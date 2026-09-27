@@ -990,7 +990,7 @@ function SelectedCardPanel({
   const canActivateArtifact = Boolean(card && /(?:Action|Omni):/i.test(card.face.text));
 
   return (
-    <section className="inspector-section" aria-live="polite">
+    <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}`} aria-live="polite">
       <div className="section-label-row">
         <span className="section-label">{t("inspector.title")}</span>
         {selection && <button className="quiet-icon-button" type="button" onClick={onClear} aria-label={t("common.close")}><X size={14} /></button>}
@@ -1248,6 +1248,18 @@ function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [deckModalOpen]);
+
+  // Escape dismisses the card inspector (on narrow screens it is a bottom sheet).
+  useEffect(() => {
+    if (!selected) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || deckModalOpen) return;
+      setSelected(null);
+      setFightMode(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selected, deckModalOpen]);
 
   // Forge flash + win/lose sounds.
   useEffect(() => {

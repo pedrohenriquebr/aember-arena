@@ -520,9 +520,12 @@ button:disabled {
   }
 }
 
+/* fill-mode backwards (não both) nas entradas: "both" deixa um translateY(0)
+   residual que faz da tela/rail o containing block dos filhos position: fixed
+   (sheet do inspetor, lightbox) — eles passavam a rolar junto com a página. */
 .screen {
   width: 100%;
-  animation: screen-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: screen-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 .reduce-motion .screen {
@@ -580,7 +583,7 @@ button:disabled {
   justify-content: space-between;
   gap: 10px;
   margin: 0 0 11px;
-  animation: rise-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: rise-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 @media (min-width: 701px) {
@@ -722,7 +725,7 @@ button:disabled {
     radial-gradient(ellipse at 47% 48%, rgba(50, 77, 67, 0.62), transparent 58%),
     linear-gradient(135deg, #202e28 0%, #1a2521 45%, #18211e 100%);
   box-shadow: 0 18px 55px rgba(0, 0, 0, 0.23), inset 0 0 0 5px rgba(9, 12, 10, 0.16);
-  animation: rise-in 620ms 60ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: rise-in 620ms 60ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 @media (min-width: 701px) {
@@ -1767,7 +1770,7 @@ button:disabled {
   padding: 3px 0 0;
   color: #c4ad70;
   font-size: var(--fs-2xs);
-  animation: rise-in 320ms ease both;
+  animation: rise-in 320ms ease backwards;
 }
 
 /* T6 — default = mobile (scroll-snap horizontal); desktop ao lado. */
@@ -1826,7 +1829,7 @@ button:disabled {
   border-radius: 9px;
   background: linear-gradient(155deg, rgba(31, 33, 28, 0.98), rgba(23, 25, 21, 0.98));
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.14);
-  animation: rise-in 660ms 140ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: rise-in 660ms 140ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 @media (min-width: 701px) {
@@ -1911,6 +1914,94 @@ button:disabled {
   }
 }
 
+/* Abaixo de 1041px o rail fica DEPOIS da mão: com uma carta selecionada o
+   inspetor vira um sheet fixo acima da tab bar — antes as ações (Jogar/Colher/
+   Lutar) ficavam ~1100px abaixo do toque, fora da tela. >1040 o rail é sticky
+   ao lado do board e o inspetor volta ao fluxo. */
+.inspector-section--docked {
+  position: fixed;
+  z-index: 60;
+  right: 0;
+  bottom: var(--tabbar-h);
+  left: 0;
+  max-height: min(58dvh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px 14px 14px;
+  border: 1px solid rgba(211, 173, 93, 0.3);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(170deg, #22241e, #191b17 60%);
+  box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.55);
+  animation: sheet-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Alça: affordance de sheet. */
+.inspector-section--docked::before {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(226, 218, 196, 0.22);
+  content: "";
+  transform: translateX(-50%);
+}
+
+.inspector-section--docked .quiet-icon-button {
+  width: 44px;
+  height: 44px;
+  margin: -12px -10px -12px 0;
+  border-color: transparent;
+}
+
+/* O sheet cobre a base da tela: folga para ainda rolar a mão acima dele. */
+.game-screen:has(.inspector-section--docked) {
+  padding-bottom: min(58dvh, 560px);
+}
+
+@media (min-width: 701px) {
+  .inspector-section--docked {
+    right: max(12px, calc(50% - 320px));
+    bottom: 0;
+    left: max(12px, calc(50% - 320px));
+    padding: 20px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (min-width: 1041px) {
+  .inspector-section--docked {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 13px 15px 14px;
+    border: 0;
+    border-bottom: 1px solid rgba(225, 216, 194, 0.1);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    animation: none;
+  }
+  .inspector-section--docked::before {
+    content: none;
+  }
+  .inspector-section--docked .quiet-icon-button {
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    border-color: rgba(229, 219, 195, 0.13);
+  }
+  .game-screen:has(.inspector-section--docked) {
+    padding-bottom: 30px;
+  }
+}
+
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .section-label-row {
   display: flex;
   align-items: center;
@@ -1935,7 +2026,7 @@ button:disabled {
 
 .selected-card-content {
   padding-top: 12px;
-  animation: rise-in 260ms ease both;
+  animation: rise-in 260ms ease backwards;
 }
 
 /* T6 — default = mobile; desktop ao lado. */
@@ -2035,6 +2126,11 @@ button:disabled {
   margin-top: 9px;
 }
 
+/* Ação única (Jogar/Usar) ocupa a linha: meia largura parecia secundária. */
+.inspector-actions > button:only-of-type {
+  grid-column: 1 / -1;
+}
+
 @media (min-width: 701px) {
   .inspector-actions {
     margin-top: 12px;
@@ -2044,7 +2140,7 @@ button:disabled {
 .primary-action,
 .secondary-action {
   display: inline-flex;
-  min-height: 35px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -2777,7 +2873,7 @@ button:disabled {
   border: 1px solid rgba(211, 173, 93, 0.25);
   border-radius: 7px;
   background: rgba(211, 173, 93, 0.045);
-  animation: rise-in 260ms ease both;
+  animation: rise-in 260ms ease backwards;
 }
 
 @media (min-width: 701px) {
@@ -3468,7 +3564,7 @@ button:disabled {
 
 .deck-grid-item {
   display: block;
-  animation: rise-in 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: rise-in 340ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 
 .reduce-motion .deck-grid-item {
@@ -4103,7 +4199,7 @@ button:disabled {
   border: 1px solid rgba(225, 216, 194, 0.11);
   border-radius: 13px;
   background: linear-gradient(155deg, rgba(31, 33, 28, 0.9), rgba(23, 25, 21, 0.9));
-  animation: rise-in 300ms ease both;
+  animation: rise-in 300ms ease backwards;
 }
 
 @media (min-width: 701px) {
@@ -5370,7 +5466,7 @@ button:disabled {
   border: 0;
   background: transparent;
   cursor: pointer;
-  animation: rise-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: rise-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
   transition: transform 170ms ease;
 }
 
@@ -5477,7 +5573,7 @@ button:disabled {
   border: 1px solid rgba(226, 218, 196, 0.13);
   border-radius: 11px;
   background: linear-gradient(160deg, #24261f, #1a1c17 72%);
-  animation: rise-in 260ms ease both;
+  animation: rise-in 260ms ease backwards;
 }
 
 .reduce-motion .card-detail-inner {
