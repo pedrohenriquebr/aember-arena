@@ -13,7 +13,8 @@
     "e2e:floor": "node e2e/capture.mjs --floor-only",
     "e2e:smoke": "node e2e/capture.mjs --match-smoke --out e2e/shots/match-smoke",
     "e2e:bundle": "node e2e/bundle-size.mjs",
-    "e2e:acceptance": "node e2e/acceptance.mjs"
+    "e2e:acceptance": "node e2e/acceptance.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",
@@ -28,6 +29,7 @@
     "playwright-core": "^1.63.0",
     "typescript": "5.9.3",
     "vite": "7.3.2",
-    "vite-plugin-singlefile": "2.3.0"
+    "vite-plugin-singlefile": "2.3.0",
+    "vitest": "^3.2.7"
   }
 }
