@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e:capture": "node e2e/capture.mjs --out e2e/shots/current",
+    "e2e:floor": "node e2e/capture.mjs --floor-only",
+    "e2e:smoke": "node e2e/capture.mjs --match-smoke --out e2e/shots/match-smoke",
+    "e2e:bundle": "node e2e/bundle-size.mjs",
+    "e2e:acceptance": "node e2e/acceptance.mjs"
   },
   "dependencies": {
     "clsx": "2.1.1",
@@ -22,6 +27,7 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.1",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "vite": "7.3.2",
