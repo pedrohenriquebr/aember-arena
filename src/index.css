@@ -35,6 +35,13 @@
   --fs-3xl: clamp(2rem, 1.896rem + 0.52vw, 2.3125rem); /* 32 -> 37px */
   --fs-display: clamp(2.375rem, 2.331rem + 0.68vw, 2.875rem); /* 38 -> 46px */
   --fs-input: max(16px, 1rem); /* inputs >= 16px sempre */
+
+  /* População A (T4) — texto DENTRO da carta: escala com a largura da carta via
+     cqi. --fs-card-floor (10px) vale só p/ caps/eyebrow in-card (§2: 10px exige
+     letter-spacing >= 0.1em); texto informacional não-caps dentro de carta usa
+     max(var(--fs-2xs), 7cqi) — piso 11px. Onde o piso não cabe, o label sai da
+     carta (@container) ou vira indicador visual + aria-label via t(). */
+  --fs-card-floor: 10px;
 }
 
 * {
@@ -530,18 +537,18 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* Indicador de turno (T4): pill só-ícone — o texto ACTIVE/THINKING virou
+   aria-label via t() no elemento (App.tsx); o estado também fica no highlight
+   da banda (.player-band--active) e no dot do avatar (.avatar-live-dot). */
 .active-turn-tag {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 5px;
   padding: 3px 6px;
   border: 1px solid rgba(211, 173, 93, 0.22);
   border-radius: 3px;
   color: #d6bd7a;
   background: rgba(211, 173, 93, 0.08);
-  font-size: var(--fs-2xs);
-  font-weight: 800;
-  letter-spacing: 0.12em;
 }
 
 .player-deck-name {
@@ -617,13 +624,8 @@ button:disabled {
   font-size: var(--fs-2xs);
 }
 
-.key-counter small {
-  margin-left: 2px;
-  color: #8f9185;
-  font-size: var(--fs-2xs);
-  font-weight: 650;
-  letter-spacing: 0.07em;
-}
+/* T4: o <small> "/ 3 KEYS" saiu do DOM — os pips (forjadas preenchidas) são o
+   indicador visual e o texto completo ficou no aria-label do .key-counter. */
 
 .amber-counter {
   display: flex;
@@ -700,6 +702,12 @@ button:disabled {
 }
 
 .card-tile {
+  /* Container da população A (T4): o texto da carta escala com a largura do tile.
+     As larguras são explícitas (103/88/93px e variantes mobile), então a
+     containment de inline-size não muda o layout das grades/mão. position:relative
+     ancora o .damage-label, que agora vive dentro do tile. */
+  position: relative;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -731,6 +739,11 @@ button:disabled {
 }
 
 .card-art {
+  /* Segundo container da população A: o fallback textual vive dentro do art,
+     que também é usado standalone (deck tile, inspector, zoom) — sem isto, cqi
+     resolveria contra a viewport e estouraria o texto. Largura sempre explícita
+     ou 100%, então a containment não altera o layout. */
+  container-type: inline-size;
   position: relative;
   display: block;
   overflow: hidden;
@@ -787,7 +800,10 @@ button:disabled {
   overflow: hidden;
   margin-top: 5px;
   color: #dbd8cb;
-  font-size: var(--fs-2xs);
+  /* Piso informacional (§2 invariante): texto não-caps nunca abaixo de 11px —
+     --fs-card-floor (10px) vale só p/ caps in-card. O cqi deixa o título crescer
+     em cartas grandes; em tiles pequenos vence o piso (estado T3). */
+  font-size: max(var(--fs-2xs), 7cqi);
   font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -797,7 +813,6 @@ button:disabled {
 .card-tile--board .card-caption {
   max-width: 88px;
   color: #c9c6b8;
-  font-size: var(--fs-2xs);
 }
 
 .card-fallback {
@@ -821,7 +836,7 @@ button:disabled {
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(239, 225, 193, 0.3);
   color: #dbc17c;
-  font-size: var(--fs-3xs);
+  font-size: max(var(--fs-card-floor), 7cqi);
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -839,51 +854,49 @@ button:disabled {
 
 .card-fallback strong {
   font-family: Georgia, serif;
-  font-size: var(--fs-2xs);
+  /* Título na carta: texto informacional não-caps -> piso 11px (§2). */
+  font-size: max(var(--fs-2xs), 7cqi);
   line-height: 1.15;
 }
 
 .fallback-type {
+  /* Eyebrow da carta: 10px legal (caps + ls >= 0.1em, §2) via --fs-card-floor. */
   color: #bdb5a1;
-  font-size: var(--fs-2xs);
+  font-size: max(var(--fs-card-floor), 7cqi);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .fallback-stats {
   color: #d3b469;
-  font-size: var(--fs-2xs);
+  /* Número de poder/aember: informacional não-caps -> piso 11px (§2). */
+  font-size: max(var(--fs-2xs), 7cqi);
+}
+
+/* Onde a carta é pequena demais para o piso, o texto sai da carta (T4/§5): o
+   tipo é redundante aqui (consta no aria-label do tile) e some nos containers
+   estreitos, em vez de descer abaixo de 10px ou estourar a arte. */
+@container (max-width: 80px) {
+  .fallback-type {
+    display: none;
+  }
 }
 
 .board-piece--ready .card-tile:not(:disabled) .card-art {
   border-color: rgba(190, 202, 155, 0.49);
 }
 
-.ready-label {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 4px;
-  color: rgba(183, 195, 162, 0.77);
-  font-size: var(--fs-3xs);
-  font-weight: 800;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+/* Estados da peça no board (T4): o texto READY/STUNNED/RESTING saiu do DOM e
+   virou aria-label via t() (App.tsx, CardTile.stateLabel). O estado fica no
+   visual — borda verde p/ pronta (.board-piece--ready, acima), laranja com
+   dessaturação p/ atordoada, opacidade p/ descansando. */
+.board-piece--stunned .card-tile:not(:disabled) .card-art {
+  border-color: rgba(209, 155, 114, 0.62);
+  filter: saturate(0.45) brightness(0.9);
 }
 
-.ready-label span {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #a5c292;
-}
-
-.ready-label--stunned {
-  color: #d19b72;
-}
-
-.ready-label--stunned span {
-  background: #d19b72;
+.board-piece--resting .card-tile:not(:disabled) .card-art {
+  opacity: 0.62;
 }
 
 .damage-label {
@@ -895,7 +908,8 @@ button:disabled {
   border-radius: 3px;
   color: #ffd5be;
   background: #7c3e32;
-  font-size: var(--fs-2xs);
+  /* Informacional não-caps -> piso 11px (§2); cresce via cqi em cartas grandes. */
+  font-size: max(var(--fs-2xs), 7cqi);
   font-weight: 800;
 }
 
@@ -4888,16 +4902,6 @@ button:disabled {
   .card-tile--board .card-caption {
     max-width: 68px;
     margin-top: 3px;
-  }
-
-  .ready-label {
-    gap: 3px;
-    margin-top: 3px;
-  }
-
-  .ready-label span {
-    width: 3px;
-    height: 3px;
   }
 
   .empty-battleline {

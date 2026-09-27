@@ -89,6 +89,8 @@ function CardTile({
   disabled = false,
   hoverZoom = false,
   playAnim = false,
+  stateLabel,
+  damageLabel,
   onClick,
 }: {
   card: CardInstance;
@@ -98,19 +100,25 @@ function CardTile({
   disabled?: boolean;
   hoverZoom?: boolean;
   playAnim?: boolean;
+  /** Estado da peça (READY/STUNNED/RESTING via t()) — vai só no aria-label (T4). */
+  stateLabel?: string;
+  /** Dano da criatura via t() — badge visual dentro do tile (T4). */
+  damageLabel?: string;
   onClick?: () => void;
 }) {
   const { face } = card;
+  const baseLabel = `${face.title}, ${houseLabel(face.house)} ${face.type}`;
   return (
     <button
       className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}`}
       type="button"
       onClick={onClick}
       disabled={disabled || !onClick}
-      aria-label={`${face.title}, ${houseLabel(face.house)} ${face.type}`}
+      aria-label={stateLabel ? `${baseLabel}, ${stateLabel}` : baseLabel}
     >
       <CardArt face={face} size={size} hoverZoom={hoverZoom} />
       {size !== "preview" && <span className="card-caption">{face.title}</span>}
+      {damageLabel && <span className="damage-label">{damageLabel}</span>}
     </button>
   );
 }
@@ -556,13 +564,15 @@ function AmberCounter({ amount, t }: { amount: number; t: Translator }) {
 
 function KeyCounter({ keys, t }: { keys: number; t: Translator }) {
   return (
+    // T4: os pips são o indicador (forjadas preenchidas); o texto "/ 3 KEYS"
+    // saiu do DOM e vive no aria-label abaixo via t().
     <div className="key-counter" aria-label={`${keys} / 3 ${t("game.keys")}`}>
       <div className="key-pips">
         {[0, 1, 2].map((index) => (
           <KeyRound key={index} className={index < keys ? "key-pip is-forged" : "key-pip"} size={17} strokeWidth={1.8} />
         ))}
       </div>
-      <span>{keys}<small> / 3 {t("game.keys")}</small></span>
+      <span>{keys}</span>
     </div>
   );
 }
@@ -589,7 +599,12 @@ function PlayerBand({
       <div className="player-copy">
         <div className="player-name-row">
           <strong>{player.name}</strong>
-          {active && <span className="active-turn-tag">{thinking ? t("game.thinkingTag") : t("game.active")}</span>}
+          {/* T4: indicador só-ícone; o texto ACTIVE/THINKING via t() fica no aria-label. */}
+          {active && (
+            <span className="active-turn-tag" role="img" aria-label={thinking ? t("game.thinkingTag") : t("game.active")}>
+              <Zap size={11} strokeWidth={2.4} />
+            </span>
+          )}
         </div>
         <div className="player-deck-name">
           <span className="player-deck-label">{player.deckName}</span>
@@ -639,8 +654,12 @@ function BoardLane({
     <div className={`board-lane${fightMode && owner === 1 ? " board-lane--targeting" : ""}`}>
       {cards.map((card) => {
         const canUse = owner === 0 && card.ready && !card.stunned && (!activeHouse || card.face.house === activeHouse);
+        // T4: o estado da peça é indicador visual (borda/opacidade, index.css) +
+        // aria-label via t(); não existe mais label de texto sob a carta.
+        const stateLabel = card.stunned ? t("game.stunned") : card.ready ? t("game.ready") : t("game.resting");
+        const stateClass = card.stunned ? " board-piece--stunned" : card.ready ? "" : " board-piece--resting";
         return (
-          <div className={`board-piece${canUse ? " board-piece--ready" : ""}`} key={card.instanceId}>
+          <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}`} key={card.instanceId}>
             <CardTile
               card={card}
               size="board"
@@ -648,13 +667,10 @@ function BoardLane({
               dimmed={fightMode && owner === 1 ? card.face.type !== "Creature" : false}
               hoverZoom={settings.hoverZoom}
               playAnim={settings.animations}
+              stateLabel={stateLabel}
+              damageLabel={card.damage > 0 ? `${card.damage} ${t("game.dmg")}` : undefined}
               onClick={() => onSelect(card)}
             />
-            <div className={`ready-label${card.stunned ? " ready-label--stunned" : ""}`}>
-              <span />
-              {card.stunned ? t("game.stunned") : card.ready ? t("game.ready") : t("game.resting")}
-            </div>
-            {card.damage > 0 && <span className="damage-label">{card.damage} {t("game.dmg")}</span>}
           </div>
         );
       })}
