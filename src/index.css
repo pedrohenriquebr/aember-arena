@@ -2512,7 +2512,7 @@ button:disabled {
   margin: 8px 0 5px;
   color: #f2ecdf;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  font-size: clamp(28px, 3.6vw, 40px);
+  font-size: var(--fs-3xl);
   font-weight: 500;
   letter-spacing: -0.035em;
   line-height: 1.02;
@@ -2522,7 +2522,7 @@ button:disabled {
   max-width: 480px;
   margin: 0;
   color: #a8a89b;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 
@@ -2539,7 +2539,7 @@ button:disabled {
   align-items: center;
   gap: 7px;
   color: #8b8c80;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.05em;
 }
@@ -2551,7 +2551,7 @@ button:disabled {
   place-items: center;
   border: 1px solid rgba(226, 218, 196, 0.16);
   border-radius: 50%;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-style: normal;
 }
 
@@ -2577,21 +2577,21 @@ button:disabled {
   margin: 0 0 4px;
   color: #eee8da;
   font-family: "Iowan Old Style", Georgia, serif;
-  font-size: 22px;
+  font-size: var(--fs-lg);
   font-weight: 500;
 }
 
 .home-section-head p {
   margin: 0;
   color: #98988d;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .deck-group-label {
   display: block;
   margin: 14px 0 8px;
   color: #a58e5a;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.15em;
 }
@@ -2626,7 +2626,7 @@ button:disabled {
 .deck-list-count {
   margin-bottom: 8px;
   color: #7d7f74;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
 }
@@ -4628,11 +4628,11 @@ button:disabled {
   }
 
   .home-hero h1 {
-    font-size: 30px;
+    font-size: var(--fs-2xl);
   }
 
   .home-hero p {
-    font-size: 12px;
+    font-size: var(--fs-xs);
   }
 
   .home-steps {
