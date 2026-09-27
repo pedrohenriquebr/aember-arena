@@ -2318,7 +2318,7 @@ button:disabled {
   color: #c5c3b7;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
@@ -2333,12 +2333,12 @@ button:disabled {
 }
 
 .lang-flag {
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1;
 }
 
 .lang-short {
-  font-size: 10px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.05em;
 }
 
@@ -2367,7 +2367,7 @@ button:disabled {
   color: #cfccbf;
   background: transparent;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-align: left;
 }
 
