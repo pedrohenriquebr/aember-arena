@@ -42,10 +42,12 @@ export function DeckTile({
         <CardArt face={deck.cards[0]} size="preview" hoverZoom={false} />
         <span className="deck-tile-stack" aria-hidden="true" />
         {selected && <span className="deck-tile-check"><Check size={13} /></span>}
-        {tag && <span className="deck-tile-tag">{tag}</span>}
       </div>
 
       <div className="deck-tile-copy">
+        {/* In the copy column, not over the art: a tag wider than the art used to
+            spill over the stats row and hide the Cards/Creatures values. */}
+        {tag && <span className="deck-tile-tag">{tag}</span>}
         <h3 title={deck.name}>{deck.name}</h3>
         <HouseRow houses={deck.houses} />
         <dl className="deck-tile-stats">

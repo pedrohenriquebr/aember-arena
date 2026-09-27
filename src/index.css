@@ -3791,17 +3791,20 @@ button:disabled {
 }
 
 .deck-tile-tag {
-  position: absolute;
-  z-index: 2;
-  bottom: -4px;
-  left: 0;
-  padding: 2px 5px;
-  border-radius: 3px;
-  color: #1a1a13;
-  background: #bda363;
-  font-size: var(--fs-2xs);
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 7px;
+  border: 1px solid rgba(211, 173, 93, 0.35);
+  border-radius: 999px;
+  color: var(--gold-bright);
+  background: rgba(211, 173, 93, 0.1);
+  font-size: var(--fs-3xs);
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 

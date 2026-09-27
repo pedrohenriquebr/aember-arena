@@ -165,7 +165,7 @@ export function DeckBrowser({
                 key={deck.id}
                 deck={deck}
                 t={t}
-                tag={deck.powerLevel ? `${t("deck.power")} ${deck.powerLevel}` : t("deck.masterVault")}
+                tag={deck.powerLevel ? `${t("deck.power")} ${deck.powerLevel}` : undefined}
                 onInspect={() => onInspect(deck)}
                 onSelect={() => onUseDeck(deck)}
               />
