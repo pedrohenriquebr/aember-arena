@@ -2667,23 +2667,37 @@ button:disabled {
 }
 
 /* ---------- Home screen ---------- */
+/* T6 — default = mobile; desktop invertido em min-width: 701px ao lado do seletor. */
 .home-screen {
   width: min(100%, 1120px);
   margin: 0 auto;
-  padding: 22px clamp(14px, 2.6vw, 34px) 104px;
+  padding: 14px 11px 168px;
+}
+
+@media (min-width: 701px) {
+  .home-screen {
+    padding: 22px clamp(14px, 2.6vw, 34px) 104px;
+  }
 }
 
 .home-hero {
   position: relative;
   overflow: hidden;
-  margin-bottom: 18px;
-  padding: 24px clamp(18px, 3.2vw, 34px);
+  margin-bottom: 20px;
+  padding: 24px 18px;
   border: 1px solid rgba(219, 207, 179, 0.16);
   border-radius: 16px;
   background:
     radial-gradient(ellipse at 82% 8%, rgba(211, 173, 93, 0.14), transparent 55%),
     linear-gradient(150deg, #23261e 0%, #191b16 70%);
   box-shadow: 0 18px 55px rgba(0, 0, 0, 0.2);
+}
+
+@media (min-width: 701px) {
+  .home-hero {
+    margin-bottom: 18px;
+    padding: 24px clamp(18px, 3.2vw, 34px);
+  }
 }
 
 .home-hero-glow {
@@ -2703,30 +2717,51 @@ button:disabled {
   50% { opacity: 1; transform: scale(1.12); }
 }
 
+/* T6 — default = mobile; desktop ao lado. */
 .home-hero h1 {
   margin: 8px 0 5px;
   color: #f2ecdf;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  font-size: var(--fs-3xl);
+  font-size: var(--fs-2xl);
   font-weight: 500;
   letter-spacing: -0.035em;
   line-height: 1.02;
+}
+
+@media (min-width: 701px) {
+  .home-hero h1 {
+    font-size: var(--fs-3xl);
+  }
 }
 
 .home-hero p {
   max-width: 480px;
   margin: 0;
   color: #a8a89b;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   line-height: 1.5;
+}
+
+@media (min-width: 701px) {
+  .home-hero p {
+    font-size: var(--fs-sm);
+  }
 }
 
 .home-steps {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 20px;
   color: #6f7268;
+}
+
+@media (min-width: 701px) {
+  .home-steps {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
 }
 
 .home-step {
@@ -2791,10 +2826,19 @@ button:disabled {
   letter-spacing: 0.15em;
 }
 
+/* T6 — default = mobile (1 coluna); desktop ao lado com mínimo fixo blindado
+   (min(258px,100%) evita overflow abaixo de 258px de container). */
 .deck-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
-  gap: 11px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+}
+
+@media (min-width: 701px) {
+  .deck-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(258px, 100%), 1fr));
+    gap: 11px;
+  }
 }
 
 .deck-grid-item {
@@ -2832,21 +2876,30 @@ button:disabled {
   margin-top: 14px;
 }
 
+/* T6 — default = mobile (1 coluna); desktop ao lado. */
 .home-shortcuts {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 11px;
   margin-top: 12px;
 }
 
+@media (min-width: 701px) {
+  .home-shortcuts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* ---------- Deck tile ---------- */
+/* T6 — default = mobile; desktop ao lado. */
 .deck-tile {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   gap: 11px;
   overflow: hidden;
   height: 100%;
-  padding: 11px 11px 41px;
+  padding: 10px;
   border: 1px solid rgba(224, 215, 192, 0.11);
   border-radius: 11px;
   background:
@@ -2854,6 +2907,13 @@ button:disabled {
     #1b1d18;
   text-align: left;
   transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+@media (min-width: 701px) {
+  .deck-tile {
+    flex-wrap: nowrap;
+    padding: 11px 11px 41px;
+  }
 }
 
 @media (hover: hover) {
@@ -2893,16 +2953,17 @@ button:disabled {
   to { left: 120%; }
 }
 
+/* T6 — default = mobile (60px); desktop ao lado. */
 .deck-tile-art {
   position: relative;
-  width: 68px;
+  width: 60px;
   flex: 0 0 auto;
 }
 
 .deck-tile-art .card-art {
   position: relative;
   z-index: 1;
-  width: 68px;
+  width: 60px;
 }
 
 .deck-tile-stack {
@@ -2910,11 +2971,19 @@ button:disabled {
   z-index: 0;
   top: 5px;
   left: 5px;
-  width: 68px;
+  width: 60px;
   aspect-ratio: 0.714;
   border: 1px solid rgba(235, 227, 207, 0.16);
   border-radius: 5px;
   background: #14160f;
+}
+
+@media (min-width: 701px) {
+  .deck-tile-art,
+  .deck-tile-art .card-art,
+  .deck-tile-stack {
+    width: 68px;
+  }
 }
 
 .deck-tile-check {
@@ -2947,12 +3016,19 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* T6 — default = mobile (basis 140px); desktop ao lado. */
 .deck-tile-copy {
   display: flex;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 140px;
   flex-direction: column;
   gap: 5px;
+}
+
+@media (min-width: 701px) {
+  .deck-tile-copy {
+    flex: 1;
+  }
 }
 
 .deck-tile-copy h3 {
@@ -3008,14 +3084,28 @@ button:disabled {
   font-weight: 650;
 }
 
+/* T6 — default = mobile (estático, largura total; offsets inertes mantidos na
+   base); desktop ao lado volta a absoluto. */
 .deck-tile-actions {
-  position: absolute;
+  position: static;
   right: 10px;
   bottom: 9px;
   left: 90px;
   display: flex;
   gap: 5px;
+  width: 100%;
+  margin-top: 9px;
+  opacity: 1;
+  transform: none;
   transition: opacity 180ms ease, transform 180ms ease;
+}
+
+@media (min-width: 701px) {
+  .deck-tile-actions {
+    position: absolute;
+    width: auto;
+    margin-top: 0;
+  }
 }
 
 @media (hover: hover) {
@@ -3192,20 +3282,28 @@ button:disabled {
   color: #a58e5a;
 }
 
+/* T6 — default = mobile (acima da tab bar); desktop ao lado. */
 .home-cta-bar {
   position: fixed;
   z-index: 40;
-  bottom: 0;
+  bottom: 54px;
   left: 0;
   right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px clamp(14px, 3vw, 40px) calc(11px + env(safe-area-inset-bottom, 0px));
+  padding: 9px 11px;
   border-top: 1px solid rgba(226, 218, 196, 0.1);
   background: rgba(18, 20, 17, 0.94);
   backdrop-filter: blur(16px);
+}
+
+@media (min-width: 701px) {
+  .home-cta-bar {
+    bottom: 0;
+    padding: 11px clamp(14px, 3vw, 40px) calc(11px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .home-cta-deck {
@@ -3229,9 +3327,18 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* T6 — default = mobile (escondido); desktop ao lado (inline = UA default de
+   <small>; dentro do grid pai computa block como antes, via blockification). */
 .home-cta-deck small {
+  display: none;
   color: #8f9084;
   font-size: var(--fs-2xs);
+}
+
+@media (min-width: 701px) {
+  .home-cta-deck small {
+    display: inline;
+  }
 }
 
 .home-lang-float {
@@ -3971,6 +4078,9 @@ button:disabled {
 }
 
 /* ---------- Vault browser ---------- */
+/* T6 — largura/margem compartilhadas; padding do .browse-screen invertido
+   (default = mobile, desktop ao lado). O .inspect-screen está fora do escopo
+   desta passada e continua com o padding mobile no bloco 700px. */
 .browse-screen,
 .inspect-screen {
   width: min(100%, 1180px);
@@ -3978,19 +4088,38 @@ button:disabled {
   padding: 22px clamp(14px, 2.6vw, 34px) 44px;
 }
 
+.browse-screen {
+  padding: 14px 11px 86px;
+}
+
+@media (min-width: 701px) {
+  .browse-screen {
+    padding: 22px clamp(14px, 2.6vw, 34px) 44px;
+  }
+}
+
+/* T6 — default = mobile (gap 7px); desktop ao lado. */
 .browse-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
   margin-bottom: 11px;
 }
 
+@media (min-width: 701px) {
+  .browse-toolbar {
+    gap: 9px;
+  }
+}
+
+/* T6 — default = mobile (largura total, min-width liberado p/ caber em 320px);
+   desktop ao lado. */
 .browse-search {
   display: flex;
-  min-width: 210px;
+  min-width: 0;
   height: 37px;
-  flex: 1;
+  flex: 1 1 100%;
   align-items: center;
   gap: 8px;
   padding: 0 11px;
@@ -3999,6 +4128,13 @@ button:disabled {
   background: rgba(8, 10, 8, 0.35);
   color: #9a9b90;
   transition: border-color 160ms ease;
+}
+
+@media (min-width: 701px) {
+  .browse-search {
+    min-width: 210px;
+    flex: 1;
+  }
 }
 
 .browse-search:focus-within {
@@ -4033,9 +4169,17 @@ button:disabled {
   line-height: 1;
 }
 
+/* T6 — default = mobile (wrap); desktop ao lado. */
 .browse-sorts {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
+}
+
+@media (min-width: 701px) {
+  .browse-sorts {
+    flex-wrap: nowrap;
+  }
 }
 
 .sort-chip {
@@ -4065,14 +4209,24 @@ button:disabled {
   background: rgba(211, 173, 93, 0.11);
 }
 
+/* T6 — default = mobile (empilhado); desktop ao lado. */
 .browse-status {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 4px;
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(226, 218, 196, 0.09);
+}
+
+@media (min-width: 701px) {
+  .browse-status {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
 }
 
 .status-line {
@@ -4107,8 +4261,17 @@ button:disabled {
   letter-spacing: 0.05em;
 }
 
+/* T6 — default = mobile (1 coluna, herdado/aqui declarado); desktop ao lado com
+   mínimo fixo blindado (min(272px,100%)). Fica depois de .deck-grid na fonte,
+   preservando quem vence no desktop. */
 .deck-grid--browse {
-  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 701px) {
+  .deck-grid--browse {
+    grid-template-columns: repeat(auto-fill, minmax(min(272px, 100%), 1fr));
+  }
 }
 
 .browse-pager {
@@ -4212,12 +4375,19 @@ button:disabled {
   to { background-position: -30% 0; }
 }
 
+/* T6 — default = mobile (escondido); desktop ao lado. */
 .browse-houses {
-  display: flex;
+  display: none;
   justify-content: center;
   gap: 7px;
   margin-top: 26px;
   opacity: 0.32;
+}
+
+@media (min-width: 701px) {
+  .browse-houses {
+    display: flex;
+  }
 }
 
 /* ---------- Deck inspector ---------- */
@@ -4793,11 +4963,6 @@ button:disabled {
 }
 
 @media (max-width: 700px) {
-  .home-screen {
-    padding: 14px 11px 168px;
-  }
-
-  .browse-screen,
   .inspect-screen {
     padding: 14px 11px 86px;
   }
@@ -4808,15 +4973,6 @@ button:disabled {
 
   .config-screen {
     padding: 14px 11px 86px;
-  }
-
-  .home-cta-bar {
-    bottom: 54px;
-    padding: 9px 11px;
-  }
-
-  .home-shortcuts {
-    grid-template-columns: 1fr;
   }
 
   .sub-head {
@@ -4867,83 +5023,6 @@ button:disabled {
   .card-grid {
     grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
     gap: 7px;
-  }
-
-  .deck-grid,
-  .deck-grid--browse {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 9px;
-  }
-
-  .deck-tile {
-    flex-wrap: wrap;
-    padding: 10px;
-  }
-
-  .deck-tile-art {
-    width: 60px;
-  }
-
-  .deck-tile-art .card-art,
-  .deck-tile-stack {
-    width: 60px;
-  }
-
-  .deck-tile-copy {
-    flex: 1 1 140px;
-  }
-
-  .deck-tile-actions {
-    position: static;
-    width: 100%;
-    margin-top: 9px;
-    opacity: 1;
-    transform: none;
-  }
-
-  .browse-toolbar {
-    gap: 7px;
-  }
-
-  .browse-search {
-    min-width: 0;
-    flex: 1 1 100%;
-  }
-
-  .browse-sorts {
-    flex-wrap: wrap;
-  }
-
-  .browse-status {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .browse-houses {
-    display: none;
-  }
-
-  .home-hero {
-    margin-bottom: 20px;
-    padding: 24px 18px;
-  }
-
-  .home-hero h1 {
-    font-size: var(--fs-2xl);
-  }
-
-  .home-hero p {
-    font-size: var(--fs-xs);
-  }
-
-  .home-steps {
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .home-cta-deck small {
-    display: none;
   }
 
   .config-step-pill span:not(.config-step-num) {
