@@ -1631,7 +1631,6 @@ function App() {
                   <div>
                     <div className="match-eyebrow"><span>{t("game.eyebrow")}</span><span className="eyebrow-line" /><span>{t("game.table")}</span></div>
                     <h1>{currentDeck.name}</h1>
-                    <p>{t("home.subtitle")}</p>
                   </div>
                   <div className="match-chip">
                     <span className="match-chip-icon"><Radio size={14} /></span>

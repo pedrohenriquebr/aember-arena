@@ -581,7 +581,6 @@ button:disabled {
 
 .match-heading {
   display: flex;
-  min-height: 65px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -591,7 +590,6 @@ button:disabled {
 
 @media (min-width: 701px) {
   .match-heading {
-    min-height: 66px;
     gap: 16px;
     margin-bottom: 12px;
   }
@@ -642,23 +640,10 @@ button:disabled {
   }
 }
 
-.match-heading p {
-  margin: 0;
-  color: #a6a69a;
-  max-width: 245px;
-  font-size: var(--fs-2xs);
-  line-height: 1.45;
-}
-
-@media (min-width: 701px) {
-  .match-heading p {
-    max-width: none;
-    font-size: var(--fs-xs);
-  }
-}
-
+/* Mobile: o turn-console já diz rodada e de quem é a vez — o chip duplicava a
+   informação (e quebrava em 2 linhas em pt-BR) empurrando a mão para baixo. */
 .match-chip {
-  display: flex;
+  display: none;
   min-width: 0;
   align-items: center;
   gap: 6px;
@@ -670,6 +655,7 @@ button:disabled {
 
 @media (min-width: 701px) {
   .match-chip {
+    display: flex;
     min-width: 134px;
     gap: 10px;
     padding: 10px 12px;
@@ -5807,20 +5793,6 @@ button:disabled {
    1041px/1221px onde havia 1040px/1220px) colocado ao lado de cada seletor. */
 
 @media (max-width: 390px) {
-  .match-chip {
-    gap: 4px;
-    padding: 6px;
-  }
-
-  .match-chip-icon {
-    width: 22px;
-    height: 22px;
-  }
-
-  .match-chip-icon svg {
-    width: 12px;
-  }
-
   .match-heading h1 {
     font-size: var(--fs-xl);
   }
