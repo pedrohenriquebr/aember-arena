@@ -7,6 +7,7 @@ import { HouseIcon } from "./HouseIcon";
 
 export { houseColor, houseLabel } from "../lib/houses";
 import { houseColor, houseLabel } from "../lib/houses";
+import { useDialogFocus } from "./useDialogFocus";
 
 type Size = "hand" | "board" | "preview";
 
@@ -240,6 +241,7 @@ export function CardLightbox({
   t: Translator;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>(Boolean(face));
   useEffect(() => {
     if (!face) return;
     const onKey = (event: KeyboardEvent) => {
@@ -262,6 +264,7 @@ export function CardLightbox({
     >
       <section
         className="card-lightbox"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={face.title}

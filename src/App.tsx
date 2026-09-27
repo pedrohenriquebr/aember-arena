@@ -60,6 +60,7 @@ import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser } from "./components/DeckBrowser";
 import { DeckInspector } from "./components/DeckInspector";
 import { Pagination } from "./components/Pagination";
+import { useDialogFocus } from "./components/useDialogFocus";
 
 type Screen = "home" | "config" | "game" | "browse" | "inspect";
 type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanceId: string };
@@ -229,8 +230,15 @@ function LanguageMenu({
     const handler = (event: MouseEvent) => {
       if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
 
   return (
@@ -843,6 +851,7 @@ function GameBoard({
   // BoardLane/CardTile não teria efeito.
   const selectOpponentCard = useCallback((card: CardInstance) => onSelectBoard(1, card), [onSelectBoard]);
   const selectPlayerCard = useCallback((card: CardInstance) => onSelectBoard(0, card), [onSelectBoard]);
+  const winnerRef = useDialogFocus<HTMLDivElement>(game.winner !== null);
 
   return (
     <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label={t("game.board")}>
@@ -958,7 +967,7 @@ function GameBoard({
 
       {game.winner !== null && (
         <div className="winner-shade" role="dialog" aria-modal="true" aria-labelledby="winner-title">
-          <div className="winner-panel">
+          <div className="winner-panel" ref={winnerRef}>
             <div className="winner-emblem"><Crown size={23} /></div>
             <span className="eyebrow">{t("game.matchComplete")}</span>
             <h2 id="winner-title">{game.winner === 0 ? t("game.youWin") : t("game.aiWin")}</h2>
@@ -1101,9 +1110,10 @@ function DeckModal({
   onUseDeck: () => void;
   onClose: () => void;
 }) {
+  const dialogRef = useDialogFocus<HTMLElement>();
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="modal-panel deck-modal" role="dialog" aria-modal="true" aria-labelledby="deck-modal-title">
+      <section className="modal-panel deck-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="deck-modal-title">
         <div className="modal-heading">
           <div>
             <span className="eyebrow">{t("deck.eyebrow")}</span>
