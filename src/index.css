@@ -107,7 +107,10 @@ button,
   --line-strong: rgba(229, 219, 195, 0.2);
   --paper: #eee9dc;
   --muted: #96968b;
-  --faint: #6d7067;
+  /* Texto terciário (contagens, dicas, rótulos de stat): ≥4.5:1 sobre --ink e
+     sobre os painéis/feltro — o antigo #6d7067 e os cinzas com alpha 0.36–0.58
+     davam 2.5–4.2:1. */
+  --faint: #8e8f83;
   --gold: #d3ad5d;
   --gold-bright: #edc878;
   --green: #82aa87;
@@ -1091,7 +1094,7 @@ button:disabled {
 }
 
 .zone-card-count {
-  color: rgba(190, 188, 171, 0.45);
+  color: var(--faint);
   font-size: var(--fs-2xs);
   letter-spacing: 0.12em;
 }
@@ -1404,7 +1407,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  color: rgba(209, 205, 185, 0.36);
+  color: var(--faint);
   font-size: var(--fs-2xs);
   letter-spacing: 0.035em;
 }
@@ -1753,14 +1756,14 @@ button:disabled {
 
 .hand-count,
 .deck-count {
-  color: rgba(181, 182, 168, 0.55);
+  color: var(--faint);
   font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
 
 .deck-count {
-  color: rgba(182, 177, 157, 0.58);
+  color: var(--faint);
 }
 
 .hand-prompt {
@@ -1886,7 +1889,7 @@ button:disabled {
 }
 
 .table-number {
-  color: #77796f;
+  color: var(--faint);
 }
 
 /* T6 — default = mobile; desktop ao lado em duas faixas (701-1040 = célula do
@@ -3793,7 +3796,7 @@ button:disabled {
 }
 
 .deck-tile-stats dt {
-  color: #7b7d72;
+  color: var(--faint);
   font-size: var(--fs-3xs);
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -3903,7 +3906,7 @@ button:disabled {
 
 .pager-gap {
   padding: 0 2px;
-  color: #6f7168;
+  color: var(--faint);
   font-size: var(--fs-xs);
 }
 
@@ -5113,7 +5116,7 @@ button:disabled {
 }
 
 .status-page {
-  color: #7b7d72;
+  color: var(--faint);
   font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.05em;
@@ -5141,7 +5144,7 @@ button:disabled {
 }
 
 .pager-hint {
-  color: #76786e;
+  color: var(--faint);
   font-size: var(--fs-xs);
   letter-spacing: 0.05em;
 }
