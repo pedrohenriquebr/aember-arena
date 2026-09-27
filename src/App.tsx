@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -87,19 +87,7 @@ function renderLog(entry: LogEntry, t: Translator): string {
 
 // ---------- Small shared components ----------
 
-function CardTile({
-  card,
-  size,
-  selected = false,
-  dimmed = false,
-  disabled = false,
-  hoverZoom = false,
-  playAnim = false,
-  stateLabel,
-  damageLabel,
-  t,
-  onClick,
-}: {
+type CardTileProps = {
   card: CardInstance;
   size: "hand" | "board" | "preview";
   selected?: boolean;
@@ -113,8 +101,54 @@ function CardTile({
   damageLabel?: string;
   /** T5 — tradutor p/ o CardLightbox do long-press touch. */
   t: Translator;
-  onClick?: () => void;
-}) {
+  /** T7d — recebe a própria carta: o pai passa o handler estável direto
+      (sem closure por carta) e o memo do tile funciona. */
+  onClick?: (card: CardInstance) => void;
+};
+
+// T7d: cloneGame (game.ts:138-153) recria todo CardInstance a cada move e só
+// preserva a identidade de `face`; comparar por VALOR (instanceId + campos que
+// afetam o render) é o que deixa o memo enxergar cartas cujo estado não mudou.
+function sameCardInstance(a: CardInstance, b: CardInstance): boolean {
+  return (
+    a === b ||
+    (a.instanceId === b.instanceId &&
+      a.face === b.face &&
+      a.damage === b.damage &&
+      a.ready === b.ready &&
+      a.stunned === b.stunned)
+  );
+}
+
+function areCardTilePropsEqual(a: CardTileProps, b: CardTileProps): boolean {
+  return (
+    a.size === b.size &&
+    a.selected === b.selected &&
+    a.dimmed === b.dimmed &&
+    a.disabled === b.disabled &&
+    a.hoverZoom === b.hoverZoom &&
+    a.playAnim === b.playAnim &&
+    a.stateLabel === b.stateLabel &&
+    a.damageLabel === b.damageLabel &&
+    a.t === b.t &&
+    a.onClick === b.onClick &&
+    sameCardInstance(a.card, b.card)
+  );
+}
+
+const CardTile = memo(function CardTile({
+  card,
+  size,
+  selected = false,
+  dimmed = false,
+  disabled = false,
+  hoverZoom = false,
+  playAnim = false,
+  stateLabel,
+  damageLabel,
+  t,
+  onClick,
+}: CardTileProps) {
   const { face } = card;
   // T8: casa e tipo do aria-label passam por t() (houseLabel aceita tradutor opcional).
   const baseLabel = `${face.title}, ${houseLabel(face.house, t)} ${t(`type.${face.type}`)}`;
@@ -128,7 +162,7 @@ function CardTile({
         onClick={() => {
           // T5: o long-press já abriu a inspeção — o click sintético do toque não seleciona.
           if (Date.now() - longPressAt.current < 700) return;
-          onClick?.();
+          onClick?.(card);
         }}
         disabled={disabled || !onClick}
         aria-label={stateLabel ? `${baseLabel}, ${stateLabel}` : baseLabel}
@@ -148,7 +182,7 @@ function CardTile({
       <CardLightbox face={lightboxOpen ? face : null} t={t} onClose={() => setLightboxOpen(false)} />
     </>
   );
-}
+}, areCardTilePropsEqual);
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
   return (
@@ -612,19 +646,39 @@ function KeyCounter({ keys, t }: { keys: number; t: Translator }) {
   );
 }
 
-function PlayerBand({
-  player,
-  isAi,
-  active,
-  thinking = false,
-  t,
-}: {
+type PlayerBandProps = {
   player: GameState["players"][number];
   isAi: boolean;
   active: boolean;
   thinking?: boolean;
   t: Translator;
-}) {
+};
+
+// T7d: mesmo racional do CardTile — o objeto `player` muda de identidade a cada
+// move (cloneGame); comparar os campos renderizados deixa o band de fora dos
+// commits em que o placar do dono não mudou.
+function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolean {
+  return (
+    a.isAi === b.isAi &&
+    a.active === b.active &&
+    (a.thinking ?? false) === (b.thinking ?? false) &&
+    a.t === b.t &&
+    a.player.name === b.player.name &&
+    a.player.deckName === b.player.deckName &&
+    a.player.amber === b.player.amber &&
+    a.player.keys === b.player.keys &&
+    a.player.houses.length === b.player.houses.length &&
+    a.player.houses.every((house, index) => house === b.player.houses[index])
+  );
+}
+
+const PlayerBand = memo(function PlayerBand({
+  player,
+  isAi,
+  active,
+  thinking = false,
+  t,
+}: PlayerBandProps) {
   return (
     <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}`}>
       <div className={`player-avatar${isAi ? " player-avatar--ai" : ""}`}>
@@ -655,18 +709,9 @@ function PlayerBand({
       </div>
     </div>
   );
-}
+}, arePlayerBandPropsEqual);
 
-function BoardLane({
-  cards,
-  owner,
-  activeHouse,
-  selectedId,
-  fightMode,
-  settings,
-  t,
-  onSelect,
-}: {
+type BoardLaneProps = {
   cards: CardInstance[];
   owner: 0 | 1;
   activeHouse: string | null;
@@ -675,7 +720,37 @@ function BoardLane({
   settings: AppSettings;
   t: Translator;
   onSelect: (card: CardInstance) => void;
-}) {
+};
+
+// T7d: a lane só re-renderiza quando um input de render muda; `cards` muda de
+// identidade a cada move (cloneGame), então a comparação é elemento a elemento
+// via sameCardInstance.
+function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
+  if (
+    a.owner !== b.owner ||
+    a.activeHouse !== b.activeHouse ||
+    a.selectedId !== b.selectedId ||
+    a.fightMode !== b.fightMode ||
+    a.settings !== b.settings ||
+    a.t !== b.t ||
+    a.onSelect !== b.onSelect
+  ) {
+    return false;
+  }
+  if (a.cards === b.cards) return true;
+  return a.cards.length === b.cards.length && a.cards.every((card, index) => sameCardInstance(card, b.cards[index]));
+}
+
+const BoardLane = memo(function BoardLane({
+  cards,
+  owner,
+  activeHouse,
+  selectedId,
+  fightMode,
+  settings,
+  t,
+  onSelect,
+}: BoardLaneProps) {
   if (!cards.length) {
     return (
       <div className="empty-battleline">
@@ -705,14 +780,14 @@ function BoardLane({
               stateLabel={stateLabel}
               t={t}
               damageLabel={card.damage > 0 ? `${card.damage} ${t("game.dmg")}` : undefined}
-              onClick={() => onSelect(card)}
+              onClick={onSelect}
             />
           </div>
         );
       })}
     </div>
   );
-}
+}, areBoardLanePropsEqual);
 
 function GameBoard({
   game,
@@ -746,6 +821,10 @@ function GameBoard({
   const player = game.players[0];
   const ai = game.players[1];
   const isHumanTurn = game.activePlayer === 0 && game.winner === null;
+  // T7d: closures estáveis por lane — sem identidade estável o memo de
+  // BoardLane/CardTile não teria efeito.
+  const selectOpponentCard = useCallback((card: CardInstance) => onSelectBoard(1, card), [onSelectBoard]);
+  const selectPlayerCard = useCallback((card: CardInstance) => onSelectBoard(0, card), [onSelectBoard]);
 
   return (
     <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label={t("game.board")}>
@@ -766,7 +845,7 @@ function GameBoard({
             fightMode={fightMode}
             settings={settings}
             t={t}
-            onSelect={(card) => onSelectBoard(1, card)}
+            onSelect={selectOpponentCard}
           />
         </section>
 
@@ -820,7 +899,7 @@ function GameBoard({
             selectedId={selected?.zone === "board" ? selected.instanceId : undefined}
             settings={settings}
             t={t}
-            onSelect={(card) => onSelectBoard(0, card)}
+            onSelect={selectPlayerCard}
           />
         </section>
 
@@ -850,7 +929,7 @@ function GameBoard({
                   hoverZoom={settings.hoverZoom}
                   playAnim={settings.animations}
                   t={t}
-                  onClick={() => onSelectHand(card)}
+                  onClick={onSelectHand}
                 />
               );
             })}
@@ -1257,7 +1336,9 @@ function App() {
     sound.play("forge");
   }
 
-  function performHumanMove(move: GameMove) {
+  // T7d: handlers quentes do board em useCallback — a identidade estável é o que
+  // efetiva o memo de GameBoard→BoardLane→CardTile (só leem refs/setters estáveis).
+  const performHumanMove = useCallback((move: GameMove) => {
     if (!gameRef.current) return;
     sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : move.type === "use" ? "play" : "play");
     const next = applyMove(gameRef.current, 0, move);
@@ -1265,18 +1346,21 @@ function App() {
     setGame(next);
     setSelected(null);
     setFightMode(false);
-  }
+  }, []);
 
-  function pickBoardCard(owner: 0 | 1, card: CardInstance) {
-    if (owner === 1 && fightMode && selected?.zone === "board" && selected.playerIndex === 0) {
-      if (card.face.type === "Creature") performHumanMove({ type: "fight", attackerId: selected.instanceId, targetId: card.instanceId });
-      return;
-    }
-    sound.play("select");
-    setSelected({ zone: owner === 0 ? "board" : "enemy", playerIndex: owner, instanceId: card.instanceId });
-  }
+  const pickBoardCard = useCallback(
+    (owner: 0 | 1, card: CardInstance) => {
+      if (owner === 1 && fightMode && selected?.zone === "board" && selected.playerIndex === 0) {
+        if (card.face.type === "Creature") performHumanMove({ type: "fight", attackerId: selected.instanceId, targetId: card.instanceId });
+        return;
+      }
+      sound.play("select");
+      setSelected({ zone: owner === 0 ? "board" : "enemy", playerIndex: owner, instanceId: card.instanceId });
+    },
+    [fightMode, selected, performHumanMove],
+  );
 
-  function endHumanTurn() {
+  const endHumanTurn = useCallback(() => {
     if (!gameRef.current) return;
     sound.play("endTurn");
     const next = endTurn(gameRef.current, 0);
@@ -1284,7 +1368,27 @@ function App() {
     setGame(next);
     setSelected(null);
     setFightMode(false);
-  }
+  }, []);
+
+  const choosePlayerHouse = useCallback((house: string) => {
+    if (!gameRef.current) return;
+    sound.play("house");
+    const next = chooseHouse(gameRef.current, 0, house);
+    gameRef.current = next;
+    setGame(next);
+  }, []);
+
+  const selectHandCard = useCallback((card: CardInstance) => {
+    sound.play("select");
+    setSelected({ zone: "hand", playerIndex: 0, instanceId: card.instanceId });
+  }, []);
+
+  const rematch = useCallback(() => startMatch(currentDeck), [currentDeck]);
+
+  const goHome = useCallback(() => {
+    sound.play("click");
+    setScreen("home");
+  }, []);
 
   async function updateAppShell() {
     try {
@@ -1518,18 +1622,12 @@ function App() {
                   settings={settings}
                   t={t}
                   forgeFlash={forgeFlash}
-                  onHouse={(house) => {
-                    if (!gameRef.current) return;
-                    sound.play("house");
-                    const next = chooseHouse(gameRef.current, 0, house);
-                    gameRef.current = next;
-                    setGame(next);
-                  }}
-                  onSelectHand={(card) => { sound.play("select"); setSelected({ zone: "hand", playerIndex: 0, instanceId: card.instanceId }); }}
+                  onHouse={choosePlayerHouse}
+                  onSelectHand={selectHandCard}
                   onSelectBoard={pickBoardCard}
                   onEndTurn={endHumanTurn}
-                  onRematch={() => startMatch(currentDeck)}
-                  onHome={() => { sound.play("click"); setScreen("home"); }}
+                  onRematch={rematch}
+                  onHome={goHome}
                 />
               </div>
 
