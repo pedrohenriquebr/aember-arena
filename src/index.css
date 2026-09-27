@@ -3346,10 +3346,17 @@ button:disabled {
 }
 
 /* ---------- Config screen ---------- */
+/* T6 — default = mobile; desktop invertido em min-width: 701px ao lado do seletor. */
 .config-screen {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: 22px clamp(14px, 2.6vw, 34px) 34px;
+  padding: 14px 11px 86px;
+}
+
+@media (min-width: 701px) {
+  .config-screen {
+    padding: 22px clamp(14px, 2.6vw, 34px) 34px;
+  }
 }
 
 .config-head {
@@ -3376,10 +3383,11 @@ button:disabled {
   overflow-x: auto;
 }
 
+/* T6 — default = mobile (min-width liberado, label escondido); desktop ao lado. */
 .config-step-pill {
   display: inline-flex;
   flex: 1;
-  min-width: 108px;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -3394,6 +3402,12 @@ button:disabled {
   font-weight: 650;
   white-space: nowrap;
   transition: color 150ms ease, background 150ms ease;
+}
+
+@media (min-width: 701px) {
+  .config-step-pill {
+    min-width: 108px;
+  }
 }
 
 @media (hover: hover) {
@@ -3423,16 +3437,35 @@ button:disabled {
   opacity: 0.9;
 }
 
+/* T6 — default = mobile (label do passo escondido); desktop ao lado (inline é o
+   UA default de <span>; dentro do flex pai computa block como antes). */
+.config-step-pill span:not(.config-step-num) {
+  display: none;
+}
+
+@media (min-width: 701px) {
+  .config-step-pill span:not(.config-step-num) {
+    display: inline;
+  }
+}
+
 .config-body {
   min-height: 340px;
 }
 
+/* T6 — default = mobile; desktop ao lado. */
 .config-panel {
-  padding: 22px;
+  padding: 16px;
   border: 1px solid rgba(225, 216, 194, 0.11);
   border-radius: 13px;
   background: linear-gradient(155deg, rgba(31, 33, 28, 0.9), rgba(23, 25, 21, 0.9));
   animation: rise-in 300ms ease both;
+}
+
+@media (min-width: 701px) {
+  .config-panel {
+    padding: 22px;
+  }
 }
 
 .reduce-motion .config-panel {
@@ -3981,16 +4014,32 @@ button:disabled {
 }
 
 /* ---------- Shared sub-page head ---------- */
+/* T6 — default = mobile; desktop invertido ao lado do seletor. */
 .sub-head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-bottom: 13px;
+}
+
+@media (min-width: 701px) {
+  .sub-head {
+    flex-wrap: nowrap;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
 }
 
 .sub-head-copy {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 150px;
+}
+
+@media (min-width: 701px) {
+  .sub-head-copy {
+    flex: 1;
+  }
 }
 
 .sub-head h1 {
@@ -3998,12 +4047,19 @@ button:disabled {
   margin: 5px 0 0;
   color: #f1ece0;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  font-size: var(--fs-xl);
+  font-size: var(--fs-lg);
   font-weight: 500;
   letter-spacing: -0.025em;
   line-height: 1.08;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+}
+
+@media (min-width: 701px) {
+  .sub-head h1 {
+    font-size: var(--fs-xl);
+    white-space: nowrap;
+  }
 }
 
 .icon-back {
@@ -4029,13 +4085,23 @@ button:disabled {
 }
 }
 
+/* T6 — default = mobile (linha própria abaixo do título); desktop ao lado. */
 .sub-head-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 5px;
-  margin-top: 4px;
+  width: 100%;
+  margin-top: 0;
+}
+
+@media (min-width: 701px) {
+  .sub-head-meta {
+    justify-content: flex-end;
+    width: auto;
+    margin-top: 4px;
+  }
 }
 
 .meta-chip {
@@ -4391,9 +4457,11 @@ button:disabled {
 }
 
 /* ---------- Deck inspector ---------- */
+/* T6 — default = mobile (3 colunas fixas, lead ocupa a linha); desktop ao lado
+   com mínimos fixos blindados (min(Xpx,100%)). */
 .stat-strip {
   display: grid;
-  grid-template-columns: minmax(150px, 1.5fr) repeat(auto-fit, minmax(74px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   margin-bottom: 15px;
@@ -4402,16 +4470,35 @@ button:disabled {
   background: rgba(226, 218, 196, 0.11);
 }
 
+@media (min-width: 701px) {
+  .stat-strip {
+    grid-template-columns: minmax(min(150px, 100%), 1.5fr) repeat(auto-fit, minmax(min(74px, 100%), 1fr));
+  }
+}
+
 .stat-cell {
   display: grid;
   align-content: center;
   gap: 4px;
-  padding: 11px 13px;
+  padding: 9px 10px;
   background: #1b1d18;
 }
 
+@media (min-width: 701px) {
+  .stat-cell {
+    padding: 11px 13px;
+  }
+}
+
 .stat-cell--lead {
+  grid-column: 1 / -1;
   background: linear-gradient(140deg, #23251d, #1b1d18);
+}
+
+@media (min-width: 701px) {
+  .stat-cell--lead {
+    grid-column: auto;
+  }
 }
 
 .stat-label {
@@ -4441,11 +4528,18 @@ button:disabled {
   color: #f0d58c;
 }
 
+/* T6 — default = mobile (1 coluna); desktop ao lado. */
 .inspect-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 268px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 15px;
+}
+
+@media (min-width: 701px) {
+  .inspect-layout {
+    grid-template-columns: minmax(0, 1fr) 268px;
+  }
 }
 
 .inspect-main {
@@ -4550,10 +4644,19 @@ button:disabled {
   letter-spacing: 0.05em;
 }
 
+/* T6 — default = mobile (tiles menores); desktop ao lado com mínimo fixo
+   blindado (min(96px,100%)). */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 9px;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 7px;
+}
+
+@media (min-width: 701px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(96px, 100%), 1fr));
+    gap: 9px;
+  }
 }
 
 .card-cell {
@@ -4651,11 +4754,19 @@ button:disabled {
 }
 
 /* ---------- Card detail rail ---------- */
+/* T6 — default = mobile (estático; top inerte mantido na base); desktop ao
+   lado volta a sticky. */
 .card-detail {
-  position: sticky;
+  position: static;
   top: 74px;
   display: grid;
   gap: 9px;
+}
+
+@media (min-width: 701px) {
+  .card-detail {
+    position: sticky;
+  }
 }
 
 .card-detail-inner {
@@ -4971,70 +5082,8 @@ button:disabled {
     padding-bottom: 82px;
   }
 
-  .config-screen {
-    padding: 14px 11px 86px;
-  }
-
-  .sub-head {
-    flex-wrap: wrap;
-    gap: 9px;
-    margin-bottom: 13px;
-  }
-
-  .sub-head-copy {
-    flex: 1 1 150px;
-  }
-
-  .sub-head h1 {
-    white-space: normal;
-    font-size: var(--fs-lg);
-  }
-
-  .sub-head-meta {
-    justify-content: flex-start;
-    width: 100%;
-    margin-top: 0;
-  }
-
-  .stat-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .stat-cell {
-    padding: 9px 10px;
-  }
-
-  .stat-cell--lead {
-    grid-column: 1 / -1;
-  }
-
   .stat-value {
     font-size: var(--fs-base);
-  }
-
-  .inspect-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .card-detail {
-    position: static;
-  }
-
-  .card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 7px;
-  }
-
-  .config-step-pill span:not(.config-step-num) {
-    display: none;
-  }
-
-  .config-step-pill {
-    min-width: 0;
-  }
-
-  .config-panel {
-    padding: 16px;
   }
 
   .review-grid {
