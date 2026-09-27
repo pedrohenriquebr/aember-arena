@@ -152,16 +152,17 @@ button:disabled {
 
 .brand-wordmark strong {
   color: #f2eddf;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 750;
   letter-spacing: 0.17em;
 }
 
 .brand-wordmark small {
   color: #c4a35c;
-  font-size: 9px;
+  font-size: var(--fs-3xs);
   font-weight: 700;
   letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 
 .header-room-status,
@@ -199,7 +200,7 @@ button:disabled {
   align-items: center;
   gap: 10px;
   color: #a6a497;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.17em;
   white-space: nowrap;
@@ -239,7 +240,7 @@ button:disabled {
   gap: 6px;
   margin-right: 7px;
   color: #91b795;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.1em;
   white-space: nowrap;
@@ -269,7 +270,7 @@ button:disabled {
   border-radius: 7px;
   color: #c3c1b5;
   background: rgba(255, 255, 255, 0.02);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -4694,11 +4695,11 @@ button:disabled {
   }
 
   .brand-wordmark strong {
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .brand-wordmark small {
-    font-size: 7px;
+    font-size: var(--fs-3xs);
   }
 
   .header-room-status {
@@ -5239,7 +5240,7 @@ button:disabled {
   }
 
   .brand-wordmark strong {
-    font-size: 10px;
+    font-size: var(--fs-xs);
   }
 }
 
