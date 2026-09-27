@@ -1044,8 +1044,12 @@ function App() {
   useEffect(() => {
     saveLanguage(language);
     setSettings((prev) => (prev.language === language ? prev : { ...prev, language }));
-    document.documentElement.lang = language === "ptBR" ? "pt-BR" : "en";
   }, [language]);
+
+  // Keep <html lang> in sync with the active language (settings.language).
+  useEffect(() => {
+    document.documentElement.lang = settings.language === "ptBR" ? "pt-BR" : "en";
+  }, [settings.language]);
 
   useEffect(() => {
     void cacheDeck(DEMO_DECK);

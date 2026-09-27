@@ -27,14 +27,13 @@
 }
 
 html {
-  min-width: 320px;
   min-height: 100%;
   background: var(--ink);
 }
 
 body {
-  min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
   background:
     radial-gradient(ellipse at 50% -28%, rgba(77, 76, 56, 0.24), transparent 48%),
@@ -85,6 +84,7 @@ button:disabled {
 
 .app-root {
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
 }
 
@@ -93,11 +93,11 @@ button:disabled {
   z-index: 30;
   top: 0;
   display: flex;
-  height: 62px;
+  height: calc(62px + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 0 clamp(14px, 2.6vw, 34px);
+  padding: env(safe-area-inset-top, 0px) clamp(14px, 2.6vw, 34px) 0;
   border-bottom: 1px solid rgba(230, 221, 198, 0.1);
   background: rgba(18, 20, 17, 0.94);
   backdrop-filter: blur(16px);
@@ -972,11 +972,11 @@ button:disabled {
   position: relative;
   display: inline-flex;
   min-width: 92px;
-  height: 42px;
+  min-height: 44px;
   align-items: center;
   justify-content: flex-start;
   gap: 7px;
-  padding: 0 9px;
+  padding: 10px 9px;
   border: 1px solid rgba(222, 214, 194, 0.1);
   border-radius: 6px;
   color: #a4a69a;
@@ -1018,12 +1018,12 @@ button:disabled {
 
 .end-turn-button {
   display: inline-flex;
-  height: 38px;
+  min-height: 44px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   gap: 9px;
-  padding: 0 12px;
+  padding: 10px 12px;
   border: 1px solid rgba(211, 173, 93, 0.47);
   border-radius: 6px;
   color: #f0d38b;
@@ -1134,6 +1134,7 @@ button:disabled {
   top: 76px;
   display: flex;
   max-height: calc(100vh - 92px);
+  max-height: calc(100dvh - 92px);
   min-height: 520px;
   flex-direction: column;
   overflow: auto;
@@ -1966,7 +1967,7 @@ button:disabled {
   border-radius: 5px;
   color: #eee9dc;
   background: rgba(5, 7, 5, 0.32);
-  font-size: 10px;
+  font-size: 16px;
 }
 
 .deck-input-row input::placeholder {
@@ -3682,7 +3683,7 @@ button:disabled {
   border: 0;
   color: #ece7d9;
   background: transparent;
-  font-size: 11px;
+  font-size: 16px;
   outline: none;
 }
 
@@ -3979,7 +3980,7 @@ button:disabled {
   border: 0;
   color: #ece7d9;
   background: transparent;
-  font-size: 11px;
+  font-size: 16px;
   outline: none;
 }
 
@@ -4350,7 +4351,8 @@ button:disabled {
   flex: 1;
   gap: 3px;
   justify-items: center;
-  padding: 6px 2px;
+  min-height: 44px;
+  padding: 7px 2px;
   border: 0;
   border-radius: 7px;
   color: #86887d;
@@ -4391,7 +4393,7 @@ button:disabled {
   .house-choice {
     min-width: 80px;
     gap: 5px;
-    padding: 0 7px;
+    padding: 10px 7px;
   }
 
   .house-choice > span:nth-child(2) {
@@ -4454,9 +4456,9 @@ button:disabled {
 
 @media (max-width: 700px) {
   .app-header {
-    height: 58px;
+    height: calc(58px + env(safe-area-inset-top, 0px));
     gap: 8px;
-    padding: 0 11px;
+    padding: env(safe-area-inset-top, 0px) 11px 0;
   }
 
   .header-nav {
@@ -4491,7 +4493,7 @@ button:disabled {
   }
 
   .home-cta-bar {
-    bottom: 52px;
+    bottom: 54px;
     padding: 9px 11px;
   }
 
@@ -4958,9 +4960,9 @@ button:disabled {
 
   .house-choice {
     min-width: 85px;
-    height: 35px;
+    min-height: 44px;
     gap: 6px;
-    padding: 0 7px;
+    padding: 8px 7px;
   }
 
   .house-choice .house-icon {
@@ -4978,11 +4980,11 @@ button:disabled {
   }
 
   .end-turn-button {
-    height: 32px;
+    min-height: 44px;
     grid-column: 2;
     grid-row: 1;
     gap: 5px;
-    padding: 0 8px;
+    padding: 8px;
     font-size: 8px;
   }
 
