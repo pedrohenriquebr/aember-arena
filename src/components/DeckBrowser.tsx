@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowLeft, CloudOff, LoaderCircle, Search, Swords, WifiOff } from "lucide-react";
+import { ArrowLeft, CloudOff, LoaderCircle, Search, SearchX, Swords, WifiOff, X } from "lucide-react";
 import type { DeckInfo } from "../lib/game";
-import { fetchDeckPage } from "../lib/keyforgeApi";
+import { fetchDeckPage, VaultError, vaultErrorText } from "../lib/keyforgeApi";
 import type { Translator } from "../lib/i18n";
 import { sound } from "../lib/sound";
 import { HouseMark, DeckTile } from "./DeckTile";
@@ -36,13 +36,13 @@ export function DeckBrowser({
   const [decks, setDecks] = useState<DeckInfo[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
   const requestRef = useRef(0);
 
   useEffect(() => {
     const requestId = ++requestRef.current;
     setLoading(true);
-    setError("");
+    setError(null);
 
     fetchDeckPage({ page, pageSize: PAGE_SIZE, search, ordering })
       .then((result) => {
@@ -54,8 +54,8 @@ export function DeckBrowser({
         if (requestId !== requestRef.current) return;
         setDecks([]);
         setCount(0);
-        setError(cause instanceof Error ? cause.message : t("browse.failed"));
-        sound.play("error");
+        setError(cause ?? new VaultError("browse.failed"));
+        if (!(cause instanceof VaultError && cause.key === "vault.noResults")) sound.play("error");
       })
       .finally(() => {
         if (requestId === requestRef.current) setLoading(false);
@@ -66,6 +66,10 @@ export function DeckBrowser({
     };
   }, [page, search, ordering, t]);
 
+  // An empty result for a search is not a failure: it gets its own state
+  // instead of the "Vault is out of reach" screen.
+  const noResults = error instanceof VaultError && error.key === "vault.noResults";
+  const errorText = error ? vaultErrorText(error, t) : "";
   const totalPages = Math.max(1, Math.min(Math.ceil(count / PAGE_SIZE), 5000));
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
@@ -122,16 +126,16 @@ export function DeckBrowser({
           <span className="status-line status-line--busy"><LoaderCircle size={13} className="spin" /> {t("common.loading")}</span>
         ) : error ? (
           <span className="status-line status-line--warn">
-            {offline ? <WifiOff size={13} /> : <CloudOff size={13} />} {error}
+            {noResults ? <SearchX size={13} /> : offline ? <WifiOff size={13} /> : <CloudOff size={13} />} {errorText}
           </span>
         ) : (
           <span className="status-line">
             <Swords size={13} />
-            {t("browse.resultCount", { count: count.toLocaleString() })}
+            {t("browse.resultCount", { count: count.toLocaleString(t("meta.locale")) })}
           </span>
         )}
         {!loading && !error && (
-          <span className="status-page">{t("browse.pageOf", { page, total: totalPages.toLocaleString() })}</span>
+          <span className="status-page">{t("browse.pageOf", { page, total: totalPages.toLocaleString(t("meta.locale")) })}</span>
         )}
       </div>
 
@@ -146,7 +150,18 @@ export function DeckBrowser({
         </div>
       )}
 
-      {!loading && error && (
+      {!loading && noResults && (
+        <div className="browse-empty">
+          <span className="browse-empty-icon"><SearchX size={22} /></span>
+          <strong>{t("browse.noResultsTitle", { query: search })}</strong>
+          <p>{t("browse.noResultsBody")}</p>
+          <button type="button" className="ghost-button" onClick={() => { sound.play("click"); setPendingSearch(""); setPage(1); setSearch(""); }}>
+            <X size={15} /> {t("browse.clearSearch")}
+          </button>
+        </div>
+      )}
+
+      {!loading && Boolean(error) && !noResults && (
         <div className="browse-empty">
           <span className="browse-empty-icon"><CloudOff size={22} /></span>
           <strong>{t("browse.offlineTitle")}</strong>

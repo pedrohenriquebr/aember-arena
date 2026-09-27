@@ -1,10 +1,29 @@
 import { cacheDeck, getCachedDeck } from "./cache";
 import type { CardFace, DeckInfo } from "./game";
+import type { Translator } from "./i18n";
 
 const DECK_API = "https://www.keyforgegame.com/api/decks";
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 type ApiRecord = Record<string, unknown>;
+
+/** Failure whose text the UI resolves through t(): `key` is an i18n key
+    ("vault.*"), so the message follows the app language, not always English. */
+export class VaultError extends Error {
+  constructor(
+    readonly key: string,
+    readonly params?: Record<string, string | number>,
+  ) {
+    super(key);
+    this.name = "VaultError";
+  }
+}
+
+/** User-facing text for any failure thrown by this module. */
+export function vaultErrorText(error: unknown, t: Translator): string {
+  if (error instanceof VaultError) return t(error.key, error.params);
+  return error instanceof Error && error.message ? error.message : t("vault.loadFailed");
+}
 
 export interface DeckPage {
   decks: DeckInfo[];
@@ -52,7 +71,7 @@ function normaliseCard(value: unknown): CardFace | null {
 
 export function extractDeckId(input: string): string {
   const id = input.trim().match(UUID_PATTERN)?.[0];
-  if (!id) throw new Error("Enter a Master Vault deck UUID or a deck-details URL containing one.");
+  if (!id) throw new VaultError("vault.badId");
   return id.toLowerCase();
 }
 
@@ -99,12 +118,12 @@ function sharedCardsMap(payload: ApiRecord): Map<string, CardFace> {
 
 function describeFailure(error: unknown): Error {
   if (error instanceof Error && error.name === "AbortError") {
-    return new Error("The Master Vault request timed out. Check your connection and try again.");
+    return new VaultError("vault.timeout");
   }
   if (error instanceof TypeError) {
-    return new Error("Could not reach the Master Vault API. The service may be offline or block browser requests.");
+    return new VaultError("vault.unreachable");
   }
-  return error instanceof Error ? error : new Error("Could not load this deck.");
+  return error instanceof Error ? error : new VaultError("vault.loadFailed");
 }
 
 function withTimeout(milliseconds: number): { signal: AbortSignal; clear: () => void } {
@@ -125,11 +144,11 @@ export async function fetchKeyforgeDeck(input: string): Promise<DeckInfo> {
       headers: { Accept: "application/json" },
       signal,
     });
-    if (!response.ok) throw new Error(`Master Vault returned ${response.status}.`);
+    if (!response.ok) throw new VaultError("vault.status", { status: response.status });
     const payload = getRecord(await response.json());
     const data = getRecord(payload.data ?? payload.deck ?? payload);
     const deck = buildDeck(data, sharedCardsMap(payload), id);
-    if (!deck) throw new Error("The deck response did not include card details.");
+    if (!deck) throw new VaultError("vault.noCards");
     await cacheDeck(deck);
     return deck;
   } catch (error) {
@@ -163,7 +182,7 @@ export async function fetchDeckPage(options: {
       headers: { Accept: "application/json" },
       signal,
     });
-    if (!response.ok) throw new Error(`Master Vault returned ${response.status}.`);
+    if (!response.ok) throw new VaultError("vault.status", { status: response.status });
     const payload = getRecord(await response.json());
     const records = Array.isArray(payload.data) ? payload.data : [];
     const cardsById = sharedCardsMap(payload);
@@ -171,7 +190,7 @@ export async function fetchDeckPage(options: {
       .map((record) => buildDeck(getRecord(record), cardsById, ""))
       .filter((deck): deck is DeckInfo => Boolean(deck));
 
-    if (!decks.length) throw new Error("No decks were returned for this page.");
+    if (!decks.length) throw new VaultError("vault.noResults");
     // Cache the page decks one after another: together with the shared IDB
     // connection in cache.ts this keeps a single open() and one write
     // transaction at a time instead of nine concurrent ones per browse page.

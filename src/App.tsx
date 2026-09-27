@@ -50,7 +50,7 @@ import {
   type GameState,
   type LogEntry,
 } from "./lib/game";
-import { fetchKeyforgeDeck, loadDeckOrCache } from "./lib/keyforgeApi";
+import { fetchKeyforgeDeck, loadDeckOrCache, vaultErrorText } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator } from "./lib/i18n";
 import { readSettings, saveSettings, type AppSettings } from "./lib/settings";
 import { sound } from "./lib/sound";
@@ -74,13 +74,20 @@ function prefersHover() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: hover)").matches;
 }
 
-// Translate a structured log entry, localizing the two known player names.
+// game.ts is pure and language-agnostic, so the fixed player/deck names it
+// creates are localized at render time (score bands and the log alike).
+function localizeName(name: string, t: Translator): string {
+  if (name === "You") return t("log.you");
+  if (name === "The Ember Warden") return t("log.warden");
+  if (name === "Warden's mirror deck") return t("game.mirrorDeck");
+  return name;
+}
+
+// Translate a structured log entry, localizing the known player/deck names.
 function renderLog(entry: LogEntry, t: Translator): string {
-  const localizeName = (name: string) =>
-    name === "You" ? t("log.you") : name === "The Ember Warden" ? t("log.warden") : name;
   const params: Record<string, string> = { ...entry.params };
-  if (params.name) params.name = localizeName(params.name);
-  if (params.rival) params.rival = localizeName(params.rival);
+  if (params.name) params.name = localizeName(params.name, t);
+  if (params.rival) params.rival = localizeName(params.rival, t);
   if (params.house) params.house = houseLabel(params.house, t);
   return t(entry.key, params);
 }
@@ -698,7 +705,7 @@ const PlayerBand = memo(function PlayerBand({
       </div>
       <div className="player-copy">
         <div className="player-name-row">
-          <strong>{player.name}</strong>
+          <strong>{localizeName(player.name, t)}</strong>
           {/* T4: indicador só-ícone; o texto ACTIVE/THINKING via t() fica no aria-label. */}
           {active && (
             <span className="active-turn-tag" role="img" aria-label={thinking ? t("game.thinkingTag") : t("game.active")}>
@@ -707,7 +714,7 @@ const PlayerBand = memo(function PlayerBand({
           )}
         </div>
         <div className="player-deck-name">
-          <span className="player-deck-label">{player.deckName}</span>
+          <span className="player-deck-label">{localizeName(player.deckName, t)}</span>
           <span className="player-house-list">
             {player.houses.map((house) => <HouseIcon key={house} house={house} size="xs" />)}
           </span>
@@ -1447,7 +1454,7 @@ function App() {
     } catch (error) {
       const cached = await getCachedDeck(currentDeck.id);
       if (cached) showToast(t("toast.usingCache", { name: cached.name }));
-      else showToast(error instanceof Error ? error.message : t("toast.syncFailed"), "error");
+      else showToast(vaultErrorText(error, t), "error");
     } finally {
       setSyncing(false);
     }
@@ -1465,7 +1472,7 @@ function App() {
       setDeckFromCache(result.fromCache);
       sound.play("select");
     } catch (error) {
-      setDeckError(error instanceof Error ? error.message : t("toast.syncFailed"));
+      setDeckError(vaultErrorText(error, t));
       sound.play("error");
     } finally {
       setDeckLoading(false);

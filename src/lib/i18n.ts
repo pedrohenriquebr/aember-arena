@@ -298,6 +298,18 @@ const en: Dict = {
   "pager.prev": "Previous page",
   "pager.next": "Next page",
   "game.amberToKey": "{amount} amber · a key costs {cost}",
+  "meta.locale": "en-US",
+  "game.mirrorDeck": "Warden's mirror deck",
+  "vault.badId": "Enter a Master Vault deck UUID or a deck-details URL containing one.",
+  "vault.timeout": "The Master Vault request timed out. Check your connection and try again.",
+  "vault.unreachable": "Could not reach the Master Vault API. The service may be offline or block browser requests.",
+  "vault.loadFailed": "Could not load this deck.",
+  "vault.status": "Master Vault returned {status}.",
+  "vault.noCards": "The deck response did not include card details.",
+  "vault.noResults": "No decks match this search.",
+  "browse.noResultsTitle": "No decks named “{query}”",
+  "browse.noResultsBody": "The Master Vault searches by deck name. Check the spelling or try a shorter part of the name.",
+  "browse.clearSearch": "Clear search",
 };
 
 const ptBR: Dict = {
@@ -575,6 +587,18 @@ const ptBR: Dict = {
   "pager.prev": "Página anterior",
   "pager.next": "Próxima página",
   "game.amberToKey": "{amount} âmbar · uma chave custa {cost}",
+  "meta.locale": "pt-BR",
+  "game.mirrorDeck": "Baralho espelho do Warden",
+  "vault.badId": "Informe o UUID de um baralho do Master Vault ou uma URL de deck-details que o contenha.",
+  "vault.timeout": "A requisição ao Master Vault expirou. Verifique a conexão e tente de novo.",
+  "vault.unreachable": "Não foi possível acessar a API do Master Vault. O serviço pode estar fora do ar ou bloqueando requisições do navegador.",
+  "vault.loadFailed": "Não foi possível carregar este baralho.",
+  "vault.status": "O Master Vault respondeu {status}.",
+  "vault.noCards": "A resposta do baralho não trouxe os detalhes das cartas.",
+  "vault.noResults": "Nenhum baralho corresponde a esta busca.",
+  "browse.noResultsTitle": "Nenhum baralho chamado “{query}”",
+  "browse.noResultsBody": "O Master Vault busca pelo nome do baralho. Confira a grafia ou tente um trecho menor do nome.",
+  "browse.clearSearch": "Limpar busca",
 };
 
 const dictionaries: Record<Language, Dict> = { en, ptBR };
