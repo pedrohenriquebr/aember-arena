@@ -1,7 +1,15 @@
 const SHELL_CACHE = "aember-arena-shell-v2";
 const ART_CACHE = "aember-arena-art-v2";
-const SHELL_URLS = ["/", "/index.html", "/manifest.webmanifest", "/forge-icon.svg"];
+// Relative paths: resolved against the service worker script URL, so the shell
+// precache works at the deployment root, under a subpath, wherever the SW is.
+const SHELL_URLS = ["./", "./index.html", "./manifest.webmanifest", "./forge-icon.svg"];
 const ART_HOSTS = ["mastervault-storage-prod.s3.amazonaws.com", "cdn.keyforgegame.com"];
+
+// Simple LRU cap on the art cache. Cache.keys() returns requests in insertion
+// order, so the head of the list is the least recently used and re-putting a
+// hit moves it to the tail. Keeps offline browsing of the Master Vault from
+// growing the cache without bound until the browser evicts it silently.
+const ART_CACHE_LIMIT = 300;
 
 // Official house emblems: precached so faction badges render offline.
 const HOUSE_ICONS = [
@@ -27,6 +35,67 @@ async function precacheHouseIcons() {
       }
     }),
   );
+}
+
+function isQuotaError(error) {
+  return (
+    error?.name === "QuotaExceededError" ||
+    error?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    (typeof error?.message === "string" && /quota/i.test(error.message))
+  );
+}
+
+// Drops the oldest half of the cache. Used when the storage quota is hit so a
+// fresh entry can still be stored on the retry.
+async function pruneOldestArt(cache) {
+  const keys = await cache.keys();
+  const count = Math.ceil(keys.length / 2);
+  await Promise.all(keys.slice(0, count).map((request) => cache.delete(request)));
+}
+
+// Enforces the cap after a put: deletes from the head (oldest) until the cache
+// holds at most ART_CACHE_LIMIT entries.
+async function trimArtCache(cache) {
+  const keys = await cache.keys();
+  const count = keys.length - ART_CACHE_LIMIT;
+  if (count <= 0) return;
+  await Promise.all(keys.slice(0, count).map((request) => cache.delete(request)));
+}
+
+// Best-effort put with quota handling. On QuotaExceededError it prunes the
+// oldest half and retries once; every remaining failure is swallowed on
+// purpose — the page already holds the network response, so caching is an
+// optimization, never a gate.
+async function putArtEntry(cache, request, entry) {
+  const retryCopy = entry.clone();
+  try {
+    await cache.put(request, entry);
+  } catch (error) {
+    if (!isQuotaError(error)) return;
+    try {
+      await pruneOldestArt(cache);
+      await cache.put(request, retryCopy);
+    } catch {
+      // Still over quota: give up on this entry.
+    }
+    return;
+  }
+  try {
+    await trimArtCache(cache);
+  } catch {
+    // A failed trim is retried on the next put.
+  }
+}
+
+// LRU touch: deleting and re-putting a hit moves it to the tail (most
+// recently used) of the cache's insertion order.
+async function touchArtEntry(cache, request, entry) {
+  try {
+    await cache.delete(request);
+    await cache.put(request, entry);
+  } catch {
+    // Worst case the entry keeps its old position; it is still served.
+  }
 }
 
 self.addEventListener("install", (event) => {
@@ -57,7 +126,9 @@ self.addEventListener("fetch", (event) => {
     if (url.pathname.endsWith("/sw.js")) return;
     if (request.mode === "navigate") {
       event.respondWith(
-        fetch(request).catch(async () => (await caches.match("/") || await caches.match("/index.html"))),
+        // Relative matches resolve against the SW script URL, same base as the
+        // precached SHELL_URLS — consistent at root and under a subpath.
+        fetch(request).catch(async () => (await caches.match("./") || await caches.match("./index.html"))),
       );
       return;
     }
@@ -77,10 +148,16 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       caches.open(ART_CACHE).then(async (cache) => {
         const cached = await cache.match(request);
-        if (cached) return cached;
+        if (cached) {
+          // Clone while the body is still unused; the page gets the original.
+          const copy = cached.clone();
+          event.waitUntil(touchArtEntry(cache, request, copy));
+          return cached;
+        }
         const response = await fetch(request);
         if (response.ok || response.type === "opaque") {
-          await cache.put(request, response.clone()).catch(() => undefined);
+          const copy = response.clone();
+          event.waitUntil(putArtEntry(cache, request, copy));
         }
         return response;
       }),
