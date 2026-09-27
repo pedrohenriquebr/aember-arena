@@ -137,6 +137,18 @@ button,
      carta (@container) ou vira indicador visual + aria-label via t(). */
   --fs-card-floor: 10px;
 
+  /* Escala de raios (P2 polish): 17 valores ad-hoc (5–13px) viraram 5 degraus.
+     sm = chips/botões pequenos · md = botões/inputs · lg = cards/painéis ·
+     xl = hero/sheets · pill = chips arredondados. 3–4px (badges mínimos) e
+     50% (círculos) ficam literais. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+  /* Curva de saída única das entradas/microinterações. */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
   /* Altura da tab bar mobile (44px de alvo + 2×5px + 1px de borda ≈ 54px) mais a
      safe-area: âncora dos docks fixos/sticky que ficam logo acima dela. */
   --tabbar-h: calc(54px + env(safe-area-inset-bottom, 0px));
@@ -197,7 +209,7 @@ button:disabled {
 
 ::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(211, 173, 93, 0.32);
   background-clip: padding-box;
 }
@@ -421,7 +433,7 @@ button:disabled {
   gap: 0;
   padding: 0;
   border-color: rgba(226, 218, 196, 0.12);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: #c3c1b5;
   background: rgba(255, 255, 255, 0.02);
   font-size: var(--fs-xs);
@@ -493,7 +505,7 @@ button:disabled {
   width: 33px;
   height: 33px;
   border-color: rgba(226, 218, 196, 0.12);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: #c4c2b6;
   background: rgba(255, 255, 255, 0.02);
 }
@@ -528,7 +540,7 @@ button:disabled {
    (sheet do inspetor, lightbox) — eles passavam a rolar junto com a página. */
 .screen {
   width: 100%;
-  animation: screen-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: screen-in 420ms var(--ease-out) backwards;
 }
 
 .reduce-motion .screen {
@@ -585,7 +597,7 @@ button:disabled {
   justify-content: space-between;
   gap: 10px;
   margin: 0 0 11px;
-  animation: rise-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: rise-in 520ms var(--ease-out) backwards;
 }
 
 @media (min-width: 701px) {
@@ -649,7 +661,7 @@ button:disabled {
   gap: 6px;
   padding: 7px;
   border: 1px solid rgba(221, 212, 189, 0.12);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(245, 238, 216, 0.025);
 }
 
@@ -667,7 +679,7 @@ button:disabled {
   width: 25px;
   height: 25px;
   place-items: center;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: #dabb75;
   background: rgba(211, 173, 93, 0.12);
 }
@@ -709,17 +721,17 @@ button:disabled {
   isolation: isolate;
   overflow: hidden;
   border: 1px solid rgba(218, 207, 179, 0.19);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background:
     radial-gradient(ellipse at 47% 48%, rgba(50, 77, 67, 0.62), transparent 58%),
     linear-gradient(135deg, #202e28 0%, #1a2521 45%, #18211e 100%);
   box-shadow: 0 18px 55px rgba(0, 0, 0, 0.23), inset 0 0 0 5px rgba(9, 12, 10, 0.16);
-  animation: rise-in 620ms 60ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: rise-in 620ms 60ms var(--ease-out) backwards;
 }
 
 @media (min-width: 701px) {
   .game-board {
-    border-radius: 13px;
+    border-radius: var(--radius-lg);
   }
 }
 
@@ -728,7 +740,7 @@ button:disabled {
   z-index: -1;
   inset: 4px;
   border: 1px solid rgba(209, 182, 122, 0.075);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background:
     radial-gradient(ellipse at 50% 51%, transparent 0 29%, rgba(183, 156, 98, 0.06) 29.2% 29.35%, transparent 29.6%),
     radial-gradient(ellipse at 50% 51%, transparent 0 39%, rgba(183, 156, 98, 0.04) 39.2% 39.35%, transparent 39.6%),
@@ -739,7 +751,7 @@ button:disabled {
 @media (min-width: 701px) {
   .felt-etching {
     inset: 6px;
-    border-radius: 9px;
+    border-radius: var(--radius-md);
   }
 }
 
@@ -1040,7 +1052,7 @@ button:disabled {
   left: 0;
   height: 2px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(215, 175, 91, 0.16);
 }
 
@@ -1049,7 +1061,7 @@ button:disabled {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #b8913f, #f1d58a);
-  transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: width 320ms var(--ease-out);
 }
 
 .amber-counter--ready .amber-meter i {
@@ -1159,7 +1171,7 @@ button:disabled {
 .board-piece {
   position: relative;
   flex: 0 0 auto;
-  animation: card-arrive 330ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: card-arrive 330ms var(--ease-out) both;
 }
 
 .card-tile {
@@ -1233,7 +1245,7 @@ button:disabled {
   overflow: hidden;
   aspect-ratio: 0.714;
   border: 1px solid rgba(235, 227, 207, 0.39);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(145deg, color-mix(in srgb, var(--house-color) 61%, #2b241b), #161612 72%);
   box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   transition: box-shadow 170ms ease, border-color 170ms ease, transform 170ms ease;
@@ -1599,7 +1611,7 @@ button:disabled {
   gap: 6px;
   padding: 8px 7px;
   border: 1px solid rgba(222, 214, 194, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #a4a69a;
   background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
@@ -1697,7 +1709,7 @@ button:disabled {
   gap: 5px;
   padding: 8px;
   border: 1px solid rgba(211, 173, 93, 0.47);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #f0d38b;
   background: linear-gradient(140deg, rgba(162, 123, 51, 0.25), rgba(131, 97, 42, 0.15));
   cursor: pointer;
@@ -1864,10 +1876,10 @@ button:disabled {
   overflow: visible;
   margin-top: 11px;
   border: 1px solid rgba(225, 216, 194, 0.13);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: linear-gradient(155deg, rgba(31, 33, 28, 0.98), rgba(23, 25, 21, 0.98));
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.14);
-  animation: rise-in 660ms 140ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: rise-in 660ms 140ms var(--ease-out) backwards;
 }
 
 @media (min-width: 701px) {
@@ -1879,7 +1891,7 @@ button:disabled {
     align-items: start;
     overflow: visible;
     margin-top: 0;
-    border-radius: 11px;
+    border-radius: var(--radius-lg);
   }
 }
 
@@ -1972,7 +1984,7 @@ button:disabled {
   border-radius: 16px 16px 0 0;
   background: linear-gradient(170deg, #22241e, #191b17 60%);
   box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.55);
-  animation: sheet-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: sheet-in 240ms var(--ease-out) both;
 }
 
 /* Alça: affordance de sheet. */
@@ -1982,7 +1994,7 @@ button:disabled {
   left: 50%;
   width: 36px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(226, 218, 196, 0.22);
   content: "";
   transform: translateX(-50%);
@@ -2058,7 +2070,7 @@ button:disabled {
   width: 24px;
   height: 24px;
   border-color: rgba(229, 219, 195, 0.13);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: #a6a396;
   background: rgba(255, 255, 255, 0.02);
 }
@@ -2185,7 +2197,7 @@ button:disabled {
   gap: 6px;
   padding: 6px 8px;
   border: 1px solid rgba(211, 173, 93, 0.37);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: #f0d38c;
   background: rgba(174, 134, 58, 0.17);
   cursor: pointer;
@@ -2363,7 +2375,7 @@ button:disabled {
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid rgba(199, 170, 102, 0.25);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #ceb779;
   background: rgba(190, 151, 68, 0.1);
 }
@@ -2390,7 +2402,7 @@ button:disabled {
   height: 27px;
   place-items: center;
   border: 1px solid rgba(225, 216, 194, 0.12);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: #a9a698;
   background: transparent;
   cursor: pointer;
@@ -2566,13 +2578,13 @@ button:disabled {
   gap: 9px;
   padding: 11px 12px;
   border: 1px solid rgba(139, 175, 137, 0.35);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: #d7e4d1;
   background: rgba(32, 45, 34, 0.97);
   box-shadow: 0 14px 35px rgba(0, 0, 0, 0.34);
   font-size: var(--fs-2xs);
   line-height: 1.35;
-  animation: toast-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: toast-in 260ms var(--ease-out) both;
 }
 
 @media (min-width: 701px) {
@@ -2647,7 +2659,7 @@ button:disabled {
 @media (min-width: 701px) {
   .modal-panel {
     max-height: min(90vh, 820px);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
   }
 }
 
@@ -2689,7 +2701,7 @@ button:disabled {
   height: 32px;
   flex: 0 0 auto;
   border-color: rgba(224, 216, 195, 0.14);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #b7b4a7;
   background: rgba(255, 255, 255, 0.02);
 }
@@ -2710,7 +2722,7 @@ button:disabled {
   gap: 10px;
   padding: 6px 10px;
   border: 1px solid rgba(225, 215, 191, 0.1);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #d5d1c3;
   background: rgba(255, 255, 255, 0.018);
   cursor: pointer;
@@ -2787,7 +2799,7 @@ button:disabled {
   margin-top: 18px;
   padding: 10px 11px;
   border: 1px solid rgba(211, 173, 93, 0.17);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: rgba(211, 173, 93, 0.04);
 }
 
@@ -2797,7 +2809,7 @@ button:disabled {
   height: 28px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #dab96e;
   background: rgba(211, 173, 93, 0.1);
 }
@@ -2850,7 +2862,7 @@ button:disabled {
   flex: 1;
   padding: 0 11px;
   border: 1px solid rgba(224, 214, 191, 0.17);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: #eee9dc;
   background: rgba(5, 7, 5, 0.32);
   font-size: var(--fs-input);
@@ -2867,7 +2879,7 @@ button:disabled {
   justify-content: center;
   gap: 6px;
   border: 1px solid rgba(211, 173, 93, 0.4);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: #edd28a;
   background: rgba(182, 139, 54, 0.15);
   cursor: pointer;
@@ -2895,7 +2907,7 @@ button:disabled {
   margin-top: 11px;
   padding: 9px 10px;
   border: 1px solid rgba(201, 118, 90, 0.3);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: #e7b09b;
   background: rgba(123, 56, 41, 0.12);
   font-size: var(--fs-2xs);
@@ -2910,7 +2922,7 @@ button:disabled {
   margin-top: 18px;
   padding: 9px;
   border: 1px solid rgba(211, 173, 93, 0.25);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: rgba(211, 173, 93, 0.045);
   animation: rise-in 260ms ease backwards;
 }
@@ -3009,7 +3021,7 @@ button:disabled {
   margin-top: 18px;
   padding: 11px;
   border: 1px solid rgba(224, 215, 192, 0.11);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -3019,7 +3031,7 @@ button:disabled {
   height: 31px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #c4a35e;
   background: rgba(211, 173, 93, 0.1);
 }
@@ -3076,7 +3088,7 @@ button:disabled {
   max-width: 400px;
   padding: 27px 25px;
   border: 1px solid rgba(219, 188, 113, 0.39);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(145deg, #292920, #1c1d17);
   text-align: center;
   box-shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
@@ -3163,7 +3175,7 @@ button:disabled {
   margin-right: auto;
   padding: 3px;
   border: 1px solid rgba(226, 218, 196, 0.09);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.015);
 }
 
@@ -3180,7 +3192,7 @@ button:disabled {
   gap: 6px;
   padding: 0 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #9a998d;
   background: transparent;
   cursor: pointer;
@@ -3231,7 +3243,7 @@ button:disabled {
   gap: 7px;
   padding: 0 7px;
   border: 1px solid rgba(226, 218, 196, 0.12);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: #c5c3b7;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
@@ -3283,7 +3295,7 @@ button:disabled {
   min-width: 178px;
   padding: 5px;
   border: 1px solid rgba(226, 218, 196, 0.16);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: linear-gradient(150deg, #26281f, #1a1c17);
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
   animation: modal-in 180ms ease both;
@@ -3295,7 +3307,7 @@ button:disabled {
   gap: 9px;
   padding: 9px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #cfccbf;
   background: transparent;
   cursor: pointer;
@@ -3328,7 +3340,7 @@ button:disabled {
   align-items: center;
   padding: 0;
   border: 1px solid rgba(226, 218, 196, 0.16);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.04);
   cursor: pointer;
   transition: background 180ms ease, border-color 180ms ease;
@@ -3347,7 +3359,7 @@ button:disabled {
   border-radius: 50%;
   background: #cbc7ba;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), background 180ms ease;
+  transition: transform 200ms var(--ease-out), background 180ms ease;
 }
 
 .toggle--on .toggle-knob {
@@ -3366,7 +3378,7 @@ button:disabled {
   gap: 8px;
   padding: 0 14px;
   border: 1px solid rgba(211, 173, 93, 0.5);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #17150f;
   background: linear-gradient(140deg, #edc878, #cba25c);
   cursor: pointer;
@@ -3403,7 +3415,7 @@ button:disabled {
   gap: 8px;
   padding: 0 14px;
   border: 1px solid rgba(226, 218, 196, 0.15);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #c9c6b9;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
@@ -3446,7 +3458,7 @@ button:disabled {
   margin-bottom: 20px;
   padding: 24px 18px;
   border: 1px solid rgba(219, 207, 179, 0.16);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   background:
     radial-gradient(ellipse at 82% 8%, rgba(211, 173, 93, 0.14), transparent 55%),
     linear-gradient(150deg, #23261e 0%, #191b16 70%);
@@ -3614,7 +3626,7 @@ button:disabled {
 
 .deck-grid-item {
   display: block;
-  animation: rise-in 340ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: rise-in 340ms var(--ease-out) backwards;
 }
 
 .reduce-motion .deck-grid-item {
@@ -3672,7 +3684,7 @@ button:disabled {
   height: 100%;
   padding: 10px;
   border: 1px solid rgba(224, 215, 192, 0.11);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   background:
     linear-gradient(150deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008)),
     #1b1d18;
@@ -3745,7 +3757,7 @@ button:disabled {
   width: 60px;
   aspect-ratio: 0.714;
   border: 1px solid rgba(235, 227, 207, 0.16);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: #14160f;
 }
 
@@ -3778,7 +3790,7 @@ button:disabled {
   overflow: hidden;
   padding: 2px 7px;
   border: 1px solid rgba(211, 173, 93, 0.35);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--gold-bright);
   background: rgba(211, 173, 93, 0.1);
   font-size: var(--fs-3xs);
@@ -3898,7 +3910,7 @@ button:disabled {
   gap: 5px;
   padding: 0 8px;
   border: 1px solid rgba(226, 218, 196, 0.16);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   color: #cbc8bb;
   background: rgba(16, 18, 14, 0.86);
   cursor: pointer;
@@ -3935,7 +3947,7 @@ button:disabled {
   gap: 4px;
   padding: 4px;
   border: 1px solid rgba(226, 218, 196, 0.12);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -3965,7 +3977,7 @@ button:disabled {
   place-items: center;
   padding: 0 6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #a3a49a;
   background: transparent;
   cursor: pointer;
@@ -4009,7 +4021,7 @@ button:disabled {
   margin-top: 14px;
   padding: 15px;
   border: 1px dashed rgba(224, 215, 192, 0.18);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   color: inherit;
   background: rgba(255, 255, 255, 0.012);
   cursor: pointer;
@@ -4030,7 +4042,7 @@ button:disabled {
   height: 40px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   color: #d9bd74;
   background: rgba(211, 173, 93, 0.12);
 }
@@ -4152,7 +4164,7 @@ button:disabled {
   margin-bottom: 20px;
   padding: 5px;
   border: 1px solid rgba(226, 218, 196, 0.1);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.015);
   overflow-x: auto;
 }
@@ -4168,7 +4180,7 @@ button:disabled {
   height: 44px;
   padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #92938a;
   background: transparent;
   cursor: pointer;
@@ -4247,7 +4259,7 @@ button:disabled {
 .config-panel {
   padding: 16px;
   border: 1px solid rgba(225, 216, 194, 0.11);
-  border-radius: 13px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(155deg, rgba(31, 33, 28, 0.9), rgba(23, 25, 21, 0.9));
   animation: rise-in 300ms ease backwards;
 }
@@ -4304,7 +4316,7 @@ button:disabled {
   width: 100%;
   height: 5px;
   margin: 12px 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   appearance: none;
   background: linear-gradient(90deg, #d3ad5d var(--range-progress), #43453d var(--range-progress));
   cursor: pointer;
@@ -4335,7 +4347,7 @@ button:disabled {
   margin-top: 8px;
   padding: 9px 13px;
   border: 1px solid rgba(211, 173, 93, 0.2);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #dcc588;
   background: rgba(211, 173, 93, 0.06);
   font-size: var(--fs-xs);
@@ -4353,7 +4365,7 @@ button:disabled {
   gap: 12px;
   padding: 12px 13px;
   border: 1px solid rgba(225, 216, 194, 0.09);
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.014);
 }
 
@@ -4363,7 +4375,7 @@ button:disabled {
   height: 33px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #d3b571;
   background: rgba(211, 173, 93, 0.1);
 }
@@ -4401,7 +4413,7 @@ button:disabled {
 .review-card {
   padding: 14px;
   border: 1px solid rgba(225, 216, 194, 0.1);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.015);
 }
 
@@ -4524,11 +4536,11 @@ button:disabled {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(235, 227, 207, 0.3);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: #1a1c16;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.35);
   transform-origin: var(--zoom-origin, 50% 50%);
-  animation: zoom-pop 130ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: zoom-pop 130ms var(--ease-out) both;
 }
 
 @media (min-width: 701px) {
@@ -4606,7 +4618,7 @@ button:disabled {
   overflow-y: auto;
   padding: 16px;
   border: 1px solid rgba(225, 215, 191, 0.17);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(145deg, #24261f, #191b17 74%);
   box-shadow: 0 25px 90px rgba(0, 0, 0, 0.55);
   animation: modal-in 260ms cubic-bezier(0.18, 0.8, 0.24, 1) both;
@@ -4695,7 +4707,7 @@ button:disabled {
 
 /* ---------- Card enter animation ---------- */
 .card-tile--enter {
-  animation: card-deal 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: card-deal 340ms var(--ease-out) both;
 }
 
 .reduce-motion .card-tile--enter,
@@ -4899,7 +4911,7 @@ button:disabled {
   place-items: center;
   margin-top: 3px;
   border: 1px solid rgba(226, 218, 196, 0.14);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: #c3c1b5;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
@@ -4939,7 +4951,7 @@ button:disabled {
   gap: 4px;
   padding: 4px 8px;
   border: 1px solid rgba(226, 218, 196, 0.13);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: #a8a99d;
   background: rgba(255, 255, 255, 0.02);
   font-size: var(--fs-2xs);
@@ -5028,7 +5040,7 @@ button:disabled {
   gap: 8px;
   padding: 0 11px;
   border: 1px solid rgba(226, 218, 196, 0.14);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(8, 10, 8, 0.35);
   color: #9a9b90;
   transition: border-color 160ms ease;
@@ -5090,7 +5102,7 @@ button:disabled {
   height: 30px;
   padding: 0 11px;
   border: 1px solid rgba(226, 218, 196, 0.12);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: #9b9c91;
   background: transparent;
   cursor: pointer;
@@ -5198,7 +5210,7 @@ button:disabled {
   gap: 8px;
   padding: 42px 24px;
   border: 1px dashed rgba(226, 218, 196, 0.15);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.012);
   text-align: center;
 }
@@ -5239,7 +5251,7 @@ button:disabled {
   height: 122px;
   padding: 11px;
   border: 1px solid rgba(224, 215, 192, 0.08);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.014);
 }
 
@@ -5247,7 +5259,7 @@ button:disabled {
   width: 68px;
   aspect-ratio: 0.714;
   flex: 0 0 auto;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(100deg, #23251e 30%, #2e3128 50%, #23251e 70%);
   background-size: 220% 100%;
   animation: skeleton-slide 1.35s ease-in-out infinite;
@@ -5304,7 +5316,7 @@ button:disabled {
   overflow: hidden;
   margin-bottom: 15px;
   border: 1px solid rgba(226, 218, 196, 0.11);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   background: rgba(226, 218, 196, 0.11);
 }
 
@@ -5404,7 +5416,7 @@ button:disabled {
   gap: 8px;
   padding: 0 11px;
   border: 1px solid rgba(226, 218, 196, 0.13);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(8, 10, 8, 0.32);
   color: #9a9b90;
 }
@@ -5440,7 +5452,7 @@ button:disabled {
   gap: 5px;
   padding: 0 10px;
   border: 1px solid rgba(226, 218, 196, 0.12);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: #9b9c91;
   background: transparent;
   cursor: pointer;
@@ -5512,7 +5524,7 @@ button:disabled {
   border: 0;
   background: transparent;
   cursor: pointer;
-  animation: rise-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation: rise-in 300ms var(--ease-out) backwards;
   transition: transform 170ms ease;
 }
 
@@ -5578,7 +5590,7 @@ button:disabled {
   gap: 8px;
   padding: 40px 20px;
   border: 1px dashed rgba(226, 218, 196, 0.14);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   color: #91928a;
   text-align: center;
 }
@@ -5617,7 +5629,7 @@ button:disabled {
 .card-detail-inner {
   overflow: hidden;
   border: 1px solid rgba(226, 218, 196, 0.13);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   background: linear-gradient(160deg, #24261f, #1a1c17 72%);
   animation: rise-in 260ms ease backwards;
 }
@@ -5727,7 +5739,7 @@ button:disabled {
   gap: 7px;
   padding: 26px 18px;
   border: 1px solid rgba(226, 218, 196, 0.11);
-  border-radius: 11px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.014);
   text-align: center;
 }
@@ -5827,7 +5839,7 @@ button:disabled {
   min-height: 44px;
   padding: 7px 2px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: #86887d;
   background: transparent;
   cursor: pointer;
