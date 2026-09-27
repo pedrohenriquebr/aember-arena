@@ -3394,7 +3394,7 @@ button:disabled {
   overflow: hidden;
   color: #efe9da;
   font-family: Georgia, serif;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -3406,7 +3406,7 @@ button:disabled {
   overflow: hidden;
   margin: 0;
   color: #a9a89c;
-  font-size: 8px;
+  font-size: var(--fs-xs);
   line-height: 1.35;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
