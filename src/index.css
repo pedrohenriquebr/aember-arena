@@ -2744,7 +2744,7 @@ button:disabled {
   border-radius: 3px;
   color: #1a1a13;
   background: #bda363;
-  font-size: 6px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.08em;
   white-space: nowrap;
@@ -2763,7 +2763,7 @@ button:disabled {
   margin: 0;
   color: #ece6d7;
   font-family: Georgia, serif;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -2797,7 +2797,7 @@ button:disabled {
 
 .deck-tile-stats dt {
   color: #7b7d72;
-  font-size: 6px;
+  font-size: var(--fs-3xs);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2806,7 +2806,7 @@ button:disabled {
 .deck-tile-stats dd {
   margin: 0;
   color: #d9d4c5;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
 }
@@ -2839,7 +2839,7 @@ button:disabled {
   color: #cbc8bb;
   background: rgba(16, 18, 14, 0.86);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   backdrop-filter: blur(4px);
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
