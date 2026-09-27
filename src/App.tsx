@@ -1179,6 +1179,12 @@ function App() {
     setSettings((prev) => (prev.language === language ? prev : { ...prev, language }));
   }, [language]);
 
+  // Each screen is a fresh page: without this the new screen opens at the
+  // previous one's scroll offset (e.g. config mid-list, board without header).
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screen]);
+
   // Keep <html lang> in sync with the active language (settings.language).
   useEffect(() => {
     document.documentElement.lang = settings.language === "ptBR" ? "pt-BR" : "en";
