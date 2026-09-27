@@ -3048,7 +3048,7 @@ button:disabled {
   margin: 6px 0 0;
   color: #f1ece0;
   font-family: "Iowan Old Style", Georgia, serif;
-  font-size: clamp(22px, 3vw, 28px);
+  font-size: var(--fs-xl);
   font-weight: 500;
   letter-spacing: -0.02em;
 }
@@ -3078,7 +3078,7 @@ button:disabled {
   color: #92938a;
   background: transparent;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   white-space: nowrap;
   transition: color 150ms ease, background 150ms ease;
@@ -3104,7 +3104,7 @@ button:disabled {
   place-items: center;
   border: 1px solid currentColor;
   border-radius: 50%;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   opacity: 0.9;
 }
@@ -3133,14 +3133,14 @@ button:disabled {
   margin: 0 0 5px;
   color: #eee8da;
   font-family: "Iowan Old Style", Georgia, serif;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 500;
 }
 
 .config-panel-head p {
   margin: 0;
   color: #97978c;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .depth-display {
@@ -3153,14 +3153,14 @@ button:disabled {
 .depth-big {
   color: #edc878;
   font-family: Georgia, serif;
-  font-size: 46px;
+  font-size: var(--fs-display);
   font-weight: 500;
   line-height: 1;
 }
 
 .depth-total {
   color: #85867b;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .depth-range {
@@ -3201,7 +3201,7 @@ button:disabled {
   border-radius: 8px;
   color: #dcc588;
   background: rgba(211, 173, 93, 0.06);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 650;
 }
 
@@ -3239,13 +3239,13 @@ button:disabled {
 
 .exp-copy strong {
   color: #e5dfd1;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 650;
 }
 
 .exp-copy small {
   color: #92938a;
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 
 .review-grid {
@@ -3269,7 +3269,7 @@ button:disabled {
   display: block;
   margin-bottom: 10px;
   color: #a58e5a;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.14em;
 }
@@ -3290,7 +3290,7 @@ button:disabled {
   margin-bottom: 7px;
   color: #ece6d7;
   font-family: Georgia, serif;
-  font-size: 16px;
+  font-size: var(--fs-base);
   font-weight: 500;
 }
 
@@ -3298,7 +3298,7 @@ button:disabled {
   display: block;
   margin-top: 7px;
   color: #8f9084;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
 }
 
 .review-list {
@@ -3318,12 +3318,12 @@ button:disabled {
 
 .review-list span {
   color: #94958a;
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 
 .review-list strong {
   color: #ddd7c9;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 650;
 }
 
@@ -4668,7 +4668,7 @@ button:disabled {
   }
 
   .depth-big {
-    font-size: 38px;
+    font-size: var(--fs-display);
   }
 
   .card-zoom {
