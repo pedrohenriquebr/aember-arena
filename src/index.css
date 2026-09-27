@@ -201,19 +201,28 @@ button:disabled {
   overflow-x: hidden;
 }
 
+/* T6 — default = mobile; desktop invertido em min-width: 701px ao lado do seletor. */
 .app-header {
   position: sticky;
   z-index: 30;
   top: 0;
   display: flex;
-  height: calc(62px + env(safe-area-inset-top, 0px));
+  height: calc(58px + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: env(safe-area-inset-top, 0px) clamp(14px, 2.6vw, 34px) 0;
+  gap: 8px;
+  padding: env(safe-area-inset-top, 0px) 11px 0;
   border-bottom: 1px solid rgba(230, 221, 198, 0.1);
   background: rgba(18, 20, 17, 0.94);
   backdrop-filter: blur(16px);
+}
+
+@media (min-width: 701px) {
+  .app-header {
+    height: calc(62px + env(safe-area-inset-top, 0px));
+    gap: 18px;
+    padding: env(safe-area-inset-top, 0px) clamp(14px, 2.6vw, 34px) 0;
+  }
 }
 
 .brand-lockup {
@@ -2396,8 +2405,9 @@ button:disabled {
 }
 
 /* ---------- Header nav ---------- */
+/* T6 — default = escondido (mobile usa .mobile-tabs); desktop ao lado. */
 .header-nav {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 3px;
   margin-left: 4px;
@@ -2406,6 +2416,12 @@ button:disabled {
   border: 1px solid rgba(226, 218, 196, 0.09);
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.015);
+}
+
+@media (min-width: 701px) {
+  .header-nav {
+    display: flex;
+  }
 }
 
 .nav-link {
@@ -2444,12 +2460,15 @@ button:disabled {
   position: relative;
 }
 
+/* T6 — default = mobile (31px / 0 7px); desktop ao lado. O --compact também
+   inverte: antes o bloco 700px vencia o empate de especificidade e deixava o
+   compact com 0 7px no mobile / 0 9px no desktop. */
 .lang-trigger {
   display: inline-flex;
-  height: 35px;
+  height: 31px;
   align-items: center;
   gap: 7px;
-  padding: 0 11px;
+  padding: 0 7px;
   border: 1px solid rgba(226, 218, 196, 0.12);
   border-radius: 7px;
   color: #c5c3b7;
@@ -2460,6 +2479,13 @@ button:disabled {
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
 
+@media (min-width: 701px) {
+  .lang-trigger {
+    height: 35px;
+    padding: 0 11px;
+  }
+}
+
 @media (hover: hover) {
 .lang-trigger:hover {
   border-color: rgba(220, 181, 103, 0.38);
@@ -2468,7 +2494,13 @@ button:disabled {
 }
 
 .lang-trigger--compact {
-  padding: 0 9px;
+  padding: 0 7px;
+}
+
+@media (min-width: 701px) {
+  .lang-trigger--compact {
+    padding: 0 9px;
+  }
 }
 
 .lang-flag {
@@ -2563,21 +2595,30 @@ button:disabled {
 }
 
 /* ---------- Shared CTA buttons ---------- */
+/* T6 — default = mobile (40px / 0 14px / --fs-xs); desktop ao lado. */
 .cta-button {
   display: inline-flex;
-  height: 42px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 18px;
+  padding: 0 14px;
   border: 1px solid rgba(211, 173, 93, 0.5);
   border-radius: 8px;
   color: #17150f;
   background: linear-gradient(140deg, #edc878, #cba25c);
   cursor: pointer;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: 750;
   transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+
+@media (min-width: 701px) {
+  .cta-button {
+    height: 42px;
+    padding: 0 18px;
+    font-size: var(--fs-sm);
+  }
 }
 
 @media (hover: hover) {
@@ -2592,21 +2633,30 @@ button:disabled {
   transform: translateY(0);
 }
 
+/* T6 — default = mobile (40px / 0 14px / --fs-xs); desktop ao lado. */
 .ghost-button {
   display: inline-flex;
-  height: 42px;
+  height: 40px;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 16px;
+  padding: 0 14px;
   border: 1px solid rgba(226, 218, 196, 0.15);
   border-radius: 8px;
   color: #c9c6b9;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: 650;
   transition: border-color 150ms ease, background 150ms ease;
+}
+
+@media (min-width: 701px) {
+  .ghost-button {
+    height: 42px;
+    padding: 0 16px;
+    font-size: var(--fs-sm);
+  }
 }
 
 @media (hover: hover) {
@@ -4617,17 +4667,25 @@ button:disabled {
 }
 
 /* ---------- Mobile tab bar ---------- */
+/* T6 — default = visível (mobile); desktop esconde ao lado. */
 .mobile-tabs {
   position: fixed;
   z-index: 70;
   bottom: 0;
   left: 0;
   right: 0;
-  display: none;
+  display: flex;
+  gap: 3px;
   padding: 5px 7px calc(5px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(226, 218, 196, 0.12);
   background: rgba(17, 19, 16, 0.97);
   backdrop-filter: blur(14px);
+}
+
+@media (min-width: 701px) {
+  .mobile-tabs {
+    display: none;
+  }
 }
 
 .mobile-tab {
@@ -4735,26 +4793,6 @@ button:disabled {
 }
 
 @media (max-width: 700px) {
-  .app-header {
-    height: calc(58px + env(safe-area-inset-top, 0px));
-    gap: 8px;
-    padding: env(safe-area-inset-top, 0px) 11px 0;
-  }
-
-  .header-nav {
-    display: none;
-  }
-
-  .mobile-tabs {
-    display: flex;
-    gap: 3px;
-  }
-
-  .lang-trigger {
-    height: 31px;
-    padding: 0 7px;
-  }
-
   .home-screen {
     padding: 14px 11px 168px;
   }
@@ -4906,13 +4944,6 @@ button:disabled {
 
   .home-cta-deck small {
     display: none;
-  }
-
-  .cta-button,
-  .ghost-button {
-    height: 40px;
-    padding: 0 14px;
-    font-size: var(--fs-xs);
   }
 
   .config-step-pill span:not(.config-step-num) {
