@@ -9,7 +9,6 @@ type Dict = Record<string, string>;
 
 const en: Dict = {
   // Brand / global
-  "brand.tagline": "SOLO PLAY",
   "nav.home": "Home",
   "nav.play": "Play",
   "nav.config": "Settings",
@@ -17,18 +16,14 @@ const en: Dict = {
   "nav.screens": "Screens",
   "common.online": "ONLINE",
   "common.offline": "OFFLINE",
-  "common.done": "Done",
   "common.back": "Back",
   "common.close": "Close",
-  "common.cancel": "Cancel",
   "common.loading": "Loading",
   "common.syncing": "Syncing",
   "common.sync": "Sync",
-  "common.newMatch": "New match",
   "common.deck": "Deck",
   "common.cards": "cards",
   "common.next": "Next",
-  "common.continue": "Continue",
   "common.mute": "Mute",
   "common.unmute": "Unmute",
   "common.you": "You",
@@ -42,8 +37,6 @@ const en: Dict = {
   "home.step.play": "Play",
   "home.chooseDeck": "Choose your deck",
   "home.chooseDeckSub": "Pick a bundled deck or import one from the Master Vault.",
-  "home.starterDecks": "Starter decks",
-  "home.savedDecks": "Saved decks",
   "home.importDeck": "Import a deck",
   "home.importDeckSub": "Load card details and art from a Master Vault deck link or UUID.",
   "home.selected": "SELECTED",
@@ -51,7 +44,6 @@ const en: Dict = {
   "home.continueSetup": "Continue to setup",
   "home.play": "Start match",
   "home.deckReady": "ready to play",
-  "home.noSaved": "No saved decks yet. Import one to see it here.",
 
   // Config steps
   "config.title": "Match setup",
@@ -153,8 +145,6 @@ const en: Dict = {
   "inspector.resting": "This card is resting until your next turn.",
   "inspector.stunned": "Stunned cards cannot be used this turn.",
   "inspector.onlyHouse": "Only cards from {house} can be played this turn.",
-  "inspector.houseNotActive": "This house is not active for the current turn.",
-  "inspector.noAbility": "This artifact has no activated ability in the current game rules.",
   "inspector.noText": "No card text.",
   "inspector.amber": "amber",
   "inspector.power": "power",
@@ -194,11 +184,9 @@ const en: Dict = {
   "deck.chains": "chains",
 
   // Toasts
-  "toast.newMatch": "A new solo match is ready.",
   "toast.deckReady": "{name} is ready for a new match.",
   "toast.synced": "Synced {name}: {count} card records refreshed.",
   "toast.usingCache": "Using the saved offline copy of {name}.",
-  "toast.syncFailed": "Could not sync this deck.",
   "toast.langChanged": "Language set to English.",
 
   // Log
@@ -288,7 +276,6 @@ const en: Dict = {
   "home.pageLabel": "Decks page",
   "home.deckCount": "{count} decks available",
   "home.yourLibrary": "Your deck library",
-  "browse.vaultTag": "VAULT",
   "inspector.zoomCard": "Magnify card",
   "inspector.zone.hand": "IN YOUR HAND",
   "inspector.zone.board": "ON YOUR BATTLELINE",
@@ -313,7 +300,6 @@ const en: Dict = {
 };
 
 const ptBR: Dict = {
-  "brand.tagline": "MODO SOLO",
   "nav.home": "Início",
   "nav.play": "Jogar",
   "nav.config": "Ajustes",
@@ -321,18 +307,14 @@ const ptBR: Dict = {
   "nav.screens": "Telas",
   "common.online": "ONLINE",
   "common.offline": "OFFLINE",
-  "common.done": "Concluir",
   "common.back": "Voltar",
   "common.close": "Fechar",
-  "common.cancel": "Cancelar",
   "common.loading": "Carregando",
   "common.syncing": "Sincronizando",
   "common.sync": "Sincronizar",
-  "common.newMatch": "Nova partida",
   "common.deck": "Baralho",
   "common.cards": "cartas",
   "common.next": "Avançar",
-  "common.continue": "Continuar",
   "common.mute": "Silenciar",
   "common.unmute": "Ativar som",
   "common.you": "Você",
@@ -345,8 +327,6 @@ const ptBR: Dict = {
   "home.step.play": "Jogar",
   "home.chooseDeck": "Escolha seu baralho",
   "home.chooseDeckSub": "Use um baralho incluído ou importe um do Master Vault.",
-  "home.starterDecks": "Baralhos inclusos",
-  "home.savedDecks": "Baralhos salvos",
   "home.importDeck": "Importar baralho",
   "home.importDeckSub": "Carregue cartas e artes de um link ou UUID do Master Vault.",
   "home.selected": "SELECIONADO",
@@ -354,7 +334,6 @@ const ptBR: Dict = {
   "home.continueSetup": "Ir para os ajustes",
   "home.play": "Iniciar partida",
   "home.deckReady": "pronto para jogar",
-  "home.noSaved": "Nenhum baralho salvo. Importe um para vê-lo aqui.",
 
   "config.title": "Configuração da partida",
   "config.subtitle": "Ajuste o oponente e a interface antes de jogar.",
@@ -452,8 +431,6 @@ const ptBR: Dict = {
   "inspector.resting": "Esta carta descansa até seu próximo turno.",
   "inspector.stunned": "Cartas atordoadas não podem ser usadas neste turno.",
   "inspector.onlyHouse": "Só cartas de {house} podem ser jogadas neste turno.",
-  "inspector.houseNotActive": "Esta casa não está ativa no turno atual.",
-  "inspector.noAbility": "Este artefato não tem habilidade ativada nas regras atuais.",
   "inspector.noText": "Sem texto de carta.",
   "inspector.amber": "âmbar",
   "inspector.power": "poder",
@@ -490,11 +467,9 @@ const ptBR: Dict = {
   "deck.power": "Poder",
   "deck.chains": "correntes",
 
-  "toast.newMatch": "Uma nova partida solo está pronta.",
   "toast.deckReady": "{name} está pronto para uma nova partida.",
   "toast.synced": "Sincronizado {name}: {count} cartas atualizadas.",
   "toast.usingCache": "Usando a cópia offline salva de {name}.",
-  "toast.syncFailed": "Não foi possível sincronizar este baralho.",
   "toast.langChanged": "Idioma alterado para Português.",
 
   "log.you": "Você",
@@ -577,7 +552,6 @@ const ptBR: Dict = {
   "home.pageLabel": "Página de baralhos",
   "home.deckCount": "{count} baralhos disponíveis",
   "home.yourLibrary": "Sua biblioteca de baralhos",
-  "browse.vaultTag": "VAULT",
   "inspector.zoomCard": "Ampliar carta",
   "inspector.zone.hand": "NA SUA MÃO",
   "inspector.zone.board": "NA SUA LINHA DE BATALHA",
