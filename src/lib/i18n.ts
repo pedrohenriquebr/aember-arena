@@ -13,6 +13,8 @@ const en: Dict = {
   "nav.home": "Home",
   "nav.play": "Play",
   "nav.config": "Settings",
+  "nav.language": "Language",
+  "nav.screens": "Screens",
   "common.online": "ONLINE",
   "common.offline": "OFFLINE",
   "common.done": "Done",
@@ -27,6 +29,9 @@ const en: Dict = {
   "common.cards": "cards",
   "common.next": "Next",
   "common.continue": "Continue",
+  "common.mute": "Mute",
+  "common.unmute": "Unmute",
+  "common.you": "You",
 
   // Home
   "home.eyebrow": "KEYFORGE-INSPIRED SOLO ARENA",
@@ -98,6 +103,7 @@ const en: Dict = {
   // Game
   "game.eyebrow": "SOLO MATCH",
   "game.table": "TABLE 01",
+  "game.board": "KeyForge game board",
   "game.yourTurn": "Your turn",
   "game.opponentTurn": "Opponent turn",
   "game.thinking": "Warden is thinking",
@@ -157,6 +163,7 @@ const en: Dict = {
 
   // Rail
   "rail.notes": "TABLE NOTES",
+  "rail.controls": "Match controls and card information",
   "rail.warden": "THE EMBER WARDEN",
   "rail.matchLog": "MATCH LOG",
   "rail.live": "LIVE",
@@ -293,6 +300,8 @@ const ptBR: Dict = {
   "nav.home": "Início",
   "nav.play": "Jogar",
   "nav.config": "Ajustes",
+  "nav.language": "Idioma",
+  "nav.screens": "Telas",
   "common.online": "ONLINE",
   "common.offline": "OFFLINE",
   "common.done": "Concluir",
@@ -307,6 +316,9 @@ const ptBR: Dict = {
   "common.cards": "cartas",
   "common.next": "Avançar",
   "common.continue": "Continuar",
+  "common.mute": "Silenciar",
+  "common.unmute": "Ativar som",
+  "common.you": "Você",
 
   "home.eyebrow": "ARENA SOLO INSPIRADA EM KEYFORGE",
   "home.title": "Forje seu caminho.",
@@ -374,6 +386,7 @@ const ptBR: Dict = {
 
   "game.eyebrow": "PARTIDA SOLO",
   "game.table": "MESA 01",
+  "game.board": "Tabuleiro de jogo KeyForge",
   "game.yourTurn": "Seu turno",
   "game.opponentTurn": "Turno do oponente",
   "game.thinking": "O Warden está pensando",
@@ -431,6 +444,7 @@ const ptBR: Dict = {
   "inspector.damage": "dano",
 
   "rail.notes": "NOTAS DA MESA",
+  "rail.controls": "Controles da partida e informações de cartas",
   "rail.warden": "O EMBER WARDEN",
   "rail.matchLog": "REGISTRO DA PARTIDA",
   "rail.live": "AO VIVO",

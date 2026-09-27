@@ -116,7 +116,8 @@ function CardTile({
   onClick?: () => void;
 }) {
   const { face } = card;
-  const baseLabel = `${face.title}, ${houseLabel(face.house)} ${face.type}`;
+  // T8: casa e tipo do aria-label passam por t() (houseLabel aceita tradutor opcional).
+  const baseLabel = `${face.title}, ${houseLabel(face.house, t)} ${t(`type.${face.type}`)}`;
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const longPressAt = useRef(0);
   return (
@@ -169,10 +170,13 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (val
 function LanguageMenu({
   language,
   onChange,
+  label,
   compact = false,
 }: {
   language: Language;
   onChange: (language: Language) => void;
+  /** T8: aria-label do gatilho via t() — antes era "Language" fixo. */
+  label: string;
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -196,7 +200,7 @@ function LanguageMenu({
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Language"
+        aria-label={label}
       >
         <Languages size={14} />
         <span className="lang-flag">{current.flag}</span>
@@ -352,7 +356,7 @@ function HomeScreen({
       </div>
 
       <div className="home-lang-float">
-        <LanguageMenu language={language} onChange={onLanguage} />
+        <LanguageMenu language={language} onChange={onLanguage} label={t("nav.language")} />
       </div>
     </div>
   );
@@ -521,7 +525,7 @@ function ConfigScreen({
               <div className="exp-row">
                 <span className="exp-icon"><Languages size={16} /></span>
                 <div className="exp-copy"><strong>{t("config.experience.language")}</strong></div>
-                <LanguageMenu language={settings.language} onChange={onLanguage} />
+                <LanguageMenu language={settings.language} onChange={onLanguage} label={t("nav.language")} />
               </div>
             </div>
           </section>
@@ -624,7 +628,7 @@ function PlayerBand({
   return (
     <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}`}>
       <div className={`player-avatar${isAi ? " player-avatar--ai" : ""}`}>
-        {isAi ? <Cpu size={18} strokeWidth={1.6} /> : <span>YOU</span>}
+        {isAi ? <Cpu size={18} strokeWidth={1.6} /> : <span>{t("common.you")}</span>}
         {active && <span className="avatar-live-dot" />}
       </div>
       <div className="player-copy">
@@ -744,7 +748,7 @@ function GameBoard({
   const isHumanTurn = game.activePlayer === 0 && game.winner === null;
 
   return (
-    <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label="KeyForge game board">
+    <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label={t("game.board")}>
       <div className="felt-etching" aria-hidden="true" />
       <div className="board-content">
         <PlayerBand player={ai} isAi active={game.activePlayer === 1 && game.winner === null} thinking={aiThinking} t={t} />
@@ -1105,7 +1109,8 @@ function App() {
     void cacheDeck(DEMO_DECK);
     void cacheDeck(DEMO_DECK_2);
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      // T7c/T8: caminho relativo — coerente com SHELL_URLS/manifest; não quebra em subpath.
+      navigator.serviceWorker.register("./sw.js").catch(() => undefined);
     }
     const setNetwork = () => setOnline(navigator.onLine);
     window.addEventListener("online", setNetwork);
@@ -1391,7 +1396,7 @@ function App() {
           <span className="brand-wordmark"><strong>AEMBER</strong><small>ARENA</small></span>
         </button>
 
-        <nav className="header-nav" aria-label="Screens">
+        <nav className="header-nav" aria-label={t("nav.screens")}>
           <button type="button" className={`nav-link${screen === "home" || screen === "inspect" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("home"); }}>
             <Home size={14} /> <span>{t("nav.home")}</span>
           </button>
@@ -1416,7 +1421,7 @@ function App() {
           <button
             type="button"
             className="header-icon-button"
-            aria-label={settings.sfx ? "Mute" : "Unmute"}
+            aria-label={settings.sfx ? t("common.mute") : t("common.unmute")}
             onClick={() => { sound.play("click"); setSettings((prev) => ({ ...prev, sfx: !prev.sfx })); }}
           >
             {settings.sfx ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -1428,7 +1433,7 @@ function App() {
             {syncing ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
             <span>{syncing ? t("common.syncing") : t("common.sync")}</span>
           </button>
-          <LanguageMenu language={language} onChange={(next) => { setLanguage(next); showToast(t("toast.langChanged")); }} compact />
+          <LanguageMenu language={language} onChange={(next) => { setLanguage(next); showToast(t("toast.langChanged")); }} label={t("nav.language")} compact />
         </div>
       </header>
 
@@ -1528,7 +1533,7 @@ function App() {
                 />
               </div>
 
-              <aside className="command-rail" aria-label="Match controls and card information">
+              <aside className="command-rail" aria-label={t("rail.controls")}>
                 <div className="rail-topline"><span>{t("rail.notes")}</span><span className="table-number">01</span></div>
                 <SelectedCardPanel
                   selection={selected}
@@ -1590,7 +1595,7 @@ function App() {
         )}
       </main>
 
-      <nav className="mobile-tabs" aria-label="Screens">
+      <nav className="mobile-tabs" aria-label={t("nav.screens")}>
         <button type="button" className={`mobile-tab${screen === "home" || screen === "inspect" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("home"); }}>
           <Home size={17} /><span>{t("nav.home")}</span>
         </button>
