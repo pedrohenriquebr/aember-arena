@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { Gem, Shield, Sparkles, Swords, X } from "lucide-react";
 import type { CardFace } from "../lib/game";
@@ -16,6 +16,9 @@ const ZOOM_TEXT_HEIGHT = 76;
 const ZOOM_GAP = 12;
 const ZOOM_MARGIN = 12;
 const ZOOM_DELAY = 120;
+// T5 — touch: long-press inspeciona a carta (tap continua selecionando no board).
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_SLOP = 12;
 
 function CardImage({ face, size }: { face: CardFace; size: Size }) {
   const [failed, setFailed] = useState(false);
@@ -56,6 +59,12 @@ interface ZoomPlacement {
   originY: string;
 }
 
+// T5 — hover só é caminho válido quando o dispositivo anuncia "(hover: hover)";
+// o pointerType sozinho não basta (tap de touch gera pointer compatível "mouse").
+function hasHoverMedia() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: hover)").matches;
+}
+
 function placeZoom(rect: DOMRect): ZoomPlacement {
   const artHeight = ZOOM_WIDTH / 0.714;
   const totalHeight = artHeight + ZOOM_TEXT_HEIGHT;
@@ -90,30 +99,39 @@ export function CardArt({
   face,
   size,
   hoverZoom = false,
+  onLongPress,
 }: {
   face: CardFace;
   size: Size;
   hoverZoom?: boolean;
+  /** T5 — caminho touch: disparado após long-press (~500ms) com pointerType touch. */
+  onLongPress?: () => void;
 }) {
   const [placement, setPlacement] = useState<ZoomPlacement | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<number | null>(null);
+  const pressTimer = useRef<number | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const pressGuard = useRef(0);
 
   const enabled = hoverZoom && size !== "preview";
 
   useEffect(
     () => () => {
       if (timer.current) window.clearTimeout(timer.current);
+      if (pressTimer.current) window.clearTimeout(pressTimer.current);
     },
     [],
   );
 
   useEffect(() => setPlacement(null), [face.image, enabled]);
 
+  // Hover-zoom (mouse/pen): UM timer por entrada do ponteiro, sem re-arm a cada move —
+  // o rect é medido na hora do disparo, então mover o mouse não muda o resultado.
   const scheduleZoom = () => {
-    if (!enabled) return;
-    if (timer.current) window.clearTimeout(timer.current);
+    if (!enabled || !hasHoverMedia() || timer.current) return;
     timer.current = window.setTimeout(() => {
+      timer.current = null;
       if (ref.current) setPlacement(placeZoom(ref.current.getBoundingClientRect()));
     }, ZOOM_DELAY);
   };
@@ -124,15 +142,55 @@ export function CardArt({
     setPlacement(null);
   };
 
+  const cancelLongPress = () => {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+    pressStart.current = null;
+  };
+
+  const startLongPress = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch" || !onLongPress) return;
+    pressStart.current = { x: event.clientX, y: event.clientY };
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = null;
+      pressStart.current = null;
+      pressGuard.current = Date.now() + 1500;
+      onLongPress();
+    }, LONG_PRESS_MS);
+  };
+
+  // Dedo que desliza é scroll da mão/painel — cancela o long-press em vez de dispará-lo.
+  const trackLongPressDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!pressTimer.current || !pressStart.current) return;
+    const dx = event.clientX - pressStart.current.x;
+    const dy = event.clientY - pressStart.current.y;
+    if (dx * dx + dy * dy > LONG_PRESS_SLOP * LONG_PRESS_SLOP) cancelLongPress();
+  };
+
   return (
     <>
       <div
         ref={ref}
         className={`card-art card-art--${size}`}
         style={{ "--house-color": houseColor(face.house) } as CSSProperties}
-        onMouseEnter={scheduleZoom}
-        onMouseMove={enabled && !placement ? scheduleZoom : undefined}
-        onMouseLeave={cancelZoom}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== "touch") scheduleZoom();
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType !== "touch") cancelZoom();
+          cancelLongPress();
+        }}
+        onPointerDown={startLongPress}
+        onPointerMove={trackLongPressDrag}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={() => {
+          cancelZoom();
+          cancelLongPress();
+        }}
+        onContextMenu={(event) => {
+          // Android dispara contextmenu no long-press; não deixe abrir por cima do lightbox.
+          if (pressTimer.current !== null || Date.now() < pressGuard.current) event.preventDefault();
+        }}
       >
         <CardImage face={face} size={size} />
       </div>

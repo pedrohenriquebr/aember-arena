@@ -54,7 +54,7 @@ import { fetchKeyforgeDeck, loadDeckOrCache } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator } from "./lib/i18n";
 import { readSettings, saveSettings, type AppSettings } from "./lib/settings";
 import { sound } from "./lib/sound";
-import { CardArt, houseColor, houseLabel } from "./components/CardArt";
+import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
 import { DeckTile, HouseMark } from "./components/DeckTile";
 import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser } from "./components/DeckBrowser";
@@ -67,6 +67,12 @@ type Toast = { message: string; kind: "success" | "error" } | null;
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
 const STARTER_DECKS: DeckInfo[] = [DEMO_DECK, DEMO_DECK_2];
+
+// T5: hover só existe quando o dispositivo anuncia "(hover: hover)"; em touch o
+// toggle hoverZoom some e a inspeção vai por long-press (CardLightbox).
+function prefersHover() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: hover)").matches;
+}
 
 // Translate a structured log entry, localizing the two known player names.
 function renderLog(entry: LogEntry, t: Translator): string {
@@ -91,6 +97,7 @@ function CardTile({
   playAnim = false,
   stateLabel,
   damageLabel,
+  t,
   onClick,
 }: {
   card: CardInstance;
@@ -104,22 +111,41 @@ function CardTile({
   stateLabel?: string;
   /** Dano da criatura via t() — badge visual dentro do tile (T4). */
   damageLabel?: string;
+  /** T5 — tradutor p/ o CardLightbox do long-press touch. */
+  t: Translator;
   onClick?: () => void;
 }) {
   const { face } = card;
   const baseLabel = `${face.title}, ${houseLabel(face.house)} ${face.type}`;
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const longPressAt = useRef(0);
   return (
-    <button
-      className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}`}
-      type="button"
-      onClick={onClick}
-      disabled={disabled || !onClick}
-      aria-label={stateLabel ? `${baseLabel}, ${stateLabel}` : baseLabel}
-    >
-      <CardArt face={face} size={size} hoverZoom={hoverZoom} />
-      {size !== "preview" && <span className="card-caption">{face.title}</span>}
-      {damageLabel && <span className="damage-label">{damageLabel}</span>}
-    </button>
+    <>
+      <button
+        className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}`}
+        type="button"
+        onClick={() => {
+          // T5: o long-press já abriu a inspeção — o click sintético do toque não seleciona.
+          if (Date.now() - longPressAt.current < 700) return;
+          onClick?.();
+        }}
+        disabled={disabled || !onClick}
+        aria-label={stateLabel ? `${baseLabel}, ${stateLabel}` : baseLabel}
+      >
+        <CardArt
+          face={face}
+          size={size}
+          hoverZoom={hoverZoom}
+          onLongPress={() => {
+            longPressAt.current = Date.now();
+            setLightboxOpen(true);
+          }}
+        />
+        {size !== "preview" && <span className="card-caption">{face.title}</span>}
+        {damageLabel && <span className="damage-label">{damageLabel}</span>}
+      </button>
+      <CardLightbox face={lightboxOpen ? face : null} t={t} onClose={() => setLightboxOpen(false)} />
+    </>
   );
 }
 
@@ -341,6 +367,7 @@ function ConfigScreen({
   t,
   settings,
   deck,
+  hasHover,
   onChange,
   onLanguage,
   onBack,
@@ -349,6 +376,8 @@ function ConfigScreen({
   t: Translator;
   settings: AppSettings;
   deck: DeckInfo;
+  /** T5 — sem "(hover: hover)" o toggle hoverZoom não faz sentido e some. */
+  hasHover: boolean;
   onChange: (settings: AppSettings) => void;
   onLanguage: (language: Language) => void;
   onBack: () => void;
@@ -482,11 +511,13 @@ function ConfigScreen({
                 <div className="exp-copy"><strong>{t("config.experience.animations")}</strong><small>{t("config.experience.animationsSub")}</small></div>
                 <Toggle checked={settings.animations} label={t("config.experience.animations")} onChange={(value) => onChange({ ...settings, animations: value })} />
               </div>
-              <div className="exp-row">
-                <span className="exp-icon"><ZoomIn size={16} /></span>
-                <div className="exp-copy"><strong>{t("config.experience.zoom")}</strong><small>{t("config.experience.zoomSub")}</small></div>
-                <Toggle checked={settings.hoverZoom} label={t("config.experience.zoom")} onChange={(value) => onChange({ ...settings, hoverZoom: value })} />
-              </div>
+              {hasHover && (
+                <div className="exp-row">
+                  <span className="exp-icon"><ZoomIn size={16} /></span>
+                  <div className="exp-copy"><strong>{t("config.experience.zoom")}</strong><small>{t("config.experience.zoomSub")}</small></div>
+                  <Toggle checked={settings.hoverZoom} label={t("config.experience.zoom")} onChange={(value) => onChange({ ...settings, hoverZoom: value })} />
+                </div>
+              )}
               <div className="exp-row">
                 <span className="exp-icon"><Languages size={16} /></span>
                 <div className="exp-copy"><strong>{t("config.experience.language")}</strong></div>
@@ -529,7 +560,7 @@ function ConfigScreen({
                   <li><span>{t("config.experience.sfx")}</span><strong>{settings.sfx ? t("config.on") : t("config.off")}</strong></li>
                   <li><span>{t("config.experience.music")}</span><strong>{settings.music ? t("config.on") : t("config.off")}</strong></li>
                   <li><span>{t("config.experience.animations")}</span><strong>{settings.animations ? t("config.on") : t("config.off")}</strong></li>
-                  <li><span>{t("config.experience.zoom")}</span><strong>{settings.hoverZoom ? t("config.on") : t("config.off")}</strong></li>
+                  {hasHover && <li><span>{t("config.experience.zoom")}</span><strong>{settings.hoverZoom ? t("config.on") : t("config.off")}</strong></li>}
                   <li><span>{t("config.experience.language")}</span><strong>{LANGUAGES.find((l) => l.id === settings.language)?.short}</strong></li>
                 </ul>
               </div>
@@ -668,6 +699,7 @@ function BoardLane({
               hoverZoom={settings.hoverZoom}
               playAnim={settings.animations}
               stateLabel={stateLabel}
+              t={t}
               damageLabel={card.damage > 0 ? `${card.damage} ${t("game.dmg")}` : undefined}
               onClick={() => onSelect(card)}
             />
@@ -813,6 +845,7 @@ function GameBoard({
                   dimmed={game.activePlayer === 0 && Boolean(game.activeHouse) && !playable}
                   hoverZoom={settings.hoverZoom}
                   playAnim={settings.animations}
+                  t={t}
                   onClick={() => onSelectHand(card)}
                 />
               );
@@ -1018,6 +1051,7 @@ function DeckModal({
 function App() {
   const [language, setLanguage] = useState<Language>(readLanguage);
   const [settings, setSettings] = useState<AppSettings>(() => readSettings(readLanguage()));
+  const [hasHover] = useState(prefersHover);
   const t = useMemo(() => createTranslator(language), [language]);
 
   const [screen, setScreen] = useState<Screen>("home");
@@ -1447,6 +1481,7 @@ function App() {
             t={t}
             settings={settings}
             deck={selectedDeck}
+            hasHover={hasHover}
             onChange={setSettings}
             onLanguage={setLanguage}
             onBack={() => setScreen("home")}

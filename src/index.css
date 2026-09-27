@@ -75,6 +75,22 @@ input:where([type="button"], [type="reset"], [type="submit"]) {
   opacity: 1;
 }
 
+/* T5 — touch: resposta no primeiro toque (sem espera de duplo-toque) em botões e
+   cartas; o long-press de inspeção não pode disparar callout/seleção nativa
+   (iOS: touch-callout; Android: contextmenu é prevenido no CardArt). O
+   -webkit-tap-highlight-color: transparente já está no html acima e é herdado. */
+button,
+.card-art {
+  touch-action: manipulation;
+}
+
+.card-tile,
+.card-art {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #eee9dc;
@@ -357,6 +373,7 @@ button:disabled {
   white-space: nowrap;
 }
 
+@media (hover: hover) {
 .header-button:hover:not(:disabled),
 .header-icon-button:hover,
 .modal-close:hover,
@@ -365,6 +382,7 @@ button:disabled {
   color: #f3d590;
   background: rgba(211, 173, 93, 0.1);
 }
+}
 
 .header-button--sync {
   border-color: rgba(211, 173, 93, 0.34);
@@ -372,8 +390,10 @@ button:disabled {
   background: rgba(211, 173, 93, 0.08);
 }
 
+@media (hover: hover) {
 .header-button--sync:hover:not(:disabled) {
   background: rgba(211, 173, 93, 0.16);
+}
 }
 
 .header-button:disabled {
@@ -849,14 +869,18 @@ button:disabled {
   object-fit: cover;
 }
 
+@media (hover: hover) {
 .card-tile--hand:not(:disabled):hover {
   z-index: 3;
   transform: translateY(-9px) rotate(-1deg);
 }
+}
 
+@media (hover: hover) {
 .card-tile--board:not(:disabled):hover {
   z-index: 3;
   transform: translateY(-3px);
+}
 }
 
 .card-tile.is-selected .card-art {
@@ -1094,11 +1118,13 @@ button:disabled {
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
 }
 
+@media (hover: hover) {
 .house-choice:not(:disabled):hover {
   border-color: color-mix(in srgb, var(--house-color) 65%, transparent);
   color: #f0eadc;
   background: color-mix(in srgb, var(--house-color) 12%, transparent);
   transform: translateY(-1px);
+}
 }
 
 .house-choice.is-chosen {
@@ -1141,9 +1167,11 @@ button:disabled {
   transition: background 160ms ease, transform 160ms ease, opacity 160ms ease;
 }
 
+@media (hover: hover) {
 .end-turn-button:hover:not(:disabled) {
   background: rgba(196, 151, 65, 0.27);
   transform: translateY(-1px);
+}
 }
 
 .end-turn-button:disabled {
@@ -1407,9 +1435,11 @@ button:disabled {
   transition: background 150ms ease, border-color 150ms ease, opacity 150ms ease;
 }
 
+@media (hover: hover) {
 .primary-action:hover:not(:disabled) {
   border-color: rgba(226, 191, 110, 0.8);
   background: rgba(174, 134, 58, 0.28);
+}
 }
 
 .primary-action:disabled,
@@ -1423,9 +1453,11 @@ button:disabled {
   background: rgba(255, 255, 255, 0.025);
 }
 
+@media (hover: hover) {
 .secondary-action:hover:not(:disabled) {
   border-color: rgba(226, 219, 197, 0.29);
   background: rgba(255, 255, 255, 0.06);
+}
 }
 
 .inspector-hint {
@@ -1529,9 +1561,11 @@ button:disabled {
   cursor: pointer;
 }
 
+@media (hover: hover) {
 .ai-brief > button:hover {
   border-color: rgba(211, 173, 93, 0.4);
   color: #e6c978;
+}
 }
 
 .log-section {
@@ -1673,8 +1707,10 @@ button:disabled {
   text-decoration: none;
 }
 
+@media (hover: hover) {
 .rail-footer a:hover {
   color: #d9c17c;
+}
 }
 
 .offline-ready {
@@ -1882,8 +1918,10 @@ button:disabled {
   transition: border-color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .difficulty-choice:hover {
   border-color: rgba(219, 182, 100, 0.32);
+}
 }
 
 .difficulty-choice.is-active {
@@ -2036,8 +2074,10 @@ button:disabled {
   font-weight: 750;
 }
 
+@media (hover: hover) {
 .modal-done:hover {
   background: rgba(191, 146, 58, 0.24);
+}
 }
 
 .deck-modal-intro {
@@ -2096,8 +2136,10 @@ button:disabled {
   font-weight: 750;
 }
 
+@media (hover: hover) {
 .deck-input-row > button:hover:not(:disabled) {
   background: rgba(182, 139, 54, 0.25);
+}
 }
 
 .deck-input-row > button:disabled {
@@ -2196,8 +2238,10 @@ button:disabled {
   font-weight: 700;
 }
 
+@media (hover: hover) {
 .use-deck-button:hover {
   color: #f4de9f;
+}
 }
 
 .current-deck-note {
@@ -2380,8 +2424,10 @@ button:disabled {
   transition: color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .nav-link:hover {
   color: #ded8ca;
+}
 }
 
 .nav-link.is-active {
@@ -2414,9 +2460,11 @@ button:disabled {
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .lang-trigger:hover {
   border-color: rgba(220, 181, 103, 0.38);
   color: #f3d590;
+}
 }
 
 .lang-trigger--compact {
@@ -2462,8 +2510,10 @@ button:disabled {
   text-align: left;
 }
 
+@media (hover: hover) {
 .lang-option:hover {
   background: rgba(255, 255, 255, 0.04);
+}
 }
 
 .lang-option.is-active {
@@ -2530,10 +2580,12 @@ button:disabled {
   transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
 }
 
+@media (hover: hover) {
 .cta-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 20px rgba(211, 173, 93, 0.24);
   filter: brightness(1.05);
+}
 }
 
 .cta-button:active {
@@ -2557,9 +2609,11 @@ button:disabled {
   transition: border-color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .ghost-button:hover {
   border-color: rgba(226, 218, 196, 0.3);
   background: rgba(255, 255, 255, 0.05);
+}
 }
 
 /* ---------- Home screen ---------- */
@@ -2752,10 +2806,12 @@ button:disabled {
   transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
+@media (hover: hover) {
 .deck-tile:hover {
   border-color: rgba(220, 181, 103, 0.34);
   transform: translateY(-2px);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+}
 }
 
 .deck-tile--selected {
@@ -2912,9 +2968,11 @@ button:disabled {
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
+@media (hover: hover) {
 .deck-tile:hover .tile-action--primary {
   border-color: rgba(226, 196, 122, 0.72);
   background: rgba(170, 128, 52, 0.5);
+}
 }
 
 .tile-action {
@@ -2936,10 +2994,12 @@ button:disabled {
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .tile-action:hover {
   border-color: rgba(226, 218, 196, 0.34);
   color: #f0eadb;
   background: rgba(30, 33, 26, 0.94);
+}
 }
 
 .tile-action--primary {
@@ -3001,10 +3061,12 @@ button:disabled {
   transition: color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .pager-num:hover:not(:disabled),
 .pager-arrow:hover:not(:disabled) {
   color: #f0eadb;
   background: rgba(255, 255, 255, 0.05);
+}
 }
 
 .pager-num.is-current {
@@ -3041,9 +3103,11 @@ button:disabled {
   transition: border-color 160ms ease, background 160ms ease;
 }
 
+@media (hover: hover) {
 .import-card:hover {
   border-color: rgba(220, 181, 103, 0.4);
   background: rgba(211, 173, 93, 0.05);
+}
 }
 
 .import-card-icon {
@@ -3175,8 +3239,10 @@ button:disabled {
   transition: color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .config-step-pill:hover {
   color: #d6d2c5;
+}
 }
 
 .config-step-pill.is-active {
@@ -3507,6 +3573,103 @@ button:disabled {
   animation: none;
 }
 
+/* ---------- Card lightbox (T5 — inspeção touch: long-press na carta) ---------- */
+.card-lightbox {
+  position: relative;
+  display: grid;
+  gap: 13px;
+  width: min(100%, 400px);
+  max-height: min(88dvh, 760px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid rgba(225, 215, 191, 0.17);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #24261f, #191b17 74%);
+  box-shadow: 0 25px 90px rgba(0, 0, 0, 0.55);
+  animation: modal-in 260ms cubic-bezier(0.18, 0.8, 0.24, 1) both;
+}
+
+.card-lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.card-lightbox-art {
+  width: min(58%, 218px);
+  margin: 0 auto;
+}
+
+.card-lightbox-art .card-art {
+  width: 100%;
+}
+
+.card-lightbox-info {
+  display: grid;
+  gap: 9px;
+}
+
+.card-lightbox-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 10px;
+  /* deixa o botão de fechar (absoluto) respirar sobre o título */
+  padding-right: 34px;
+}
+
+.card-lightbox-house {
+  color: color-mix(in srgb, var(--house-color) 72%, #dcd4bd);
+  font-size: var(--fs-3xs);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.card-lightbox-head h2 {
+  margin: 3px 0 0;
+  color: #f2ecde;
+  font-family: "Iowan Old Style", Georgia, serif;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.card-lightbox-traits {
+  margin: 4px 0 0;
+  color: #9d9b8e;
+  font-size: var(--fs-2xs);
+  font-style: italic;
+}
+
+.card-lightbox-text {
+  color: #d8d4c6;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+
+.card-lightbox-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(225, 216, 194, 0.1);
+}
+
+.card-lightbox-stats span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: #b9b6a8;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+}
+
+.card-lightbox-stats svg {
+  color: var(--gold);
+}
+
 /* ---------- Card enter animation ---------- */
 .card-tile--enter {
   animation: card-deal 340ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -3640,11 +3803,13 @@ button:disabled {
   gap: 4px;
 }
 
+@media (hover: hover) {
 .deck-tile:hover .house-icon,
 .house-choice:hover .house-icon {
   border-color: color-mix(in srgb, var(--house-color) 82%, transparent);
   box-shadow: inset 0 0 10px color-mix(in srgb, var(--house-color) 30%, transparent),
     0 0 9px color-mix(in srgb, var(--house-color) 26%, transparent);
+}
 }
 
 .house-choice.is-chosen .house-icon {
@@ -3699,10 +3864,12 @@ button:disabled {
   transition: border-color 150ms ease, color 150ms ease, transform 150ms ease;
 }
 
+@media (hover: hover) {
 .icon-back:hover {
   border-color: rgba(220, 181, 103, 0.42);
   color: #f3d590;
   transform: translateX(-2px);
+}
 }
 
 .sub-head-meta {
@@ -3746,9 +3913,11 @@ button:disabled {
   font-weight: 650;
 }
 
+@media (hover: hover) {
 .link-button:hover {
   color: #eccd84;
   text-decoration: underline;
+}
 }
 
 /* ---------- Vault browser ---------- */
@@ -3833,9 +4002,11 @@ button:disabled {
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .sort-chip:hover {
   border-color: rgba(220, 181, 103, 0.32);
   color: #ded8ca;
+}
 }
 
 .sort-chip.is-active {
@@ -4119,9 +4290,11 @@ button:disabled {
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
 }
 
+@media (hover: hover) {
 .filter-chip:hover {
   border-color: color-mix(in srgb, var(--house-color, #d3ad5d) 55%, transparent);
   color: #e8e2d4;
+}
 }
 
 .filter-chip.is-active {
@@ -4179,8 +4352,10 @@ button:disabled {
   animation: none;
 }
 
+@media (hover: hover) {
 .card-cell:hover {
   transform: translateY(-4px);
+}
 }
 
 .card-cell .card-art {
