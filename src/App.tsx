@@ -622,27 +622,37 @@ function ConfigScreen({
 
 // ---------- Game screen pieces ----------
 
+// KeyForge forges a key for 6 amber at the start of a turn (game.ts); the meter
+// shows the way there so the player can read "how close" at a glance.
+const KEY_COST = 6;
+
 function AmberCounter({ amount, t }: { amount: number; t: Translator }) {
+  const ready = amount >= KEY_COST;
+  const label = t("game.amberToKey", { amount, cost: KEY_COST });
   return (
-    <div className="amber-counter" aria-label={`${amount} ${t("inspector.amber")}`}>
+    <div className={`amber-counter${ready ? " amber-counter--ready" : ""}`} aria-label={label} title={label}>
       <Gem size={18} strokeWidth={1.8} />
-      <span>{amount}</span>
+      {/* Keyed by value: remounting replays the count-pop animation on change. */}
+      <span className="amber-value" key={amount}>{amount}</span>
       <small>{t("game.aember")}</small>
+      <span className="amber-meter" aria-hidden="true">
+        <i style={{ width: `${(Math.min(amount, KEY_COST) / KEY_COST) * 100}%` }} />
+      </span>
     </div>
   );
 }
 
 function KeyCounter({ keys, t }: { keys: number; t: Translator }) {
   return (
-    // T4: os pips são o indicador (forjadas preenchidas); o texto "/ 3 KEYS"
-    // saiu do DOM e vive no aria-label abaixo via t().
+    // The pips are the indicator (forged ones filled); "n/3" stays visible so a
+    // lone "0" beside three outlines is not ambiguous. Full text in aria-label.
     <div className="key-counter" aria-label={`${keys} / 3 ${t("game.keys")}`}>
       <div className="key-pips">
         {[0, 1, 2].map((index) => (
           <KeyRound key={index} className={index < keys ? "key-pip is-forged" : "key-pip"} size={17} strokeWidth={1.8} />
         ))}
       </div>
-      <span>{keys}</span>
+      <span>{keys}/3</span>
     </div>
   );
 }

@@ -991,10 +991,21 @@ button:disabled {
   font-size: var(--fs-2xs);
 }
 
-/* T4: o <small> "/ 3 KEYS" saiu do DOM — os pips (forjadas preenchidas) são o
-   indicador visual e o texto completo ficou no aria-label do .key-counter. */
+/* "n/3" visível ao lado dos pips (o "0" solto era ambíguo); o texto completo
+   "n / 3 KEYS" segue no aria-label do .key-counter. */
+
+/* Chave recém-forjada: o pip "acende" em vez de só trocar de cor. */
+.key-pip.is-forged {
+  animation: key-forge 620ms cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+
+@keyframes key-forge {
+  0% { transform: rotate(-42deg) scale(0.4); filter: drop-shadow(0 0 0 rgba(240, 200, 110, 0)); }
+  55% { transform: rotate(-42deg) scale(1.35); filter: drop-shadow(0 0 10px rgba(240, 200, 110, 0.9)); }
+}
 
 .amber-counter {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 3px;
@@ -1018,6 +1029,44 @@ button:disabled {
   font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.11em;
+}
+
+/* Progresso até o custo da chave (6): barra de 2px sob o contador; cheia +
+   brilho quando a próxima virada de turno forja. */
+.amber-meter {
+  position: absolute;
+  right: 0;
+  bottom: -6px;
+  left: 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(215, 175, 91, 0.16);
+}
+
+.amber-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #b8913f, #f1d58a);
+  transition: width 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.amber-counter--ready .amber-meter i {
+  box-shadow: 0 0 8px rgba(241, 213, 138, 0.8);
+}
+
+.amber-counter--ready svg {
+  filter: drop-shadow(0 0 6px rgba(241, 213, 138, 0.6));
+}
+
+.amber-value {
+  display: inline-block;
+  animation: count-pop 320ms cubic-bezier(0.2, 1.6, 0.4, 1) backwards;
+}
+
+@keyframes count-pop {
+  0% { transform: scale(1.45); color: #fff3cf; }
 }
 
 @media (min-width: 701px) {
@@ -4675,10 +4724,6 @@ button:disabled {
 /* ---------- Extra table motion ---------- */
 .turn-console--human .round-dot {
   animation: status-glow 2.2s ease-in-out infinite;
-}
-
-.game-board:not(.no-anim) .amber-counter span {
-  transition: transform 200ms cubic-bezier(0.2, 1.6, 0.4, 1);
 }
 
 .game-board:not(.no-anim) .board-piece--ready .card-art {

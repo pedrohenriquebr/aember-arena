@@ -297,6 +297,7 @@ const en: Dict = {
   "pager.label": "Pagination",
   "pager.prev": "Previous page",
   "pager.next": "Next page",
+  "game.amberToKey": "{amount} amber · a key costs {cost}",
 };
 
 const ptBR: Dict = {
@@ -573,6 +574,7 @@ const ptBR: Dict = {
   "pager.label": "Paginação",
   "pager.prev": "Página anterior",
   "pager.next": "Próxima página",
+  "game.amberToKey": "{amount} âmbar · uma chave custa {cost}",
 };
 
 const dictionaries: Record<Language, Dict> = { en, ptBR };
