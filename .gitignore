@@ -2,3 +2,5 @@ node_modules/
 dist/
 graphify-out/
 e2e/shots/
+.playwright-mcp/
+docs/advisor/*.log
