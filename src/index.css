@@ -2434,7 +2434,7 @@ button:disabled {
   color: #17150f;
   background: linear-gradient(140deg, #edc878, #cba25c);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 750;
   transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
 }
@@ -2461,7 +2461,7 @@ button:disabled {
   color: #c9c6b9;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 650;
   transition: border-color 150ms ease, background 150ms ease;
 }
@@ -4648,7 +4648,7 @@ button:disabled {
   .ghost-button {
     height: 40px;
     padding: 0 14px;
-    font-size: 11px;
+    font-size: var(--fs-xs);
   }
 
   .config-step-pill span:not(.config-step-num) {
