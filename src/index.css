@@ -360,6 +360,7 @@ button:disabled {
   font-size: var(--fs-3xs);
   font-weight: 750;
   letter-spacing: 0.19em;
+  text-transform: uppercase;
 }
 
 .eyebrow-line {
@@ -3521,9 +3522,11 @@ button:disabled {
 }
 
 .house-icon b {
-  font-size: 0.42em;
+  /* Glifo fallback do emblema: piso de caps (10px) quando o icon box é pequeno. */
+  font-size: max(10px, 0.44em);
   font-weight: 850;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .house-icon--xs { font-size: 20px; }
