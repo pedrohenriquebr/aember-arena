@@ -1186,6 +1186,12 @@ function App() {
     window.scrollTo(0, 0);
   }, [screen]);
 
+  // The motion switch lives on <html>, not on .app-root: the card zoom and the
+  // long-press lightbox are portaled to <body> and must obey it too.
+  useEffect(() => {
+    document.documentElement.classList.toggle("reduce-motion", !settings.animations);
+  }, [settings.animations]);
+
   // Keep <html lang> in sync with the active language (settings.language).
   useEffect(() => {
     document.documentElement.lang = settings.language === "ptBR" ? "pt-BR" : "en";
@@ -1507,7 +1513,7 @@ function App() {
         : t("game.opponentTurn");
 
   return (
-    <div className={`app-root${settings.animations ? "" : " reduce-motion"}`}>
+    <div className="app-root">
       <header className="app-header">
         <button
           type="button"

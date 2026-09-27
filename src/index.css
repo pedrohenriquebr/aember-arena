@@ -5849,6 +5849,18 @@ button:disabled {
   }
 }
 
+/* settings.animations OFF (classe no <html>) vale tanto quanto o
+   prefers-reduced-motion do sistema: antes só ~8 seletores tinham override e
+   hero-pulse, rise-in, warm-pulse, skeleton, sheen, toast/modal seguiam animando. */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -5858,4 +5870,11 @@ button:disabled {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* O spinner é indicador de estado (carregando/sincronizando), não decoração:
+   continua girando nos dois modos de movimento reduzido. */
+html .spin {
+  animation-duration: 1s !important;
+  animation-iteration-count: infinite !important;
 }
