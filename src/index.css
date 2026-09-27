@@ -1825,6 +1825,7 @@ button:disabled {
   position: static;
   top: 76px;
   display: flex;
+  flex-direction: column;
   grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr);
   max-height: none;
   min-height: 0;
@@ -1855,7 +1856,6 @@ button:disabled {
   .command-rail {
     position: sticky;
     display: flex;
-    flex-direction: column;
     grid-template-columns: none;
     align-items: normal;
     max-height: calc(100vh - 92px);
