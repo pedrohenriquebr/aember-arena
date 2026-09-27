@@ -23,7 +23,6 @@ import {
   RotateCcw,
   Settings2,
   Shield,
-  Sparkles,
   Sword,
   Swords,
   Volume2,
@@ -94,6 +93,16 @@ function renderLog(entry: LogEntry, t: Translator): string {
 }
 
 // ---------- Small shared components ----------
+
+// The forge glyph of public/forge-icon.svg, so header and favicon share one mark.
+function ForgeMark() {
+  return (
+    <svg viewBox="20 10 88 100" width="19" height="19" fill="none" stroke="currentColor" strokeLinecap="round" aria-hidden="true">
+      <path d="M64 15 102 37v44L64 105 26 81V37z" strokeWidth="6" />
+      <path d="M64 39v31m-13-17h26M55 43l18 19m0-19L55 62" strokeWidth="7" />
+    </svg>
+  );
+}
 
 type CardTileProps = {
   card: CardInstance;
@@ -1219,6 +1228,18 @@ function App() {
     document.documentElement.classList.toggle("reduce-motion", !settings.animations);
   }, [settings.animations]);
 
+  // Tab/window title follows the screen and the language.
+  useEffect(() => {
+    const titles: Record<Screen, string> = {
+      home: t("nav.home"),
+      browse: t("nav.browse"),
+      config: t("nav.config"),
+      game: t("nav.play"),
+      inspect: inspectDeck?.name ?? t("nav.home"),
+    };
+    document.title = `${titles[screen]} · Aember Arena`;
+  }, [screen, t, inspectDeck]);
+
   // Keep <html lang> in sync with the active language (settings.language).
   useEffect(() => {
     document.documentElement.lang = settings.language === "ptBR" ? "pt-BR" : "en";
@@ -1548,7 +1569,7 @@ function App() {
           aria-label={t("nav.home")}
           onClick={() => { sound.play("click"); setScreen("home"); }}
         >
-          <span className="brand-symbol"><Sparkles size={19} strokeWidth={1.8} /></span>
+          <span className="brand-symbol"><ForgeMark /></span>
           <span className="brand-wordmark"><strong>AEMBER</strong><small>ARENA</small></span>
         </button>
 
