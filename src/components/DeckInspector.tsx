@@ -90,7 +90,8 @@ export function DeckInspector({
           {deck.expansion ? <span className="meta-chip">{t("deck.set")} {deck.expansion}</span> : null}
           {deck.powerLevel ? <span className="meta-chip"><Sparkles size={12} /> {t("deck.power")} {deck.powerLevel}</span> : null}
           {deck.chains ? <span className="meta-chip">{deck.chains} {t("deck.chains")}</span> : null}
-          <span className="meta-chip">{deck.wins ?? 0}W · {deck.losses ?? 0}L</span>
+          {/* A record only means something once the deck has one. */}
+          {deck.wins || deck.losses ? <span className="meta-chip">{deck.wins ?? 0}W · {deck.losses ?? 0}L</span> : null}
         </div>
       </div>
 
