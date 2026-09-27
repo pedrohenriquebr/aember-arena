@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Gem, Shield, Sparkles, Swords, X } from "lucide-react";
 import type { CardFace } from "../lib/game";
 import type { Translator } from "../lib/i18n";
+import { CoverageBadge } from "./CoverageBadge";
 import { HouseIcon } from "./HouseIcon";
 
 export { houseColor, houseLabel } from "../lib/houses";
@@ -286,6 +287,7 @@ export function CardLightbox({
             </div>
           </div>
           <p className="card-lightbox-text">{face.text || t("inspector.noText")}</p>
+          <CoverageBadge face={face} t={t} />
           <div className="card-lightbox-stats">
             {face.amber > 0 && <span><Gem size={14} /> {face.amber} {t("inspector.amber")}</span>}
             {face.power > 0 && <span><Swords size={14} /> {face.power} {t("inspector.power")}</span>}

@@ -60,6 +60,7 @@ import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language,
 import { readSettings, saveSettings, type AppSettings } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
+import { CoverageBadge } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
 import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser } from "./components/DeckBrowser";
@@ -1062,6 +1063,7 @@ function SelectedCardPanel({
             </div>
           </div>
           <p className="selected-card-text">{card.face.text || t("inspector.noText")}</p>
+          <CoverageBadge face={card.face} t={t} />
 
           <div className="inspector-actions">
             {pick ? (

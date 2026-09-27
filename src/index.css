@@ -2170,6 +2170,42 @@ button:disabled {
   }
 }
 
+/* Selo de cobertura do motor (CoverageBadge): selo em caps + frase sempre
+   visível — nada de informação só em hover. */
+.coverage-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 8px 0 0;
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  line-height: 1.45;
+}
+
+.coverage-badge {
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-3xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.coverage-note--full .coverage-badge {
+  color: var(--green);
+}
+
+.coverage-note--partial .coverage-badge {
+  color: var(--gold);
+}
+
+.coverage-note--vanilla .coverage-badge {
+  color: var(--muted);
+}
+
 .inspector-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
