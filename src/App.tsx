@@ -44,7 +44,6 @@ import {
   chooseHouse,
   createMatch,
   endTurn,
-  type CardFace,
   type CardInstance,
   type DeckInfo,
   type GameMove,
@@ -55,7 +54,7 @@ import { fetchKeyforgeDeck, loadDeckOrCache } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator } from "./lib/i18n";
 import { readSettings, saveSettings, type AppSettings } from "./lib/settings";
 import { sound } from "./lib/sound";
-import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
+import { CardArt, houseColor, houseLabel } from "./components/CardArt";
 import { DeckTile, HouseMark } from "./components/DeckTile";
 import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser } from "./components/DeckBrowser";
