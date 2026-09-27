@@ -786,7 +786,7 @@ button:disabled {
   overflow: hidden;
   margin-top: 5px;
   color: #dbd8cb;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -796,7 +796,7 @@ button:disabled {
 .card-tile--board .card-caption {
   max-width: 88px;
   color: #c9c6b8;
-  font-size: 7px;
+  font-size: var(--fs-2xs);
 }
 
 .card-fallback {
@@ -820,7 +820,7 @@ button:disabled {
   padding-bottom: 4px;
   border-bottom: 1px solid rgba(239, 225, 193, 0.3);
   color: #dbc17c;
-  font-size: 7px;
+  font-size: var(--fs-3xs);
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -838,19 +838,19 @@ button:disabled {
 
 .card-fallback strong {
   font-family: Georgia, serif;
-  font-size: clamp(8px, 0.85vw, 11px);
+  font-size: var(--fs-2xs);
   line-height: 1.15;
 }
 
 .fallback-type {
   color: #bdb5a1;
-  font-size: 7px;
+  font-size: var(--fs-2xs);
   text-transform: uppercase;
 }
 
 .fallback-stats {
   color: #d3b469;
-  font-size: 7px;
+  font-size: var(--fs-2xs);
 }
 
 .board-piece--ready .card-tile:not(:disabled) .card-art {
@@ -864,9 +864,10 @@ button:disabled {
   gap: 4px;
   margin-top: 4px;
   color: rgba(183, 195, 162, 0.77);
-  font-size: 6px;
+  font-size: var(--fs-3xs);
   font-weight: 800;
   letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 
 .ready-label span {
@@ -893,7 +894,7 @@ button:disabled {
   border-radius: 3px;
   color: #ffd5be;
   background: #7c3e32;
-  font-size: 7px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
 }
 
@@ -909,7 +910,7 @@ button:disabled {
   justify-content: center;
   gap: 9px;
   color: rgba(209, 205, 185, 0.36);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.035em;
 }
 
@@ -951,7 +952,7 @@ button:disabled {
   align-items: center;
   gap: 5px;
   color: #b4a16d;
-  font-size: 7px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.15em;
 }
@@ -966,13 +967,13 @@ button:disabled {
 
 .turn-console-copy strong {
   color: #ece6d7;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
 }
 
 .turn-console-copy > span:last-child {
   color: #888c81;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
 }
 
 .house-picker {
@@ -998,7 +999,7 @@ button:disabled {
   color: #a4a69a;
   background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
 }
@@ -1045,7 +1046,7 @@ button:disabled {
   color: #f0d38b;
   background: linear-gradient(140deg, rgba(162, 123, 51, 0.25), rgba(131, 97, 42, 0.15));
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 750;
   transition: background 160ms ease, transform 160ms ease, opacity 160ms ease;
 }
@@ -1068,7 +1069,7 @@ button:disabled {
   border-bottom: 1px solid rgba(210, 127, 95, 0.18);
   color: #e0aa8b;
   background: rgba(113, 55, 42, 0.12);
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.04em;
   animation: warm-pulse 1.8s ease-in-out infinite;
@@ -1097,7 +1098,7 @@ button:disabled {
 
 .hand-title {
   color: rgba(224, 216, 194, 0.84);
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.16em;
 }
@@ -1105,7 +1106,7 @@ button:disabled {
 .hand-count,
 .deck-count {
   color: rgba(181, 182, 168, 0.55);
-  font-size: 7px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -1120,7 +1121,7 @@ button:disabled {
   gap: 6px;
   padding: 3px 0 0;
   color: #c4ad70;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   animation: rise-in 320ms ease both;
 }
 
@@ -1142,7 +1143,7 @@ button:disabled {
   width: 100%;
   place-items: center;
   color: #939489;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
 }
 
 .command-rail {
