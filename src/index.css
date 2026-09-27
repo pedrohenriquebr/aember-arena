@@ -5623,7 +5623,12 @@ button:disabled {
   padding: 10px 12px 8px;
 }
 
+/* block + width: é um <button> (inline-block, largura pelo conteúdo) e o
+   .card-art tem container-type: inline-size (sem largura intrínseca): o par
+   colapsava a arte em 26×3px — sobrava só um "." no painel. */
 .card-detail-art {
+  display: block;
+  width: 100%;
   padding: 0 12px;
 }
 
