@@ -4211,7 +4211,7 @@ button:disabled {
   margin: 0;
   color: #f2ecdd;
   font-family: "Iowan Old Style", Georgia, serif;
-  font-size: 16px;
+  font-size: var(--fs-base);
   font-weight: 500;
   line-height: 1.15;
 }
@@ -4219,14 +4219,14 @@ button:disabled {
 .card-detail-sub {
   margin: 5px 0 0;
   color: #9d9e92;
-  font-size: 8px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.04em;
 }
 
 .card-detail-traits {
   margin: 6px 0 0;
   color: #b3ac93;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-style: italic;
 }
 
@@ -4235,7 +4235,7 @@ button:disabled {
   padding-top: 9px;
   border-top: 1px solid rgba(226, 218, 196, 0.1);
   color: #c3c2b5;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   line-height: 1.5;
   white-space: pre-line;
 }
@@ -4256,7 +4256,7 @@ button:disabled {
   border-radius: 4px;
   color: #d6d1c2;
   background: rgba(255, 255, 255, 0.02);
-  font-size: 8px;
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -4297,14 +4297,14 @@ button:disabled {
 .card-detail-empty strong {
   color: #e2ddcf;
   font-family: Georgia, serif;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 
 .card-detail-empty p {
   margin: 0;
   color: #8d8e83;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   line-height: 1.5;
 }
 
@@ -4322,7 +4322,7 @@ button:disabled {
   align-items: center;
   gap: 7px;
   color: #94958a;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
 }
 
 .rarity-legend i {
