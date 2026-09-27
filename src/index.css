@@ -1,12 +1,14 @@
 /* Reset mínimo (T9) — substitui o preflight do Tailwind, que era o reset do app.
    Replica apenas o que o app usa: box-sizing/margens/paddings zerados (h1-h6, p,
-   ul/li, dl tinham default de UA), line-height 1.5 do html, img/svg em block,
-   headings herdando tamanho/peso, listas sem marcador e botões/inputs herdados.
-   Verificado contra o CSS compilado do preflight em dist/index.html. */
+   ul/li, dl tinham default de UA), border 0 solid (botões tinham 2px outset de UA),
+   line-height 1.5 + tab-size 4 do html, img/svg em block, headings herdando
+   tamanho/peso, listas sem marcador e botões/inputs herdados (font, appearance,
+   fundo transparente). Diffs computados pre/pós verificados via Playwright. */
 *,
 ::before,
 ::after {
   box-sizing: border-box;
+  border: 0 solid;
   margin: 0;
   padding: 0;
 }
@@ -14,6 +16,7 @@
 html {
   line-height: 1.5;
   -webkit-text-size-adjust: 100%;
+  tab-size: 4;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -42,6 +45,7 @@ svg,
 video,
 canvas {
   display: block;
+  vertical-align: middle;
 }
 
 img,
@@ -53,11 +57,18 @@ video {
 button,
 input {
   font: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
   letter-spacing: inherit;
   color: inherit;
   opacity: 1;
   background-color: transparent;
   border-radius: 0;
+}
+
+button,
+input:where([type="button"], [type="reset"], [type="submit"]) {
+  appearance: button;
 }
 
 ::placeholder {
