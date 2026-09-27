@@ -20,6 +20,21 @@
   --gold: #d3ad5d;
   --gold-bright: #edc878;
   --green: #82aa87;
+
+  /* Escala tipográfica da interface (população B) — docs/WORKFLOW.md §5.
+     html permanece 16px; texto DENTRO de carta é população A (cqi, tarefa T4).
+     Pisos (§2): 11px informativo; 10px só caps/eyebrow c/ letter-spacing >= 0.1em. */
+  --fs-3xs: 0.625rem; /* 10px fixo — eyebrow/caps */
+  --fs-2xs: clamp(0.6875rem, 0.66rem + 0.12vw, 0.75rem); /* 11 -> 12px */
+  --fs-xs: clamp(0.75rem, 0.72rem + 0.15vw, 0.8125rem); /* 12 -> 13px */
+  --fs-sm: clamp(0.8125rem, 0.78rem + 0.2vw, 0.9375rem); /* 13 -> 15px */
+  --fs-base: clamp(1rem, 0.935rem + 0.24vw, 1.125rem); /* 16 -> 18px */
+  --fs-lg: clamp(1.1875rem, 1.135rem + 0.3vw, 1.375rem); /* 19 -> 22px */
+  --fs-xl: clamp(1.4375rem, 1.337rem + 0.36vw, 1.625rem); /* 23 -> 26px */
+  --fs-2xl: clamp(1.6875rem, 1.586rem + 0.44vw, 1.9375rem); /* 27 -> 31px */
+  --fs-3xl: clamp(2rem, 1.896rem + 0.52vw, 2.3125rem); /* 32 -> 37px */
+  --fs-display: clamp(2.375rem, 2.331rem + 0.68vw, 2.875rem); /* 38 -> 46px */
+  --fs-input: max(16px, 1rem); /* inputs >= 16px sempre */
 }
 
 * {
