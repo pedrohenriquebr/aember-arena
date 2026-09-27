@@ -9,7 +9,24 @@ interface CachedDeck extends DeckInfo {
   cachedAt: number;
 }
 
+// One connection for the whole page: every operation awaits the same cached
+// promise instead of firing a fresh indexedDB.open() per call (a browse page
+// used to trigger nine concurrent opens). A failed open is not cached, so the
+// next operation may retry; storage failures stay swallowed and the match
+// remains playable through the localStorage fallbacks below.
+let databasePromise: Promise<IDBDatabase> | null = null;
+
 function openDatabase(): Promise<IDBDatabase> {
+  if (!databasePromise) {
+    databasePromise = requestDatabase().catch((error) => {
+      databasePromise = null;
+      throw error;
+    });
+  }
+  return databasePromise;
+}
+
+function requestDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
       reject(new Error("IndexedDB is unavailable in this browser."));
@@ -22,7 +39,21 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!database.objectStoreNames.contains(DECK_STORE)) database.createObjectStore(DECK_STORE, { keyPath: "id" });
       if (!database.objectStoreNames.contains(CARD_STORE)) database.createObjectStore(CARD_STORE, { keyPath: "id" });
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const database = request.result;
+      // The shared connection stays open for the page's lifetime: per-operation
+      // close() would race with concurrent transactions on the same connection.
+      database.onversionchange = () => {
+        database.close();
+        databasePromise = null;
+      };
+      // Forget a connection the browser closed behind our back (e.g. storage
+      // eviction) so the next operation reopens instead of failing forever.
+      database.onclose = () => {
+        databasePromise = null;
+      };
+      resolve(database);
+    };
     request.onerror = () => reject(request.error ?? new Error("Could not open local card storage."));
   });
 }
@@ -44,7 +75,6 @@ export async function cacheDeck(deck: DeckInfo): Promise<void> {
       transaction.onerror = () => reject(transaction.error ?? new Error("Could not cache deck data."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Deck cache was interrupted."));
     });
-    database.close();
   } catch {
     try {
       localStorage.setItem(localDeckKey(deck.id), JSON.stringify(cached));
@@ -63,7 +93,6 @@ export async function listCachedDecks(): Promise<DeckInfo[]> {
       request.onsuccess = () => resolve((request.result ?? []) as CachedDeck[]);
       request.onerror = () => reject(request.error ?? new Error("Could not read cached decks."));
     });
-    database.close();
     return rows
       .sort((a, b) => (b.cachedAt ?? 0) - (a.cachedAt ?? 0))
       .map(({ cachedAt: _cachedAt, ...deck }) => deck as DeckInfo);
@@ -81,7 +110,6 @@ export async function getCachedDeck(id: string): Promise<DeckInfo | null> {
       request.onsuccess = () => resolve(request.result as CachedDeck | undefined);
       request.onerror = () => reject(request.error ?? new Error("Could not read cached deck."));
     });
-    database.close();
     if (result) return result;
   } catch {
     // Fall through to the small localStorage fallback below.

@@ -172,7 +172,12 @@ export async function fetchDeckPage(options: {
       .filter((deck): deck is DeckInfo => Boolean(deck));
 
     if (!decks.length) throw new Error("No decks were returned for this page.");
-    void Promise.all(decks.map((deck) => cacheDeck(deck))).catch(() => undefined);
+    // Cache the page decks one after another: together with the shared IDB
+    // connection in cache.ts this keeps a single open() and one write
+    // transaction at a time instead of nine concurrent ones per browse page.
+    void decks
+      .reduce<Promise<void>>((chain, deck) => chain.then(() => cacheDeck(deck)), Promise.resolve())
+      .catch(() => undefined);
 
     return {
       decks,
