@@ -3481,15 +3481,17 @@ button:disabled {
   margin: 8px 0 5px;
   color: #f2ecdf;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  font-size: var(--fs-2xl);
+  font-size: var(--fs-3xl);
   font-weight: 500;
   letter-spacing: -0.035em;
   line-height: 1.02;
 }
 
+/* O H1 do hero é o momento de marca: um degrau acima dos títulos de sub-tela
+   em todo viewport (a 360 ficava em 27px, quase igual ao H1 do config). */
 @media (min-width: 701px) {
   .home-hero h1 {
-    font-size: var(--fs-3xl);
+    font-size: var(--fs-display);
   }
 }
 
