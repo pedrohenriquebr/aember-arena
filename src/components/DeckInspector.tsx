@@ -216,6 +216,7 @@ export function DeckInspector({
               totalPages={totalPages}
               onChange={(next) => { sound.play("click"); setPage(next); }}
               label={t("inspect.pagerLabel")}
+              t={t}
               compact
             />
           </div>

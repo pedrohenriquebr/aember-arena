@@ -172,7 +172,7 @@ export function DeckBrowser({
             ))}
           </div>
           <div className="browse-pager">
-            <Pagination page={page} totalPages={totalPages} onChange={(next) => { sound.play("click"); setPage(next); window.scrollTo({ top: 0, behavior: "smooth" }); }} label={t("browse.pagerLabel")} />
+            <Pagination page={page} totalPages={totalPages} onChange={(next) => { sound.play("click"); setPage(next); window.scrollTo({ top: 0, behavior: "smooth" }); }} label={t("browse.pagerLabel")} t={t} />
             <span className="pager-hint">{t("browse.pagerHint")}</span>
           </div>
         </>

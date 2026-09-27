@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { Translator } from "../lib/i18n";
 
 // Compact page window: first, last, and a sliding neighbourhood around the current page.
 export function pageWindow(current: number, total: number, span = 1): number[] {
@@ -18,12 +19,14 @@ export function Pagination({
   totalPages,
   onChange,
   label,
+  t,
   compact = false,
 }: {
   page: number;
   totalPages: number;
   onChange: (page: number) => void;
   label?: string;
+  t: Translator;
   compact?: boolean;
 }) {
   if (totalPages <= 1) return null;
@@ -31,20 +34,21 @@ export function Pagination({
   let lastRendered = 0;
 
   return (
-    <nav className={`pager${compact ? " pager--compact" : ""}`} aria-label={label ?? "Pagination"}>
+    <nav className={`pager${compact ? " pager--compact" : ""}`} aria-label={label ?? t("pager.label")}>
       <button
         type="button"
         className="pager-arrow"
         onClick={() => onChange(page - 1)}
         disabled={page <= 1}
-        aria-label="Previous page"
+        aria-label={t("pager.prev")}
       >
         <ChevronLeft size={15} />
       </button>
 
       <div className="pager-pages">
         {pages.map((item) => {
-          const gap = lastRendered && item - lastRendered > 1;
+          // Boolean: `0 && …` would render a literal "0" before the first page.
+          const gap = lastRendered > 0 && item - lastRendered > 1;
           lastRendered = item;
           return (
             <span key={item} className="pager-slot">
@@ -67,7 +71,7 @@ export function Pagination({
         className="pager-arrow"
         onClick={() => onChange(page + 1)}
         disabled={page >= totalPages}
-        aria-label="Next page"
+        aria-label={t("pager.next")}
       >
         <ChevronRight size={15} />
       </button>

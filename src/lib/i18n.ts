@@ -293,6 +293,10 @@ const en: Dict = {
   "inspector.zone.hand": "IN YOUR HAND",
   "inspector.zone.board": "ON YOUR BATTLELINE",
   "inspector.zone.enemy": "OPPONENT CARD",
+  // Polish pass
+  "pager.label": "Pagination",
+  "pager.prev": "Previous page",
+  "pager.next": "Next page",
 };
 
 const ptBR: Dict = {
@@ -565,6 +569,10 @@ const ptBR: Dict = {
   "inspector.zone.hand": "NA SUA MÃO",
   "inspector.zone.board": "NA SUA LINHA DE BATALHA",
   "inspector.zone.enemy": "CARTA DO OPONENTE",
+  // Polish pass
+  "pager.label": "Paginação",
+  "pager.prev": "Página anterior",
+  "pager.next": "Próxima página",
 };
 
 const dictionaries: Record<Language, Dict> = { en, ptBR };

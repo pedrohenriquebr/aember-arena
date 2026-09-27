@@ -351,6 +351,7 @@ function HomeScreen({
               totalPages={totalPages}
               onChange={(next) => { sound.play("click"); setPage(next); }}
               label={t("home.pageLabel")}
+              t={t}
               compact
             />
           </div>
