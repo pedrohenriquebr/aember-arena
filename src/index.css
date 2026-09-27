@@ -357,7 +357,7 @@ button:disabled {
   align-items: center;
   gap: 9px;
   color: #b99d62;
-  font-size: 9px;
+  font-size: var(--fs-3xs);
   font-weight: 750;
   letter-spacing: 0.19em;
 }
@@ -372,7 +372,7 @@ button:disabled {
   margin: 7px 0 3px;
   color: #f1ecdf;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  font-size: clamp(27px, 3vw, 35px);
+  font-size: var(--fs-2xl);
   font-weight: 500;
   letter-spacing: -0.035em;
   line-height: 1.04;
@@ -381,7 +381,7 @@ button:disabled {
 .match-heading p {
   margin: 0;
   color: #a6a69a;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1.45;
 }
 
@@ -413,14 +413,14 @@ button:disabled {
 
 .match-chip small {
   color: #918f82;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 750;
   letter-spacing: 0.12em;
 }
 
 .match-chip strong {
   color: #e6e0d2;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   letter-spacing: 0.05em;
 }
@@ -487,7 +487,7 @@ button:disabled {
   border-radius: 50%;
   color: #d6bd7a;
   background: rgba(222, 213, 188, 0.055);
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.06em;
 }
@@ -523,7 +523,7 @@ button:disabled {
 .player-name-row strong {
   overflow: hidden;
   color: #eee9dc;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -538,7 +538,7 @@ button:disabled {
   border-radius: 3px;
   color: #d6bd7a;
   background: rgba(211, 173, 93, 0.08);
-  font-size: 7px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.12em;
 }
@@ -550,7 +550,7 @@ button:disabled {
   overflow: hidden;
   margin-top: 4px;
   color: #999b8e;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
 }
 
 .player-deck-label {
@@ -589,7 +589,7 @@ button:disabled {
   align-items: center;
   gap: 7px;
   color: #dbd4c4;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -613,13 +613,13 @@ button:disabled {
 
 .key-counter > span {
   color: #eee3c9;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
 }
 
 .key-counter small {
   margin-left: 2px;
   color: #8f9185;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.07em;
 }
@@ -629,7 +629,7 @@ button:disabled {
   align-items: center;
   gap: 5px;
   color: #f1d58a;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   line-height: 1;
 }
@@ -642,7 +642,7 @@ button:disabled {
 .amber-counter small {
   margin-left: 2px;
   color: #929286;
-  font-size: 7px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.11em;
 }
@@ -669,14 +669,14 @@ button:disabled {
   justify-content: space-between;
   margin-bottom: 8px;
   color: rgba(218, 206, 178, 0.64);
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 750;
   letter-spacing: 0.16em;
 }
 
 .zone-card-count {
   color: rgba(190, 188, 171, 0.45);
-  font-size: 7px;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.12em;
 }
 
