@@ -4411,10 +4411,6 @@ button:disabled {
     gap: 5px;
     padding: 10px 7px;
   }
-
-  .house-choice > span:nth-child(2) {
-    font-size: 8px;
-  }
 }
 
 @media (max-width: 1040px) {
@@ -4667,10 +4663,6 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .depth-big {
-    font-size: var(--fs-display);
-  }
-
   .card-zoom {
     display: none;
   }
@@ -4696,10 +4688,6 @@ button:disabled {
 
   .brand-wordmark strong {
     font-size: var(--fs-xs);
-  }
-
-  .brand-wordmark small {
-    font-size: var(--fs-3xs);
   }
 
   .header-room-status {
@@ -4752,7 +4740,6 @@ button:disabled {
 
   .match-eyebrow {
     gap: 6px;
-    font-size: 7px;
   }
 
   .eyebrow-line {
@@ -4761,12 +4748,12 @@ button:disabled {
 
   .match-heading h1 {
     margin: 6px 0 3px;
-    font-size: 27px;
+    font-size: var(--fs-2xl);
   }
 
   .match-heading p {
     max-width: 245px;
-    font-size: 9px;
+    font-size: var(--fs-2xs);
   }
 
   .match-chip {
@@ -4780,12 +4767,8 @@ button:disabled {
     height: 25px;
   }
 
-  .match-chip small {
-    font-size: 7px;
-  }
-
   .match-chip strong {
-    font-size: 8px;
+    font-size: var(--fs-2xs);
   }
 
   .game-board {
@@ -4806,7 +4789,6 @@ button:disabled {
   .player-avatar {
     width: 29px;
     height: 29px;
-    font-size: 7px;
   }
 
   .player-avatar svg {
@@ -4818,23 +4800,21 @@ button:disabled {
   }
 
   .player-name-row strong {
-    font-size: 10px;
+    font-size: var(--fs-2xs);
   }
 
   .active-turn-tag {
     padding: 2px 4px;
-    font-size: 6px;
   }
 
   .player-deck-name {
     max-width: 170px;
     margin-top: 3px;
-    font-size: 7px;
   }
 
   .player-house-list {
     margin-left: 5px;
-    font-size: 7px;
+    font-size: var(--fs-3xs);
   }
 
   .player-resources {
@@ -4847,7 +4827,7 @@ button:disabled {
 
   .key-counter {
     gap: 3px;
-    font-size: 10px;
+    font-size: var(--fs-2xs);
   }
 
   .key-pips {
@@ -4859,13 +4839,9 @@ button:disabled {
     height: 13px;
   }
 
-  .key-counter small {
-    font-size: 6px;
-  }
-
   .amber-counter {
     gap: 3px;
-    font-size: 17px;
+    font-size: var(--fs-base);
   }
 
   .amber-counter svg {
@@ -4888,11 +4864,6 @@ button:disabled {
 
   .zone-heading {
     margin-bottom: 6px;
-    font-size: 7px;
-  }
-
-  .zone-card-count {
-    font-size: 6px;
   }
 
   .board-lane {
@@ -4913,13 +4884,11 @@ button:disabled {
   .card-tile--board .card-caption {
     max-width: 68px;
     margin-top: 3px;
-    font-size: 6px;
   }
 
   .ready-label {
     gap: 3px;
     margin-top: 3px;
-    font-size: 5px;
   }
 
   .ready-label span {
@@ -4930,7 +4899,6 @@ button:disabled {
   .empty-battleline {
     min-height: 91px;
     justify-content: center;
-    font-size: 8px;
   }
 
   .empty-orbit {
@@ -4953,16 +4921,8 @@ button:disabled {
     gap: 3px;
   }
 
-  .round-kicker {
-    font-size: 6px;
-  }
-
   .turn-console-copy strong {
-    font-size: 10px;
-  }
-
-  .turn-console-copy > span:last-child {
-    font-size: 7px;
+    font-size: var(--fs-2xs);
   }
 
   .house-picker {
@@ -4987,10 +4947,6 @@ button:disabled {
     font-size: 21px;
   }
 
-  .house-choice > span:nth-child(2) {
-    font-size: 8px;
-  }
-
   .house-check {
     width: 11px;
   }
@@ -5001,7 +4957,7 @@ button:disabled {
     grid-row: 1;
     gap: 5px;
     padding: 8px;
-    font-size: 8px;
+    font-size: var(--fs-2xs);
   }
 
   .end-turn-button svg {
@@ -5010,24 +4966,18 @@ button:disabled {
 
   .fight-instruction {
     min-height: 28px;
-    font-size: 8px;
   }
 
   .hand-zone {
     padding: 10px 9px 11px;
   }
 
-  .hand-title {
-    font-size: 7px;
+  .card-caption {
+    margin-top: 4px;
   }
 
-  .hand-count,
-  .deck-count {
-    font-size: 6px;
-  }
-
-  .hand-prompt {
-    font-size: 7px;
+  .empty-hand {
+    min-height: 112px;
   }
 
   .hand-track {
@@ -5094,13 +5044,8 @@ button:disabled {
     width: 76px;
   }
 
-  .selected-card-heading h3 {
-    font-size: 16px;
-  }
-
   .selected-card-text {
     margin-top: 9px;
-    font-size: 8px;
   }
 
   .inspector-actions {
@@ -5133,7 +5078,6 @@ button:disabled {
   .app-footer {
     flex-wrap: wrap;
     padding: 0 10px 14px;
-    font-size: 7px;
   }
 
   .toast-message {
@@ -5156,20 +5100,12 @@ button:disabled {
     padding: 17px 15px 15px;
   }
 
-  .modal-heading h2 {
-    font-size: 23px;
-  }
-
   .settings-section {
     margin-top: 16px;
   }
 
   .difficulty-choice {
     min-height: 42px;
-  }
-
-  .deck-modal-intro {
-    font-size: 9px;
   }
 
   .deck-result {
@@ -5184,7 +5120,7 @@ button:disabled {
   }
 
   .deck-result-copy h3 {
-    font-size: 15px;
+    font-size: var(--fs-sm);
   }
 
   .use-deck-button {
@@ -5209,7 +5145,7 @@ button:disabled {
   }
 
   .match-heading h1 {
-    font-size: 24px;
+    font-size: var(--fs-xl);
   }
 
   .player-resources {
@@ -5221,12 +5157,8 @@ button:disabled {
     height: 11px;
   }
 
-  .key-counter small {
-    font-size: 5px;
-  }
-
   .amber-counter {
-    font-size: 15px;
+    font-size: var(--fs-sm);
   }
 
   .player-deck-name {
@@ -5237,10 +5169,6 @@ button:disabled {
   .header-icon-button {
     width: 30px;
     height: 30px;
-  }
-
-  .brand-wordmark strong {
-    font-size: var(--fs-xs);
   }
 }
 
