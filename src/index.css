@@ -4374,7 +4374,7 @@ button:disabled {
   color: #86887d;
   background: transparent;
   cursor: pointer;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.04em;
   transition: color 150ms ease, background 150ms ease;
