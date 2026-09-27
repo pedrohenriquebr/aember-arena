@@ -3509,19 +3509,28 @@ button:disabled {
   }
 }
 
+/* Mobile: sem chevrons — os 3 passos cabem numa linha a 360 (antes "3 Play"
+   quebrava sozinho numa segunda linha). */
 .home-steps {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6px 12px;
   margin-top: 20px;
   color: #6f7268;
+}
+
+.home-steps > svg {
+  display: none;
 }
 
 @media (min-width: 701px) {
   .home-steps {
     flex-wrap: nowrap;
     gap: 8px;
+  }
+  .home-steps > svg {
+    display: block;
   }
 }
 
