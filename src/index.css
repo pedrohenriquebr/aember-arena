@@ -133,6 +133,10 @@ button,
      max(var(--fs-2xs), 7cqi) — piso 11px. Onde o piso não cabe, o label sai da
      carta (@container) ou vira indicador visual + aria-label via t(). */
   --fs-card-floor: 10px;
+
+  /* Altura da tab bar mobile (44px de alvo + 2×5px + 1px de borda ≈ 54px) mais a
+     safe-area: âncora dos docks fixos/sticky que ficam logo acima dela. */
+  --tabbar-h: calc(54px + env(safe-area-inset-bottom, 0px));
 }
 
 * {
@@ -3384,10 +3388,11 @@ button:disabled {
 }
 
 /* ---------- Shared CTA buttons ---------- */
-/* T6 — default = mobile (40px / 0 14px / --fs-xs); desktop ao lado. */
+/* Default = mobile (44px / 0 14px / --fs-xs); desktop ao lado. 44px em todo
+   viewport: é o CTA primário de cada tela (alvo de toque mínimo). */
 .cta-button {
   display: inline-flex;
-  height: 40px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -3404,7 +3409,6 @@ button:disabled {
 
 @media (min-width: 701px) {
   .cta-button {
-    height: 42px;
     padding: 0 18px;
     font-size: var(--fs-sm);
   }
@@ -3422,10 +3426,10 @@ button:disabled {
   transform: translateY(0);
 }
 
-/* T6 — default = mobile (40px / 0 14px / --fs-xs); desktop ao lado. */
+/* Default = mobile (44px / 0 14px / --fs-xs); desktop ao lado. */
 .ghost-button {
   display: inline-flex;
-  height: 40px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -3442,7 +3446,6 @@ button:disabled {
 
 @media (min-width: 701px) {
   .ghost-button {
-    height: 42px;
     padding: 0 16px;
     font-size: var(--fs-sm);
   }
@@ -4078,7 +4081,7 @@ button:disabled {
 .home-cta-bar {
   position: fixed;
   z-index: 40;
-  bottom: 54px;
+  bottom: var(--tabbar-h);
   left: 0;
   right: 0;
   display: flex;
@@ -4142,7 +4145,7 @@ button:disabled {
 .config-screen {
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: 14px 11px 86px;
+  padding: 14px 11px 8px;
 }
 
 @media (min-width: 701px) {
@@ -4183,7 +4186,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 40px;
+  height: 44px;
   padding: 0 12px;
   border: 0;
   border-radius: 8px;
@@ -4233,6 +4236,22 @@ button:disabled {
    UA default de <span>; dentro do flex pai computa block como antes). */
 .config-step-pill span:not(.config-step-num) {
   display: none;
+}
+
+/* No mobile o passo atual mostra o nome (os demais ficam só com o número):
+   sem isso o stepper era "1 2 3 4" sem dizer onde o jogador está. */
+.config-step-pill.is-active {
+  flex: 3 1 auto;
+}
+
+@media (min-width: 701px) {
+  .config-step-pill.is-active {
+    flex: 1;
+  }
+}
+
+.config-step-pill.is-active span:not(.config-step-num) {
+  display: inline;
 }
 
 @media (min-width: 701px) {
@@ -4473,12 +4492,40 @@ button:disabled {
   font-weight: 650;
 }
 
+/* Mobile: dock sticky logo acima da tab bar — Back/Next ficavam fora da dobra a
+   360×800 com as descrições de dificuldade em 2 linhas. Desktop: fluxo normal. */
 .config-nav {
+  position: sticky;
+  z-index: 20;
+  bottom: var(--tabbar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 20px;
+  gap: 10px;
+  margin: 16px -11px 0;
+  padding: 10px 11px;
+  border-top: 1px solid rgba(226, 218, 196, 0.1);
+  background: rgba(18, 20, 17, 0.94);
+  backdrop-filter: blur(16px);
+}
+
+.config-nav .cta-button {
+  flex: 1;
+}
+
+@media (min-width: 701px) {
+  .config-nav {
+    position: static;
+    gap: 12px;
+    margin: 20px 0 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    backdrop-filter: none;
+  }
+  .config-nav .cta-button {
+    flex: none;
+  }
 }
 
 /* ---------- Card hover zoom ---------- */
