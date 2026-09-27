@@ -56,6 +56,8 @@ export function setupTest(player1: SideSetup, player2: SideSetup = {}, house: st
     player.keys = setup.keys ?? 0;
   });
   state.activeHouse = house;
+  // Past the first-turn rule unless a spec opts back in.
+  state.turn = 2;
   state.log = [];
   return state;
 }

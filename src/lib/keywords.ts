@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Keyword model ported from keyteki (https://github.com/keyteki/keyteki):
+// server/game/Card.js (printedKeywords / getKeywordValue) and docs/keywords.md.
+// Copyright (C) keyteki contributors. Rewritten in TypeScript for Aember Arena.
+import type { CardFace } from "./game";
+
+/** Keywords the engine resolves by itself (see game.ts). */
+export const ENGINE_KEYWORDS = [
+  "elusive",
+  "taunt",
+  "skirmish",
+  "poison",
+  "deploy",
+  "alpha",
+  "omega",
+  "assault",
+  "hazardous",
+  "splash-attack",
+] as const;
+
+export type Keyword = (typeof ENGINE_KEYWORDS)[number];
+export type Keywords = Partial<Record<Keyword, number>>;
+
+const KEYWORD_SENTENCE = new RegExp(`^(${ENGINE_KEYWORDS.join("|")})(?:[\\s:]+(\\d+))?$`);
+
+/** "assault:2" (keyteki JSON), "Assault 2" (card text) or "Elusive" -> [name, value]. */
+export function readKeyword(raw: string): [Keyword, number] | null {
+  const match = raw.trim().toLowerCase().replace(/\s*[-–]\s*/g, "-").match(KEYWORD_SENTENCE);
+  return match ? [match[1] as Keyword, match[2] ? Number(match[2]) : 1] : null;
+}
+
+/** Keywords printed on the card: the vault array when present, else the leading
+    keyword sentences of card_text ("Elusive. Assault 2."). */
+export function printedKeywords(face: CardFace, textSentences: string[]): Keywords {
+  const result: Keywords = {};
+  for (const raw of face.keywords?.length ? face.keywords : textSentences) {
+    const parsed = readKeyword(raw);
+    if (parsed) result[parsed[0]] = parsed[1];
+  }
+  return result;
+}

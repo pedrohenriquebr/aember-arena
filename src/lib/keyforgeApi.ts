@@ -66,6 +66,9 @@ function normaliseCard(value: unknown): CardFace | null {
     rarity: valueAsString(raw.rarity ?? raw.Rarity),
     isMaverick: Boolean(raw.is_maverick ?? raw.Is_Maverick),
     cardNumber: valueAsString(raw.card_number ?? raw.Card_Number),
+    // keyteki-style keyword array ("elusive", "assault:2") when the payload has one;
+    // otherwise the engine reads the keywords printed in card_text.
+    keywords: Array.isArray(raw.keywords) ? raw.keywords.filter((item): item is string => typeof item === "string") : undefined,
   };
 }
 

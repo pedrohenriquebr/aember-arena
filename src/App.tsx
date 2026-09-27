@@ -7,6 +7,7 @@ import {
   Check,
   ChevronRight,
   CircleHelp,
+  Crosshair,
   Clock3,
   Cpu,
   Crown,
@@ -27,6 +28,7 @@ import {
   Swords,
   Volume2,
   VolumeX,
+  Trash2,
   Wand2,
   Wifi,
   WifiOff,
@@ -43,6 +45,10 @@ import {
   chooseHouse,
   createMatch,
   endTurn,
+  fightTargets,
+  isLegalMove,
+  keyCost,
+  targetChoices,
   type CardInstance,
   type DeckInfo,
   type GameMove,
@@ -63,6 +69,9 @@ import { useDialogFocus } from "./components/useDialogFocus";
 
 type Screen = "home" | "config" | "game" | "browse" | "inspect";
 type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanceId: string };
+/** Board pick in progress: a fight defender (`targetId` still empty) or the
+    target of the move's ability / an upgrade's host. `ids` are the legal cards. */
+type Pick = { move: GameMove; ids: string[] };
 type Toast = { message: string; kind: "success" | "error" } | null;
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
@@ -646,13 +655,11 @@ function ConfigScreen({
 
 // ---------- Game screen pieces ----------
 
-// KeyForge forges a key for 6 amber at the start of a turn (game.ts); the meter
-// shows the way there so the player can read "how close" at a glance.
-const KEY_COST = 6;
-
-function AmberCounter({ amount, t }: { amount: number; t: Translator }) {
-  const ready = amount >= KEY_COST;
-  const label = t("game.amberToKey", { amount, cost: KEY_COST });
+// A key is forged at the start of the turn for the current cost (6 + effects
+// such as Lash of Broken Dreams, game.ts keyCost); the meter shows the way there.
+function AmberCounter({ amount, cost, t }: { amount: number; cost: number; t: Translator }) {
+  const ready = amount >= cost;
+  const label = t("game.amberToKey", { amount, cost });
   return (
     <div className={`amber-counter${ready ? " amber-counter--ready" : ""}`} aria-label={label} title={label}>
       <Gem size={18} strokeWidth={1.8} />
@@ -660,7 +667,7 @@ function AmberCounter({ amount, t }: { amount: number; t: Translator }) {
       <span className="amber-value" key={amount}>{amount}</span>
       <small>{t("game.aember")}</small>
       <span className="amber-meter" aria-hidden="true">
-        <i style={{ width: `${(Math.min(amount, KEY_COST) / KEY_COST) * 100}%` }} />
+        <i style={{ width: `${(Math.min(amount, cost) / cost) * 100}%` }} />
       </span>
     </div>
   );
@@ -683,6 +690,7 @@ function KeyCounter({ keys, t }: { keys: number; t: Translator }) {
 
 type PlayerBandProps = {
   player: GameState["players"][number];
+  keyCost: number;
   isAi: boolean;
   active: boolean;
   thinking?: boolean;
@@ -701,6 +709,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     a.player.name === b.player.name &&
     a.player.deckName === b.player.deckName &&
     a.player.amber === b.player.amber &&
+    a.keyCost === b.keyCost &&
     a.player.keys === b.player.keys &&
     a.player.houses.length === b.player.houses.length &&
     a.player.houses.every((house, index) => house === b.player.houses[index])
@@ -709,6 +718,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
 
 const PlayerBand = memo(function PlayerBand({
   player,
+  keyCost,
   isAi,
   active,
   thinking = false,
@@ -740,7 +750,7 @@ const PlayerBand = memo(function PlayerBand({
       <div className="player-resources">
         <KeyCounter keys={player.keys} t={t} />
         <div className="resource-divider" />
-        <AmberCounter amount={player.amber} t={t} />
+        <AmberCounter amount={player.amber} cost={keyCost} t={t} />
       </div>
     </div>
   );
@@ -751,7 +761,8 @@ type BoardLaneProps = {
   owner: 0 | 1;
   activeHouse: string | null;
   selectedId?: string;
-  fightMode?: boolean;
+  /** Cards that may be picked right now (fight defender, ability target, upgrade host). */
+  targetIds?: string[];
   settings: AppSettings;
   t: Translator;
   onSelect: (card: CardInstance) => void;
@@ -765,7 +776,7 @@ function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
     a.owner !== b.owner ||
     a.activeHouse !== b.activeHouse ||
     a.selectedId !== b.selectedId ||
-    a.fightMode !== b.fightMode ||
+    a.targetIds !== b.targetIds ||
     a.settings !== b.settings ||
     a.t !== b.t ||
     a.onSelect !== b.onSelect
@@ -781,7 +792,7 @@ const BoardLane = memo(function BoardLane({
   owner,
   activeHouse,
   selectedId,
-  fightMode,
+  targetIds,
   settings,
   t,
   onSelect,
@@ -796,7 +807,7 @@ const BoardLane = memo(function BoardLane({
   }
 
   return (
-    <div className={`board-lane${fightMode && owner === 1 ? " board-lane--targeting" : ""}`}>
+    <div className={`board-lane${targetIds?.length ? " board-lane--targeting" : ""}`}>
       {cards.map((card) => {
         const canUse = owner === 0 && card.ready && !card.stunned && (!activeHouse || card.face.house === activeHouse);
         // T4: o estado da peça é indicador visual (borda/opacidade, index.css) +
@@ -809,7 +820,7 @@ const BoardLane = memo(function BoardLane({
               card={card}
               size="board"
               selected={selectedId === card.instanceId}
-              dimmed={fightMode && owner === 1 ? card.face.type !== "Creature" : false}
+              dimmed={targetIds ? !targetIds.includes(card.instanceId) : false}
               hoverZoom={settings.hoverZoom}
               playAnim={settings.animations}
               stateLabel={stateLabel}
@@ -827,7 +838,7 @@ const BoardLane = memo(function BoardLane({
 function GameBoard({
   game,
   selected,
-  fightMode,
+  pick,
   aiThinking,
   settings,
   t,
@@ -841,7 +852,7 @@ function GameBoard({
 }: {
   game: GameState;
   selected: Selection | null;
-  fightMode: boolean;
+  pick: Pick | null;
   aiThinking: boolean;
   settings: AppSettings;
   t: Translator;
@@ -866,7 +877,7 @@ function GameBoard({
     <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label={t("game.board")}>
       <div className="felt-etching" aria-hidden="true" />
       <div className="board-content">
-        <PlayerBand player={ai} isAi active={game.activePlayer === 1 && game.winner === null} thinking={aiThinking} t={t} />
+        <PlayerBand player={ai} keyCost={keyCost(game, 1)} isAi active={game.activePlayer === 1 && game.winner === null} thinking={aiThinking} t={t} />
 
         <section className="battle-zone battle-zone--opponent" aria-label={t("game.opponentLine")}>
           <div className="zone-heading">
@@ -878,7 +889,7 @@ function GameBoard({
             owner={1}
             activeHouse={null}
             selectedId={selected?.zone === "enemy" ? selected.instanceId : undefined}
-            fightMode={fightMode}
+            targetIds={pick?.ids}
             settings={settings}
             t={t}
             onSelect={selectOpponentCard}
@@ -917,9 +928,9 @@ function GameBoard({
           </button>
         </div>
 
-        {fightMode && (
+        {pick && (
           <div className="fight-instruction" role="status">
-            <Swords size={15} /> {t("game.chooseFight")}
+            {pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
           </div>
         )}
 
@@ -933,13 +944,14 @@ function GameBoard({
             owner={0}
             activeHouse={game.activeHouse}
             selectedId={selected?.zone === "board" ? selected.instanceId : undefined}
+            targetIds={pick?.ids}
             settings={settings}
             t={t}
             onSelect={selectPlayerCard}
           />
         </section>
 
-        <PlayerBand player={player} isAi={false} active={game.activePlayer === 0 && game.winner === null} t={t} />
+        <PlayerBand player={player} keyCost={keyCost(game, 0)} isAi={false} active={game.activePlayer === 0 && game.winner === null} t={t} />
 
         <section className="hand-zone" aria-label={t("game.yourHand")}>
           <div className="hand-heading">
@@ -954,7 +966,7 @@ function GameBoard({
           )}
           <div className="hand-track">
             {player.hand.map((card) => {
-              const playable = Boolean(game.activeHouse && (card.face.house === game.activeHouse || card.face.isMaverick));
+              const playable = Boolean(game.activeHouse && card.face.house === game.activeHouse);
               return (
                 <CardTile
                   key={card.instanceId}
@@ -996,33 +1008,34 @@ function SelectedCardPanel({
   selection,
   card,
   game,
-  fightMode,
+  pick,
   settings,
   t,
-  onPlay,
-  onReap,
+  onMove,
   onFight,
-  onUse,
-  onCancelFight,
+  onCancelPick,
   onClear,
 }: {
   selection: Selection | null;
   card: CardInstance | null;
   game: GameState;
-  fightMode: boolean;
+  pick: Pick | null;
   settings: AppSettings;
   t: Translator;
-  onPlay: () => void;
-  onReap: () => void;
+  onMove: (move: GameMove) => void;
   onFight: () => void;
-  onUse: () => void;
-  onCancelFight: () => void;
+  onCancelPick: () => void;
   onClear: () => void;
 }) {
   const isHumanTurn = game.activePlayer === 0 && game.winner === null;
-  const activeForHouse = Boolean(card && game.activeHouse && (card.face.house === game.activeHouse || card.face.isMaverick));
-  const canUseCard = Boolean(card && isHumanTurn && activeForHouse);
-  const canActivateArtifact = Boolean(card && /(?:Action|Omni):/i.test(card.face.text));
+  const activeForHouse = Boolean(card && game.activeHouse && card.face.house === game.activeHouse);
+  // Legality comes from the engine (house, first-turn rule, Alpha/Omega, taunt…).
+  const legal = (move: GameMove) => isHumanTurn && isLegalMove(game, 0, move);
+  const id = card?.instanceId ?? "";
+  const canPlay = legal({ type: "play", instanceId: id });
+  const canUse = legal({ type: "use", instanceId: id });
+  const printsUse = Boolean(card && /(?:^|[\s/.])(?:Action|Omni):/i.test(card.face.text));
+  const canFight = Boolean(card && isHumanTurn && activeForHouse && fightTargets(game, 0, card).length);
 
   return (
     <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}`} aria-live="polite">
@@ -1044,36 +1057,52 @@ function SelectedCardPanel({
                 {card.face.power > 0 && <span><Sword size={12} /> {card.face.power} {t("inspector.power")}</span>}
                 {card.face.armor > 0 && <span><Shield size={12} /> {card.face.armor} {t("inspector.armor")}</span>}
                 {card.damage > 0 && <span className="damage-stat">{card.damage} {t("inspector.damage")}</span>}
+                {(card.amber ?? 0) > 0 && <span><Gem size={12} /> {t("inspector.captured", { amount: card.amber ?? 0 })}</span>}
               </div>
             </div>
           </div>
           <p className="selected-card-text">{card.face.text || t("inspector.noText")}</p>
 
           <div className="inspector-actions">
-            {selection.zone === "hand" && (
-              <button className="primary-action" type="button" disabled={!canUseCard} onClick={onPlay}>
-                <Zap size={15} />
-                {canUseCard ? t("inspector.play") : !isHumanTurn ? t("inspector.waitTurn") : !game.activeHouse ? t("inspector.chooseHouseFirst") : t("inspector.offHouse")}
+            {pick ? (
+              <button className="secondary-action" type="button" onClick={onCancelPick}>
+                {pick.move.type === "fight" ? t("inspector.cancelFight") : t("inspector.cancelTarget")}
               </button>
-            )}
-            {selection.zone === "board" && card.face.type === "Creature" && (
+            ) : (
               <>
-                <button className="primary-action" type="button" disabled={!canUseCard || !card.ready || card.stunned} onClick={onReap}>
-                  <Gem size={15} /> {t("inspector.reap")}
-                </button>
-                {fightMode ? (
-                  <button className="secondary-action" type="button" onClick={onCancelFight}>{t("inspector.cancelFight")}</button>
+                {selection.zone === "hand" && (
+                  <>
+                    <button className="primary-action" type="button" disabled={!canPlay} onClick={() => onMove({ type: "play", instanceId: id })}>
+                      <Zap size={15} />
+                      {canPlay ? t("inspector.play") : !isHumanTurn ? t("inspector.waitTurn") : !game.activeHouse ? t("inspector.chooseHouseFirst") : activeForHouse ? t("inspector.cannotPlay") : t("inspector.offHouse")}
+                    </button>
+                    {legal({ type: "discard", instanceId: id }) && (
+                      <button className="secondary-action" type="button" onClick={() => onMove({ type: "discard", instanceId: id })}>
+                        <Trash2 size={15} /> {t("inspector.discard")}
+                      </button>
+                    )}
+                  </>
+                )}
+                {selection.zone === "board" && card.face.type === "Creature" && (card.stunned ? (
+                  <button className="primary-action" type="button" disabled={!legal({ type: "unstun", instanceId: id })} onClick={() => onMove({ type: "unstun", instanceId: id })}>
+                    <CircleHelp size={15} /> {t("inspector.unstun")}
+                  </button>
                 ) : (
-                  <button className="secondary-action" type="button" disabled={!canUseCard || !card.ready || card.stunned} onClick={onFight}>
-                    <Swords size={15} /> {t("inspector.fight")}
+                  <>
+                    <button className="primary-action" type="button" disabled={!legal({ type: "reap", instanceId: id })} onClick={() => onMove({ type: "reap", instanceId: id })}>
+                      <Gem size={15} /> {t("inspector.reap")}
+                    </button>
+                    <button className="secondary-action" type="button" disabled={!canFight} onClick={onFight}>
+                      <Swords size={15} /> {t("inspector.fight")}
+                    </button>
+                  </>
+                ))}
+                {selection.zone === "board" && (card.face.type === "Artifact" || (card.face.type === "Creature" && printsUse && !card.stunned)) && (
+                  <button className="primary-action" type="button" disabled={!canUse} onClick={() => onMove({ type: "use", instanceId: id })}>
+                    <Zap size={15} /> {printsUse ? t("inspector.use") : t("inspector.passive")}
                   </button>
                 )}
               </>
-            )}
-            {selection.zone === "board" && card.face.type === "Artifact" && (
-              <button className="primary-action" type="button" disabled={!canUseCard || !card.ready || card.stunned || !canActivateArtifact} onClick={onUse}>
-                <Zap size={15} /> {canActivateArtifact ? t("inspector.use") : t("inspector.passive")}
-              </button>
             )}
             {selection.zone === "enemy" && <div className="inspector-hint"><Shield size={14} /> {t("inspector.enemyCard")}</div>}
             {selection.zone === "hand" && isHumanTurn && game.activeHouse && !activeForHouse && <div className="inspector-hint"><Shield size={14} /> {t("inspector.onlyHouse", { house: houseLabel(game.activeHouse, t) })}</div>}
@@ -1182,7 +1211,7 @@ function App() {
   const [game, setGame] = useState<GameState | null>(null);
 
   const [selected, setSelected] = useState<Selection | null>(null);
-  const [fightMode, setFightMode] = useState(false);
+  const [pick, setPick] = useState<Pick | null>(null);
   const [aiThinking, setAiThinking] = useState(false);
   const [forgeFlash, setForgeFlash] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -1309,7 +1338,7 @@ function App() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || deckModalOpen) return;
       setSelected(null);
-      setFightMode(false);
+      setPick(null);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -1402,7 +1431,7 @@ function App() {
     setCurrentDeck(deck);
     setGame(next);
     setSelected(null);
-    setFightMode(false);
+    setPick(null);
     setAiThinking(false);
     setMatchVersion((version) => version + 1);
     setScreen("game");
@@ -1413,24 +1442,37 @@ function App() {
   // efetiva o memo de GameBoard→BoardLane→CardTile (só leem refs/setters estáveis).
   const performHumanMove = useCallback((move: GameMove) => {
     if (!gameRef.current) return;
+    // The player chooses targets the way keyteki prompts: only when there is a real choice.
+    const choices = move.type === "fight" || "target" in move ? [] : targetChoices(gameRef.current, 0, move);
+    if (choices.length > 1) {
+      sound.play("select");
+      setPick({ move, ids: choices });
+      return;
+    }
     sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : move.type === "use" ? "play" : "play");
     const next = applyMove(gameRef.current, 0, move);
     gameRef.current = next;
     setGame(next);
     setSelected(null);
-    setFightMode(false);
+    setPick(null);
   }, []);
 
   const pickBoardCard = useCallback(
     (owner: 0 | 1, card: CardInstance) => {
-      if (owner === 1 && fightMode && selected?.zone === "board" && selected.playerIndex === 0) {
-        if (card.face.type === "Creature") performHumanMove({ type: "fight", attackerId: selected.instanceId, targetId: card.instanceId });
-        return;
+      if (pick) {
+        if (pick.ids.includes(card.instanceId)) {
+          performHumanMove(
+            pick.move.type === "fight" ? { ...pick.move, targetId: card.instanceId } : { ...pick.move, target: card.instanceId } as GameMove,
+          );
+          return;
+        }
+        if (owner === 1) return;
+        setPick(null);
       }
       sound.play("select");
       setSelected({ zone: owner === 0 ? "board" : "enemy", playerIndex: owner, instanceId: card.instanceId });
     },
-    [fightMode, selected, performHumanMove],
+    [pick, performHumanMove],
   );
 
   const endHumanTurn = useCallback(() => {
@@ -1440,7 +1482,7 @@ function App() {
     gameRef.current = next;
     setGame(next);
     setSelected(null);
-    setFightMode(false);
+    setPick(null);
   }, []);
 
   const choosePlayerHouse = useCallback((house: string) => {
@@ -1689,7 +1731,7 @@ function App() {
                 <GameBoard
                   game={game}
                   selected={selected}
-                  fightMode={fightMode}
+                  pick={pick}
                   aiThinking={aiThinking}
                   settings={settings}
                   t={t}
@@ -1709,15 +1751,20 @@ function App() {
                   selection={selected}
                   card={selectedCard}
                   game={game}
-                  fightMode={fightMode}
+                  pick={pick}
                   settings={settings}
                   t={t}
-                  onPlay={() => selectedCard && performHumanMove({ type: "play", instanceId: selectedCard.instanceId })}
-                  onReap={() => selectedCard && performHumanMove({ type: "reap", instanceId: selectedCard.instanceId })}
-                  onFight={() => { sound.play("select"); setFightMode(true); }}
-                  onUse={() => selectedCard && performHumanMove({ type: "use", instanceId: selectedCard.instanceId })}
-                  onCancelFight={() => setFightMode(false)}
-                  onClear={() => { setSelected(null); setFightMode(false); }}
+                  onMove={performHumanMove}
+                  onFight={() => {
+                    if (!selectedCard || !gameRef.current) return;
+                    sound.play("select");
+                    setPick({
+                      move: { type: "fight", attackerId: selectedCard.instanceId, targetId: "" },
+                      ids: fightTargets(gameRef.current, 0, selectedCard).map((target) => target.instanceId),
+                    });
+                  }}
+                  onCancelPick={() => setPick(null)}
+                  onClear={() => { setSelected(null); setPick(null); }}
                 />
 
                 <section className="ai-brief">
