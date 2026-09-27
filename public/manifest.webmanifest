@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Aember Arena - KeyForge Solo Play",
+  "short_name": "Aember Arena",
+  "description": "A responsive KeyForge-inspired solo game with offline deck caching.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#111310",
+  "theme_color": "#111310",
+  "icons": [
+    {
+      "src": "/forge-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
