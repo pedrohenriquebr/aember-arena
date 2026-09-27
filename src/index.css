@@ -1902,6 +1902,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 11px 12px 9px;
   border-bottom: 1px solid rgba(225, 216, 194, 0.1);
   color: #a58e5a;
