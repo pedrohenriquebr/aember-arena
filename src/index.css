@@ -2889,7 +2889,7 @@ button:disabled {
 .pager-gap {
   padding: 0 2px;
   color: #6f7168;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .pager-num,
@@ -2904,7 +2904,7 @@ button:disabled {
   color: #a3a49a;
   background: transparent;
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   transition: color 150ms ease, background 150ms ease;
@@ -2931,7 +2931,7 @@ button:disabled {
 .pager--compact .pager-arrow {
   min-width: 26px;
   height: 26px;
-  font-size: 10px;
+  font-size: var(--fs-2xs);
 }
 
 .import-card {
@@ -2974,13 +2974,13 @@ button:disabled {
 
 .import-card strong {
   color: #e6e0d2;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
 }
 
 .import-card span {
   color: #93948a;
-  font-size: 10px;
+  font-size: var(--fs-xs);
 }
 
 .import-card-arrow {
@@ -3019,14 +3019,14 @@ button:disabled {
 .home-cta-deck strong {
   overflow: hidden;
   color: #ebe5d6;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .home-cta-deck small {
   color: #8f9084;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
 }
 
 .home-lang-float {
