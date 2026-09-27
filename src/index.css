@@ -3583,7 +3583,7 @@ button:disabled {
   margin: 5px 0 0;
   color: #f1ece0;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  font-size: clamp(21px, 2.6vw, 27px);
+  font-size: var(--fs-xl);
   font-weight: 500;
   letter-spacing: -0.025em;
   line-height: 1.08;
@@ -3630,7 +3630,7 @@ button:disabled {
   border-radius: 999px;
   color: #a8a99d;
   background: rgba(255, 255, 255, 0.02);
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   white-space: nowrap;
@@ -3649,7 +3649,7 @@ button:disabled {
   color: #c9a860;
   background: transparent;
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 650;
 }
 
@@ -4529,7 +4529,7 @@ button:disabled {
 
   .sub-head h1 {
     white-space: normal;
-    font-size: 20px;
+    font-size: var(--fs-lg);
   }
 
   .sub-head-meta {
