@@ -198,7 +198,10 @@ button:disabled {
 .app-root {
   min-height: 100vh;
   min-height: 100dvh;
+  /* clip (não hidden): hidden faz do root um scroll-container e o header
+     sticky passa a grudar nele — que nunca rola — em vez da janela. */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* T6 — default = mobile; desktop invertido em min-width: 701px ao lado do seletor. */
