@@ -3699,7 +3699,7 @@ button:disabled {
   border: 0;
   color: #ece7d9;
   background: transparent;
-  font-size: 16px;
+  font-size: var(--fs-input);
   outline: none;
 }
 
@@ -3717,7 +3717,7 @@ button:disabled {
   color: #c9c6b9;
   background: rgba(255, 255, 255, 0.07);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1;
 }
 
@@ -3734,7 +3734,7 @@ button:disabled {
   color: #9b9c91;
   background: transparent;
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   white-space: nowrap;
   transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
@@ -3766,7 +3766,7 @@ button:disabled {
   align-items: center;
   gap: 7px;
   color: #93948a;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3788,7 +3788,7 @@ button:disabled {
 
 .status-page {
   color: #7b7d72;
-  font-size: 9px;
+  font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.05em;
 }
@@ -3807,7 +3807,7 @@ button:disabled {
 
 .pager-hint {
   color: #76786e;
-  font-size: 8px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.05em;
 }
 
@@ -3835,7 +3835,7 @@ button:disabled {
 .browse-empty strong {
   color: #e7e1d3;
   font-family: Georgia, serif;
-  font-size: 16px;
+  font-size: var(--fs-base);
   font-weight: 500;
 }
 
@@ -3843,7 +3843,7 @@ button:disabled {
   max-width: 400px;
   margin: 0;
   color: #91928a;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   line-height: 1.55;
 }
 
