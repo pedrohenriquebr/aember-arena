@@ -247,8 +247,13 @@ button:disabled {
 
 @media (min-width: 701px) {
   .brand-lockup {
-    min-width: 160px;
     gap: 10px;
+  }
+}
+
+@media (min-width: 1041px) {
+  .brand-lockup {
+    min-width: 160px;
   }
 }
 
@@ -380,7 +385,9 @@ button:disabled {
   display: none;
 }
 
-@media (min-width: 701px) {
+/* Rótulos de texto do header só a partir de 1041px: entre 701 e 1040 o nav
+   desktop + 5 ações não cabiam e o chip de idioma saía da tela a 768px. */
+@media (min-width: 1041px) {
   .network-state {
     margin-right: 7px;
   }
@@ -431,18 +438,24 @@ button:disabled {
 
 @media (min-width: 701px) {
   .header-button {
-    width: auto;
+    width: 35px;
     height: 35px;
-    gap: 8px;
-    padding: 0 12px;
-  }
-  .header-button span {
-    display: inline;
   }
   .header-button svg,
   .header-icon-button svg {
     width: auto;
     height: auto;
+  }
+}
+
+@media (min-width: 1041px) {
+  .header-button {
+    width: auto;
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .header-button span {
+    display: inline;
   }
 }
 
@@ -3045,6 +3058,18 @@ button:disabled {
 .nav-link:hover {
   color: #ded8ca;
 }
+}
+
+/* 701–1040: só o rótulo (o ícone volta a partir de 1041px) — com a aba Play
+   presente o header passava 57px da borda a 701px. */
+.nav-link svg {
+  display: none;
+}
+
+@media (min-width: 1041px) {
+  .nav-link svg {
+    display: block;
+  }
 }
 
 .nav-link.is-active {

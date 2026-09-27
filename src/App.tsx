@@ -1537,10 +1537,10 @@ function App() {
           >
             {settings.sfx ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
-          <button className="header-button header-button--subtle" type="button" onClick={() => { sound.play("click"); openDeckModal(); }}>
+          <button className="header-button header-button--subtle" type="button" aria-label={t("common.deck")} title={t("common.deck")} onClick={() => { sound.play("click"); openDeckModal(); }}>
             <BookOpen size={15} /><span>{t("common.deck")}</span>
           </button>
-          <button className="header-button header-button--sync" type="button" onClick={() => void syncCurrentDeck()} disabled={syncing}>
+          <button className="header-button header-button--sync" type="button" aria-label={syncing ? t("common.syncing") : t("common.sync")} title={t("common.sync")} onClick={() => void syncCurrentDeck()} disabled={syncing}>
             {syncing ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
             <span>{syncing ? t("common.syncing") : t("common.sync")}</span>
           </button>
