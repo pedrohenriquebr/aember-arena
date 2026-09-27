@@ -61,4 +61,84 @@ claro de acabamento/consistência · **P2** refinamento.
 
 ## Fase 2 — Implementação
 
-_(preenchido commit a commit)_
+Um commit por melhoria, em ordem de prioridade. Gates rodados por commit:
+`npm run build` sempre; `e2e:floor` quando tocou tipografia/layout; `e2e:smoke` quando
+tocou o board; captura/probe Playwright + inspeção visual quando tocou visual.
+
+| Hash | Gap | O que mudou |
+|---|---|---|
+| `48d173c` | P0-3 | `overflow-x: clip` (fallback `hidden`) no `.app-root` devolve o sticky do header: após rolar 368px o header fica em `top=0` (antes `-368`). |
+| `18b8f87` | P0-2 | `window.scrollTo(0,0)` a cada troca de tela (config abria em `scrollY=178`). |
+| `7ae51be` | P0-4 | Paginação: `gap` booleano (acabou o "0" literal) e aria-labels `pager.*` via `t()`. |
+| `4663edb` | P0-5 | Tag do tile sai de cima da arte para a coluna de texto (chip caps 10px/0.1em); no Vault só aparece com power level. Valores Cards/Creatures voltam a aparecer. |
+| `ba4ab38` | P0-6 | Config: Back/Next em dock sticky acima da tab bar no mobile; CTA/ghost/pills 44px; passo ativo mostra o nome; token `--tabbar-h` (54px + safe-area) também corrige o `home-cta-bar`, que ignorava a safe-area. |
+| `7ac329f` | P2-5 | −186 linhas de CSS morto (antecipado para abrir margem de bundle). |
+| `31388ee` | P0-7 | Header 701–1040px: rótulos de Deck/Sync/Online e ícones do nav só ≥1041px; brand sem `min-width` na faixa. Medido: sem estouro em 701/768/900/1040/1041/1280, com e sem a aba Play. Deck/Sync ganham `aria-label`/`title` no modo só-ícone. |
+| `d5890c2` | P0-1 | **Inspetor vira bottom sheet** (<1041px) quando há carta selecionada: ações a y≈688–732 a 360×800 (antes 1094). Alça, fechar 44px, Escape fecha, ações primárias 44px, ação única em largura cheia, folga de scroll sob o sheet. Entradas `rise-in/screen-in` passaram a `fill-mode: backwards` — `both` deixava `translateY(0)` residual que prendia filhos `fixed` ao rail (causa raiz encontrada no probe). |
+| `835c90c` | P1-1 | Token `--faint #8e8f83` (≥4.5:1 em ink/painel/feltro) substitui os cinzas ad-hoc; auditoria re-rodada a 1280 e 360: zero falhas fora de estados disabled/dimmed. |
+| `7a30609` | P1-2 | `settings.animations` OFF zera toda animação/transição (classe no `<html>` para alcançar zoom/lightbox portados no `<body>`); spinner de loading continua girando (indicador de estado). |
+| `06985dc` | P1-3 | Cabeçalho da partida enxuto: sai o subtítulo repetido e, no mobile, o chip Round/turn duplicado. |
+| `f057aa8` | P1-4 | Placar: keys "n/3" visível (**decisão do ponto herdado #4**: o texto volta, curto); medidor de âmbar até 6 com brilho "forja garantida"; pop na contagem e pip que "acende" ao forjar. |
+| `b5cda19` | P1-5 | Coerência en/pt-BR: nomes do placar localizados, números no locale do app (`meta.locale`), `VaultError` com chaves `vault.*` via `t()` (describeFailure segue ponto único), estado próprio para busca sem resultado. |
+| `775d7f4` | P1-6 | `useDialogFocus`: modal de deck, painel de vitória e lightbox recebem foco, prendem Tab e devolvem foco; menu de idioma fecha com Escape. |
+| `fd0d0bc` | P1-7 | Marca única (glifo forja do favicon no header), favicon/manifest relativos, Open Graph, `document.title` por tela/idioma. |
+| `44edc24` | P1-8 | H1 do hero: `--fs-3xl` no mobile, `--fs-display` no desktop (ponto herdado #3). |
+| `543f7d3` | P2-4 (achado novo) | O "." do Card Detail era a **arte colapsada em 26×3px** (`<button>` inline-block + `container-type: inline-size`); agora 266×339 a 1280. |
+| `6bc0926` | P2-4 | Chip "0W · 0L" só com histórico real. |
+| `cdb62e8` | P2-3 | Breadcrumb do hero cabe numa linha a 360 (sem chevrons no mobile). |
+| `49312d2` | P2-2 | `gap` no `rail-topline` ("TABLE NOTES01"). |
+| `158bd24` | P2-9 | `package.json`/lock: `aember-arena`. |
+| `0a77bef` | P2-1 | Escala de raios `--radius-sm/md/lg/xl/pill` (74 usos, 17 valores → 5) e `--ease-out` (13 usos). |
+
+### Comparativos (antes × depois)
+
+| | |
+|---|---|
+| Sheet do inspetor, 360×800 — após tocar numa carta | ![](polish/01-dock-inspetor-360.jpg) |
+| Config, 360×800 — Back/Next na dobra, passo nomeado | ![](polish/02-config-360.jpg) |
+| Header, 768×1024 — chip de idioma de volta | ![](polish/03-header-768.jpg) |
+| Vault, 1280×800 — números visíveis, sem "0" no pager, sticky | ![](polish/04-vault-1280.jpg) |
+| Inspect, 1280×800 — arte do Card Detail restaurada | ![](polish/05-inspect-1280.jpg) |
+| Board, 360×800 — scroll no topo, cabeçalho enxuto, "0/3" + medidor | ![](polish/06-board-360.jpg) |
+
+Capturas completas: `e2e/shots/polish-before/` (antes) e `e2e/shots/current/` (depois),
+ambos gerados por `npm run e2e:capture` (pasta ignorada pelo git).
+
+### O que decidi NÃO fazer (e por quê)
+
+- **Encolher as battlelines vazias** (P1-3, parcial): os `min-height` das lanes existem
+  para o board não pular quando a primeira criatura entra. Preferi estabilidade de layout;
+  a 1280×800 a mão ainda começa em y≈744 (antes 766) — a página rola e o rail é sticky.
+- **Tokenizar as 40 sombras e ~20 transições** (P2-1, parcial): só raios e easing viraram
+  tokens. As sombras são quase todas únicas por componente (glow de casa, feltro, modal);
+  unificá-las mudaria a profundidade de cada peça sem ganho de consistência perceptível.
+  Fica como próxima passada, junto do T10.
+- **Emblemas de casas novas** (P2-6): exigiria novas URLs/assets remotos de emblema;
+  o invariante de assets remotos e o fallback atual (iniciais legíveis) pesaram mais.
+- **Botões secundários do header a 30px em ≤390px** (P2-7): a 360 não cabem 4 ações de
+  44px + brand; são secundários (primários — tabs, CTAs, ações do inspetor, end turn —
+  estão ≥44px). Documentado.
+- **Truncamento de nomes no band a 360** (P2-8): o espaço é disputado com pips/âmbar;
+  o nome completo está no aria-label das cartas e no inspetor.
+- **Legendas das cartas dimmed (3.83:1)**: é o estado "fora da casa ativa" — conteúdo
+  inativo, isento pela WCAG 1.4.3; subir a opacidade apagaria o sinal visual.
+- **Favicon inline (data URI)**: o caminho relativo resolve subpath e a pasta `dist/`;
+  embutir o SVG custaria bundle só para o caso "HTML único enviado por e-mail".
+- **T10 (quebrar o App.tsx)**: fora de escopo, conforme a missão.
+
+---
+
+## Fechamento — estado final dos gates (HEAD `0a77bef`)
+
+| Gate | Resultado |
+|---|---|
+| `npm run build` | OK — tsc limpo; `dist/index.html` 422.7 kB (vite: gzip 121.16 kB) |
+| `npm run e2e:bundle` (métrica do orçamento) | **117.82 kB** gzip ≤ 121.5 kB (baseline `b343fbf` medido no mesmo script: 116.14 kB → +1.68 kB) |
+| `npm run e2e:floor` | OK — 0 violações nas 5 telas a 360×800 |
+| `npm run e2e:smoke` | OK — 4 viewports, 2 turnos cada |
+| `npm run e2e:acceptance` | OK — piso + bundle + bloco 700px |
+| `npm run e2e:capture` | OK — 20 capturas, 0 erros |
+| Auditoria de contraste (probe) | 0 falhas AA fora de disabled/dimmed a 1280 e 360 |
+
+Nota: o `vite build` reporta gzip ~3.3 kB acima do `e2e:bundle` (níveis de compressão
+diferentes); o orçamento do CLAUDE.md é medido pelo `e2e:bundle`.

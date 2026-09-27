@@ -100,14 +100,18 @@ src/
 4. `npm run e2e:smoke` — se tocou o board/partida
 5. `npm run e2e:acceptance` — fechamento
 
-## Pontos de atenção conhecidos (herdados da última passada)
+## Pontos de atenção conhecidos (pós-passada de polish, ver `docs/POLISH_REPORT.md`)
 
-- config 360×800: descrições de dificuldade quebram 2 linhas e empurram Back/Next
-  para fora da dobra.
-- 768×1024: chip de idioma corta na borda direita do header.
-- H1 serif do hero renderiza menor em 360px que em viewports maiores.
-- Contador de keys e badge de turno são ícone-only (texto virou `aria-label` na fase
-  de cartas) — decisão aberta se o texto "/ 3 KEYS" deve voltar visível.
+- Resolvidos: Back/Next do config (dock sticky), chip de idioma a 768 (rótulos do header
+  só ≥1041px), H1 do hero (fs-3xl/display), keys voltam a mostrar "n/3".
+- Abaixo de 1041px o inspetor de carta é um bottom sheet (`.inspector-section--docked`).
+  Entradas animadas usam `fill-mode: backwards` — `both` deixa transform residual e
+  quebra filhos `position: fixed`.
+- Toggle de animações = classe `reduce-motion` no `<html>` (alcança portais no body).
+- Tokens: `--faint` (texto terciário AA), `--radius-*`, `--ease-out`, `--tabbar-h`.
+- Erros do Master Vault são `VaultError` (chave `vault.*`), texto via `vaultErrorText(e, t)`.
+- Em aberto: sombras ainda ad-hoc; emblemas de casas novas caem em iniciais; a 1280×800
+  a mão começa perto da dobra (lanes com min-height para não pular).
 
 ## Conventions
 
