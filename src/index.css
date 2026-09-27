@@ -1169,7 +1169,7 @@ button:disabled {
   padding: 14px 16px 12px;
   border-bottom: 1px solid rgba(225, 216, 194, 0.1);
   color: #a58e5a;
-  font-size: 8px;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.16em;
 }
@@ -4998,16 +4998,6 @@ button:disabled {
 
   .card-art--hand {
     width: 80px;
-  }
-
-  .card-caption {
-    margin-top: 4px;
-    font-size: 7px;
-  }
-
-  .empty-hand {
-    min-height: 112px;
-    font-size: 9px;
   }
 
   .command-rail {
