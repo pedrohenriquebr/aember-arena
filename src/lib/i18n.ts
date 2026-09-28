@@ -172,6 +172,7 @@ const DICT: Record<string, [string, string]> = {
   "coverage.full.hint": ["The engine simulates all of this card's text.", "O motor simula todo o texto desta carta."],
   "coverage.partial.hint": ["Only part of this card's text is simulated.", "Só parte do texto desta carta é simulada."],
   "coverage.vanilla.hint": ["Text not simulated: plays with power, armor, bonus amber and keywords only.", "Texto não simulado: joga só com poder, armadura, âmbar bônus e palavras-chave."],
+  "coverage.deck": ["{full}/{total} with simulated effect", "{full}/{total} com efeito simulado"],
   "inspector.onlyHouse": ["Only cards from {house} can be played this turn.", "Só cartas de {house} podem ser jogadas neste turno."],
   "inspector.noText": ["No card text.", "Sem texto de carta."],
   "inspector.amber": ["amber", "âmbar"],

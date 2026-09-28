@@ -66,7 +66,7 @@ import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language,
 import { readSettings, saveSettings, type AppSettings, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
-import { CoverageBadge } from "./components/CoverageBadge";
+import { CoverageBadge, DeckCoverageChip } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
 import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser, type BrowseState } from "./components/DeckBrowser";
@@ -729,6 +729,7 @@ function ConfigScreen({
                       {deck.houses.map((house) => <HouseMark key={house} house={house} small />)}
                     </div>
                     <small>{deck.cards.length} {t("common.cards")}</small>
+                    <DeckCoverageChip deck={deck} t={t} />
                   </div>
                 </div>
               </div>

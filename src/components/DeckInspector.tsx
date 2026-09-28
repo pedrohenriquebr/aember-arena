@@ -7,6 +7,7 @@ import { sound } from "../lib/sound";
 import { ZoomIn } from "lucide-react";
 import { houseColor, houseLabel } from "../lib/houses";
 import { CardArt, CardLightbox } from "./CardArt";
+import { DeckCoverageChip } from "./CoverageBadge";
 import { HouseMark } from "./DeckTile";
 import { HouseIcon } from "./HouseIcon";
 import { Pagination } from "./Pagination";
@@ -92,6 +93,7 @@ export function DeckInspector({
           {deck.chains ? <span className="meta-chip">{deck.chains} {t("deck.chains")}</span> : null}
           {/* A record only means something once the deck has one. */}
           {deck.wins || deck.losses ? <span className="meta-chip">{deck.wins ?? 0}W · {deck.losses ?? 0}L</span> : null}
+          <DeckCoverageChip deck={deck} t={t} />
         </div>
       </div>
 
