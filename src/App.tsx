@@ -38,7 +38,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, type Difficulty } from "./lib/ai";
-import { cacheDeck, getCachedDeck, listCachedDecks } from "./lib/cache";
+import { cacheDeck, clearSavedMatch, getCachedDeck, listCachedDecks, loadSavedMatch, saveMatch, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
 import {
@@ -67,6 +67,7 @@ import { CoverageBadge } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
 import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser, type BrowseState } from "./components/DeckBrowser";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DeckInspector } from "./components/DeckInspector";
 import { Pagination } from "./components/Pagination";
 import { useDialogFocus } from "./components/useDialogFocus";
@@ -1271,6 +1272,9 @@ function App() {
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
   // BUG-15: the Vault view state survives browsing into a deck and back.
   const [browseState, setBrowseState] = useState<BrowseState>({ page: 1, search: "", ordering: "-date" });
+  // FEAT-01: the interrupted match found at mount, offered on Home.
+  const [resumeMatch, setResumeMatch] = useState<SavedMatch | null>(null);
+  const [boundaryEpoch, setBoundaryEpoch] = useState(0);
   const [inspectDeck, setInspectDeck] = useState<DeckInfo | null>(null);
   const [savedDecks, setSavedDecks] = useState<DeckInfo[]>(STARTER_DECKS);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
@@ -1360,6 +1364,11 @@ function App() {
     };
   }, []);
 
+  // FEAT-01: offer an interrupted match (if any) once at mount.
+  useEffect(() => {
+    setResumeMatch(loadSavedMatch());
+  }, []);
+
   // Restore every deck cached in IndexedDB, plus the last one the player chose.
   useEffect(() => {
     let disposed = false;
@@ -1384,6 +1393,13 @@ function App() {
     });
     return () => { disposed = true; };
   }, []);
+
+  // FEAT-01: the live match is the save file; a finished match clears it.
+  useEffect(() => {
+    if (!game) return;
+    if (game.winner === null) void saveMatch({ game, deckId: currentDeck.id });
+    else clearSavedMatch();
+  }, [game, currentDeck.id]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1762,6 +1778,39 @@ function App() {
       )}
 
       <main className="app-main">
+        <ErrorBoundary
+          key={boundaryEpoch}
+          onReset={() => {
+            setScreen("home");
+            setSelected(null);
+            setPick(null);
+            setBoundaryEpoch((epoch) => epoch + 1);
+          }}
+          title={t("error.title")}
+          body={t("error.body")}
+          action={t("error.back")}
+        >
+        {screen === "home" && resumeMatch && (
+          <button
+            type="button"
+            className="resume-bar"
+            onClick={() => {
+              sound.play("forge");
+              const saved = resumeMatch.game as GameState;
+              gameRef.current = saved;
+              prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
+              setGame(saved);
+              setCurrentDeck(savedDecks.find((item) => item.id === resumeMatch.deckId) ?? DEMO_DECK);
+              setAiThinking(false);
+              setMatchVersion((version) => version + 1);
+              setScreen("game");
+              setResumeMatch(null);
+            }}
+          >
+            <KeyRound size={15} />
+            {t("home.resumeMatch", { round: (resumeMatch.game as GameState).turn })}
+          </button>
+        )}
         {screen === "home" && (
           <HomeScreen
             t={t}
@@ -1909,6 +1958,7 @@ function App() {
             </div>
           </div>
         )}
+        </ErrorBoundary>
       </main>
 
       <nav className="mobile-tabs" aria-label={t("nav.screens")}>

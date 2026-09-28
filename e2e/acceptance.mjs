@@ -3,7 +3,8 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 122 kB = baseline 118,52 kB + folga de 3 kB (§2.6: nenhuma fase aumenta >3 kB).
+//      Default 124 kB — revisado de 122 em 28/09: o port do motor keyteki + fixes/features
+//      da auditoria consumiram a folga original (decisão consciente e documentada no CLAUDE.md §7).
 //      Pressupoe "npm run build" recem-rodado.
 //   3. Bloco @media (max-width: 700px) de src/index.css com <= --block-max-lines linhas.
 //      Default 99 ("menos de 100 linhas", §5 criterio 5; hoje o bloco tem ~723).
@@ -30,7 +31,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 122);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 124);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);

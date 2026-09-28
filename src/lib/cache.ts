@@ -166,3 +166,41 @@ export async function getCachedDeck(id: string): Promise<DeckInfo | null> {
     return null;
   }
 }
+const MATCH_KEY = "aember-arena-match";
+
+export interface SavedMatch {
+  game: unknown;
+  deckId: string;
+  savedAt: number;
+}
+
+/** Persists the in-progress match after every move. localStorage is enough —
+    the GameState is one JSON blob — and every failure is swallowed on purpose:
+    losing the save must never break the live match (FEAT-01). */
+export async function saveMatch(payload: { game: unknown; deckId: string }): Promise<void> {
+  try {
+    const saved: SavedMatch = { ...payload, savedAt: Date.now() };
+    localStorage.setItem(MATCH_KEY, JSON.stringify(saved));
+  } catch {
+    // Quota/private mode: the match keeps running from memory.
+  }
+}
+
+export function loadSavedMatch(): SavedMatch | null {
+  try {
+    const raw = localStorage.getItem(MATCH_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as SavedMatch;
+    return saved?.game && saved.deckId ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSavedMatch(): void {
+  try {
+    localStorage.removeItem(MATCH_KEY);
+  } catch {
+    // Nothing to recover: the absence of a save is the acceptable state.
+  }
+}
