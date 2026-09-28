@@ -280,3 +280,19 @@ describe("regression: BUG-02 house choice gates the turn (docs/BUGS_AND_FEATURES
     expect(isLegalMove(chosen, 0, { type: "reap", instanceId: reaper })).toBe(true);
   });
 });
+
+describe("regression: BUG-04 upgrade on an enemy host (docs/BUGS_AND_FEATURES.md)", () => {
+  it("an upgrade attached to an enemy creature is discarded when that creature leaves play", () => {
+    let state = setupTest(
+      { hand: [card("Mark", { type: "Upgrade", house: "Brobnar", text: "" })], inPlay: [card("Brute", { power: 5 })] },
+      { inPlay: [card("Victim", { power: 2 })] },
+    );
+    const victim = state.players[1].board[0].instanceId;
+    state = applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId, target: victim });
+    expect(byTitle(state.players[0].board, "Mark")?.attachedTo).toBe(victim);
+    state = applyMove(state, 0, { type: "fight", attackerId: byTitle(state.players[0].board, "Brute")!.instanceId, targetId: victim });
+    expect(state.players[1].board).toHaveLength(0);
+    expect(byTitle(state.players[0].board, "Mark")).toBeUndefined();
+    expect(byTitle(state.players[0].discard, "Mark")).toBeDefined();
+  });
+});

@@ -13,20 +13,6 @@ const creature = (title: string, power: number, text = "", extra: Record<string,
   card(title, { type: "Creature", house: "Brobnar", power, text, ...extra });
 
 describe("engine audit probes", () => {
-  it.fails("BUG-04: an upgrade on an enemy creature is discarded when that creature leaves play", () => {
-    let state = setupTest(
-      { hand: [card("Mark", { type: "Upgrade", house: "Brobnar", text: "" })], inPlay: [creature("Brute", 5)] },
-      { inPlay: [creature("Victim", 2)] },
-    );
-    const victim = state.players[1].board[0].instanceId;
-    state = applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId, target: victim });
-    expect(byTitle(state.players[0].board, "Mark")?.attachedTo).toBe(victim);
-    state = applyMove(state, 0, { type: "fight", attackerId: byTitle(state.players[0].board, "Brute")!.instanceId, targetId: victim });
-    expect(state.players[1].board).toHaveLength(0);
-    expect(byTitle(state.players[0].board, "Mark")).toBeUndefined();
-    expect(byTitle(state.players[0].discard, "Mark")).toBeDefined();
-  });
-
   it.fails("BUG-06: a targeted Fight: ability exposes its choices on the fight move (AI/UI can choose)", () => {
     const state = setupTest(
       { inPlay: [creature("Basilisk", 6, "Skirmish. After Fight: Exhaust an enemy creature.")] },

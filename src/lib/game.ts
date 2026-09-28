@@ -328,7 +328,10 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   player.board = player.board.filter((item) => item !== card);
   // Captured amber goes to the opponent of the creature's controller.
   if (card.amber) state.players[other(side)].amber += card.amber;
-  for (const upgrade of player.board.filter((item) => item.attachedTo === card.instanceId)) leavePlay(state, upgrade, "discard");
+  // Upgrades may be attached by the other player too (BUG-04): scan both boards.
+  for (const upgrade of state.players.flatMap((p) => p.board).filter((item) => item.attachedTo === card.instanceId)) {
+    leavePlay(state, upgrade, "discard");
+  }
   Object.assign(card, { damage: 0, ready: false, stunned: false, amber: 0, armorUsed: 0, elusiveUsed: false, poisoned: false, attachedTo: undefined });
   if (destination === "deck") player.deck.push(card);
   else player[destination].push(card);
