@@ -1389,7 +1389,9 @@ function App() {
       gameRef.current = next;
       setGame(next);
 
-      for (let action = 0; action < 7; action += 1) {
+      // No fixed cap: play until nothing is worth doing (safety cap against a
+      // loop the evaluator cannot see an end to, BUG-12 was a hard 7).
+      for (let action = 0; action < 40; action += 1) {
         await wait(settingsRef.current.difficulty === "Impossible" ? 460 : 340);
         if (cancelled) return;
         const move = chooseAiMove(next, 1, house, settingsRef.current);
@@ -1530,14 +1532,17 @@ function App() {
     if (syncing) return;
     setSyncing(true);
     await updateAppShell();
+    // Sync the deck the player is looking at — the match deck on the board, the
+    // selected deck anywhere else — and never re-point the selection (BUG-05).
+    const target = screen === "game" ? currentDeck : selectedDeck;
     try {
-      const deck = await fetchKeyforgeDeck(currentDeck.id);
-      setCurrentDeck(deck);
-      setSelectedDeck(deck);
+      const deck = await fetchKeyforgeDeck(target.id);
+      if (screen === "game") setCurrentDeck(deck);
+      else setSelectedDeck(deck);
       setSavedDecks((prev) => prev.map((item) => (item.id === deck.id ? deck : item)));
       showToast(t("toast.synced", { name: deck.name, count: deck.cards.length }));
     } catch (error) {
-      const cached = await getCachedDeck(currentDeck.id);
+      const cached = await getCachedDeck(target.id);
       if (cached) showToast(t("toast.usingCache", { name: cached.name }));
       else showToast(vaultErrorText(error, t), "error");
     } finally {
@@ -1598,6 +1603,9 @@ function App() {
     sound.play("select");
     setSavedDecks((prev) => (prev.some((item) => item.id === deck.id) ? prev.map((item) => (item.id === deck.id ? deck : item)) : [...prev, deck]));
     setSelectedDeck(deck);
+    // Adoption is what makes a deck a library deck; vault page precache rows
+    // stay saved:false and out of the Home list (BUG-13).
+    void cacheDeck(deck, { saved: true });
     try {
       localStorage.setItem("aember-arena-last-deck", deck.id);
     } catch {
