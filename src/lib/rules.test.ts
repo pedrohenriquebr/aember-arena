@@ -315,3 +315,22 @@ describe("regression: BUG-10 self-sacrifice excludes the source from its own tar
     expect(moveHasEffect(state, 0, { type: "use", instanceId: gorm.instanceId })).toBe(false);
   });
 });
+
+describe("regression: BUG-11 'Use a friendly creature' resolves the printed Action (docs/BUGS_AND_FEATURES.md)", () => {
+  it("Dominator Bauble using a creature with 'Action: Steal 2A' steals, not reaps", () => {
+    const bauble = card("Dominator Bauble", { type: "Artifact", house: "Brobnar", text: "Action: Use a friendly creature." });
+    const thief = card("Thief", { type: "Creature", house: "Brobnar", power: 2, text: "Action: Steal 2A." });
+    const state = setupTest({ inPlay: [bauble, thief] }, { amber: 5 });
+    const after = applyMove(state, 0, { type: "use", instanceId: bauble.instanceId, target: thief.instanceId });
+    expect(after.players[0].amber).toBe(2);
+  });
+
+  it("using a creature without a printed Action reaps, and an explicit via is honoured", () => {
+    const bauble = card("Dominator Bauble", { type: "Artifact", house: "Brobnar", text: "Action: Use a friendly creature." });
+    const plain = card("Grunt", { type: "Creature", house: "Brobnar", power: 2 });
+    const state = setupTest({ inPlay: [bauble, plain] });
+    expect(applyMove(state, 0, { type: "use", instanceId: bauble.instanceId, target: plain.instanceId }).players[0].amber).toBe(1);
+    const forced = applyMove(state, 0, { type: "use", instanceId: bauble.instanceId, target: plain.instanceId, via: "reap" });
+    expect(forced.players[0].amber).toBe(1);
+  });
+});

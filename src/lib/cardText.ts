@@ -181,7 +181,7 @@ export function parseCardText(face: CardFace): CardRules {
     // A parser gap must never take the app down with it (BUG-01 was a white
     // screen): an unreadable card degrades to vanilla, like any text the
     // grammar does not understand.
-    return { abilities: [], keywords: [], coverage: "vanilla" };
+    return { abilities: [], keywords: {}, coverage: "vanilla" };
   }
 }
 

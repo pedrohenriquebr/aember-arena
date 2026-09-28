@@ -101,7 +101,7 @@ export type GameMove =
   | { type: "play"; instanceId: string; target?: string; slot?: number; flank?: "left" | "right" }
   | { type: "reap"; instanceId: string; target?: string }
   | { type: "fight"; attackerId: string; targetId: string; target?: string }
-  | { type: "use"; instanceId: string; target?: string }
+  | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action" }
   | { type: "unstun"; instanceId: string }
   | { type: "discard"; instanceId: string };
 
@@ -295,6 +295,8 @@ interface Context {
   fought?: CardInstance;
   target?: CardInstance;
   deterministic: boolean;
+  /** How a "use a creature" action resolves the creature (BUG-11). */
+  useVia?: "reap" | "action";
 }
 
 /** Mutable holder: the move's chosen target is consumed by the first targeted ability. */
@@ -447,7 +449,16 @@ function run(context: Context, act: Act): void {
       for (const card of cards) leavePlay(state, card, "archives");
       break;
     case "use":
-      for (const card of cards) if (card.ready && !card.stunned) reap(state, controllerOf(state, card) as Side, card, {}, deterministic);
+      for (const card of cards) {
+        if (!card.ready || card.stunned) continue;
+        const side = controllerOf(state, card) as Side;
+        // Using a creature is reap, fight or its Action, the player's choice;
+        // until the UI prompts for it the engine resolves the printed Action
+        // when there is one, reap otherwise (BUG-11).
+        const via = context.useVia ?? (hasPrinted(card, "Action") ? "action" : "reap");
+        if (via === "action") fire(state, side, card, "action", { choice: {}, deterministic });
+        else reap(state, side, card, {}, deterministic);
+      }
       break;
     case "fromDiscard": {
       const card = [...player.discard].reverse().find((item) => !act.type || item.face.type === act.type);
@@ -470,11 +481,11 @@ function fire(
   me: Side,
   source: CardInstance,
   trigger: Trigger,
-  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean },
+  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action" },
 ): void {
   for (const ability of rulesOf(source.face).abilities) {
     if (!ability.on.includes(trigger) || (ability.if && !holds(ability.if, state, me))) continue;
-    const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic };
+    const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic, useVia: options.via };
     if (ability.target) {
       const legal = everyMatch(state, me, source, ability.target);
       const chosen = legal.find((card) => card.instanceId === options.choice?.id);
@@ -722,8 +733,10 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   } else {
     source.ready = false;
     const house = playerIndex === state.activePlayer ? state.activeHouse : null;
-    if (houseAllows(source, house) && hasPrinted(source, "Action")) fire(state, playerIndex, source, "action", { choice, deterministic });
-    fire(state, playerIndex, source, "omni", { choice, deterministic });
+    if (houseAllows(source, house) && hasPrinted(source, "Action")) {
+      fire(state, playerIndex, source, "action", { choice, deterministic, via: move.via });
+    }
+    fire(state, playerIndex, source, "omni", { choice, deterministic, via: move.via });
     record(state, "log.use", params, silent);
   }
 

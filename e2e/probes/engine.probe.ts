@@ -22,13 +22,4 @@ describe("engine audit probes", () => {
     expect(fights.some((move) => move.target !== undefined)).toBe(true);
   });
 
-  it.fails("BUG-11: 'Use a friendly creature' lets the creature fight or use its Action, not only reap", () => {
-    const bauble = card("Dominator Bauble", { type: "Artifact", house: "Brobnar", text: "Action: Use a friendly creature." });
-    const thief = creature("Thief", 2, "Action: Steal 2A.");
-    const state = setupTest({ inPlay: [bauble, thief] }, { amber: 5 });
-    const after = applyMove(state, 0, { type: "use", instanceId: bauble.instanceId, target: thief.instanceId });
-    // Using the Action would steal 2; the engine can only reap (+1 amber).
-    expect(after.players[0].amber).toBe(2);
-  });
-
 });
