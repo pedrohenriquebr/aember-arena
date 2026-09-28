@@ -428,3 +428,14 @@ describe("FEAT-10 mulligan (docs/BUGS_AND_FEATURES.md)", () => {  const total = 
     expect(total(state, 1)).toBe(36);
   });
 });
+
+describe("FEAT-05 match log (docs/BUGS_AND_FEATURES.md)", () => {
+  it("log entries carry the round they happened in, across turns", () => {
+    const state = setupTest({ inPlay: [creature("A", 3)] }, {}, "Brobnar");
+    const reaped = applyMove(state, 0, { type: "reap", instanceId: state.players[0].board[0].instanceId });
+    expect(reaped.log.at(-1)).toMatchObject({ key: "log.reap", turn: 2 });
+    const next = endTurn(reaped, 0);
+    expect(next.log.at(-1)).toMatchObject({ key: "log.endTurn", turn: 2 });
+    expect(next.log.at(-2)).toMatchObject({ key: "log.reap", turn: 2 });
+  });
+});

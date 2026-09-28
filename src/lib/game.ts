@@ -81,6 +81,8 @@ export interface GamePlayer {
 export interface LogEntry {
   key: string;
   params: Record<string, string>;
+  /** FEAT-05: the round (state.turn) the entry belongs to. */
+  turn: number;
 }
 
 export interface GameState {
@@ -118,7 +120,8 @@ export type GameMove =
 
 export const BASE_KEY_COST = 6;
 const HAND_SIZE = 6;
-const LOG_SIZE = 14;
+/** FEAT-05: the whole match is kept — the full-log panel groups it by round. */
+const LOG_SIZE = 400;
 
 type Side = 0 | 1;
 const other = (side: Side): Side => (side === 0 ? 1 : 0);
@@ -216,7 +219,7 @@ export function createMatch(playerDeck: DeckInfo, rivalDeck: DeckInfo, options: 
     activeHouse: null,
     turn: 1,
     winner: null,
-    log: [{ key: "log.matchStart", params: { deck: playerDeck.name, rival: players[1].deckName } }],
+    log: [{ key: "log.matchStart", params: { deck: playerDeck.name, rival: players[1].deckName }, turn: 1 }],
     acted: 0,
     played: 0,
     omega: false,
@@ -278,7 +281,7 @@ export function cloneGame(state: GameState): GameState {
 }
 
 function record(state: GameState, key: string, params: Record<string, string>, silent = false): void {
-  if (!silent) state.log = [...state.log, { key, params }].slice(-LOG_SIZE);
+  if (!silent) state.log = [...state.log, { key, params, turn: state.turn }].slice(-LOG_SIZE);
 }
 
 // ---------- board queries ----------

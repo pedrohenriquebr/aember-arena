@@ -119,6 +119,9 @@ function renderLog(entry: LogEntry, t: Translator): string {
 /** FEAT-10: the opening-hand micro-phase, before the match really starts. */
 const inMulligan = (game: GameState) => game.pendingMulligan === 0 || game.pendingMulligan === 1;
 
+/** FEAT-05: log keys the type filter knows about (the rest pass every filter). */
+type LogType = "play" | "fight" | "reap" | "use" | "forge";
+
 // ---------- Small shared components ----------
 
 // The forge glyph of public/forge-icon.svg, so header and favicon share one mark.
@@ -1417,6 +1420,10 @@ function App() {
   const [deckFromCache, setDeckFromCache] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
   const [matchVersion, setMatchVersion] = useState(0);
+  // FEAT-05: full match log (docked sheet on mobile, inline panel on desktop).
+  const [logOpen, setLogOpen] = useState(false);
+  const [logSide, setLogSide] = useState<"all" | "you" | "warden">("all");
+  const [logType, setLogType] = useState<"all" | LogType>("all");
   // FEAT-09: um service worker novo está instalado e esperando o skipWaiting.
   const [updateReady, setUpdateReady] = useState(false);
 
@@ -1678,6 +1685,24 @@ function App() {
     return cards.find((card) => card.instanceId === selected.instanceId) ?? null;
   }, [game, selected]);
 
+  // FEAT-05: the full log grouped by round (latest round first, latest entry
+  // first inside it), after the side/type filters.
+  const logRounds = useMemo(() => {
+    if (!game || !logOpen) return [];
+    const filtered = game.log.filter(
+      (entry) =>
+        (logSide === "all" || entry.params.name === (logSide === "you" ? "You" : "The Ember Warden")) &&
+        (logType === "all" || entry.key === `log.${logType}`),
+    );
+    const rounds: { turn: number; entries: LogEntry[] }[] = [];
+    for (const entry of [...filtered].reverse()) {
+      const group = rounds.find((item) => item.turn === entry.turn);
+      if (group) group.entries.push(entry);
+      else rounds.push({ turn: entry.turn, entries: [entry] });
+    }
+    return rounds;
+  }, [game, logOpen, logSide, logType]);
+
   function showToast(message: string, kind: "success" | "error" = "success") {
     setToast({ message, kind });
   }
@@ -1705,6 +1730,7 @@ function App() {
     setSelected(null);
     setPick(null);
     setAiThinking(false);
+    setLogOpen(false);
     setMatchVersion((version) => version + 1);
     setScreen("game");
     sound.play("forge");
@@ -2174,19 +2200,63 @@ function App() {
                   <button type="button" onClick={() => { sound.play("click"); setScreen("config"); }} aria-label={t("nav.config")}><Settings2 size={15} /></button>
                 </section>
 
-                <section className="log-section">
+                <section className={`log-section${logOpen ? " inspector-section--docked" : ""}`}>
                   <div className="section-label-row">
                     <span className="section-label">{t("rail.matchLog")}</span>
-                    <span className="log-live"><span /> {t("rail.live")}</span>
+                    {logOpen ? (
+                      <button className="quiet-icon-button" type="button" onClick={() => { sound.play("click"); setLogOpen(false); }} aria-label={t("common.close")}><X size={14} /></button>
+                    ) : (
+                      <>
+                        <span className="log-live"><span /> {t("rail.live")}</span>
+                        <button type="button" className="filter-chip log-full-button" onClick={() => { sound.play("click"); setSelected(null); setPick(null); setLogOpen(true); }}>{t("log.full")}</button>
+                      </>
+                    )}
                   </div>
-                  <div className="match-log">
-                    {game.log.slice(-5).reverse().map((entry, index) => (
-                      <div className={`log-entry${index === 0 ? " log-entry--latest" : ""}`} key={`${entry.key}-${index}-${game.log.length}`}>
-                        <span className="log-marker" />
-                        <p>{renderLog(entry, t)}</p>
+                  {logOpen ? (
+                    <>
+                      <div className="filter-chips" role="group" aria-label={t("log.filterSide")}>
+                        {(["all", "you", "warden"] as const).map((id) => (
+                          <button key={id} type="button" className={`filter-chip${logSide === id ? " is-active" : ""}`} aria-pressed={logSide === id} onClick={() => setLogSide(id)}>
+                            {id === "all" ? t("log.all") : id === "you" ? t("common.you") : t("log.warden")}
+                          </button>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                      <div className="filter-chips" role="group" aria-label={t("log.filterType")}>
+                        {(["all", "play", "fight", "reap", "use", "forge"] as const).map((id) => (
+                          <button key={id} type="button" className={`filter-chip${logType === id ? " is-active" : ""}`} aria-pressed={logType === id} onClick={() => setLogType(id)}>
+                            {id === "all" ? t("log.all") : t(`log.type.${id}`)}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="log-groups">
+                        {logRounds.map((group) => (
+                          <div key={group.turn}>
+                            <span className="section-label">{t("game.round")} {String(group.turn).padStart(2, "0")}</span>
+                            <div className="match-log">
+                              {group.entries.map((entry, index) => (
+                                <div className={`log-entry${index === 0 ? " log-entry--latest" : ""}`} key={`${entry.key}-${index}`}>
+                                  <span className="log-marker" />
+                                  <p>{renderLog(entry, t)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {!logRounds.length && (
+                          <div className="log-entry"><span className="log-marker" /><p>{t("log.empty")}</p></div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="match-log">
+                      {game.log.slice(-5).reverse().map((entry, index) => (
+                        <div className={`log-entry${index === 0 ? " log-entry--latest" : ""}`} key={`${entry.key}-${index}-${game.log.length}`}>
+                          <span className="log-marker" />
+                          <p>{renderLog(entry, t)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </section>
 
                 <details className="quick-rules">

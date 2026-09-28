@@ -2487,6 +2487,21 @@ button:disabled {
   padding-top: 7px;
 }
 
+/* FEAT-05: full log — rounds stacked inside the same match-log line style. */
+.log-full-button {
+  margin-left: auto;
+}
+
+.log-section .filter-chips {
+  margin-top: 9px;
+}
+
+.log-groups {
+  display: grid;
+  gap: 13px;
+  margin-top: 11px;
+}
+
 .log-entry {
   position: relative;
   display: grid;
