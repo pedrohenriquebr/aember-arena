@@ -4,3 +4,4 @@ graphify-out/
 e2e/shots/
 .playwright-mcp/
 docs/advisor/*.log
+e2e/probes/shots/
