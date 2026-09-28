@@ -8,7 +8,7 @@ export interface HouseInfo {
   color: string;
   icon: string;
   /** Simple silhouette used when the official art cannot be loaded. */
-  glyph: string;
+  glyph?: string;
   short: string;
 }
 
@@ -83,16 +83,85 @@ export const HOUSES: Record<string, HouseInfo> = {
     glyph:
       "M19.6 3.6c-7 0-12.3 2.6-12.3 8.5 0 1.9.6 3.4 1.5 4.6C10 15 11.7 13.3 14 12c-1.9 1.6-3.3 3.5-4.2 5.6-.5 1.2-.9 2.5-1.1 3.8H10c.2-1 .4-2 .8-2.9 6-.2 10.2-3.4 10.2-9.3 0-1.6-.5-3.2-1.4-5.6ZM18 6.2c.2.9.3 1.7.3 2.4 0 4.3-2.8 6.7-7.1 7.2 1.8-3 4.5-5.3 7.8-6.6-3.2.6-6 2-8.2 4 .6-3.8 4.2-6 8.5-6.6l-1.3-.4Z",
   },
-};
-
-const EXTRA_HOUSES_PT: Record<string, string> = {
-  Saurian: "Sáurios",
-  "Star Alliance": "Aliança Estelar",
-  Unfathomable: "Insondáveis",
-  Ekwidon: "Ekwidon",
-  Geistoid: "Geistóide",
-  Skyborn: "Celestes",
-  Redemption: "Redenção",
+  // Expansion houses and special factions (Adventures): no hand-drawn glyph,
+  // the initials fallback covers offline rendering.
+  "Star Alliance": {
+    id: "Star Alliance",
+    namePt: "Aliança Estelar",
+    color: "#4a86c8",
+    icon: `${CDN}/Star_Alliance.png`,
+    short: "ST",
+  },
+  Saurian: {
+    id: "Saurian",
+    namePt: "Sáurios",
+    color: "#8aa04c",
+    icon: `${CDN}/Saurian.png`,
+    short: "SA",
+  },
+  Unfathomable: {
+    id: "Unfathomable",
+    namePt: "Insondáveis",
+    color: "#4fa8b8",
+    icon: `${CDN}/Unfathomable.png`,
+    short: "UN",
+  },
+  Ekwidon: {
+    id: "Ekwidon",
+    namePt: "Ekwidon",
+    color: "#c88a4a",
+    icon: `${CDN}/Ekwidon200.png`,
+    short: "EK",
+  },
+  Geistoid: {
+    id: "Geistoid",
+    namePt: "Geistóide",
+    color: "#9aa0ae",
+    icon: `${CDN}/KF_Geistoid.png`,
+    short: "GE",
+  },
+  Skyborn: {
+    id: "Skyborn",
+    namePt: "Celestes",
+    color: "#a88fd0",
+    icon: `${CDN}/Skyborn.png`,
+    short: "SK",
+  },
+  Redemption: {
+    id: "Redemption",
+    namePt: "Redenção",
+    color: "#c8a04a",
+    icon: `${CDN}/Redemption.png`,
+    short: "RE",
+  },
+  Keyraken: {
+    id: "Keyraken",
+    namePt: "Keyraken",
+    color: "#5e8a96",
+    icon: `${CDN}/KF_Keyraken.png`,
+    short: "KE",
+  },
+  Ouboros: {
+    id: "Ouboros",
+    namePt: "Ouboros",
+    color: "#7f7392",
+    icon: `${CDN}/ouboros.png`,
+    short: "OU",
+  },
+  Rebels: {
+    id: "Rebels",
+    namePt: "Rebels",
+    color: "#a3796a",
+    icon: `${CDN}/Rebels.png`,
+    short: "RE",
+  },
+  Elders: {
+    id: "Elders",
+    namePt: "Elders",
+    color: "#8f8b7a",
+    icon: `${CDN}/Elders.png`,
+    short: "EL",
+  },
 };
 
 export const HOUSE_ORDER = ["Brobnar", "Dis", "Logos", "Mars", "Sanctum", "Shadows", "Untamed"];
@@ -103,10 +172,9 @@ export function houseInfo(house: string): HouseInfo {
   return (
     HOUSES[house] ?? {
       id: house,
-      namePt: EXTRA_HOUSES_PT[house] ?? house,
+      namePt: house,
       color: "#b98948",
       icon: "",
-      glyph: "",
       short: house.slice(0, 2).toUpperCase(),
     }
   );

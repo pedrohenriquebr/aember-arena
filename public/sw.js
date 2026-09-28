@@ -20,6 +20,17 @@ const HOUSE_ICONS = [
   "Sanctum_lUWPG7x.png",
   "Shadows_z0n69GG.png",
   "Untamed_bXh9SJD.png",
+  "Star_Alliance.png",
+  "Saurian.png",
+  "Unfathomable.png",
+  "Ekwidon200.png",
+  "KF_Geistoid.png",
+  "Skyborn.png",
+  "Redemption.png",
+  "KF_Keyraken.png",
+  "ouboros.png",
+  "Rebels.png",
+  "Elders.png",
 ].map((file) => `https://mastervault-storage-prod.s3.amazonaws.com/media/houses/${file}`);
 
 async function precacheHouseIcons() {
