@@ -3,7 +3,9 @@ import { rulesOf } from "./abilities";
 import { parseCardText } from "./cardText";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
+import { getLegalMoves } from "./game";
 import type { CardFace } from "./game";
+import { card, setupTest } from "./testkit";
 
 const face = (text: string, type = "Creature", title = "Test Card"): CardFace => ({
   id: "x",
@@ -118,11 +120,10 @@ describe("regression: BUG-01 'Fully heal' (docs/BUGS_AND_FEATURES.md)", () => {
     expect(rulesOf(seraphic).abilities.some((ability) => ability.on.includes("play"))).toBe(true);
   });
 
-  it("a creature with 'Fully heal' in hand must not crash getLegalMoves", async () => {
-    const { setupTest } = await import("./testkit");
+  it("a creature with 'Fully heal' in hand must not crash getLegalMoves", () => {
     const state = setupTest({
-      hand: [{ ...face("Taunt.\nAfter Fight: Fully heal Bosch the Unyielding.", "Creature", "Bosch the Unyielding"), power: 6 }],
+      hand: [card("Bosch the Unyielding", { text: "Taunt." + String.fromCharCode(10) + "After Fight: Fully heal Bosch the Unyielding.", power: 6 })],
     });
-    expect(() => state).not.toThrow();
+    expect(() => getLegalMoves(state, 0, "Brobnar")).not.toThrow();
   });
 });

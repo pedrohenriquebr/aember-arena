@@ -7,6 +7,7 @@ import { DEMO_DECK_2 } from "./demoDeck2";
 import {
   applyMove,
   chooseHouse,
+  isLegalMove,
   createMatch,
   endTurn,
   getLegalMoves,
@@ -171,7 +172,8 @@ describe("turn structure", () => {
     expect(keyCost(used, 1)).toBe(9);
     const next = endTurn(used, 0);
     expect(next.players[1]).toMatchObject({ keys: 0, amber: 8 });
-    expect(keyCost(endTurn(next, 1), 1)).toBe(6);
+    const wardenTurn = chooseHouse(next, 1, next.players[1].houses[0]);
+    expect(keyCost(endTurn(wardenTurn, 1), 1)).toBe(6);
   });
 
   it("wins on the third key", () => {
@@ -180,7 +182,7 @@ describe("turn structure", () => {
   });
 
   it("archives are picked up when choosing a house", () => {
-    const state = setupTest({});
+    const state = setupTest({}, {}, null);
     state.players[0].archives = [card("Smith")];
     const next = chooseHouse(state, 0, "Brobnar");
     expect(titles(next.players[0].hand)).toEqual(["Smith"]);
@@ -207,6 +209,7 @@ describe("abilities and targets", () => {
     expect(state.players[1].amber).toBe(2);
     state.players[1].hand = [card("Gateway to Dis")];
     state.activePlayer = 1;
+    state.activeHouse = "Dis";
     state = applyMove(state, 1, { type: "play", instanceId: state.players[1].hand[0].instanceId });
     expect(state.players[1].amber).toBe(3);
     expect(state.players[0].deck.at(-1)!.face.title).toBe("Dextre");
@@ -258,5 +261,22 @@ describe("abilities and targets", () => {
     expect(moveHasEffect(barb, 0, { type: "play", instanceId: barb.players[0].hand[0].instanceId })).toBe(true);
     const fear = setupTest({ hand: ["Fear"] });
     expect(moveHasEffect(fear, 0, { type: "play", instanceId: fear.players[0].hand[0].instanceId })).toBe(false);
+  });
+});
+
+describe("regression: BUG-02 house choice gates the turn (docs/BUGS_AND_FEATURES.md)", () => {
+  it("before a house is chosen no card may be played or reaped, and the turn cannot end", () => {
+    const state = setupTest(
+      { hand: [card("Offhouse", { type: "Creature", house: "Dis", power: 2 })], inPlay: [card("Reaper")] },
+      {},
+      null,
+    );
+    expect(state.activeHouse).toBeNull();
+    expect(isLegalMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId })).toBe(false);
+    const reaper = state.players[0].board[0].instanceId;
+    expect(isLegalMove(state, 0, { type: "reap", instanceId: reaper })).toBe(false);
+    expect(endTurn(state, 0).activePlayer).toBe(0);
+    const chosen = chooseHouse(state, 0, "Brobnar");
+    expect(isLegalMove(chosen, 0, { type: "reap", instanceId: reaper })).toBe(true);
   });
 });

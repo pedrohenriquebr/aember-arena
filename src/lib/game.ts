@@ -586,6 +586,9 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
     used by getLegalMoves (UI/AI) and by applyMove's guard. */
 function baseMoves(state: GameState, side: Side, house: string | null): GameMove[] {
   if (!mayAct(state, side)) return [];
+  // The house is chosen before any main-phase action (keyteki ChooseHouse is
+  // mandatory): with no active house nothing is legal, discards included (BUG-02).
+  if (side === state.activePlayer && state.activeHouse === null) return [];
   const player = state.players[side];
   const moves: GameMove[] = [];
 
@@ -733,6 +736,8 @@ export function chooseHouse(state: GameState, playerIndex: Side, house: string):
 export function endTurn(current: GameState, playerIndex: Side): GameState {
   const state = cloneGame(current);
   if (playerIndex !== state.activePlayer || state.winner !== null) return state;
+  // The turn cannot end before the mandatory house choice (BUG-02).
+  if (state.activeHouse === null) return state;
 
   const endingPlayer = state.players[playerIndex];
   // Ready step, then draw step (keyteki ReadyPhase + DrawPhase).

@@ -43,7 +43,7 @@ export interface SideSetup {
 
 const toCards = (items: (string | CardInstance)[] = []) => items.map((item) => (typeof item === "string" ? card(item) : item));
 
-export function setupTest(player1: SideSetup, player2: SideSetup = {}, house: string | null = null): GameState {
+export function setupTest(player1: SideSetup, player2: SideSetup = {}, house?: string | null): GameState {
   const state = createMatch(DEMO_DECK, DEMO_DECK_2);
   state.players.forEach((player, index) => {
     const setup = index === 0 ? player1 : player2;
@@ -55,7 +55,10 @@ export function setupTest(player1: SideSetup, player2: SideSetup = {}, house: st
     player.chains = setup.chains ?? 0;
     player.keys = setup.keys ?? 0;
   });
-  state.activeHouse = house;
+  // Since BUG-02 no card is legal before the house choice; specs default to a
+  // turn already underway (house of the first card set up) and pass null
+  // explicitly to test the pre-choice state.
+  state.activeHouse = house !== undefined ? house : (state.players[0].hand[0] ?? state.players[0].board[0])?.face.house ?? "Brobnar";
   // Past the first-turn rule unless a spec opts back in.
   state.turn = 2;
   state.log = [];

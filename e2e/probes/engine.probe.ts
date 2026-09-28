@@ -62,12 +62,4 @@ describe("engine audit probes", () => {
     expect(after.players[0].amber).toBe(2);
   });
 
-  it.fails("BUG-02: before a house is chosen no card may be played, reaped or used", () => {
-    // setupTest leaves activeHouse null, exactly like the start of every human turn.
-    const dis = card("Offhouse", { type: "Creature", house: "Dis", power: 2 });
-    const state = setupTest({ hand: [dis], inPlay: [creature("Reaper", 3)] });
-    expect(state.activeHouse).toBeNull();
-    expect(isLegalMove(state, 0, { type: "play", instanceId: dis.instanceId })).toBe(false);
-    expect(isLegalMove(state, 0, { type: "reap", instanceId: state.players[0].board[0].instanceId })).toBe(false);
-  });
 });
