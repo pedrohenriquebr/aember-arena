@@ -1954,6 +1954,27 @@ button:disabled {
   color: var(--faint);
 }
 
+/* FEAT-12a: undo lives in the rail, above the Warden brief. */
+.undo-section {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid rgba(225, 216, 194, 0.1);
+}
+
+@media (min-width: 701px) {
+  .undo-section {
+    padding: 13px 15px 14px;
+  }
+}
+
+.undo-button {
+  width: 100%;
+}
+
+.undo-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* T6 — default = mobile; desktop ao lado em duas faixas (701-1040 = célula do
    grid do rail com divisórias próprias; >1040 = coluna única do rail sticky). */
 .inspector-section {

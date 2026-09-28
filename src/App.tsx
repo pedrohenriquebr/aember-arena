@@ -52,6 +52,7 @@ import {
   keepHand,
   keyCost,
   mulligan,
+  revealsHiddenInfo,
   targetChoices,
   type CardInstance,
   type DeckInfo,
@@ -89,8 +90,14 @@ type Toast = {
   sticky?: boolean;
 } | null;
 
+/** FEAT-12a: one step of the undo history — the state a transition left behind
+    and whether that transition consumed hidden information. */
+type UndoEntry = { state: GameState; revealed: boolean };
+
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
 const STARTER_DECKS: DeckInfo[] = [DEMO_DECK, DEMO_DECK_2];
+/** FEAT-12a: how many past states the undo history keeps (memory cap). */
+const UNDO_LIMIT = 40;
 
 // T5: hover só existe quando o dispositivo anuncia "(hover: hover)"; em touch o
 // toggle hoverZoom some e a inspeção vai por long-press (CardLightbox).
@@ -1516,9 +1523,46 @@ function App() {
   const prevKeysRef = useRef({ player: 0, ai: 0 });
   /** FEAT-06: matchVersion already recorded locally (a match ends once). */
   const recordedMatchRef = useRef(-1);
+  /** FEAT-12a: undo history — see commitGame below (capped at UNDO_LIMIT). */
+  const historyRef = useRef<UndoEntry[]>([]);
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  // FEAT-12a: the engine is pure and clones, so the state a transition leaves
+  // behind stays a valid snapshot. Every commit records it together with
+  // whether the transition revealed hidden information (draw/shuffle).
+  const commitGame = useCallback((prev: GameState, next: GameState) => {
+    const stack = historyRef.current;
+    stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next) });
+    if (stack.length > UNDO_LIMIT) stack.shift();
+    gameRef.current = next;
+    setGame(next);
+  }, []);
+
+  /** FEAT-12a: where undo would land, or null when it cannot — not the player's
+      turn, nothing done yet, or a move this turn already revealed hidden
+      information (a rewind would let the player re-plan with cards it saw). */
+  const undoInfo = useCallback((live: GameState | null) => {
+    const stack = historyRef.current;
+    if (!live || live.activePlayer !== 0 || live.winner !== null) return null;
+    const inTurn = (state: GameState) => state.activePlayer === 0 && state.turn === live.turn && state.activeHouse !== null;
+    let index = stack.length - 1;
+    while (index >= 0 && inTurn(stack[index].state)) index -= 1;
+    const anchor = stack[index + 1];
+    if (!anchor || anchor.state === live) return null;
+    return { anchor: anchor.state, blocked: stack.slice(index + 1).some((entry) => entry.revealed) };
+  }, []);
+
+  const undoLastMove = useCallback(() => {
+    const info = undoInfo(gameRef.current);
+    if (!info || info.blocked) return;
+    sound.play("click");
+    gameRef.current = info.anchor;
+    setGame(info.anchor);
+    setSelected(null);
+    setPick(null);
+  }, [undoInfo]);
 
   // Persist settings + language, and drive the audio engine prefs.
   useEffect(() => {
@@ -1718,10 +1762,10 @@ function App() {
       let next = gameRef.current;
       // Resuming after leaving the board mid-turn: the house was already chosen.
       const house = next.activeHouse ?? chooseAiHouse(next, 1);
-      next = chooseHouse(next, 1, house);
+      const opening = chooseHouse(next, 1, house);
       sound.play("house");
-      gameRef.current = next;
-      setGame(next);
+      commitGame(next, opening);
+      next = opening;
 
       // No fixed cap: play until nothing is worth doing (safety cap against a
       // loop the evaluator cannot see an end to, BUG-12 was a hard 7).
@@ -1730,20 +1774,20 @@ function App() {
         if (cancelled) return;
         const move = chooseAiMove(next, 1, house, settingsRef.current);
         if (!move) break;
-        next = applyMove(next, 1, move);
+        const applied = applyMove(next, 1, move);
         sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : "play");
-        gameRef.current = next;
-        setGame(next);
+        commitGame(next, applied);
+        next = applied;
         if (next.winner !== null) break;
       }
 
       if (!cancelled && next.winner === null) {
         await wait(260);
         if (cancelled) return;
-        next = endTurn(next, 1);
+        const ended = endTurn(next, 1);
         sound.play("endTurn");
-        gameRef.current = next;
-        setGame(next);
+        commitGame(next, ended);
+        next = ended;
       }
       setAiThinking(false);
     };
@@ -1755,7 +1799,7 @@ function App() {
       // the effect resume the same turn from gameRef.current on return (BUG-03).
       aiTurnRef.current = null;
     };
-  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen]);
+  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen, commitGame]);
 
   // FEAT-10: the Warden decides the mulligan on a short pause, so it reads as
   // an opponent move instead of an instant flip.
@@ -1765,11 +1809,10 @@ function App() {
       const current = gameRef.current;
       if (!current || current.pendingMulligan !== 1) return;
       const next = shouldMulligan(current, 1) ? mulligan(current, 1) : keepHand(current, 1);
-      gameRef.current = next;
-      setGame(next);
+      commitGame(current, next);
     }, 620);
     return () => window.clearTimeout(timer);
-  }, [game?.pendingMulligan, screen]);
+  }, [game?.pendingMulligan, screen, commitGame]);
 
   const selectedCard = useMemo(() => {
     if (!selected || !game) return null;
@@ -1795,6 +1838,10 @@ function App() {
     }
     return rounds;
   }, [game, logOpen, logSide, logType]);
+
+  // FEAT-12a: computed from the rendered game (gameRef lags one commit behind).
+  const undo = game ? undoInfo(game) : null;
+  const undoable = undo !== null && !undo.blocked;
 
   function showToast(message: string, kind: "success" | "error" = "success") {
     setToast({ message, kind });
@@ -1832,6 +1879,8 @@ function App() {
     const rival = opponent ?? resolveOpponent(deck);
     const next = createMatch(deck, rival, { seed: Math.floor(Math.random() * 4294967296) });
     opponentRef.current = rival;
+    // FEAT-12a: a new match starts a fresh undo history.
+    historyRef.current = [];
     gameRef.current = next;
     prevKeysRef.current = { player: 0, ai: 0 };
     setCurrentDeck(deck);
@@ -1858,12 +1907,11 @@ function App() {
       return;
     }
     sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : move.type === "use" ? "play" : "play");
-    const next = applyMove(gameRef.current, 0, move);
-    gameRef.current = next;
-    setGame(next);
+    const prev = gameRef.current;
+    commitGame(prev, applyMove(prev, 0, move));
     setSelected(null);
     setPick(null);
-  }, []);
+  }, [commitGame]);
 
   const pickBoardCard = useCallback(
     (owner: 0 | 1, card: CardInstance) => {
@@ -1889,37 +1937,35 @@ function App() {
   const endHumanTurn = useCallback(() => {
     if (!gameRef.current) return;
     sound.play("endTurn");
-    const next = endTurn(gameRef.current, 0);
-    gameRef.current = next;
-    setGame(next);
+    const prev = gameRef.current;
+    commitGame(prev, endTurn(prev, 0));
     setSelected(null);
     setPick(null);
-  }, []);
+  }, [commitGame]);
 
   // FEAT-10: the human's mulligan decision (keep advances the micro-phase).
   const keepOpeningHand = useCallback(() => {
     if (!gameRef.current) return;
     sound.play("click");
-    const next = keepHand(gameRef.current, 0);
-    gameRef.current = next;
-    setGame(next);
-  }, []);
+    const prev = gameRef.current;
+    commitGame(prev, keepHand(prev, 0));
+  }, [commitGame]);
 
   const takeMulligan = useCallback(() => {
     if (!gameRef.current) return;
     sound.play("select");
-    const next = mulligan(gameRef.current, 0);
-    gameRef.current = next;
-    setGame(next);
-  }, []);
+    const prev = gameRef.current;
+    commitGame(prev, mulligan(prev, 0));
+  }, [commitGame]);
 
   const choosePlayerHouse = useCallback((house: string) => {
     if (!gameRef.current) return;
     sound.play("house");
-    const next = chooseHouse(gameRef.current, 0, house);
-    gameRef.current = next;
-    setGame(next);
-  }, []);
+    const prev = gameRef.current;
+    // FEAT-12a: the state right after the house choice is the undo anchor — the
+    // start of the turn, before any of the player's moves.
+    commitGame(prev, chooseHouse(prev, 0, house));
+  }, [commitGame]);
 
   const selectHandCard = useCallback((card: CardInstance) => {
     sound.play("select");
@@ -1976,8 +2022,7 @@ function App() {
         // caller — BUG-21); the log entry comes from the engine itself.
         if (gameRef.current && gameRef.current.winner === null) {
           const next = refreshGameFaces(gameRef.current, deck);
-          gameRef.current = next;
-          setGame(next);
+          commitGame(gameRef.current, next);
         }
       } else {
         setSelectedDeck(deck);
@@ -2184,6 +2229,8 @@ function App() {
             onClick={() => {
               sound.play("forge");
               const saved = resumeMatch.game as GameState;
+              // FEAT-12a: a resumed match has no in-memory history to undo.
+              historyRef.current = [];
               gameRef.current = saved;
               prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
               setGame(saved);
@@ -2307,6 +2354,19 @@ function App() {
                   onCancelPick={() => setPick(null)}
                   onClear={() => { setSelected(null); setPick(null); }}
                 />
+
+                {/* FEAT-12a: rewinds the player's moves to the start of the turn. */}
+                <section className="undo-section">
+                  <button
+                    type="button"
+                    className="ghost-button undo-button"
+                    onClick={undoLastMove}
+                    disabled={!undoable}
+                    title={undo?.blocked ? t("game.undoBlocked") : undefined}
+                  >
+                    <RotateCcw size={15} /> {t("game.undo")}
+                  </button>
+                </section>
 
                 <section className="ai-brief">
                   <span className="ai-avatar"><Cpu size={17} /></span>

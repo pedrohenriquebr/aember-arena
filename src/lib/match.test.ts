@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { chooseAiHouse, chooseAiMove, shouldMulligan } from "./ai";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
-import { applyMove, chooseHouse, createMatch, endTurn, keepHand, mulligan, type DeckInfo, type GameState } from "./game";
+import { applyMove, chooseHouse, createMatch, endTurn, keepHand, mulligan, revealsHiddenInfo, type DeckInfo, type GameState } from "./game";
+import { byTitle, card, setupTest } from "./testkit";
 
 const zoneTotal = (state: GameState, index: 0 | 1) => {
   const player = state.players[index];
@@ -76,5 +77,42 @@ describe("FEAT-08 seeded RNG (docs/BUGS_AND_FEATURES.md)", () => {
     const first = simulate(DEMO_DECK, DEMO_DECK_2, 9, 24);
     const second = simulate(DEMO_DECK, DEMO_DECK_2, 9, 24);
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+  });
+});
+
+describe("FEAT-12 rewind safety (docs/BUGS_AND_FEATURES.md)", () => {
+  const reap = (state: GameState, title: string) =>
+    applyMove(state, 0, { type: "reap", instanceId: byTitle(state.players[0].board, title)!.instanceId });
+
+  it("a plain move consumes no hidden information, so it is reversible", () => {
+    const state = setupTest({ inPlay: [card("Plain", { type: "Creature", house: "Brobnar", power: 4 })] });
+    const next = reap(state, "Plain");
+    expect(next.players[0].amber).toBe(1);
+    expect(revealsHiddenInfo(state, next)).toBe(false);
+  });
+
+  it("a move that draws hidden cards blocks the rewind", () => {
+    const state = setupTest({ inPlay: [card("Doc Bookton")], deck: [card("A"), card("B")] });
+    const next = reap(state, "Doc Bookton");
+    expect(next.players[0].hand).toHaveLength(1);
+    expect(revealsHiddenInfo(state, next)).toBe(true);
+  });
+
+  it("a mulligan shuffle blocks the rewind", () => {
+    const state = setupTest({ hand: [card("A"), card("B")], deck: [card("C")] });
+    state.pendingMulligan = 0;
+    state.turn = 1;
+    expect(revealsHiddenInfo(state, mulligan(state, 0))).toBe(true);
+  });
+
+  it("an undo restores an earlier state wholesale — FEAT-06 tallies included", () => {
+    const anchor = setupTest({ inPlay: [card("Plain", { type: "Creature", house: "Brobnar", power: 4 })] });
+    const before = JSON.stringify(anchor);
+    const played = reap(anchor, "Plain");
+    expect(played.players[0].amberGained).toBe(1);
+    // The anchor is a valid earlier snapshot: restoring it rolls the counters
+    // back with the rest of the state, so nothing is counted twice.
+    expect(anchor.players[0].amberGained).toBe(0);
+    expect(JSON.stringify(anchor)).toBe(before);
   });
 });

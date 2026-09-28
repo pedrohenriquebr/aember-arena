@@ -930,6 +930,19 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   return state;
 }
 
+/** FEAT-12: did this transition consume hidden information — randomness
+    (rngCalls), a card drawn into a hand or a look at the top of a deck? The
+    undo stack must not rewind past it: the player already saw those cards and
+    could re-plan with information a fresh turn would not have. Returns to hand
+    and discard recovery count as hidden too (the conservative side). */
+export function revealsHiddenInfo(prev: GameState, next: GameState): boolean {
+  if (next.rngCalls !== prev.rngCalls) return true;
+  return next.players.some((player, index) => {
+    const before = prev.players[index];
+    return player.hand.length > before.hand.length || player.deck.length < before.deck.length;
+  });
+}
+
 export function refreshGameFaces(current: GameState, deck: DeckInfo): GameState {
   const state = cloneGame(current);
   const byId = new Map(deck.cards.map((face) => [face.id, face] as const));
