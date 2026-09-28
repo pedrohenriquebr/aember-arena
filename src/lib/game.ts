@@ -246,7 +246,8 @@ export function keyCost(state: GameState, side: Side): number {
 
 // ---------- specification (conditions and targets) ----------
 
-function holds(condition: Condition, state: GameState, me: Side): boolean {
+/** Exported for the AI: the same condition evaluation the engine runs (FEAT-03). */
+export function conditionHolds(condition: Condition, state: GameState, me: Side): boolean {
   if (condition.k === "not") return !holds(condition.c, state, me);
   if (condition.k === "amber") {
     const amber = state.players[condition.opp ? other(me) : me].amber;
@@ -884,3 +885,4 @@ export function summarizeDeck(deck: DeckInfo): DeckSummary {
     armoredCount,
   };
 }
+const holds = conditionHolds;
