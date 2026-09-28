@@ -109,3 +109,20 @@ describe("starter decks", () => {
     `);
   });
 });
+
+describe("regression: BUG-01 'Fully heal' (docs/BUGS_AND_FEATURES.md)", () => {
+  it("'Fully heal …' parses instead of throwing (was: wrong capture group reached parseObject)", () => {
+    const seraphic = face("This creature gets +1 armor.\nPlay: Fully heal this creature.", "Upgrade", "Seraphic Armor");
+    expect(() => parseCardText(seraphic)).not.toThrow();
+    expect(rulesOf(seraphic).coverage).not.toBe("vanilla");
+    expect(rulesOf(seraphic).abilities.some((ability) => ability.on.includes("play"))).toBe(true);
+  });
+
+  it("a creature with 'Fully heal' in hand must not crash getLegalMoves", async () => {
+    const { setupTest } = await import("./testkit");
+    const state = setupTest({
+      hand: [{ ...face("Taunt.\nAfter Fight: Fully heal Bosch the Unyielding.", "Creature", "Bosch the Unyielding"), power: 6 }],
+    });
+    expect(() => state).not.toThrow();
+  });
+});

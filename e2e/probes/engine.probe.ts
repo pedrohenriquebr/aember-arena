@@ -13,15 +13,6 @@ const creature = (title: string, power: number, text = "", extra: Record<string,
   card(title, { type: "Creature", house: "Brobnar", power, text, ...extra });
 
 describe("engine audit probes", () => {
-  it.fails("BUG-01: 'Fully heal …' must parse instead of throwing", () => {
-    expect(() => parseCardText(card("Seraphic Armor", { type: "Upgrade", text: "This creature gets +1 armor.\rPlay: Fully heal this creature." }).face)).not.toThrow();
-  });
-
-  it.fails("BUG-01: a creature with 'Fully heal' in hand must not crash getLegalMoves", () => {
-    const state = setupTest({ hand: [creature("Bosch the Unyielding", 6, "Taunt.\nAfter Fight: Fully heal Bosch the Unyielding.")] });
-    expect(() => getLegalMoves(state, 0, "Brobnar")).not.toThrow();
-  });
-
   it.fails("BUG-04: an upgrade on an enemy creature is discarded when that creature leaves play", () => {
     let state = setupTest(
       { hand: [card("Mark", { type: "Upgrade", house: "Brobnar", text: "" })], inPlay: [creature("Brute", 5)] },

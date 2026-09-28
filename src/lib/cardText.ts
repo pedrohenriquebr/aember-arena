@@ -91,21 +91,23 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^return a creature from your discard pile to your hand$/, () => ({ k: "fromDiscard", type: "Creature" })],
 ];
 
-const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number }][] = [
-  [/^destroy (.+)$/, () => ({ k: "destroy" })],
-  [/^sacrifice (.+)$/, () => ({ k: "destroy" })],
-  [/^deal (\d+)(?: damage)? to (.+)$/, (m) => ({ k: "damage", n: +m[1] })],
-  [/^stun (.+)$/, () => ({ k: "stun" })],
-  [/^exhaust (.+)$/, () => ({ k: "exhaust" })],
-  [/^ready (.+)$/, () => ({ k: "ready" })],
-  [/^unstun (.+)$/, () => ({ k: "unstun" })],
-  [/^heal (\d+) damage from (.+)$/, (m) => ({ k: "heal", n: +m[1] })],
-  [/^fully heal (.+)$/, () => ({ k: "heal", n: 99 })],
-  [/^return (.+?) to (?:its|their) owners?'s? hands?$/, () => ({ k: "returnToHand" })],
-  [/^put (.+) on top of your deck$/, () => ({ k: "returnToDeck" })],
-  [/^archive (.+)$/, () => ({ k: "archive" })],
-  [/^use (.+)$/, () => ({ k: "use" })],
-  [/^(.+?) captures? (\d+) amber$/, (m) => ({ k: "capture", n: +m[2] })],
+// Each verb declares which capture group holds the object phrase; assuming a
+// group that a sibling regex does not have crashes parseObject (BUG-01).
+const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number; obj: number }][] = [
+  [/^destroy (.+)$/, () => ({ k: "destroy", obj: 1 })],
+  [/^sacrifice (.+)$/, () => ({ k: "destroy", obj: 1 })],
+  [/^deal (\d+)(?: damage)? to (.+)$/, (m) => ({ k: "damage", n: +m[1], obj: 2 })],
+  [/^stun (.+)$/, () => ({ k: "stun", obj: 1 })],
+  [/^exhaust (.+)$/, () => ({ k: "exhaust", obj: 1 })],
+  [/^ready (.+)$/, () => ({ k: "ready", obj: 1 })],
+  [/^unstun (.+)$/, () => ({ k: "unstun", obj: 1 })],
+  [/^heal (\d+) damage from (.+)$/, (m) => ({ k: "heal", n: +m[1], obj: 2 })],
+  [/^fully heal (.+)$/, () => ({ k: "heal", n: 99, obj: 1 })],
+  [/^return (.+?) to (?:its|their) owners?'s? hands?$/, () => ({ k: "returnToHand", obj: 1 })],
+  [/^put (.+) on top of your deck$/, () => ({ k: "returnToDeck", obj: 1 })],
+  [/^archive (.+)$/, () => ({ k: "archive", obj: 1 })],
+  [/^use (.+)$/, () => ({ k: "use", obj: 1 })],
+  [/^(.+?) captures? (\d+) amber$/, (m) => ({ k: "capture", n: +m[2], obj: 1 })],
 ];
 
 function parseSentence(sentence: string, upgrade: boolean, creature: boolean): Sentence | null {
@@ -136,8 +138,8 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean): S
   for (const [pattern, build] of VERBS) {
     const m = sentence.match(pattern);
     if (!m) continue;
-    const { k, n } = build(m);
-    const object = parseObject(k === "damage" || k === "heal" ? m[2] : m[1], upgrade);
+    const { k, n, obj } = build(m);
+    const object = parseObject(m[obj], upgrade);
     if (!object) return null;
     // keyteki's UseAction only affects creatures that can be used right now.
     if (k === "use" && object.target) object.target.ready = true;
@@ -167,6 +169,17 @@ function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creat
 }
 
 export function parseCardText(face: CardFace): CardRules {
+  try {
+    return parseCardBody(face);
+  } catch {
+    // A parser gap must never take the app down with it (BUG-01 was a white
+    // screen): an unreadable card degrades to vanilla, like any text the
+    // grammar does not understand.
+    return { abilities: [], keywords: [], coverage: "vanilla" };
+  }
+}
+
+function parseCardBody(face: CardFace): CardRules {
   const text = normalise(face.text ?? "");
   // Self references only inside ability text, so a card named like a keyword keeps its keywords.
   const self = new RegExp(`\\b${normalise(face.title).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
