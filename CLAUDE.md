@@ -85,16 +85,16 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **129,5 kB** (teto revisado em
-   28/09 de 127,5 → 129,5 para o FEAT-12: o FEAT-12a — pilha de undo com os estados
-   imutáveis do motor + botão "Desfazer" no rail — mediu 127,77 kB gz logo após a
-   limpeza, e o FEAT-12b (replay passo a passo a partir do seed + lista de passos em
-   memória) consome a folga restante; 129,5 kB é o teto máximo pré-autorizado, sem
-   folga residual de propósito. A auditoria de código morto desta rodada (chaves
-   i18n sem uso, exports nunca importados, classes CSS órfãs) não achou peso
-   removível — o que sobra é tree-shaken. Revisões anteriores: 124 → 125 com
-   `modulePreload: false` + mangle de toplevel + dicionário i18n compacto; 125 → 126
-   com FEAT-05/08/10; 126 → 127,5 com FEAT-11/14/06).
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **132 kB** (teto revisado em
+   28/09 de 129,5 → 132 para o FEAT-13: o modo 2 jogadores pass-and-play adiciona a
+   tela de "passe o aparelho", os dois pickers de deck na configuração, o wizard
+   variável por modo e 21 chaves i18n en+pt-BR; mediu 130,45 kB gz, e 132 kB é o
+   teto máximo pré-autorizado desta rodada, sem folga residual de propósito. A
+   auditoria de código morto desta rodada (chaves i18n sem uso, exports nunca
+   importados, classes CSS órfãs) não achou peso removível — o que sobra é
+   tree-shaken. Revisões anteriores: 124 → 125 com `modulePreload: false` + mangle
+   de toplevel + dicionário i18n compacto; 125 → 126 com FEAT-05/08/10; 126 → 127,5
+   com FEAT-11/14/06; 127,5 → 129,5 com FEAT-12a/12b).
    Nova folga só com justificativa explícita. Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).

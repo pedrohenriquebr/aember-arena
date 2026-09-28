@@ -3,11 +3,12 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 129.5 kB — revisado de 127.5 em 28/09: o FEAT-12 (desfazer + replay
-//      passo a passo) mede 127.77 kB gz na parte "a" (pilha de undo + botao no rail)
-//      e consome a folga com a parte "b"; 129.5 kB e o teto maximo pre-autorizado
-//      (sem folga residual, decisao documentada no CLAUDE.md §7). A revisao anterior
-//      (126 -> 127.5) foi FEAT-11/14/06; antes dela, 125 -> 126 com FEAT-05/08/10 e
+//      Default 132 kB — revisado de 129.5 em 28/09: o FEAT-13 (multiplayer local
+//      pass-and-play: tela de passe, pickers de deck por jogador, wizard por modo
+//      e chaves i18n novas) mede 130.45 kB gz; 132 kB e o teto maximo
+//      pre-autorizado desta rodada (sem folga residual, decisao no CLAUDE.md §7).
+//      A revisao anterior (127.5 -> 129.5) foi FEAT-12a/12b; antes dela,
+//      126 -> 127.5 com FEAT-11/14/06, 125 -> 126 com FEAT-05/08/10 e
 //      124 -> 125 com modulePreload:false + mangle toplevel + i18n compacto.
 //      Pressupoe "npm run build" recem-rodado.
 //   3. Bloco @media (max-width: 700px) de src/index.css com <= --block-max-lines linhas.
@@ -35,7 +36,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 129.5);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 132);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);
