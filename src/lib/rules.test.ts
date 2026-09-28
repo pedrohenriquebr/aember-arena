@@ -439,3 +439,49 @@ describe("FEAT-05 match log (docs/BUGS_AND_FEATURES.md)", () => {
     expect(next.log.at(-2)).toMatchObject({ key: "log.reap", turn: 2 });
   });
 });
+
+describe("FEAT-06 match tallies (docs/BUGS_AND_FEATURES.md)", () => {
+  it("reaping and a bonus icon count as generated amber; playing counts a card", () => {
+    const bonus = card("Bonus", { type: "Action", house: "Brobnar", amber: 2, text: "" });
+    let state = setupTest({ inPlay: [creature("A", 3)], hand: [bonus] }, {}, "Brobnar");
+    state = applyMove(state, 0, { type: "reap", instanceId: state.players[0].board[0].instanceId });
+    expect(state.players[0].amberGained).toBe(1);
+    state = applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId });
+    expect(state.players[0].amberGained).toBe(3);
+    expect(state.players[0].cardsPlayed).toBe(1);
+  });
+
+  it("steal and capture move amber from the opponent into their own tally", () => {
+    let state = setupTest({ hand: [creature("Thief", 3, "Play: Steal 1 amber.")] }, { amber: 3 }, "Brobnar");
+    state = applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId });
+    expect(state.players[0].amberStolen).toBe(1);
+    expect(state.players[1].amber).toBe(2);
+
+    state = setupTest({ hand: [creature("Captor", 3, "Play: Capture 1 amber.")] }, { amber: 3 }, "Brobnar");
+    state = applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId });
+    expect(state.players[0].amberCaptured).toBe(1);
+    expect(state.players[1].amber).toBe(2);
+    expect(state.players[0].board[0].amber).toBe(1);
+  });
+
+  it("destruction credits the side that killed: fight exchange and destroy effect", () => {
+    const state = fight(setupTest({ inPlay: [creature("A", 5)] }, { inPlay: [creature("B", 2)] }), "A", "B");
+    expect(state.players[1].board).toHaveLength(0);
+    expect(state.players[0].creaturesDestroyed).toBe(1);
+    expect(state.players[1].creaturesDestroyed).toBe(0);
+
+    const sweeper = setupTest({ hand: [creature("Sweeper", 3, "Play: Destroy an enemy creature.")] }, { inPlay: [creature("B", 2)] }, "Brobnar");
+    const after = applyMove(sweeper, 0, { type: "play", instanceId: sweeper.players[0].hand[0].instanceId });
+    expect(after.players[1].board).toHaveLength(0);
+    expect(after.players[0].creaturesDestroyed).toBe(1);
+    expect(after.players[1].creaturesDestroyed).toBe(0);
+  });
+
+  it("the counters stay plain JSON (no functions in the state)", () => {
+    let state = setupTest({ inPlay: [creature("A", 3)] });
+    state = applyMove(state, 0, { type: "reap", instanceId: state.players[0].board[0].instanceId });
+    const roundTrip = JSON.parse(JSON.stringify(state)) as GameState;
+    expect(JSON.stringify(roundTrip)).toBe(JSON.stringify(state));
+    expect(roundTrip.players[0].amberGained).toBe(1);
+  });
+});

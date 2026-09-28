@@ -38,7 +38,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, type Difficulty } from "./lib/ai";
-import { cacheDeck, clearSavedMatch, deleteDeck, getCachedDeck, listCachedDecks, loadSavedMatch, saveMatch, setDeckFavorite, type LibraryDeck, type SavedMatch } from "./lib/cache";
+import { cacheDeck, clearSavedMatch, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
 import {
@@ -1196,6 +1196,20 @@ function GameBoard({
             <span className="eyebrow">{t("game.matchComplete")}</span>
             <h2 id="winner-title">{game.winner === 0 ? t("game.youWin") : t("game.aiWin")}</h2>
             <p>{game.winner === 0 ? t("game.youWinSub") : t("game.aiWinSub")}</p>
+            {/* FEAT-06: the player's tallies for this match (legacy saves without
+                the counters read as 0). */}
+            <ul className="review-list winner-stats">
+              {([
+                ["stats.rounds", game.turn],
+                ["stats.amberGained", player.amberGained],
+                ["stats.amberStolen", player.amberStolen],
+                ["stats.amberCaptured", player.amberCaptured],
+                ["stats.creaturesDestroyed", player.creaturesDestroyed],
+                ["stats.cardsPlayed", player.cardsPlayed],
+              ] as const).map(([key, value]) => (
+                <li key={key}><span>{t(key)}</span><strong>{value ?? 0}</strong></li>
+              ))}
+            </ul>
             <p className="winner-seed">{t("game.seed", { seed: game.seed })}</p>
             <div className="winner-actions">
               <button type="button" className="cta-button" onClick={onRematch}><RotateCcw size={15} /> {t("game.rematch")}</button>
@@ -1461,6 +1475,8 @@ function App() {
   const [resumeMatch, setResumeMatch] = useState<SavedMatch | null>(null);
   const [boundaryEpoch, setBoundaryEpoch] = useState(0);
   const [inspectDeck, setInspectDeck] = useState<DeckInfo | null>(null);
+  // FEAT-06: local W/L of the deck open in the inspector.
+  const [inspectStats, setInspectStats] = useState<DeckStats | null>(null);
   const [savedDecks, setSavedDecks] = useState<LibraryDeck[]>(STARTER_DECKS);
   // FEAT-07: library deck queued for the remove confirmation.
   const [deckToRemove, setDeckToRemove] = useState<LibraryDeck | null>(null);
@@ -1498,6 +1514,8 @@ function App() {
   const aiTurnRef = useRef<string | null>(null);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const prevKeysRef = useRef({ player: 0, ai: 0 });
+  /** FEAT-06: matchVersion already recorded locally (a match ends once). */
+  const recordedMatchRef = useRef(-1);
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -1668,6 +1686,15 @@ function App() {
     if (game.winner === 0) sound.play("win");
     else if (game.winner === 1) sound.play("lose");
   }, [game?.players[0].keys, game?.players[1].keys, game?.winner]);
+
+  // FEAT-06: one local W/L row per finished match (deck + mode + difficulty).
+  // cache.ts swallows storage failures, so the record never breaks the table.
+  useEffect(() => {
+    if (!game || game.winner === null || recordedMatchRef.current === matchVersion) return;
+    recordedMatchRef.current = matchVersion;
+    const { opponentMode, difficulty } = settingsRef.current;
+    void recordMatchResult(currentDeck.id, game.winner === 0, opponentMode, difficulty);
+  }, [game, matchVersion, currentDeck.id]);
 
   // AI turn loop.
   useEffect(() => {
@@ -2018,6 +2045,8 @@ function App() {
   function openInspector(deck: DeckInfo) {
     sound.play("select");
     setInspectDeck(deck);
+    setInspectStats(null);
+    void getDeckStats(deck.id).then(setInspectStats);
     setScreen("inspect");
   }
 
@@ -2203,6 +2232,7 @@ function App() {
             deck={inspectDeck}
             t={t}
             selected={selectedDeck.id === inspectDeck.id}
+            stats={inspectStats}
             onBack={() => { sound.play("click"); setScreen(savedDecks.some((item) => item.id === inspectDeck.id) ? "home" : "browse"); }}
             onUseDeck={() => { adoptDeck(inspectDeck); setScreen("config"); }}
           />

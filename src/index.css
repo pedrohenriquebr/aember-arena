@@ -4636,6 +4636,15 @@ button:disabled {
   font-weight: 650;
 }
 
+/* FEAT-06: post-match tallies (the list layout itself is .review-list). */
+.winner-stats {
+  margin: 15px 0 3px;
+  padding: 12px 14px;
+  border: 1px solid rgba(226, 218, 196, 0.12);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
 /* Mobile: dock sticky logo acima da tab bar — Back/Next ficavam fora da dobra a
    360×800 com as descrições de dificuldade em 2 linhas. Desktop: fluxo normal. */
 .config-nav {

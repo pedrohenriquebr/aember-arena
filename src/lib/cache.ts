@@ -1,9 +1,10 @@
 import type { DeckInfo } from "./game";
 
 const DATABASE_NAME = "keyforge-arena-cache";
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const DECK_STORE = "decks";
 const CARD_STORE = "cards";
+const STATS_STORE = "stats";
 
 /** A deck in the player's library (FEAT-07): the favorite flag rides along
     with the deck row, so it survives reloads and the localStorage fallback. */
@@ -52,6 +53,8 @@ function requestDatabase(): Promise<IDBDatabase> {
       const database = request.result;
       if (!database.objectStoreNames.contains(DECK_STORE)) database.createObjectStore(DECK_STORE, { keyPath: "id" });
       if (!database.objectStoreNames.contains(CARD_STORE)) database.createObjectStore(CARD_STORE, { keyPath: "id" });
+      // v3 (FEAT-06): local win/loss rows, one per deck.
+      if (!database.objectStoreNames.contains(STATS_STORE)) database.createObjectStore(STATS_STORE, { keyPath: "deckId" });
       // v1→v2: rows written before the saved flag are vault precache debris
       // from BUG-13 — they stay importable offline but leave the library.
       if ((request as IDBOpenDBRequest & { oldVersion?: number }).oldVersion! < 2 && database.objectStoreNames.contains(DECK_STORE)) {
@@ -221,6 +224,7 @@ export async function getCachedDeck(id: string): Promise<DeckInfo | null> {
     return null;
   }
 }
+
 const MATCH_KEY = "aember-arena-match";
 
 export interface SavedMatch {
@@ -257,5 +261,68 @@ export function clearSavedMatch(): void {
     localStorage.removeItem(MATCH_KEY);
   } catch {
     // Nothing to recover: the absence of a save is the acceptable state.
+  }
+}
+
+export interface DeckStats {
+  deckId: string;
+  wins: number;
+  losses: number;
+  /** W/L per difficulty, kept for a future breakdown of the local record. */
+  byDifficulty: Record<string, { w: number; l: number }>;
+  /** Setup of the last recorded result (FEAT-06). */
+  lastOpponentMode: string;
+  updatedAt: number;
+}
+
+const localStatsKey = (id: string) => `keyforge-stats-${id}`;
+
+export async function getDeckStats(deckId: string): Promise<DeckStats | null> {
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(STATS_STORE, "readonly");
+    const request = transaction.objectStore(STATS_STORE).get(deckId);
+    const row = await new Promise<DeckStats | undefined>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as DeckStats | undefined);
+      request.onerror = () => reject(request.error ?? new Error("Could not read deck stats."));
+    });
+    if (row) return row;
+  } catch {
+    // Fall through to the localStorage fallback below.
+  }
+  try {
+    const raw = localStorage.getItem(localStatsKey(deckId));
+    return raw ? (JSON.parse(raw) as DeckStats) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** FEAT-06: one local W/L row per deck, recorded when a match ends. The row is
+    cosmetic, so every storage failure is swallowed on purpose. */
+export async function recordMatchResult(deckId: string, win: boolean, opponentMode: string, difficulty: string): Promise<void> {
+  const previous = await getDeckStats(deckId);
+  const byDifficulty = { ...(previous?.byDifficulty ?? {}) };
+  const row = byDifficulty[difficulty] ?? { w: 0, l: 0 };
+  byDifficulty[difficulty] = win ? { w: row.w + 1, l: row.l } : { w: row.w, l: row.l + 1 };
+  const stats: DeckStats = {
+    deckId,
+    wins: (previous?.wins ?? 0) + (win ? 1 : 0),
+    losses: (previous?.losses ?? 0) + (win ? 0 : 1),
+    byDifficulty,
+    lastOpponentMode: opponentMode,
+    updatedAt: Date.now(),
+  };
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(STATS_STORE, "readwrite");
+    transaction.objectStore(STATS_STORE).put(stats);
+    await transactionDone(transaction);
+  } catch {
+    try {
+      localStorage.setItem(localStatsKey(deckId), JSON.stringify(stats));
+    } catch {
+      // Storage unavailable: the record stays session-only.
+    }
   }
 }

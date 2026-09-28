@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ArrowLeft, Filter, Gem, Layers, Search, Shield, Sparkles, Swords, X } from "lucide-react";
 import type { CardFace, DeckInfo } from "../lib/game";
 import { summarizeDeck } from "../lib/game";
+import type { DeckStats } from "../lib/cache";
 import type { Translator } from "../lib/i18n";
 import { sound } from "../lib/sound";
 import { ZoomIn } from "lucide-react";
@@ -21,12 +22,15 @@ export function DeckInspector({
   onBack,
   onUseDeck,
   selected,
+  stats,
 }: {
   deck: DeckInfo;
   t: Translator;
   onBack: () => void;
   onUseDeck: () => void;
   selected: boolean;
+  /** FEAT-06: local W/L recorded by finished matches (null until loaded). */
+  stats?: DeckStats | null;
 }) {
   const [query, setQuery] = useState("");
   const [house, setHouse] = useState<string>("all");
@@ -93,6 +97,9 @@ export function DeckInspector({
           {deck.chains ? <span className="meta-chip">{deck.chains} {t("deck.chains")}</span> : null}
           {/* A record only means something once the deck has one. */}
           {deck.wins || deck.losses ? <span className="meta-chip">{deck.wins ?? 0}W · {deck.losses ?? 0}L</span> : null}
+          {stats && (stats.wins > 0 || stats.losses > 0) ? (
+            <span className="meta-chip">{t("stats.local", { wins: stats.wins, losses: stats.losses })}</span>
+          ) : null}
           <DeckCoverageChip deck={deck} t={t} />
         </div>
       </div>

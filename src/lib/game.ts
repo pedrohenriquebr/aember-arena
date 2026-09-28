@@ -76,6 +76,13 @@ export interface GamePlayer {
   keyCostMod: number;
   /** FEAT-10: this side already used its one mulligan. */
   mulliganed?: boolean;
+  /** FEAT-06: per-side match tallies for the post-match panel. Plain numbers, so
+      the state stays JSON-safe (matches saved before the feature read as 0). */
+  amberGained: number;
+  amberStolen: number;
+  amberCaptured: number;
+  creaturesDestroyed: number;
+  cardsPlayed: number;
 }
 
 export interface LogEntry {
@@ -178,6 +185,11 @@ function makePlayer(name: string, deck: DeckInfo, owner: string, rng: Rng): Game
     keys: 0,
     chains: 0,
     keyCostMod: 0,
+    amberGained: 0,
+    amberStolen: 0,
+    amberCaptured: 0,
+    creaturesDestroyed: 0,
+    cardsPlayed: 0,
   };
 }
 
@@ -283,6 +295,11 @@ export function cloneGame(state: GameState): GameState {
 function record(state: GameState, key: string, params: Record<string, string>, silent = false): void {
   if (!silent) state.log = [...state.log, { key, params, turn: state.turn }].slice(-LOG_SIZE);
 }
+
+/** FEAT-06: bumps one per-side match tally (numbers only, clones stay pure). */
+const tally = (player: GamePlayer, key: "amberGained" | "amberStolen" | "amberCaptured" | "creaturesDestroyed" | "cardsPlayed", amount = 1): void => {
+  player[key] += amount;
+};
 
 // ---------- board queries ----------
 
@@ -424,9 +441,13 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
 // on their way out, so sweep() must not destroy them a second time.
 const dying = new WeakSet<CardInstance>();
 
-function destroy(state: GameState, card: CardInstance, deterministic: boolean): void {
+function destroy(state: GameState, card: CardInstance, deterministic: boolean, by?: Side): void {
   const side = controllerOf(state, card);
   if (side === undefined || dying.has(card)) return;
+  // FEAT-06: an enemy creature destroyed by an effect is a kill for the acting
+  // side; damage-based deaths are credited by fight() (a board wipe destroys
+  // both sides at once, so no single "destroyer" exists).
+  if (isCreature(card) && by !== undefined && by !== side) tally(state.players[by], "creaturesDestroyed");
   dying.add(card);
   fire(state, side, card, "destroyed", { deterministic });
   dying.delete(card);
@@ -469,6 +490,7 @@ function run(context: Context, act: Act): void {
   switch (act.k) {
     case "gainAmber":
       player.amber += amount;
+      tally(player, "amberGained", amount);
       break;
     case "loseAmber":
       player.amber = Math.max(0, player.amber - amount);
@@ -477,6 +499,7 @@ function run(context: Context, act: Act): void {
       const stolen = Math.min(amount, state.players[other(me)].amber);
       state.players[other(me)].amber -= stolen;
       state.players[me].amber += stolen;
+      tally(state.players[me], "amberStolen", stolen);
       break;
     }
     case "gainChains":
@@ -493,10 +516,11 @@ function run(context: Context, act: Act): void {
       break;
     case "capture":
       for (const card of cards.filter(isCreature)) {
-        const opponent = state.players[other(controllerOf(state, card) as Side)];
-        const taken = Math.min(amount, opponent.amber);
-        opponent.amber -= taken;
+        const side = controllerOf(state, card) as Side;
+        const taken = Math.min(amount, state.players[other(side)].amber);
+        state.players[other(side)].amber -= taken;
         card.amber = (card.amber ?? 0) + taken;
+        tally(state.players[side], "amberCaptured", taken);
       }
       break;
     case "damage":
@@ -506,7 +530,7 @@ function run(context: Context, act: Act): void {
       for (const card of cards) card.damage = Math.max(0, card.damage - amount);
       break;
     case "destroy":
-      for (const card of cards) destroy(state, card, deterministic);
+      for (const card of cards) destroy(state, card, deterministic, me);
       break;
     case "stun":
       for (const card of cards.filter(isCreature)) card.stunned = true;
@@ -581,6 +605,7 @@ function fire(
 function reap(state: GameState, me: Side, creature: CardInstance, choice: Choice, deterministic: boolean): void {
   creature.ready = false;
   state.players[me].amber += 1;
+  tally(state.players[me], "amberGained");
   fire(state, me, creature, "reap", { choice, deterministic });
 }
 
@@ -590,11 +615,17 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
   attacker.ready = false;
   fire(state, me, attacker, "beforeFight", { fought: defender, choice, deterministic });
   const alive = () => controllerOf(state, attacker) === me && controllerOf(state, defender) === other(me);
-  if (!alive()) return;
+  // FEAT-06: a creature that ended in the discard pile during the exchange is a
+  // kill for the other side (assault/hazardous/poison and "Fight:" included).
+  const credit = () => {
+    if (state.players[me].discard.includes(attacker)) tally(state.players[other(me)], "creaturesDestroyed");
+    if (state.players[other(me)].discard.includes(defender)) tally(state.players[me], "creaturesDestroyed");
+  };
+  if (!alive()) return credit();
   dealDamage(defender, keyword(attacker, "assault"));
   dealDamage(attacker, keyword(defender, "hazardous"));
   sweep(state, deterministic);
-  if (!alive()) return;
+  if (!alive()) return credit();
 
   const elusive = keyword(defender, "elusive") > 0 && !defender.elusiveUsed;
   defender.elusiveUsed = true;
@@ -606,6 +637,7 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
   if (splash) for (const neighbor of neighbors(state, defender)) dealDamage(neighbor, splash);
   sweep(state, deterministic);
   if (controllerOf(state, attacker) === me) fire(state, me, attacker, "fight", { fought: defender, choice, deterministic });
+  credit();
 }
 
 // ---------- legality ----------
@@ -794,6 +826,8 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     record(state, "log.discard", params, silent);
   } else if (move.type === "play") {
     player.amber += source.face.amber;
+    tally(player, "amberGained", source.face.amber);
+    tally(player, "cardsPlayed");
     Object.assign(source, { ready: false, stunned: false, damage: 0 });
     record(state, "log.play", params, silent);
     if (isCreature(source)) {
@@ -806,6 +840,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
         if (half) {
           player.hand = player.hand.filter((item) => item !== half);
           player.amber += half.face.amber;
+          tally(player, "amberGained", half.face.amber);
           source.under = [half];
         }
       }
