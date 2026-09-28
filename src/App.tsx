@@ -1230,7 +1230,7 @@ function App() {
 
   const gameRef = useRef<GameState | null>(null);
   const settingsRef = useRef(settings);
-  const aiTurnRef = useRef("");
+  const aiTurnRef = useRef<string | null>(null);
   const prevKeysRef = useRef({ player: 0, ai: 0 });
 
   useEffect(() => { gameRef.current = game; }, [game]);
@@ -1382,7 +1382,8 @@ function App() {
       if (cancelled || !gameRef.current) return;
 
       let next = gameRef.current;
-      const house = chooseAiHouse(next, 1);
+      // Resuming after leaving the board mid-turn: the house was already chosen.
+      const house = next.activeHouse ?? chooseAiHouse(next, 1);
       next = chooseHouse(next, 1, house);
       sound.play("house");
       gameRef.current = next;
@@ -1412,7 +1413,12 @@ function App() {
     };
 
     void takeAiTurn();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Leaving the board mid-turn cancels the loop; clearing the marker lets
+      // the effect resume the same turn from gameRef.current on return (BUG-03).
+      aiTurnRef.current = null;
+    };
   }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen]);
 
   const selectedCard = useMemo(() => {
@@ -1444,8 +1450,9 @@ function App() {
   // efetiva o memo de GameBoard→BoardLane→CardTile (só leem refs/setters estáveis).
   const performHumanMove = useCallback((move: GameMove) => {
     if (!gameRef.current) return;
-    // The player chooses targets the way keyteki prompts: only when there is a real choice.
-    const choices = move.type === "fight" || "target" in move ? [] : targetChoices(gameRef.current, 0, move);
+    // The player chooses targets the way keyteki prompts: only when there is a
+    // real choice left (a fight's second pick is the ability target, BUG-06).
+    const choices = "target" in move && move.target ? [] : targetChoices(gameRef.current, 0, move);
     if (choices.length > 1) {
       sound.play("select");
       setPick({ move, ids: choices });
@@ -1463,9 +1470,12 @@ function App() {
     (owner: 0 | 1, card: CardInstance) => {
       if (pick) {
         if (pick.ids.includes(card.instanceId)) {
-          performHumanMove(
-            pick.move.type === "fight" ? { ...pick.move, targetId: card.instanceId } : { ...pick.move, target: card.instanceId } as GameMove,
-          );
+          // A fight pick fills the defender first, then the ability target.
+          const applied: GameMove =
+            pick.move.type === "fight" && !pick.move.targetId
+              ? { ...pick.move, targetId: card.instanceId }
+              : ({ ...pick.move, target: card.instanceId } as GameMove);
+          performHumanMove(applied);
           return;
         }
         if (owner === 1) return;
