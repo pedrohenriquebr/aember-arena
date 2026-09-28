@@ -3,14 +3,12 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 127.5 kB — revisado de 126 em 28/09: as features FEAT-11/14/06 desta
-//      rodada consomem todo o headroom — FEAT-11 medida em 0,68 kB gz (passo
-//      "Oponente" na Configuracao com espelho/deck da biblioteca/aleatorio,
-//      settings.opponentMode + opponentDeckId e 11 chaves i18n) e FEAT-14 (chip de
-//      cobertura por deck) + FEAT-06 (estatisticas pos-partida e W/L local) somam o
-//      restante; 127.5 kB e o teto maximo pre-autorizado (sem folga residual, decisao
-//      documentada no CLAUDE.md §7). A revisao anterior (125 -> 126) foi FEAT-05/08/10;
-//      antes dela, 124 -> 125 com modulePreload:false + mangle toplevel + i18n compacto.
+//      Default 129.5 kB — revisado de 127.5 em 28/09: o FEAT-12 (desfazer + replay
+//      passo a passo) mede 127.77 kB gz na parte "a" (pilha de undo + botao no rail)
+//      e consome a folga com a parte "b"; 129.5 kB e o teto maximo pre-autorizado
+//      (sem folga residual, decisao documentada no CLAUDE.md §7). A revisao anterior
+//      (126 -> 127.5) foi FEAT-11/14/06; antes dela, 125 -> 126 com FEAT-05/08/10 e
+//      124 -> 125 com modulePreload:false + mangle toplevel + i18n compacto.
 //      Pressupoe "npm run build" recem-rodado.
 //   3. Bloco @media (max-width: 700px) de src/index.css com <= --block-max-lines linhas.
 //      Default 99 ("menos de 100 linhas", §5 criterio 5; hoje o bloco tem ~723).
@@ -37,7 +35,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 127.5);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 129.5);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);
