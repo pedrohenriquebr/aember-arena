@@ -85,10 +85,11 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **124 kB** (teto final revisado
-   em 28/09: o port do motor keyteki — requisito do dono — e os fixes/features da
-   auditoria consumiram a folga original de 3 kB sobre o baseline 118,5. Nova folga só
-   com justificativa explícita). Confira com `npm run e2e:bundle`.
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **125 kB** (teto revisado em
+   28/09 de 124 → 125: as features FEAT-07/09/15 somam ~1,5 kB gz e o headroom era
+   0,62 kB; a folga veio de `modulePreload: false` + mangle de toplevel no build e da
+   compactação do dicionário i18n, ~0,4 kB). Nova folga só com justificativa explícita.
+   Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
