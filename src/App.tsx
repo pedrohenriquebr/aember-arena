@@ -1307,7 +1307,8 @@ function DeckModal({
 
 // ---------- Confirm dialog ----------
 
-/** Shared destructive-action dialog (FEAT-07 remove deck): same focus contract as the deck modal, Escape/backdrop cancel. */
+/** Shared destructive-action dialog (FEAT-07 remove deck, FEAT-15 abandon
+    match): same focus contract as the deck modal, Escape/backdrop cancel. */
 function ConfirmDialog({
   title,
   body,
@@ -1368,6 +1369,8 @@ function App() {
   const [savedDecks, setSavedDecks] = useState<LibraryDeck[]>(STARTER_DECKS);
   // FEAT-07: library deck queued for the remove confirmation.
   const [deckToRemove, setDeckToRemove] = useState<LibraryDeck | null>(null);
+  // FEAT-15: deck que aguarda a confirmação de abandono da partida em curso.
+  const [pendingDeck, setPendingDeck] = useState<DeckInfo | null>(null);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
   const [game, setGame] = useState<GameState | null>(null);
 
@@ -1637,7 +1640,19 @@ function App() {
     setToast({ message, kind });
   }
 
+  // FEAT-15: substituir uma partida em curso pede confirmação; reiniciar uma
+  // partida intocada (mesmo deck, rodada 1) não perde nada e segue direto.
   function startMatch(deck: DeckInfo) {
+    const current = gameRef.current;
+    if (current && current.winner === null && (currentDeck.id !== deck.id || current.turn > 1)) {
+      sound.play("click");
+      setPendingDeck(deck);
+      return;
+    }
+    launchMatch(deck);
+  }
+
+  function launchMatch(deck: DeckInfo) {
     const next = createMatch(deck, deck);
     gameRef.current = next;
     prevKeysRef.current = { player: 0, ai: 0 };
@@ -2156,6 +2171,21 @@ function App() {
           cancelLabel={t("common.cancel")}
           onConfirm={removeDeck}
           onCancel={() => setDeckToRemove(null)}
+        />
+      )}
+
+      {pendingDeck && (
+        <ConfirmDialog
+          title={t("abandon.title")}
+          body={t("abandon.body")}
+          confirmLabel={t("abandon.confirm")}
+          cancelLabel={t("common.cancel")}
+          onConfirm={() => {
+            const deck = pendingDeck;
+            setPendingDeck(null);
+            launchMatch(deck);
+          }}
+          onCancel={() => setPendingDeck(null)}
         />
       )}
 
