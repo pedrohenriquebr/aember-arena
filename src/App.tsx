@@ -90,9 +90,29 @@ type Toast = {
   sticky?: boolean;
 } | null;
 
-/** FEAT-12a: one step of the undo history — the state a transition left behind
-    and whether that transition consumed hidden information. */
-type UndoEntry = { state: GameState; revealed: boolean };
+/** FEAT-12a: one step of the undo history — the state a transition left behind,
+    whether that transition consumed hidden information, and how many replay
+    steps were recorded while that state was live. */
+type UndoEntry = { state: GameState; revealed: boolean; step: number };
+
+/** FEAT-12b: one recorded transition of the match. The seed plus this list
+    rebuilds every state of the match (createMatch + applyStep), which is what
+    the replay viewer walks — the live match is never touched. */
+type ReplayStep =
+  | { kind: "house"; side: 0 | 1; house: string }
+  | { kind: "keep" | "mulligan"; side: 0 | 1 }
+  | { kind: "end"; side: 0 | 1 }
+  | { kind: "move"; side: 0 | 1; move: GameMove };
+
+function applyStep(state: GameState, step: ReplayStep): GameState {
+  if (step.kind === "house") return chooseHouse(state, step.side, step.house);
+  if (step.kind === "move") return applyMove(state, step.side, step.move);
+  if (step.kind === "end") return endTurn(state, step.side);
+  return step.kind === "mulligan" ? mulligan(state, step.side) : keepHand(state, step.side);
+}
+
+/** Read-only GameBoard callbacks for the replay viewer. */
+const NOOP = () => undefined;
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
 const STARTER_DECKS: DeckInfo[] = [DEMO_DECK, DEMO_DECK_2];
@@ -902,7 +922,8 @@ type BoardLaneProps = {
   targetIds?: string[];
   settings: AppSettings;
   t: Translator;
-  onSelect: (card: CardInstance) => void;
+  /** Undefined in the replay viewer: the tiles render disabled. */
+  onSelect?: (card: CardInstance) => void;
 };
 
 // T7d: a lane só re-renderiza quando um input de render muda; `cards` muda de
@@ -1029,6 +1050,9 @@ function GameBoard({
   onHome,
   onKeepHand,
   onMulligan,
+  replay = false,
+  canReplay = false,
+  onReplay,
 }: {
   game: GameState;
   selected: Selection | null;
@@ -1037,6 +1061,12 @@ function GameBoard({
   settings: AppSettings;
   t: Translator;
   forgeFlash: boolean;
+  /** FEAT-12b: read-only board for the replay viewer — controls disabled and
+      the mulligan/winner overlays suppressed. */
+  replay?: boolean;
+  /** FEAT-12b: available when the match has recorded steps (same session). */
+  canReplay?: boolean;
+  onReplay?: () => void;
   onHouse: (house: string) => void;
   onSelectHand: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
@@ -1048,15 +1078,16 @@ function GameBoard({
 }) {
   const player = game.players[0];
   const ai = game.players[1];
-  const isHumanTurn = game.activePlayer === 0 && game.winner === null && !inMulligan(game);
+  const readOnly = replay === true;
+  const isHumanTurn = !readOnly && game.activePlayer === 0 && game.winner === null && !inMulligan(game);
   // FEAT-04: ids with at least one legal move, only while it is the player's
   // turn with the house chosen; memoised so lane/tile memos keep working.
   const hintIds = useMemo(() => {
-    if (!settings.hints || game.activePlayer !== 0 || !game.activeHouse || game.winner !== null) return null;
+    if (readOnly || !settings.hints || game.activePlayer !== 0 || !game.activeHouse || game.winner !== null) return null;
     return new Set(
       getLegalMoves(game, 0, game.activeHouse).map((move) => (move.type === "fight" ? move.attackerId : move.instanceId)),
     );
-  }, [game, settings.hints]);
+  }, [game, settings.hints, readOnly]);
   // T7d: closures estáveis por lane — sem identidade estável o memo de
   // BoardLane/CardTile não teria efeito.
   const selectOpponentCard = useCallback((card: CardInstance) => onSelectBoard(1, card), [onSelectBoard]);
@@ -1082,7 +1113,7 @@ function GameBoard({
             targetIds={pick?.ids}
             settings={settings}
             t={t}
-            onSelect={selectOpponentCard}
+            onSelect={readOnly ? undefined : selectOpponentCard}
           />
         </section>
 
@@ -1138,7 +1169,7 @@ function GameBoard({
             targetIds={pick?.ids}
             settings={settings}
             t={t}
-            onSelect={selectPlayerCard}
+            onSelect={readOnly ? undefined : selectPlayerCard}
           />
         </section>
 
@@ -1169,7 +1200,7 @@ function GameBoard({
                   hoverZoom={settings.hoverZoom}
                   playAnim={settings.animations}
                   t={t}
-                  onClick={onSelectHand}
+                  onClick={readOnly ? undefined : onSelectHand}
                 />
               );
             })}
@@ -1178,7 +1209,7 @@ function GameBoard({
         </section>
       </div>
 
-      {inMulligan(game) && (
+      {inMulligan(game) && !readOnly && (
         <div className="winner-shade mulligan-shade" role="dialog" aria-modal="true" aria-labelledby="mulligan-title">
           <div className="winner-panel">
             <span className="eyebrow">{game.pendingMulligan === 0 ? t("game.yourHand") : t("rail.warden")}</span>
@@ -1196,7 +1227,7 @@ function GameBoard({
         </div>
       )}
 
-      {game.winner !== null && (
+      {game.winner !== null && !readOnly && (
         <div className="winner-shade" role="dialog" aria-modal="true" aria-labelledby="winner-title">
           <div className="winner-panel" ref={winnerRef}>
             <div className="winner-emblem"><Crown size={23} /></div>
@@ -1220,6 +1251,9 @@ function GameBoard({
             <p className="winner-seed">{t("game.seed", { seed: game.seed })}</p>
             <div className="winner-actions">
               <button type="button" className="cta-button" onClick={onRematch}><RotateCcw size={15} /> {t("game.rematch")}</button>
+              {canReplay && onReplay && (
+                <button type="button" className="ghost-button" onClick={onReplay}><Eye size={15} /> {t("game.replay")}</button>
+              )}
               <button type="button" className="ghost-button" onClick={onHome}><Home size={15} /> {t("game.toHome")}</button>
             </div>
           </div>
@@ -1513,6 +1547,9 @@ function App() {
   const [logType, setLogType] = useState<"all" | LogType>("all");
   // FEAT-09: um service worker novo está instalado e esperando o skipWaiting.
   const [updateReady, setUpdateReady] = useState(false);
+  // FEAT-12b: the read-only replay viewer — derived states, never the live one.
+  const [replay, setReplay] = useState<{ states: GameState[]; index: number } | null>(null);
+  const replayRef = useDialogFocus<HTMLDivElement>(replay !== null);
 
   const gameRef = useRef<GameState | null>(null);
   const settingsRef = useRef(settings);
@@ -1525,17 +1562,22 @@ function App() {
   const recordedMatchRef = useRef(-1);
   /** FEAT-12a: undo history — see commitGame below (capped at UNDO_LIMIT). */
   const historyRef = useRef<UndoEntry[]>([]);
+  /** FEAT-12b: every transition of the live match, in order (in memory only —
+      the save stays the plain GameState, no new persistence format). */
+  const stepsRef = useRef<ReplayStep[]>([]);
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with
-  // whether the transition revealed hidden information (draw/shuffle).
-  const commitGame = useCallback((prev: GameState, next: GameState) => {
+  // whether the transition revealed hidden information (draw/shuffle) and the
+  // replay step count at that point; FEAT-12b appends the step itself.
+  const commitGame = useCallback((prev: GameState, next: GameState, step?: ReplayStep) => {
     const stack = historyRef.current;
-    stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next) });
+    stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next), step: stepsRef.current.length });
     if (stack.length > UNDO_LIMIT) stack.shift();
+    if (step) stepsRef.current.push(step);
     gameRef.current = next;
     setGame(next);
   }, []);
@@ -1551,13 +1593,16 @@ function App() {
     while (index >= 0 && inTurn(stack[index].state)) index -= 1;
     const anchor = stack[index + 1];
     if (!anchor || anchor.state === live) return null;
-    return { anchor: anchor.state, blocked: stack.slice(index + 1).some((entry) => entry.revealed) };
+    return { anchor: anchor.state, step: anchor.step, blocked: stack.slice(index + 1).some((entry) => entry.revealed) };
   }, []);
 
   const undoLastMove = useCallback(() => {
     const info = undoInfo(gameRef.current);
     if (!info || info.blocked) return;
     sound.play("click");
+    // FEAT-12b: the rewind also rolls the replay list back to the anchor, so a
+    // later replay never applies moves the player undid.
+    stepsRef.current.splice(info.step);
     gameRef.current = info.anchor;
     setGame(info.anchor);
     setSelected(null);
@@ -1715,6 +1760,16 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selected, deckModalOpen]);
 
+  // FEAT-12b: Escape leaves the read-only replay, like every other overlay.
+  useEffect(() => {
+    if (!replay) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setReplay(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [replay]);
+
   // Forge flash + win/lose sounds.
   useEffect(() => {
     if (!game) return;
@@ -1764,7 +1819,7 @@ function App() {
       const house = next.activeHouse ?? chooseAiHouse(next, 1);
       const opening = chooseHouse(next, 1, house);
       sound.play("house");
-      commitGame(next, opening);
+      commitGame(next, opening, { kind: "house", side: 1, house });
       next = opening;
 
       // No fixed cap: play until nothing is worth doing (safety cap against a
@@ -1776,7 +1831,7 @@ function App() {
         if (!move) break;
         const applied = applyMove(next, 1, move);
         sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : "play");
-        commitGame(next, applied);
+        commitGame(next, applied, { kind: "move", side: 1, move });
         next = applied;
         if (next.winner !== null) break;
       }
@@ -1786,7 +1841,7 @@ function App() {
         if (cancelled) return;
         const ended = endTurn(next, 1);
         sound.play("endTurn");
-        commitGame(next, ended);
+        commitGame(next, ended, { kind: "end", side: 1 });
         next = ended;
       }
       setAiThinking(false);
@@ -1808,8 +1863,8 @@ function App() {
     const timer = window.setTimeout(() => {
       const current = gameRef.current;
       if (!current || current.pendingMulligan !== 1) return;
-      const next = shouldMulligan(current, 1) ? mulligan(current, 1) : keepHand(current, 1);
-      commitGame(current, next);
+      const take = shouldMulligan(current, 1);
+      commitGame(current, take ? mulligan(current, 1) : keepHand(current, 1), { kind: take ? "mulligan" : "keep", side: 1 });
     }, 620);
     return () => window.clearTimeout(timer);
   }, [game?.pendingMulligan, screen, commitGame]);
@@ -1842,6 +1897,9 @@ function App() {
   // FEAT-12a: computed from the rendered game (gameRef lags one commit behind).
   const undo = game ? undoInfo(game) : null;
   const undoable = undo !== null && !undo.blocked;
+  // FEAT-12b: the replay viewer needs the recorded steps (same session); the
+  // seed always lives in the state.
+  const canReplay = Boolean(game && stepsRef.current.length > 0);
 
   function showToast(message: string, kind: "success" | "error" = "success") {
     setToast({ message, kind });
@@ -1881,6 +1939,7 @@ function App() {
     opponentRef.current = rival;
     // FEAT-12a: a new match starts a fresh undo history.
     historyRef.current = [];
+    stepsRef.current = [];
     gameRef.current = next;
     prevKeysRef.current = { player: 0, ai: 0 };
     setCurrentDeck(deck);
@@ -1908,7 +1967,7 @@ function App() {
     }
     sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : move.type === "use" ? "play" : "play");
     const prev = gameRef.current;
-    commitGame(prev, applyMove(prev, 0, move));
+    commitGame(prev, applyMove(prev, 0, move), { kind: "move", side: 0, move });
     setSelected(null);
     setPick(null);
   }, [commitGame]);
@@ -1938,7 +1997,7 @@ function App() {
     if (!gameRef.current) return;
     sound.play("endTurn");
     const prev = gameRef.current;
-    commitGame(prev, endTurn(prev, 0));
+    commitGame(prev, endTurn(prev, 0), { kind: "end", side: 0 });
     setSelected(null);
     setPick(null);
   }, [commitGame]);
@@ -1948,14 +2007,14 @@ function App() {
     if (!gameRef.current) return;
     sound.play("click");
     const prev = gameRef.current;
-    commitGame(prev, keepHand(prev, 0));
+    commitGame(prev, keepHand(prev, 0), { kind: "keep", side: 0 });
   }, [commitGame]);
 
   const takeMulligan = useCallback(() => {
     if (!gameRef.current) return;
     sound.play("select");
     const prev = gameRef.current;
-    commitGame(prev, mulligan(prev, 0));
+    commitGame(prev, mulligan(prev, 0), { kind: "mulligan", side: 0 });
   }, [commitGame]);
 
   const choosePlayerHouse = useCallback((house: string) => {
@@ -1964,7 +2023,7 @@ function App() {
     const prev = gameRef.current;
     // FEAT-12a: the state right after the house choice is the undo anchor — the
     // start of the turn, before any of the player's moves.
-    commitGame(prev, chooseHouse(prev, 0, house));
+    commitGame(prev, chooseHouse(prev, 0, house), { kind: "house", side: 0, house });
   }, [commitGame]);
 
   const selectHandCard = useCallback((card: CardInstance) => {
@@ -1979,6 +2038,19 @@ function App() {
   // launchMatch resolves it again from the settings.
   function rematch() {
     startMatch(currentDeck, opponentRef.current ?? undefined);
+  }
+
+  // FEAT-12b: rebuilds the match from its seed plus the recorded steps and opens
+  // the read-only viewer (the live match and its save are untouched).
+  function openReplay() {
+    const live = gameRef.current;
+    if (!live) return;
+    const states = [createMatch(currentDeck, opponentRef.current ?? currentDeck, { seed: live.seed })];
+    for (const step of stepsRef.current) states.push(applyStep(states[states.length - 1], step));
+    sound.play("select");
+    setSelected(null);
+    setPick(null);
+    setReplay({ states, index: 0 });
   }
 
   const goHome = useCallback(() => {
@@ -2229,8 +2301,10 @@ function App() {
             onClick={() => {
               sound.play("forge");
               const saved = resumeMatch.game as GameState;
-              // FEAT-12a: a resumed match has no in-memory history to undo.
+              // FEAT-12a: a resumed match has no in-memory history to undo (and
+              // FEAT-12b has no step list to replay it).
               historyRef.current = [];
+              stepsRef.current = [];
               gameRef.current = saved;
               prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
               setGame(saved);
@@ -2243,6 +2317,11 @@ function App() {
           >
             <KeyRound size={15} />
             {t("home.resumeMatch", { round: (resumeMatch.game as GameState).turn })}
+          </button>
+        )}
+        {screen === "home" && canReplay && (
+          <button type="button" className="resume-bar" onClick={openReplay}>
+            <Eye size={15} /> {t("game.replayLast")}
           </button>
         )}
         {screen === "home" && (
@@ -2330,6 +2409,8 @@ function App() {
                   onHome={goHome}
                   onKeepHand={keepOpeningHand}
                   onMulligan={takeMulligan}
+                  canReplay={canReplay}
+                  onReplay={openReplay}
                 />
               </div>
 
@@ -2452,6 +2533,54 @@ function App() {
                   <span className="offline-ready"><span /> {t("rail.offlineReady")}</span>
                 </div>
               </aside>
+            </div>
+          </div>
+        )}
+
+        {/* FEAT-12b: read-only replay of the match, state by state. */}
+        {replay && (
+          <div className="replay-overlay" ref={replayRef} role="dialog" aria-modal="true" aria-label={t("game.replay")}>
+            <GameBoard
+              game={replay.states[replay.index]}
+              selected={null}
+              pick={null}
+              aiThinking={false}
+              settings={settings}
+              t={t}
+              forgeFlash={false}
+              replay
+              onHouse={NOOP}
+              onSelectHand={NOOP}
+              onSelectBoard={NOOP}
+              onEndTurn={NOOP}
+              onRematch={NOOP}
+              onHome={NOOP}
+              onKeepHand={NOOP}
+              onMulligan={NOOP}
+            />
+            <div className="replay-controls">
+              <button
+                type="button"
+                className="ghost-button"
+                aria-label={t("game.replayPrev")}
+                disabled={replay.index === 0}
+                onClick={() => setReplay({ states: replay.states, index: replay.index - 1 })}
+              >
+                <ArrowLeft size={15} />
+              </button>
+              <span className="replay-step">{t("game.replayStep", { step: replay.index, total: replay.states.length - 1 })}</span>
+              <button
+                type="button"
+                className="ghost-button"
+                aria-label={t("game.replayNext")}
+                disabled={replay.index >= replay.states.length - 1}
+                onClick={() => setReplay({ states: replay.states, index: replay.index + 1 })}
+              >
+                <ArrowRight size={15} />
+              </button>
+              <button type="button" className="ghost-button" onClick={() => { sound.play("click"); setReplay(null); }}>
+                <X size={15} /> {t("game.replayExit")}
+              </button>
             </div>
           </div>
         )}

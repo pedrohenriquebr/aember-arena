@@ -3250,6 +3250,53 @@ button:disabled {
   backdrop-filter: none;
 }
 
+/* FEAT-12b: replay viewer — a read-only board above the live screen with the
+   step controls fixed below it. */
+.replay-overlay {
+  position: fixed;
+  z-index: 75;
+  inset: 0;
+  overflow: auto;
+  padding: 12px 10px 78px;
+  background: rgba(9, 12, 10, 0.92);
+  backdrop-filter: blur(5px);
+}
+
+.replay-overlay .game-board {
+  width: min(100%, 1510px);
+  margin: 0 auto;
+}
+
+.replay-controls {
+  position: fixed;
+  z-index: 76;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 12px calc(9px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(225, 216, 194, 0.14);
+  background: rgba(21, 23, 20, 0.97);
+}
+
+.replay-controls .ghost-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.replay-step {
+  min-width: 104px;
+  color: #c9c6b9;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -4923,6 +4970,7 @@ button:disabled {
 /* ---------- Winner actions ---------- */
 .winner-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
   margin-top: 18px;
