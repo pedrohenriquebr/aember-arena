@@ -634,7 +634,7 @@ export function createTranslator(language: Language) {
     let value = dict[key] ?? dictionaries.en[key] ?? key;
     if (vars) {
       for (const [name, replacement] of Object.entries(vars)) {
-        value = value.replace(new RegExp(`\\{${name}\\}`, "g"), String(replacement));
+        value = value.replace(new RegExp(`\\{${name}\\}`, "g"), () => String(replacement));
       }
     }
     return value;
@@ -642,3 +642,12 @@ export function createTranslator(language: Language) {
 }
 
 export type Translator = ReturnType<typeof createTranslator>;
+
+/** Card type label with an honest fallback: unknown types (Token Creature,
+    Prophecy, Archon Power...) render their raw API label instead of a bare
+    translation key (BUG-22). */
+export function cardTypeLabel(value: string, t: Translator): string {
+  const key = `type.${value}`;
+  const translated = t(key);
+  return translated === key ? value : translated;
+}

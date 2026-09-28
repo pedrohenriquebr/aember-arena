@@ -55,9 +55,11 @@ import {
   type GameMove,
   type GameState,
   type LogEntry,
+  refreshGameFaces,
 } from "./lib/game";
 import { fetchKeyforgeDeck, loadDeckOrCache, vaultErrorText } from "./lib/keyforgeApi";
-import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator } from "./lib/i18n";
+import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
+  cardTypeLabel,} from "./lib/i18n";
 import { readSettings, saveSettings, type AppSettings } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
@@ -181,7 +183,7 @@ const CardTile = memo(function CardTile({
 }: CardTileProps) {
   const { face } = card;
   // T8: casa e tipo do aria-label passam por t() (houseLabel aceita tradutor opcional).
-  const baseLabel = `${face.title}, ${houseLabel(face.house, t)} ${t(`type.${face.type}`)}`;
+  const baseLabel = `${face.title}, ${houseLabel(face.house, t)} ${cardTypeLabel(face.type, t)}`;
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const longPressAt = useRef(0);
   return (
@@ -1532,6 +1534,9 @@ function App() {
 
   const selectHandCard = useCallback((card: CardInstance) => {
     sound.play("select");
+    // A pending ability target belongs to the card that started it; picking a
+    // hand card cancels the pick instead of executing with the old card (BUG-24).
+    setPick(null);
     setSelected({ zone: "hand", playerIndex: 0, instanceId: card.instanceId });
   }, []);
 
@@ -1560,8 +1565,18 @@ function App() {
     const target = screen === "game" ? currentDeck : selectedDeck;
     try {
       const deck = await fetchKeyforgeDeck(target.id);
-      if (screen === "game") setCurrentDeck(deck);
-      else setSelectedDeck(deck);
+      if (screen === "game") {
+        setCurrentDeck(deck);
+        // A live match reflects the fresh card data (refreshGameFaces had no
+        // caller — BUG-21); the log entry comes from the engine itself.
+        if (gameRef.current && gameRef.current.winner === null) {
+          const next = refreshGameFaces(gameRef.current, deck);
+          gameRef.current = next;
+          setGame(next);
+        }
+      } else {
+        setSelectedDeck(deck);
+      }
       setSavedDecks((prev) => prev.map((item) => (item.id === deck.id ? deck : item)));
       showToast(t("toast.synced", { name: deck.name, count: deck.cards.length }));
     } catch (error) {

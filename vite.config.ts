@@ -12,7 +12,7 @@ export default defineConfig({
   plugins: [react(), viteSingleFile()],
   build: {
     minify: "terser",
-    terserOptions: { compress: { passes: 2 } },
+    terserOptions: { compress: { passes: 3, drop_console: ["log"] } },
   },
   resolve: {
     alias: {

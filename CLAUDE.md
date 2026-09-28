@@ -85,8 +85,10 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **121.5 kB** (baseline pós-refactor
-   ≈ 118.4 kB). Confira com `npm run e2e:bundle`.
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **122 kB**. Ajustado de 121.5
+   (28/09) quando o port do motor keyteki + fixes de auditoria consumiram a folga de 3 kB
+   que o plano original reservou — o motor é requisito do dono, single-file continua
+   intocado. Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.

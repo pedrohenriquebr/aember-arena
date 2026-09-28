@@ -169,7 +169,15 @@ self.addEventListener("fetch", (event) => {
           event.waitUntil(touchArtEntry(cache, request, copy));
           return cached;
         }
-        const response = await fetch(request);
+        // CORS first: an opaque response is billed ~7 MB of quota in Chromium
+        // no matter its real size, which cycled the LRU for nothing (BUG-25).
+        // The S3/CDN art hosts send Access-Control-Allow-Origin: *.
+        let response;
+        try {
+          response = await fetch(request, { mode: "cors", credentials: "omit" });
+        } catch {
+          response = await fetch(request);
+        }
         if (response.ok || response.type === "opaque") {
           const copy = response.clone();
           event.waitUntil(putArtEntry(cache, request, copy));

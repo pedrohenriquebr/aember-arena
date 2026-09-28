@@ -51,12 +51,16 @@ function normaliseCard(value: unknown): CardFace | null {
   const title = valueAsString(raw.card_title ?? raw.title ?? raw.card_title_en, "Unknown card");
   const house = valueAsString(raw.house ?? raw.House, "Unknown");
   if (!id) return null;
+  // Tokens/prophecies/archon powers are not playable cards; letting them in
+  // made the engine discard them like Actions and the UI show raw keys (BUG-22).
+  const type = valueAsString(raw.card_type ?? raw.Card_Type ?? raw.type, "Action");
+  if (!["Creature", "Artifact", "Upgrade", "Action"].includes(type)) return null;
 
   return {
     id,
     title,
     house,
-    type: valueAsString(raw.card_type ?? raw.Card_Type ?? raw.type, "Action"),
+    type,
     image: valueAsString(raw.front_image ?? raw.Front_Image ?? raw.image),
     text: valueAsString(raw.card_text ?? raw.Card_Text ?? raw.text).replace(/\u000b/g, "\n"),
     amber: valueAsNumber(raw.amber ?? raw.Amber),
@@ -126,7 +130,11 @@ function describeFailure(error: unknown): Error {
   if (error instanceof TypeError) {
     return new VaultError("vault.unreachable");
   }
-  return error instanceof Error ? error : new VaultError("vault.loadFailed");
+  // Anything else (SyntaxError from an HTML maintenance page, Cloudflare
+  // interstitials...) has no user-facing message: it used to leak raw English
+  // like "Unexpected token '<'" into both languages (BUG-20).
+  if (!(error instanceof VaultError)) return new VaultError("vault.loadFailed");
+  return error;
 }
 
 function withTimeout(milliseconds: number): { signal: AbortSignal; clear: () => void } {

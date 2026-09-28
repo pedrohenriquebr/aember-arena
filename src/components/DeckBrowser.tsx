@@ -64,7 +64,7 @@ export function DeckBrowser({
     return () => {
       requestRef.current += 1;
     };
-  }, [page, search, ordering, t]);
+  }, [page, search, ordering]);
 
   // An empty result for a search is not a failure: it gets its own state
   // instead of the "Vault is out of reach" screen.
