@@ -66,7 +66,7 @@ import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/Card
 import { CoverageBadge } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
 import { HouseIcon } from "./components/HouseIcon";
-import { DeckBrowser } from "./components/DeckBrowser";
+import { DeckBrowser, type BrowseState } from "./components/DeckBrowser";
 import { DeckInspector } from "./components/DeckInspector";
 import { Pagination } from "./components/Pagination";
 import { useDialogFocus } from "./components/useDialogFocus";
@@ -823,6 +823,12 @@ const BoardLane = memo(function BoardLane({
   t,
   onSelect,
 }: BoardLaneProps) {
+  // Visual neighbours must equal engine neighbours: creatures render in
+  // battleline order, artifacts/upgrades move to their own strip below
+  // (BUG-18 — interleaved artificats made "[C1][Artifact][C2]" look
+  // non-adjacent when the engine treats them as neighbours).
+  const creatures = cards.filter((card) => card.face.type === "Creature");
+  const attachments = cards.filter((card) => card.face.type !== "Creature");
   if (!cards.length) {
     return (
       <div className="empty-battleline">
@@ -834,7 +840,13 @@ const BoardLane = memo(function BoardLane({
 
   return (
     <div className={`board-lane${targetIds?.length ? " board-lane--targeting" : ""}`}>
-      {cards.map((card) => {
+      {creatures.length === 0 && (
+        <div className="empty-battleline">
+          <span className="empty-orbit"><Shield size={17} strokeWidth={1.3} /></span>
+          <span>{t("game.clearLine")}</span>
+        </div>
+      )}
+      {creatures.map((card) => {
         const canUse = owner === 0 && card.ready && !card.stunned && (!activeHouse || card.face.house === activeHouse);
         // T4: o estado da peça é indicador visual (borda/opacidade, index.css) +
         // aria-label via t(); não existe mais label de texto sob a carta.
@@ -857,6 +869,31 @@ const BoardLane = memo(function BoardLane({
           </div>
         );
       })}
+      {attachments.length > 0 && (
+        <div className="board-attachments" role="list" aria-label={t("game.attachments")}>
+          {attachments.map((card) => {
+            const hostTitle = cards.find((item) => item.instanceId === card.attachedTo)?.face.title;
+            return (
+              <div className="board-piece board-piece--attachment" key={card.instanceId} role="listitem">
+                <CardTile
+                  card={card}
+                  size="board"
+                  dimmed={targetIds ? !targetIds.includes(card.instanceId) : false}
+                  hoverZoom={settings.hoverZoom}
+                  playAnim={settings.animations}
+                  t={t}
+                  onClick={onSelect}
+                />
+                {card.attachedTo && hostTitle && (
+                  <span className="attachment-host" title={hostTitle}>
+                    {hostTitle}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }, areBoardLanePropsEqual);
@@ -1232,6 +1269,8 @@ function App() {
 
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
+  // BUG-15: the Vault view state survives browsing into a deck and back.
+  const [browseState, setBrowseState] = useState<BrowseState>({ page: 1, search: "", ordering: "-date" });
   const [inspectDeck, setInspectDeck] = useState<DeckInfo | null>(null);
   const [savedDecks, setSavedDecks] = useState<DeckInfo[]>(STARTER_DECKS);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
@@ -1741,6 +1780,8 @@ function App() {
         {screen === "browse" && (
           <DeckBrowser
             t={t}
+            state={browseState}
+            onStateChange={setBrowseState}
             offline={!online}
             onBack={() => setScreen("home")}
             onInspect={openInspector}

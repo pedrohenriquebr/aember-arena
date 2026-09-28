@@ -5991,3 +5991,34 @@ html .spin {
 .chain-counter svg {
   color: var(--gold);
 }
+
+/* BUG-18: artifacts/upgrades render in their own strip (visual neighbours =
+   engine neighbours among creatures), upgrades naming their host. */
+.board-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 7px;
+  width: 100%;
+}
+
+.board-piece--attachment .card-tile {
+  max-width: 96px;
+}
+
+.board-piece--attachment .card-art {
+  min-height: 0;
+}
+
+.attachment-host {
+  display: block;
+  margin-top: 3px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 96px;
+}

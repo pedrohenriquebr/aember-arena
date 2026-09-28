@@ -16,23 +16,42 @@ const ORDERINGS: { id: string; key: string }[] = [
   { id: "-power_level", key: "browse.sortPower" },
 ];
 
+export interface BrowseState {
+  page: number;
+  search: string;
+  ordering: string;
+}
+
+const INITIAL_BROWSE: BrowseState = { page: 1, search: "", ordering: "-date" };
+
 export function DeckBrowser({
   t,
   offline,
   onBack,
   onInspect,
   onUseDeck,
+  /** Controlled view state: lifted so Vault -> Inspect -> Back keeps page and
+      search instead of resetting to page 1 (BUG-15). */
+  state,
+  onStateChange,
 }: {
   t: Translator;
   offline: boolean;
   onBack: () => void;
   onInspect: (deck: DeckInfo) => void;
   onUseDeck: (deck: DeckInfo) => void;
+  state?: BrowseState;
+  onStateChange?: (next: BrowseState) => void;
 }) {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [pendingSearch, setPendingSearch] = useState("");
-  const [ordering, setOrdering] = useState("-date");
+  const [internalState, setInternalState] = useState<BrowseState>(INITIAL_BROWSE);
+  const view = state ?? internalState;
+  const { page, search, ordering } = view;
+  const setView = (patch: Partial<BrowseState>) => {
+    const next = { ...view, ...patch };
+    if (onStateChange) onStateChange(next);
+    else setInternalState(next);
+  };
+  const [pendingSearch, setPendingSearch] = useState(search);
   const [decks, setDecks] = useState<DeckInfo[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -75,8 +94,7 @@ export function DeckBrowser({
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     sound.play("click");
-    setPage(1);
-    setSearch(pendingSearch.trim());
+    setView({ page: 1, search: pendingSearch.trim() });
   };
 
   return (
@@ -101,7 +119,7 @@ export function DeckBrowser({
             aria-label={t("browse.searchPlaceholder")}
           />
           {pendingSearch && (
-            <button type="button" className="search-clear" onClick={() => { setPendingSearch(""); setPage(1); setSearch(""); }} aria-label={t("common.close")}>
+            <button type="button" className="search-clear" onClick={() => { setPendingSearch(""); setView({ page: 1, search: "" }); }} aria-label={t("common.close")}>
               ×
             </button>
           )}
@@ -113,7 +131,7 @@ export function DeckBrowser({
               key={item.id}
               type="button"
               className={`sort-chip${ordering === item.id ? " is-active" : ""}`}
-              onClick={() => { sound.play("click"); setPage(1); setOrdering(item.id); }}
+              onClick={() => { sound.play("click"); setView({ page: 1, ordering: item.id }); }}
             >
               {t(item.key)}
             </button>
@@ -155,7 +173,7 @@ export function DeckBrowser({
           <span className="browse-empty-icon"><SearchX size={22} /></span>
           <strong>{t("browse.noResultsTitle", { query: search })}</strong>
           <p>{t("browse.noResultsBody")}</p>
-          <button type="button" className="ghost-button" onClick={() => { sound.play("click"); setPendingSearch(""); setPage(1); setSearch(""); }}>
+          <button type="button" className="ghost-button" onClick={() => { sound.play("click"); setPendingSearch(""); setView({ page: 1, search: "" }); }}>
             <X size={15} /> {t("browse.clearSearch")}
           </button>
         </div>
@@ -187,7 +205,7 @@ export function DeckBrowser({
             ))}
           </div>
           <div className="browse-pager">
-            <Pagination page={page} totalPages={totalPages} onChange={(next) => { sound.play("click"); setPage(next); window.scrollTo({ top: 0, behavior: "smooth" }); }} label={t("browse.pagerLabel")} t={t} />
+            <Pagination page={page} totalPages={totalPages} onChange={(next) => { sound.play("click"); setView({ page: next }); window.scrollTo({ top: 0, behavior: "smooth" }); }} label={t("browse.pagerLabel")} t={t} />
             <span className="pager-hint">{t("browse.pagerHint")}</span>
           </div>
         </>
