@@ -47,6 +47,7 @@ import {
   createMatch,
   endTurn,
   fightTargets,
+  getLegalMoves,
   isLegalMove,
   keyCost,
   targetChoices,
@@ -130,6 +131,8 @@ type CardTileProps = {
   stateLabel?: string;
   /** Dano da criatura via t() — badge visual dentro do tile (T4). */
   damageLabel?: string;
+  /** FEAT-04: a carta tem ao menos um movimento legal agora. */
+  hinted?: boolean;
   /** T5 — tradutor p/ o CardLightbox do long-press touch. */
   t: Translator;
   /** T7d — recebe a própria carta: o pai passa o handler estável direto
@@ -163,6 +166,7 @@ function areCardTilePropsEqual(a: CardTileProps, b: CardTileProps): boolean {
     a.playAnim === b.playAnim &&
     a.stateLabel === b.stateLabel &&
     a.damageLabel === b.damageLabel &&
+    a.hinted === b.hinted &&
     a.t === b.t &&
     a.onClick === b.onClick &&
     sameCardInstance(a.card, b.card)
@@ -179,6 +183,7 @@ const CardTile = memo(function CardTile({
   playAnim = false,
   stateLabel,
   damageLabel,
+  hinted = false,
   t,
   onClick,
 }: CardTileProps) {
@@ -190,7 +195,7 @@ const CardTile = memo(function CardTile({
   return (
     <>
       <button
-        className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}`}
+        className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}${hinted ? " card-tile--hint" : ""}`}
         type="button"
         onClick={() => {
           // T5: o long-press já abriu a inspeção — o click sintético do toque não seleciona.
@@ -198,7 +203,7 @@ const CardTile = memo(function CardTile({
           onClick?.(card);
         }}
         disabled={disabled || !onClick}
-        aria-label={stateLabel ? `${baseLabel}, ${stateLabel}` : baseLabel}
+        aria-label={stateLabel ? `${baseLabel}, ${stateLabel}` : hinted ? `${baseLabel}, ${t("game.hintPlayable")}` : baseLabel}
       >
         <CardArt
           face={face}
@@ -597,6 +602,11 @@ function ConfigScreen({
                 <div className="exp-copy"><strong>{t("config.experience.animations")}</strong><small>{t("config.experience.animationsSub")}</small></div>
                 <Toggle checked={settings.animations} label={t("config.experience.animations")} onChange={(value) => onChange({ ...settings, animations: value })} />
               </div>
+              <div className="exp-row">
+                <span className="exp-icon"><Eye size={16} /></span>
+                <div className="exp-copy"><strong>{t("config.experience.hints")}</strong><small>{t("config.experience.hintsSub")}</small></div>
+                <Toggle checked={settings.hints} label={t("config.experience.hints")} onChange={(value) => onChange({ ...settings, hints: value })} />
+              </div>
               {hasHover && (
                 <div className="exp-row">
                   <span className="exp-icon"><ZoomIn size={16} /></span>
@@ -788,6 +798,8 @@ type BoardLaneProps = {
   owner: 0 | 1;
   activeHouse: string | null;
   selectedId?: string;
+  /** FEAT-04: ids com movimento legal (só a lane do jogador). */
+  hintIds?: Set<string> | null;
   /** Cards that may be picked right now (fight defender, ability target, upgrade host). */
   targetIds?: string[];
   settings: AppSettings;
@@ -804,6 +816,7 @@ function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
     a.activeHouse !== b.activeHouse ||
     a.selectedId !== b.selectedId ||
     a.targetIds !== b.targetIds ||
+    a.hintIds !== b.hintIds ||
     a.settings !== b.settings ||
     a.t !== b.t ||
     a.onSelect !== b.onSelect
@@ -820,6 +833,7 @@ const BoardLane = memo(function BoardLane({
   activeHouse,
   selectedId,
   targetIds,
+  hintIds,
   settings,
   t,
   onSelect,
@@ -853,6 +867,7 @@ const BoardLane = memo(function BoardLane({
         // aria-label via t(); não existe mais label de texto sob a carta.
         const stateLabel = card.stunned ? t("game.stunned") : card.ready ? t("game.ready") : t("game.resting");
         const stateClass = card.stunned ? " board-piece--stunned" : card.ready ? "" : " board-piece--resting";
+        const hinted = Boolean(hintIds?.has(card.instanceId));
         return (
           <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}`} key={card.instanceId}>
             <CardTile
@@ -863,6 +878,7 @@ const BoardLane = memo(function BoardLane({
               hoverZoom={settings.hoverZoom}
               playAnim={settings.animations}
               stateLabel={stateLabel}
+              hinted={hinted}
               t={t}
               damageLabel={card.damage > 0 ? `${card.damage} ${t("game.dmg")}` : undefined}
               onClick={onSelect}
@@ -931,6 +947,14 @@ function GameBoard({
   const player = game.players[0];
   const ai = game.players[1];
   const isHumanTurn = game.activePlayer === 0 && game.winner === null;
+  // FEAT-04: ids with at least one legal move, only while it is the player's
+  // turn with the house chosen; memoised so lane/tile memos keep working.
+  const hintIds = useMemo(() => {
+    if (!settings.hints || game.activePlayer !== 0 || !game.activeHouse || game.winner !== null) return null;
+    return new Set(
+      getLegalMoves(game, 0, game.activeHouse).map((move) => (move.type === "fight" ? move.attackerId : move.instanceId)),
+    );
+  }, [game, settings.hints]);
   // T7d: closures estáveis por lane — sem identidade estável o memo de
   // BoardLane/CardTile não teria efeito.
   const selectOpponentCard = useCallback((card: CardInstance) => onSelectBoard(1, card), [onSelectBoard]);
@@ -1006,6 +1030,7 @@ function GameBoard({
           <BoardLane
             cards={player.board}
             owner={0}
+            hintIds={hintIds}
             activeHouse={game.activeHouse}
             selectedId={selected?.zone === "board" ? selected.instanceId : undefined}
             targetIds={pick?.ids}
@@ -1038,6 +1063,7 @@ function GameBoard({
                   size="hand"
                   selected={selected?.zone === "hand" && selected.instanceId === card.instanceId}
                   dimmed={game.activePlayer === 0 && Boolean(game.activeHouse) && !playable}
+                  hinted={Boolean(hintIds?.has(card.instanceId))}
                   hoverZoom={settings.hoverZoom}
                   playAnim={settings.animations}
                   t={t}

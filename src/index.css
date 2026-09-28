@@ -6065,3 +6065,22 @@ html .spin {
   color: var(--muted);
   font-size: var(--fs-sm);
 }
+
+/* FEAT-04: dica de jogada - contorno dourado + marcador (nao e so cor). */
+.card-tile--hint {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 1px;
+}
+
+.card-tile--hint::after {
+  content: "\2726";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--gold-bright);
+  font-size: 10px;
+  line-height: 1;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}

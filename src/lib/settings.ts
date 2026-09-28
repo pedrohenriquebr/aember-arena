@@ -8,6 +8,8 @@ export interface AppSettings {
   music: boolean;
   animations: boolean;
   hoverZoom: boolean;
+  /** FEAT-04: highlight cards with a legal move (hand + your battleline). */
+  hints: boolean;
   language: Language;
 }
 
@@ -20,6 +22,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   music: false,
   animations: true,
   hoverZoom: true,
+  hints: false,
   language: "en",
 };
 
@@ -36,6 +39,7 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
       music: typeof parsed.music === "boolean" ? parsed.music : base.music,
       animations: typeof parsed.animations === "boolean" ? parsed.animations : base.animations,
       hoverZoom: typeof parsed.hoverZoom === "boolean" ? parsed.hoverZoom : base.hoverZoom,
+      hints: typeof parsed.hints === "boolean" ? parsed.hints : base.hints,
       language: parsed.language === "en" || parsed.language === "ptBR" ? parsed.language : base.language,
     };
   } catch {
