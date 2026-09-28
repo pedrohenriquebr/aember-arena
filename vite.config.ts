@@ -10,6 +10,13 @@ const __dirname = path.dirname(__filename);
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), viteSingleFile()],
+  server: {
+    // Acesso remoto via tunel (trycloudflare muda de subdominio a cada run).
+    allowedHosts: [".trycloudflare.com"],
+  },
+  preview: {
+    allowedHosts: [".trycloudflare.com"],
+  },
   build: {
     // Orcamento de bundle (CLAUDE.md §7): o app e um chunk unico inlined, entao
     // o polyfill/links de modulepreload nunca tem efeito — remove-los e folga real.
