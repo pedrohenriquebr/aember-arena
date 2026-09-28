@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { chooseAiHouse, chooseAiMove, shouldMulligan } from "./ai";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
-import { applyMove, chooseHouse, createMatch, endTurn, keepHand, mulligan, revealsHiddenInfo, type DeckInfo, type GameState } from "./game";
+import { applyMove, chooseHouse, createMatch, createPassAndPlayMatch, endTurn, keepHand, mulligan, revealsHiddenInfo, type DeckInfo, type GameState } from "./game";
 import { byTitle, card, setupTest } from "./testkit";
 
 const zoneTotal = (state: GameState, index: 0 | 1) => {
@@ -114,5 +114,38 @@ describe("FEAT-12 rewind safety (docs/BUGS_AND_FEATURES.md)", () => {
     // back with the rest of the state, so nothing is counted twice.
     expect(anchor.players[0].amberGained).toBe(0);
     expect(JSON.stringify(anchor)).toBe(before);
+  });
+});
+
+describe("FEAT-13 pass-and-play setup (docs/BUGS_AND_FEATURES.md)", () => {
+  it("names both sides and keeps each human on their own deck", () => {
+    const state = createPassAndPlayMatch(DEMO_DECK, DEMO_DECK_2, { seed: 31 });
+    expect(state.players.map((player) => player.name)).toEqual(["Player 1", "Player 2"]);
+    expect(state.players.map((player) => player.deckName)).toEqual([DEMO_DECK.name, DEMO_DECK_2.name]);
+    expect(state.players[0].hand.every((card) => DEMO_DECK.cards.includes(card.face))).toBe(true);
+    expect(state.players[1].hand.every((card) => DEMO_DECK_2.cards.includes(card.face))).toBe(true);
+    expect(state.activePlayer).toBe(0);
+    expect(state.pendingMulligan).toBe(0);
+    expect(zoneTotal(state, 0)).toBe(36);
+    expect(zoneTotal(state, 1)).toBe(36);
+  });
+
+  it("both humans decide their mulligan and take the first turns in sequence", () => {
+    let state = createPassAndPlayMatch(DEMO_DECK, DEMO_DECK_2, { seed: 32 });
+    state = keepHand(state, 0);
+    expect(state.pendingMulligan).toBe(1);
+    state = mulligan(state, 1);
+    expect(state.pendingMulligan).toBe(null);
+    const house = state.players[0].houses[0];
+    state = chooseHouse(state, 0, house);
+    // The log carries the neutral names App localizes at render time.
+    expect(state.log[state.log.length - 1]).toMatchObject({ key: "log.house", params: { name: "Player 1", house } });
+    state = endTurn(state, 0);
+    expect(state.activePlayer).toBe(1);
+    const handBefore = state.players[1].hand.length;
+    state = chooseHouse(state, 1, state.players[1].houses[0]);
+    state = endTurn(state, 1);
+    expect(state.activePlayer).toBe(0);
+    expect(state.players[1].hand.length).toBeGreaterThanOrEqual(handBefore);
   });
 });

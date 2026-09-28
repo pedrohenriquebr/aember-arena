@@ -45,6 +45,7 @@ import {
   applyMove,
   chooseHouse,
   createMatch,
+  createPassAndPlayMatch,
   endTurn,
   fightTargets,
   getLegalMoves,
@@ -64,7 +65,7 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, vaultErrorText } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
-import { readSettings, saveSettings, type AppSettings, type OpponentMode } from "./lib/settings";
+import { readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
 import { CoverageBadge, DeckCoverageChip } from "./components/CoverageBadge";
@@ -130,6 +131,8 @@ function prefersHover() {
 function localizeName(name: string, t: Translator): string {
   if (name === "You") return t("log.you");
   if (name === "The Ember Warden") return t("log.warden");
+  if (name === "Player 1") return t("game.player1");
+  if (name === "Player 2") return t("game.player2");
   if (name === "Warden's mirror deck") return t("game.mirrorDeck");
   return name;
 }
@@ -145,6 +148,26 @@ function renderLog(entry: LogEntry, t: Translator): string {
 
 /** FEAT-10: the opening-hand micro-phase, before the match really starts. */
 const inMulligan = (game: GameState) => game.pendingMulligan === 0 || game.pendingMulligan === 1;
+
+/** FEAT-13: the side currently holding the device. Solo always plays side 0;
+    pass-and-play follows the active side (and the mulligan micro-phase, which
+    runs side 0 then side 1 before the first turn). */
+function humanSideOf(state: GameState, mode: GameMode): 0 | 1 {
+  if (mode !== "passAndPlay") return 0;
+  return inMulligan(state) ? (state.pendingMulligan as 0 | 1) : state.activePlayer;
+}
+
+/** FEAT-13: the two pass-and-play decks — the persisted ids, the Home selection
+    as the P1 fallback and a different library deck as the P2 fallback, so the
+    two sides never share a deck. */
+function resolvePassDecks(savedDecks: LibraryDeck[], fallback: DeckInfo, settings: AppSettings): [DeckInfo, DeckInfo] {
+  const p1 = savedDecks.find((item) => item.id === settings.deckP1Id) ?? fallback;
+  const p2 =
+    savedDecks.find((item) => item.id === settings.deckP2Id && item.id !== p1.id) ??
+    savedDecks.find((item) => item.id !== p1.id) ??
+    fallback;
+  return [p1, p2];
+}
 
 /** FEAT-05: log keys the type filter knows about (the rest pass every filter). */
 type LogType = "play" | "fight" | "reap" | "use" | "forge";
@@ -505,9 +528,32 @@ function HomeScreen({
 
 // ---------- Config screen (stepper) ----------
 
-const CONFIG_STEPS = ["difficulty", "opponent", "thinking", "experience", "review"] as const;
-type ConfigStep = (typeof CONFIG_STEPS)[number];
+const MODE_CONFIG_STEPS = ["mode", "difficulty", "opponent", "thinking", "experience", "review"] as const;
+// FEAT-13: pass-and-play has no AI, so the difficulty/opponent/thinking steps
+// (and their settings) leave the wizard; the decks step takes their place.
+const PASS_CONFIG_STEPS = ["mode", "decks", "experience", "review"] as const;
+type ConfigStep = (typeof MODE_CONFIG_STEPS)[number] | (typeof PASS_CONFIG_STEPS)[number];
 const OPPONENT_MODES = ["mirror", "deck", "random"] as const;
+
+/** One review-step deck card (shared by the solo deck, the two 2P decks). */
+function ConfigDeckCard({ label, deck, t }: { label: string; deck: DeckInfo; t: Translator }) {
+  return (
+    <div className="review-card review-card--deck">
+      <span className="review-label">{label}</span>
+      <div className="review-deck">
+        <CardArt face={deck.cards[0]} size="preview" />
+        <div>
+          <strong>{deck.name}</strong>
+          <div className="deck-card-houses">
+            {deck.houses.map((house) => <HouseMark key={house} house={house} small />)}
+          </div>
+          <small>{deck.cards.length} {t("common.cards")}</small>
+          <DeckCoverageChip deck={deck} t={t} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ConfigScreen({
   t,
@@ -532,8 +578,10 @@ function ConfigScreen({
   onBack: () => void;
   onStart: () => void;
 }) {
-  const [step, setStep] = useState<ConfigStep>("difficulty");
-  const stepIndex = CONFIG_STEPS.indexOf(step);
+  const [step, setStep] = useState<ConfigStep>("mode");
+  const steps: readonly ConfigStep[] = settings.gameMode === "passAndPlay" ? PASS_CONFIG_STEPS : MODE_CONFIG_STEPS;
+  const stepIndex = Math.max(0, steps.indexOf(step));
+  const activeStep = steps[stepIndex];
   // FEAT-11: the mirror deck never appears in its own picker; an invalid pick
   // falls back to the mirror in launchMatch (a deleted deck must not break it).
   const opponentChoices = savedDecks.filter((item) => item.id !== deck.id);
@@ -544,6 +592,26 @@ function ConfigScreen({
       : settings.opponentMode === "random"
         ? t("config.opponent.random")
         : (pickedOpponent ?? deck).name;
+  // FEAT-13: the two human decks (never the same one twice).
+  const [p1Deck, p2Deck] = resolvePassDecks(savedDecks, deck, settings);
+  const p2Choices = savedDecks.filter((item) => item.id !== p1Deck.id);
+
+  const chooseMode = (gameMode: GameMode) => {
+    sound.play("select");
+    setStep("mode");
+    onChange({ ...settings, gameMode });
+  };
+
+  const pickPlayerDeck = (side: 1 | 2, id: string) => {
+    sound.play("click");
+    if (side === 2) {
+      onChange({ ...settings, deckP2Id: id });
+      return;
+    }
+    // Picking P2's deck for P1 moves P2 to another library deck on the spot.
+    const deckP2Id = id === p2Deck.id ? savedDecks.find((item) => item.id !== id)?.id : settings.deckP2Id;
+    onChange({ ...settings, deckP1Id: id, deckP2Id });
+  };
 
   const chooseOpponent = (mode: OpponentMode) => {
     sound.play("select");
@@ -553,12 +621,12 @@ function ConfigScreen({
 
   const goNext = () => {
     sound.play("click");
-    if (stepIndex < CONFIG_STEPS.length - 1) setStep(CONFIG_STEPS[stepIndex + 1]);
+    if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1]);
     else onStart();
   };
   const goPrev = () => {
     sound.play("click");
-    if (stepIndex > 0) setStep(CONFIG_STEPS[stepIndex - 1]);
+    if (stepIndex > 0) setStep(steps[stepIndex - 1]);
     else onBack();
   };
 
@@ -567,16 +635,16 @@ function ConfigScreen({
       <div className="config-head">
         <div>
           <span className="eyebrow">{t("config.title")}</span>
-          <h1>{t("config.subtitle")}</h1>
+          <h1>{settings.gameMode === "passAndPlay" ? t("config.subtitle2p") : t("config.subtitle")}</h1>
         </div>
       </div>
 
       <div className="config-stepper">
-        {CONFIG_STEPS.map((item, index) => (
+        {steps.map((item, index) => (
           <button
             key={item}
             type="button"
-            className={`config-step-pill${item === step ? " is-active" : ""}${index < stepIndex ? " is-done" : ""}`}
+            className={`config-step-pill${item === activeStep ? " is-active" : ""}${index < stepIndex ? " is-done" : ""}`}
             onClick={() => setStep(item)}
           >
             <span className="config-step-num">{index < stepIndex ? <Check size={12} /> : index + 1}</span>
@@ -586,7 +654,33 @@ function ConfigScreen({
       </div>
 
       <div className="config-body">
-        {step === "difficulty" && (
+        {activeStep === "mode" && (
+          <section className="config-panel">
+            <div className="config-panel-head">
+              <h2>{t("config.mode.title")}</h2>
+              <p>{t("config.mode.sub")}</p>
+            </div>
+            <div className="difficulty-list">
+              {(["solo", "passAndPlay"] as const).map((mode, index) => (
+                <button
+                  type="button"
+                  key={mode}
+                  className={`difficulty-choice${settings.gameMode === mode ? " is-active" : ""}`}
+                  onClick={() => chooseMode(mode)}
+                >
+                  <span className="difficulty-level">0{index + 1}</span>
+                  <span className="difficulty-copy">
+                    <strong>{t(`config.mode.${mode}`)}</strong>
+                    <small>{t(`config.mode.${mode}Sub`)}</small>
+                  </span>
+                  <span className="difficulty-indicator">{settings.gameMode === mode && <Check size={13} />}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeStep === "difficulty" && (
           <section className="config-panel">
             <div className="config-panel-head">
               <h2>{t("config.difficulty.title")}</h2>
@@ -622,7 +716,7 @@ function ConfigScreen({
           </section>
         )}
 
-        {step === "opponent" && (
+        {activeStep === "opponent" && (
           <section className="config-panel">
             <div className="config-panel-head">
               <h2>{t("config.opponent.title")}</h2>
@@ -664,7 +758,48 @@ function ConfigScreen({
           </section>
         )}
 
-        {step === "thinking" && (
+        {activeStep === "decks" && (
+          <section className="config-panel">
+            <div className="config-panel-head">
+              <h2>{t("config.decks.title")}</h2>
+              <p>{t("config.decks.sub")}</p>
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <span className="section-label">{t("config.decks.p1")}</span>
+              <div className="filter-chips" style={{ marginTop: 8 }} role="group" aria-label={t("config.decks.p1")}>
+                {savedDecks.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`filter-chip${item.id === p1Deck.id ? " is-active" : ""}`}
+                    aria-pressed={item.id === p1Deck.id}
+                    onClick={() => pickPlayerDeck(1, item.id)}
+                  >
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <span className="section-label">{t("config.decks.p2")}</span>
+              <div className="filter-chips" style={{ marginTop: 8 }} role="group" aria-label={t("config.decks.p2")}>
+                {p2Choices.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`filter-chip${item.id === p2Deck.id ? " is-active" : ""}`}
+                    aria-pressed={item.id === p2Deck.id}
+                    onClick={() => pickPlayerDeck(2, item.id)}
+                  >
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeStep === "thinking" && (
           <section className="config-panel">
             <div className="config-panel-head">
               <h2>{t("config.thinking.title")}</h2>
@@ -696,7 +831,7 @@ function ConfigScreen({
           </section>
         )}
 
-        {step === "experience" && (
+        {activeStep === "experience" && (
           <section className="config-panel">
             <div className="config-panel-head">
               <h2>{t("config.experience.title")}</h2>
@@ -739,35 +874,31 @@ function ConfigScreen({
           </section>
         )}
 
-        {step === "review" && (
+        {activeStep === "review" && (
           <section className="config-panel">
             <div className="config-panel-head">
               <h2>{t("config.review.title")}</h2>
               <p>{t("config.review.sub")}</p>
             </div>
             <div className="review-grid">
-              <div className="review-card review-card--deck">
-                <span className="review-label">{t("config.review.deck")}</span>
-                <div className="review-deck">
-                  <CardArt face={deck.cards[0]} size="preview" />
-                  <div>
-                    <strong>{deck.name}</strong>
-                    <div className="deck-card-houses">
-                      {deck.houses.map((house) => <HouseMark key={house} house={house} small />)}
-                    </div>
-                    <small>{deck.cards.length} {t("common.cards")}</small>
-                    <DeckCoverageChip deck={deck} t={t} />
-                  </div>
+              {settings.gameMode === "passAndPlay" ? (
+                <>
+                  <ConfigDeckCard label={t("config.decks.p1")} deck={p1Deck} t={t} />
+                  <ConfigDeckCard label={t("config.decks.p2")} deck={p2Deck} t={t} />
+                </>
+              ) : (
+                <ConfigDeckCard label={t("config.review.deck")} deck={deck} t={t} />
+              )}
+              {settings.gameMode === "solo" && (
+                <div className="review-card">
+                  <span className="review-label">{t("config.review.opponent")}</span>
+                  <ul className="review-list">
+                    <li><span>{t("config.step.difficulty")}</span><strong>{t(`difficulty.${settings.difficulty}`)}</strong></li>
+                    <li><span>{t("config.step.thinking")}</span><strong>{settings.thinkingDepth} / 6</strong></li>
+                    <li><span>{t("config.review.deck")}</span><strong>{opponentLabel}</strong></li>
+                  </ul>
                 </div>
-              </div>
-              <div className="review-card">
-                <span className="review-label">{t("config.review.opponent")}</span>
-                <ul className="review-list">
-                  <li><span>{t("config.step.difficulty")}</span><strong>{t(`difficulty.${settings.difficulty}`)}</strong></li>
-                  <li><span>{t("config.step.thinking")}</span><strong>{settings.thinkingDepth} / 6</strong></li>
-                  <li><span>{t("config.review.deck")}</span><strong>{opponentLabel}</strong></li>
-                </ul>
-              </div>
+              )}
               <div className="review-card">
                 <span className="review-label">{t("config.review.interface")}</span>
                 <ul className="review-list">
@@ -788,7 +919,7 @@ function ConfigScreen({
           <ArrowLeft size={15} /> {t("common.back")}
         </button>
         <button type="button" className="cta-button" onClick={goNext}>
-          {step === "review" ? t("home.play") : t("common.next")} <ArrowRight size={15} />
+          {activeStep === "review" ? t("home.play") : t("common.next")} <ArrowRight size={15} />
         </button>
       </div>
     </div>
@@ -837,6 +968,8 @@ type PlayerBandProps = {
   active: boolean;
   thinking?: boolean;
   chains: number;
+  /** FEAT-13: pass-and-play avatars show the player number instead of "You". */
+  avatarLabel?: string;
   t: Translator;
 };
 
@@ -848,6 +981,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     a.isAi === b.isAi &&
     a.active === b.active &&
     (a.thinking ?? false) === (b.thinking ?? false) &&
+    (a.avatarLabel ?? "") === (b.avatarLabel ?? "") &&
     a.t === b.t &&
     a.player.name === b.player.name &&
     a.player.deckName === b.player.deckName &&
@@ -867,12 +1001,13 @@ const PlayerBand = memo(function PlayerBand({
   active,
   thinking = false,
   chains,
+  avatarLabel,
   t,
 }: PlayerBandProps) {
   return (
     <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}`}>
       <div className={`player-avatar${isAi ? " player-avatar--ai" : ""}`}>
-        {isAi ? <Cpu size={18} strokeWidth={1.6} /> : <span>{t("common.you")}</span>}
+        {isAi ? <Cpu size={18} strokeWidth={1.6} /> : <span>{avatarLabel ?? t("common.you")}</span>}
         {active && <span className="avatar-live-dot" />}
       </div>
       <div className="player-copy">
@@ -914,6 +1049,8 @@ const PlayerBand = memo(function PlayerBand({
 type BoardLaneProps = {
   cards: CardInstance[];
   owner: 0 | 1;
+  /** FEAT-13: the lane owner whose pieces may look usable right now. */
+  humanSide: 0 | 1;
   activeHouse: string | null;
   selectedId?: string;
   /** FEAT-04: ids com movimento legal (só a lane do jogador). */
@@ -932,6 +1069,7 @@ type BoardLaneProps = {
 function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
   if (
     a.owner !== b.owner ||
+    a.humanSide !== b.humanSide ||
     a.activeHouse !== b.activeHouse ||
     a.selectedId !== b.selectedId ||
     a.targetIds !== b.targetIds ||
@@ -949,6 +1087,7 @@ function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
 const BoardLane = memo(function BoardLane({
   cards,
   owner,
+  humanSide,
   activeHouse,
   selectedId,
   targetIds,
@@ -981,7 +1120,7 @@ const BoardLane = memo(function BoardLane({
         </div>
       )}
       {creatures.map((card) => {
-        const canUse = owner === 0 && card.ready && !card.stunned && (!activeHouse || card.face.house === activeHouse);
+        const canUse = owner === humanSide && card.ready && !card.stunned && (!activeHouse || card.face.house === activeHouse);
         // T4: o estado da peça é indicador visual (borda/opacidade, index.css) +
         // aria-label via t(); não existe mais label de texto sob a carta.
         const stateLabel = card.stunned ? t("game.stunned") : card.ready ? t("game.ready") : t("game.resting");
@@ -1053,6 +1192,10 @@ function GameBoard({
   replay = false,
   canReplay = false,
   onReplay,
+  passAndPlay = false,
+  humanSide = 0,
+  passPending = null,
+  onPassConfirm = NOOP,
 }: {
   game: GameState;
   selected: Selection | null;
@@ -1067,6 +1210,13 @@ function GameBoard({
   /** FEAT-12b: available when the match has recorded steps (same session). */
   canReplay?: boolean;
   onReplay?: () => void;
+  /** FEAT-13: two-human match — no AI band and a pass screen between turns. */
+  passAndPlay?: boolean;
+  /** FEAT-13: the side holding the device (0 in solo). */
+  humanSide?: 0 | 1;
+  /** FEAT-13: side that must confirm the pass before its hand renders. */
+  passPending?: 0 | 1 | null;
+  onPassConfirm?: () => void;
   onHouse: (house: string) => void;
   onSelectHand: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
@@ -1076,38 +1226,57 @@ function GameBoard({
   onKeepHand: () => void;
   onMulligan: () => void;
 }) {
-  const player = game.players[0];
-  const ai = game.players[1];
+  const enemySide = (1 - humanSide) as 0 | 1;
+  const player = game.players[humanSide];
+  const enemy = game.players[enemySide];
   const readOnly = replay === true;
-  const isHumanTurn = !readOnly && game.activePlayer === 0 && game.winner === null && !inMulligan(game);
+  // FEAT-13: while the pass screen is open the next hand is not in the DOM at
+  // all — the overlay is the only thing showing, and nobody sees it early.
+  const handHidden = passAndPlay && passPending !== null;
+  const isHumanTurn = !readOnly && game.activePlayer === humanSide && game.winner === null && !inMulligan(game) && !handHidden;
   // FEAT-04: ids with at least one legal move, only while it is the player's
   // turn with the house chosen; memoised so lane/tile memos keep working.
   const hintIds = useMemo(() => {
-    if (readOnly || !settings.hints || game.activePlayer !== 0 || !game.activeHouse || game.winner !== null) return null;
+    if (readOnly || !settings.hints || game.activePlayer !== humanSide || !game.activeHouse || game.winner !== null || handHidden) return null;
     return new Set(
-      getLegalMoves(game, 0, game.activeHouse).map((move) => (move.type === "fight" ? move.attackerId : move.instanceId)),
+      getLegalMoves(game, humanSide, game.activeHouse).map((move) => (move.type === "fight" ? move.attackerId : move.instanceId)),
     );
-  }, [game, settings.hints, readOnly]);
+  }, [game, settings.hints, readOnly, humanSide, handHidden]);
   // T7d: closures estáveis por lane — sem identidade estável o memo de
   // BoardLane/CardTile não teria efeito.
-  const selectOpponentCard = useCallback((card: CardInstance) => onSelectBoard(1, card), [onSelectBoard]);
-  const selectPlayerCard = useCallback((card: CardInstance) => onSelectBoard(0, card), [onSelectBoard]);
+  const selectOpponentCard = useCallback((card: CardInstance) => onSelectBoard(enemySide, card), [onSelectBoard, enemySide]);
+  const selectPlayerCard = useCallback((card: CardInstance) => onSelectBoard(humanSide, card), [onSelectBoard, humanSide]);
   const winnerRef = useDialogFocus<HTMLDivElement>(game.winner !== null);
+  const passRef = useDialogFocus<HTMLDivElement>(handHidden);
+  // FEAT-10/13: in pass-and-play both sides decide their own mulligan (the
+  // solo board only prompts for side 0 and lets the AI decide side 1).
+  const mulliganSide = inMulligan(game) ? (game.pendingMulligan as 0 | 1) : null;
+  const mulliganDeciding = mulliganSide !== null && (passAndPlay || mulliganSide === 0);
 
   return (
     <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label={t("game.board")}>
       <div className="felt-etching" aria-hidden="true" />
       <div className="board-content">
-        <PlayerBand player={ai} keyCost={keyCost(game, 1)} isAi active={game.activePlayer === 1 && game.winner === null} thinking={aiThinking} chains={ai.chains} t={t} />
+        <PlayerBand
+          player={enemy}
+          keyCost={keyCost(game, enemySide)}
+          isAi={!passAndPlay}
+          active={game.activePlayer === enemySide && game.winner === null}
+          thinking={aiThinking}
+          chains={enemy.chains}
+          avatarLabel={passAndPlay ? String(enemySide + 1) : undefined}
+          t={t}
+        />
 
         <section className="battle-zone battle-zone--opponent" aria-label={t("game.opponentLine")}>
           <div className="zone-heading">
             <span>{t("game.opponentLine")}</span>
-            <span className="zone-card-count">{ai.board.length} {t("game.onTable")}</span>
+            <span className="zone-card-count">{enemy.board.length} {t("game.onTable")}</span>
           </div>
           <BoardLane
-            cards={ai.board}
-            owner={1}
+            cards={enemy.board}
+            owner={enemySide}
+            humanSide={humanSide}
             activeHouse={null}
             selectedId={selected?.zone === "enemy" ? selected.instanceId : undefined}
             targetIds={pick?.ids}
@@ -1120,7 +1289,11 @@ function GameBoard({
         <div className={`turn-console${isHumanTurn ? " turn-console--human" : ""}`}>
           <div className="turn-console-copy">
             <div className="round-kicker"><span className="round-dot" /> {t("game.round")} {String(game.turn).padStart(2, "0")}</div>
-            <strong>{game.activePlayer === 0 ? t("game.yourTurn") : aiThinking ? t("game.thinking") : t("game.opponentTurn")}</strong>
+            <strong>
+              {passAndPlay
+                ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
+                : game.activePlayer === 0 ? t("game.yourTurn") : aiThinking ? t("game.thinking") : t("game.opponentTurn")}
+            </strong>
             <span>{game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse")}</span>
           </div>
           <div className="house-picker" role="group" aria-label={t("game.chooseHouse")}>
@@ -1162,7 +1335,8 @@ function GameBoard({
           </div>
           <BoardLane
             cards={player.board}
-            owner={0}
+            owner={humanSide}
+            humanSide={humanSide}
             hintIds={hintIds}
             activeHouse={game.activeHouse}
             selectedId={selected?.zone === "board" ? selected.instanceId : undefined}
@@ -1173,7 +1347,15 @@ function GameBoard({
           />
         </section>
 
-        <PlayerBand player={player} keyCost={keyCost(game, 0)} isAi={false} active={game.activePlayer === 0 && game.winner === null} chains={player.chains} t={t} />
+        <PlayerBand
+          player={player}
+          keyCost={keyCost(game, humanSide)}
+          isAi={false}
+          active={game.activePlayer === humanSide && game.winner === null}
+          chains={player.chains}
+          avatarLabel={passAndPlay ? String(humanSide + 1) : undefined}
+          t={t}
+        />
 
         <section className="hand-zone" aria-label={t("game.yourHand")}>
           <div className="hand-heading">
@@ -1183,11 +1365,11 @@ function GameBoard({
             </div>
             <span className="deck-count">{player.deck.length} {t("game.inDeck")}</span>
           </div>
-          {game.activePlayer === 0 && !game.activeHouse && game.winner === null && !inMulligan(game) && (
+          {game.activePlayer === humanSide && !game.activeHouse && game.winner === null && !inMulligan(game) && !handHidden && (
             <div className="hand-prompt"><Zap size={13} /> {t("game.unlockHint")}</div>
           )}
           <div className="hand-track">
-            {player.hand.map((card) => {
+            {!handHidden && player.hand.map((card) => {
               const playable = Boolean(game.activeHouse && card.face.house === game.activeHouse);
               return (
                 <CardTile
@@ -1195,7 +1377,7 @@ function GameBoard({
                   card={card}
                   size="hand"
                   selected={selected?.zone === "hand" && selected.instanceId === card.instanceId}
-                  dimmed={game.activePlayer === 0 && Boolean(game.activeHouse) && !playable}
+                  dimmed={game.activePlayer === humanSide && Boolean(game.activeHouse) && !playable}
                   hinted={Boolean(hintIds?.has(card.instanceId))}
                   hoverZoom={settings.hoverZoom}
                   playAnim={settings.animations}
@@ -1204,17 +1386,19 @@ function GameBoard({
                 />
               );
             })}
-            {!player.hand.length && <div className="empty-hand">{t("game.handEmpty")}</div>}
+            {!handHidden && !player.hand.length && <div className="empty-hand">{t("game.handEmpty")}</div>}
           </div>
         </section>
       </div>
 
-      {inMulligan(game) && !readOnly && (
+      {mulliganSide !== null && !readOnly && !handHidden && (
         <div className="winner-shade mulligan-shade" role="dialog" aria-modal="true" aria-labelledby="mulligan-title">
           <div className="winner-panel">
-            <span className="eyebrow">{game.pendingMulligan === 0 ? t("game.yourHand") : t("rail.warden")}</span>
-            <h2 id="mulligan-title">{game.pendingMulligan === 0 ? t("game.mulliganTitle") : t("game.thinking")}</h2>
-            {game.pendingMulligan === 0 && (
+            <span className="eyebrow">
+              {passAndPlay ? localizeName(game.players[mulliganSide].name, t) : mulliganSide === 0 ? t("game.yourHand") : t("rail.warden")}
+            </span>
+            <h2 id="mulligan-title">{mulliganDeciding ? t("game.mulliganTitle") : t("game.thinking")}</h2>
+            {mulliganDeciding && (
               <>
                 <p>{t("game.mulliganBody")}</p>
                 <div className="winner-actions">
@@ -1227,27 +1411,49 @@ function GameBoard({
         </div>
       )}
 
+      {/* FEAT-13: between turns the hand of the next player stays out of the DOM
+          until they confirm on the pass screen. */}
+      {handHidden && passPending !== null && (
+        <div className="winner-shade pass-shade" role="dialog" aria-modal="true" aria-labelledby="pass-title">
+          <div className="winner-panel" ref={passRef}>
+            <span className="eyebrow">{t("game.passTitle")}</span>
+            <h2 id="pass-title">{localizeName(game.players[passPending].name, t)}</h2>
+            <p>{t("game.passBody", { name: localizeName(game.players[passPending].name, t) })}</p>
+            <div className="winner-actions">
+              <button type="button" className="cta-button pass-confirm" onClick={onPassConfirm}>
+                <Eye size={15} /> {t("game.passConfirm", { name: localizeName(game.players[passPending].name, t) })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {game.winner !== null && !readOnly && (
         <div className="winner-shade" role="dialog" aria-modal="true" aria-labelledby="winner-title">
           <div className="winner-panel" ref={winnerRef}>
             <div className="winner-emblem"><Crown size={23} /></div>
             <span className="eyebrow">{t("game.matchComplete")}</span>
-            <h2 id="winner-title">{game.winner === 0 ? t("game.youWin") : t("game.aiWin")}</h2>
-            <p>{game.winner === 0 ? t("game.youWinSub") : t("game.aiWinSub")}</p>
+            <h2 id="winner-title">
+              {passAndPlay ? t("game.playerWin", { name: localizeName(game.players[game.winner].name, t) }) : game.winner === 0 ? t("game.youWin") : t("game.aiWin")}
+            </h2>
+            {!passAndPlay && <p>{game.winner === 0 ? t("game.youWinSub") : t("game.aiWinSub")}</p>}
             {/* FEAT-06: the player's tallies for this match (legacy saves without
-                the counters read as 0). */}
-            <ul className="review-list winner-stats">
-              {([
-                ["stats.rounds", game.turn],
-                ["stats.amberGained", player.amberGained],
-                ["stats.amberStolen", player.amberStolen],
-                ["stats.amberCaptured", player.amberCaptured],
-                ["stats.creaturesDestroyed", player.creaturesDestroyed],
-                ["stats.cardsPlayed", player.cardsPlayed],
-              ] as const).map(([key, value]) => (
-                <li key={key}><span>{t(key)}</span><strong>{value ?? 0}</strong></li>
-              ))}
-            </ul>
+                the counters read as 0). Hidden in pass-and-play: a W/L row for
+                one of the two local decks would be misleading (FEAT-13). */}
+            {!passAndPlay && (
+              <ul className="review-list winner-stats">
+                {([
+                  ["stats.rounds", game.turn],
+                  ["stats.amberGained", player.amberGained],
+                  ["stats.amberStolen", player.amberStolen],
+                  ["stats.amberCaptured", player.amberCaptured],
+                  ["stats.creaturesDestroyed", player.creaturesDestroyed],
+                  ["stats.cardsPlayed", player.cardsPlayed],
+                ] as const).map(([key, value]) => (
+                  <li key={key}><span>{t(key)}</span><strong>{value ?? 0}</strong></li>
+                ))}
+              </ul>
+            )}
             <p className="winner-seed">{t("game.seed", { seed: game.seed })}</p>
             <div className="winner-actions">
               <button type="button" className="cta-button" onClick={onRematch}><RotateCcw size={15} /> {t("game.rematch")}</button>
@@ -1270,6 +1476,7 @@ function SelectedCardPanel({
   pick,
   settings,
   t,
+  humanSide,
   onMove,
   onFight,
   onCancelPick,
@@ -1281,20 +1488,22 @@ function SelectedCardPanel({
   pick: Pick | null;
   settings: AppSettings;
   t: Translator;
+  /** FEAT-13: side whose cards the actions apply to (the active side in 2P). */
+  humanSide: 0 | 1;
   onMove: (move: GameMove) => void;
   onFight: () => void;
   onCancelPick: () => void;
   onClear: () => void;
 }) {
-  const isHumanTurn = game.activePlayer === 0 && game.winner === null && !inMulligan(game);
+  const isHumanTurn = game.activePlayer === humanSide && game.winner === null && !inMulligan(game);
   const activeForHouse = Boolean(card && game.activeHouse && card.face.house === game.activeHouse);
   // Legality comes from the engine (house, first-turn rule, Alpha/Omega, taunt…).
-  const legal = (move: GameMove) => isHumanTurn && isLegalMove(game, 0, move);
+  const legal = (move: GameMove) => isHumanTurn && isLegalMove(game, humanSide, move);
   const id = card?.instanceId ?? "";
   const canPlay = legal({ type: "play", instanceId: id });
   const canUse = legal({ type: "use", instanceId: id });
   const printsUse = Boolean(card && /(?:^|[\s/.])(?:Action|Omni):/i.test(card.face.text));
-  const canFight = Boolean(card && isHumanTurn && activeForHouse && fightTargets(game, 0, card).length);
+  const canFight = Boolean(card && isHumanTurn && activeForHouse && fightTargets(game, humanSide, card).length);
 
   return (
     <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}`} aria-live="polite">
@@ -1521,10 +1730,16 @@ function App() {
   const [savedDecks, setSavedDecks] = useState<LibraryDeck[]>(STARTER_DECKS);
   // FEAT-07: library deck queued for the remove confirmation.
   const [deckToRemove, setDeckToRemove] = useState<LibraryDeck | null>(null);
-  // FEAT-15: deck que aguarda a confirmação de abandono da partida em curso.
-  const [pendingDeck, setPendingDeck] = useState<{ deck: DeckInfo; opponent?: DeckInfo } | null>(null);
+  // FEAT-15: deck que aguarda a confirmação de abandono da partida em curso
+  // (o modo viaja junto: o 2P também confirma antes de substituir a partida).
+  const [pendingDeck, setPendingDeck] = useState<{ mode: GameMode; deck: DeckInfo; opponent?: DeckInfo } | null>(null);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
   const [game, setGame] = useState<GameState | null>(null);
+  // FEAT-13: the mode the LIVE match was created with (settings.gameMode only
+  // drives the config wizard — toggling it must not re-shape a running match).
+  const [matchMode, setMatchMode] = useState<GameMode>("solo");
+  /** FEAT-13: side that must confirm the pass before its hand renders again. */
+  const [passPending, setPassPending] = useState<0 | 1 | null>(null);
 
   const [selected, setSelected] = useState<Selection | null>(null);
   const [pick, setPick] = useState<Pick | null>(null);
@@ -1553,6 +1768,8 @@ function App() {
 
   const gameRef = useRef<GameState | null>(null);
   const settingsRef = useRef(settings);
+  /** FEAT-13: the live match mode, read by the hot callbacks (like gameRef). */
+  const matchModeRef = useRef<GameMode>("solo");
   /** FEAT-11: the rival a rematch replays against (random mode does not reroll). */
   const opponentRef = useRef<DeckInfo | null>(null);
   const aiTurnRef = useRef<string | null>(null);
@@ -1568,6 +1785,7 @@ function App() {
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { matchModeRef.current = matchMode; }, [matchMode]);
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with
@@ -1597,6 +1815,9 @@ function App() {
   }, []);
 
   const undoLastMove = useCallback(() => {
+    // FEAT-13: undo does not exist in pass-and-play — rewinding past an end
+    // turn would resurface the other player's hand.
+    if (matchModeRef.current !== "solo") return;
     const info = undoInfo(gameRef.current);
     if (!info || info.blocked) return;
     sound.play("click");
@@ -1716,11 +1937,14 @@ function App() {
   }, []);
 
   // FEAT-01: the live match is the save file; a finished match clears it.
+  // FEAT-13: pass-and-play matches are NOT saved — the save is a solo match
+  // slot (one deck, one resumable seat), and a 2P board cannot be handed back
+  // to the right player from the Home banner.
   useEffect(() => {
-    if (!game) return;
+    if (!game || matchMode === "passAndPlay") return;
     if (game.winner === null) void saveMatch({ game, deckId: currentDeck.id });
     else clearSavedMatch();
-  }, [game, currentDeck.id]);
+  }, [game, currentDeck.id, matchMode]);
 
   useEffect(() => {
     if (!toast || toast.sticky) return;
@@ -1782,22 +2006,24 @@ function App() {
       }
     }
     prevKeysRef.current = nextKeys;
-    if (game.winner === 0) sound.play("win");
-    else if (game.winner === 1) sound.play("lose");
+    // FEAT-13: in pass-and-play both sides are humans, so either win is a win.
+    if (game.winner !== null) sound.play(matchModeRef.current === "passAndPlay" || game.winner === 0 ? "win" : "lose");
   }, [game?.players[0].keys, game?.players[1].keys, game?.winner]);
 
   // FEAT-06: one local W/L row per finished match (deck + mode + difficulty).
   // cache.ts swallows storage failures, so the record never breaks the table.
+  // FEAT-13: never in pass-and-play — one row per local deck would read as W/L
+  // vs the Warden when both sides are human.
   useEffect(() => {
-    if (!game || game.winner === null || recordedMatchRef.current === matchVersion) return;
+    if (!game || game.winner === null || recordedMatchRef.current === matchVersion || matchMode !== "solo") return;
     recordedMatchRef.current = matchVersion;
     const { opponentMode, difficulty } = settingsRef.current;
     void recordMatchResult(currentDeck.id, game.winner === 0, opponentMode, difficulty);
-  }, [game, matchVersion, currentDeck.id]);
+  }, [game, matchVersion, currentDeck.id, matchMode]);
 
-  // AI turn loop.
+  // AI turn loop. FEAT-13: pass-and-play has no AI — the effect stays dormant.
   useEffect(() => {
-    if (!game || screen !== "game") return;
+    if (!game || screen !== "game" || matchMode === "passAndPlay") return;
     if (game.activePlayer !== 1 || game.winner !== null) {
       if (game.winner !== null || game.activePlayer === 0) setAiThinking(false);
       return;
@@ -1854,12 +2080,13 @@ function App() {
       // the effect resume the same turn from gameRef.current on return (BUG-03).
       aiTurnRef.current = null;
     };
-  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen, commitGame]);
+  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen, commitGame, matchMode]);
 
   // FEAT-10: the Warden decides the mulligan on a short pause, so it reads as
-  // an opponent move instead of an instant flip.
+  // an opponent move instead of an instant flip. FEAT-13: side 1 is a human in
+  // pass-and-play, so the Warden's pause is skipped there.
   useEffect(() => {
-    if (!game || screen !== "game" || game.pendingMulligan !== 1) return;
+    if (!game || screen !== "game" || game.pendingMulligan !== 1 || matchMode === "passAndPlay") return;
     const timer = window.setTimeout(() => {
       const current = gameRef.current;
       if (!current || current.pendingMulligan !== 1) return;
@@ -1867,7 +2094,7 @@ function App() {
       commitGame(current, take ? mulligan(current, 1) : keepHand(current, 1), { kind: take ? "mulligan" : "keep", side: 1 });
     }, 620);
     return () => window.clearTimeout(timer);
-  }, [game?.pendingMulligan, screen, commitGame]);
+  }, [game?.pendingMulligan, screen, commitGame, matchMode]);
 
   const selectedCard = useMemo(() => {
     if (!selected || !game) return null;
@@ -1877,12 +2104,14 @@ function App() {
   }, [game, selected]);
 
   // FEAT-05: the full log grouped by round (latest round first, latest entry
-  // first inside it), after the side/type filters.
+  // first inside it), after the side/type filters. FEAT-13: the filter reads the
+  // state's side names, so pass-and-play filters by "Player 1"/"Player 2".
   const logRounds = useMemo(() => {
     if (!game || !logOpen) return [];
+    const sideName = { you: game.players[0].name, warden: game.players[1].name };
     const filtered = game.log.filter(
       (entry) =>
-        (logSide === "all" || entry.params.name === (logSide === "you" ? "You" : "The Ember Warden")) &&
+        (logSide === "all" || entry.params.name === sideName[logSide]) &&
         (logType === "all" || entry.key === `log.${logType}`),
     );
     const rounds: { turn: number; entries: LogEntry[] }[] = [];
@@ -1898,8 +2127,11 @@ function App() {
   const undo = game ? undoInfo(game) : null;
   const undoable = undo !== null && !undo.blocked;
   // FEAT-12b: the replay viewer needs the recorded steps (same session); the
-  // seed always lives in the state.
-  const canReplay = Boolean(game && stepsRef.current.length > 0);
+  // seed always lives in the state. FEAT-13: neither undo nor replay exists in
+  // pass-and-play — a rewind would re-show cards the other player already saw.
+  const canReplay = Boolean(game && matchMode === "solo" && stepsRef.current.length > 0);
+  const passAndPlay = matchMode === "passAndPlay";
+  const humanSide: 0 | 1 = game ? humanSideOf(game, matchMode) : 0;
 
   function showToast(message: string, kind: "success" | "error" = "success") {
     setToast({ message, kind });
@@ -1911,10 +2143,22 @@ function App() {
     const current = gameRef.current;
     if (current && current.winner === null && (currentDeck.id !== deck.id || current.turn > 1)) {
       sound.play("click");
-      setPendingDeck({ deck, opponent });
+      setPendingDeck({ mode: "solo", deck, opponent });
       return;
     }
-    launchMatch(deck, opponent);
+    launchMatch(deck, opponent, "solo");
+  }
+
+  // FEAT-13: a pass-and-play match confirms the replacement the same way (the
+  // second deck rides along in `opponent`).
+  function startPassAndPlay(deck1: DeckInfo, deck2: DeckInfo) {
+    const current = gameRef.current;
+    if (current && current.winner === null && (currentDeck.id !== deck1.id || current.turn > 1)) {
+      sound.play("click");
+      setPendingDeck({ mode: "passAndPlay", deck: deck1, opponent: deck2 });
+      return;
+    }
+    launchMatch(deck1, deck2, "passAndPlay");
   }
 
   // FEAT-11: "deck" usa o baralho escolhido nas configurações e "random" sorteia
@@ -1931,11 +2175,13 @@ function App() {
     return deck;
   }
 
-  function launchMatch(deck: DeckInfo, opponent?: DeckInfo) {
+  function launchMatch(deck: DeckInfo, opponent: DeckInfo | undefined, mode: GameMode) {
     // FEAT-08: every match gets a fresh random seed, shown on the winner panel
     // so the opening hands can be replayed.
+    const seed = Math.floor(Math.random() * 4294967296);
     const rival = opponent ?? resolveOpponent(deck);
-    const next = createMatch(deck, rival, { seed: Math.floor(Math.random() * 4294967296) });
+    // FEAT-13: a 2P match renames the sides at creation (no AI is coming).
+    const next = mode === "passAndPlay" ? createPassAndPlayMatch(deck, rival, { seed }) : createMatch(deck, rival, { seed });
     opponentRef.current = rival;
     // FEAT-12a: a new match starts a fresh undo history.
     historyRef.current = [];
@@ -1944,6 +2190,14 @@ function App() {
     prevKeysRef.current = { player: 0, ai: 0 };
     setCurrentDeck(deck);
     setGame(next);
+    setMatchMode(mode);
+    setPassPending(null);
+    if (mode === "passAndPlay") {
+      // FEAT-13: 2P matches are never saved, and the solo save slot must not
+      // resurface on Home pointing at a match that was just replaced.
+      setResumeMatch(null);
+      clearSavedMatch();
+    }
     setSelected(null);
     setPick(null);
     setAiThinking(false);
@@ -1956,24 +2210,28 @@ function App() {
   // T7d: handlers quentes do board em useCallback — a identidade estável é o que
   // efetiva o memo de GameBoard→BoardLane→CardTile (só leem refs/setters estáveis).
   const performHumanMove = useCallback((move: GameMove) => {
-    if (!gameRef.current) return;
+    const prev = gameRef.current;
+    if (!prev) return;
+    const side = humanSideOf(prev, matchModeRef.current);
     // The player chooses targets the way keyteki prompts: only when there is a
     // real choice left (a fight's second pick is the ability target, BUG-06).
-    const choices = "target" in move && move.target ? [] : targetChoices(gameRef.current, 0, move);
+    const choices = "target" in move && move.target ? [] : targetChoices(prev, side, move);
     if (choices.length > 1) {
       sound.play("select");
       setPick({ move, ids: choices });
       return;
     }
     sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : move.type === "use" ? "play" : "play");
-    const prev = gameRef.current;
-    commitGame(prev, applyMove(prev, 0, move), { kind: "move", side: 0, move });
+    commitGame(prev, applyMove(prev, side, move), { kind: "move", side, move });
     setSelected(null);
     setPick(null);
   }, [commitGame]);
 
   const pickBoardCard = useCallback(
     (owner: 0 | 1, card: CardInstance) => {
+      const live = gameRef.current;
+      if (!live) return;
+      const own = owner === humanSideOf(live, matchModeRef.current);
       if (pick) {
         if (pick.ids.includes(card.instanceId)) {
           // A fight pick fills the defender first, then the ability target.
@@ -1984,67 +2242,82 @@ function App() {
           performHumanMove(applied);
           return;
         }
-        if (owner === 1) return;
+        if (!own) return;
         setPick(null);
       }
       sound.play("select");
-      setSelected({ zone: owner === 0 ? "board" : "enemy", playerIndex: owner, instanceId: card.instanceId });
+      setSelected({ zone: own ? "board" : "enemy", playerIndex: owner, instanceId: card.instanceId });
     },
     [pick, performHumanMove],
   );
 
   const endHumanTurn = useCallback(() => {
-    if (!gameRef.current) return;
+    const live = gameRef.current;
+    if (!live) return;
+    const side = humanSideOf(live, matchModeRef.current);
     sound.play("endTurn");
-    const prev = gameRef.current;
-    commitGame(prev, endTurn(prev, 0), { kind: "end", side: 0 });
+    const next = endTurn(live, side);
+    commitGame(live, next, { kind: "end", side });
     setSelected(null);
     setPick(null);
+    // FEAT-13: the other human takes over — the pass screen hides this hand
+    // before the next one renders.
+    if (matchModeRef.current === "passAndPlay" && next.winner === null) setPassPending(next.activePlayer);
   }, [commitGame]);
 
-  // FEAT-10: the human's mulligan decision (keep advances the micro-phase).
-  const keepOpeningHand = useCallback(() => {
-    if (!gameRef.current) return;
-    sound.play("click");
+  // FEAT-10/13: the opening-hand decision of the side holding the device.
+  const decideOpeningHand = useCallback((take: boolean) => {
     const prev = gameRef.current;
-    commitGame(prev, keepHand(prev, 0), { kind: "keep", side: 0 });
+    if (!prev) return;
+    const side = humanSideOf(prev, matchModeRef.current);
+    sound.play(take ? "select" : "click");
+    const next = take ? mulligan(prev, side) : keepHand(prev, side);
+    commitGame(prev, next, { kind: take ? "mulligan" : "keep", side });
+    if (matchModeRef.current === "passAndPlay") {
+      // The next decision (or the first turn) belongs to the other human; the
+      // inspector must not keep showing a card from the hand just decided.
+      setSelected(null);
+      setPick(null);
+      setPassPending(inMulligan(next) ? (next.pendingMulligan as 0 | 1) : 0);
+    }
   }, [commitGame]);
 
-  const takeMulligan = useCallback(() => {
-    if (!gameRef.current) return;
-    sound.play("select");
-    const prev = gameRef.current;
-    commitGame(prev, mulligan(prev, 0), { kind: "mulligan", side: 0 });
-  }, [commitGame]);
+  const keepOpeningHand = useCallback(() => decideOpeningHand(false), [decideOpeningHand]);
+  const takeMulligan = useCallback(() => decideOpeningHand(true), [decideOpeningHand]);
 
   const choosePlayerHouse = useCallback((house: string) => {
-    if (!gameRef.current) return;
-    sound.play("house");
     const prev = gameRef.current;
+    if (!prev) return;
+    const side = humanSideOf(prev, matchModeRef.current);
+    sound.play("house");
     // FEAT-12a: the state right after the house choice is the undo anchor — the
     // start of the turn, before any of the player's moves.
-    commitGame(prev, chooseHouse(prev, 0, house), { kind: "house", side: 0, house });
+    commitGame(prev, chooseHouse(prev, side, house), { kind: "house", side, house });
   }, [commitGame]);
 
   const selectHandCard = useCallback((card: CardInstance) => {
+    const live = gameRef.current;
+    if (!live) return;
     sound.play("select");
     // A pending ability target belongs to the card that started it; picking a
     // hand card cancels the pick instead of executing with the old card (BUG-24).
     setPick(null);
-    setSelected({ zone: "hand", playerIndex: 0, instanceId: card.instanceId });
+    setSelected({ zone: "hand", playerIndex: humanSideOf(live, matchModeRef.current), instanceId: card.instanceId });
   }, []);
 
   // FEAT-11: the rematch keeps the same rival; without one (a resumed match)
-  // launchMatch resolves it again from the settings.
+  // launchMatch resolves it again from the settings. FEAT-13: a 2P rematch
+  // replays the same two decks.
   function rematch() {
-    startMatch(currentDeck, opponentRef.current ?? undefined);
+    if (matchMode === "passAndPlay") startPassAndPlay(currentDeck, opponentRef.current ?? currentDeck);
+    else startMatch(currentDeck, opponentRef.current ?? undefined);
   }
 
   // FEAT-12b: rebuilds the match from its seed plus the recorded steps and opens
   // the read-only viewer (the live match and its save are untouched).
   function openReplay() {
     const live = gameRef.current;
-    if (!live) return;
+    if (!live || matchModeRef.current !== "solo") return;
     const states = [createMatch(currentDeck, opponentRef.current ?? currentDeck, { seed: live.seed })];
     for (const step of stepsRef.current) states.push(applyStep(states[states.length - 1], step));
     sound.play("select");
@@ -2212,9 +2485,11 @@ function App() {
     ? ""
     : game.winner !== null
       ? t("game.matchComplete")
-      : game.activePlayer === 0
-        ? t("game.yourTurn")
-        : t("game.opponentTurn");
+      : passAndPlay
+        ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
+        : game.activePlayer === 0
+          ? t("game.yourTurn")
+          : t("game.opponentTurn");
 
   return (
     <div className="app-root">
@@ -2309,6 +2584,8 @@ function App() {
               prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
               setGame(saved);
               setCurrentDeck(savedDecks.find((item) => item.id === resumeMatch.deckId) ?? DEMO_DECK);
+              setMatchMode("solo");
+              setPassPending(null);
               setAiThinking(false);
               setMatchVersion((version) => version + 1);
               setScreen("game");
@@ -2374,7 +2651,14 @@ function App() {
             onChange={setSettings}
             onLanguage={setLanguage}
             onBack={() => setScreen("home")}
-            onStart={() => startMatch(selectedDeck)}
+            onStart={() => {
+              if (settings.gameMode !== "passAndPlay") {
+                startMatch(selectedDeck);
+                return;
+              }
+              const [deck1, deck2] = resolvePassDecks(savedDecks, selectedDeck, settings);
+              startPassAndPlay(deck1, deck2);
+            }}
           />
         )}
 
@@ -2384,7 +2668,7 @@ function App() {
               <div className="main-column">
                 <div className="match-heading">
                   <div>
-                    <div className="match-eyebrow"><span>{t("game.eyebrow")}</span><span className="eyebrow-line" /><span>{t("game.table")}</span></div>
+                    <div className="match-eyebrow"><span>{passAndPlay ? t("game.eyebrow2p") : t("game.eyebrow")}</span><span className="eyebrow-line" /><span>{t("game.table")}</span></div>
                     <h1>{currentDeck.name}</h1>
                   </div>
                   <div className="match-chip">
@@ -2411,6 +2695,10 @@ function App() {
                   onMulligan={takeMulligan}
                   canReplay={canReplay}
                   onReplay={openReplay}
+                  passAndPlay={passAndPlay}
+                  humanSide={humanSide}
+                  passPending={passPending}
+                  onPassConfirm={() => { sound.play("click"); setPassPending(null); }}
                 />
               </div>
 
@@ -2423,40 +2711,49 @@ function App() {
                   pick={pick}
                   settings={settings}
                   t={t}
+                  humanSide={humanSide}
                   onMove={performHumanMove}
                   onFight={() => {
-                    if (!selectedCard || !gameRef.current) return;
+                    const live = gameRef.current;
+                    if (!selectedCard || !live) return;
                     sound.play("select");
+                    const side = humanSideOf(live, matchModeRef.current);
                     setPick({
                       move: { type: "fight", attackerId: selectedCard.instanceId, targetId: "" },
-                      ids: fightTargets(gameRef.current, 0, selectedCard).map((target) => target.instanceId),
+                      ids: fightTargets(live, side, selectedCard).map((target) => target.instanceId),
                     });
                   }}
                   onCancelPick={() => setPick(null)}
                   onClear={() => { setSelected(null); setPick(null); }}
                 />
 
-                {/* FEAT-12a: rewinds the player's moves to the start of the turn. */}
-                <section className="undo-section">
-                  <button
-                    type="button"
-                    className="ghost-button undo-button"
-                    onClick={undoLastMove}
-                    disabled={!undoable}
-                    title={undo?.blocked ? t("game.undoBlocked") : undefined}
-                  >
-                    <RotateCcw size={15} /> {t("game.undo")}
-                  </button>
-                </section>
+                {/* FEAT-12a: rewinds the player's moves to the start of the turn.
+                    FEAT-13: undo does not exist in pass-and-play. */}
+                {!passAndPlay && (
+                  <section className="undo-section">
+                    <button
+                      type="button"
+                      className="ghost-button undo-button"
+                      onClick={undoLastMove}
+                      disabled={!undoable}
+                      title={undo?.blocked ? t("game.undoBlocked") : undefined}
+                    >
+                      <RotateCcw size={15} /> {t("game.undo")}
+                    </button>
+                  </section>
+                )}
 
-                <section className="ai-brief">
-                  <span className="ai-avatar"><Cpu size={17} /></span>
-                  <div className="ai-brief-copy">
-                    <span className="section-label">{t("rail.warden")}</span>
-                    <strong>{describeAiThinking({ difficulty: settings.difficulty, thinkingDepth: settings.thinkingDepth })}</strong>
-                  </div>
-                  <button type="button" onClick={() => { sound.play("click"); setScreen("config"); }} aria-label={t("nav.config")}><Settings2 size={15} /></button>
-                </section>
+                {/* FEAT-13: no Warden in pass-and-play. */}
+                {!passAndPlay && (
+                  <section className="ai-brief">
+                    <span className="ai-avatar"><Cpu size={17} /></span>
+                    <div className="ai-brief-copy">
+                      <span className="section-label">{t("rail.warden")}</span>
+                      <strong>{describeAiThinking({ difficulty: settings.difficulty, thinkingDepth: settings.thinkingDepth })}</strong>
+                    </div>
+                    <button type="button" onClick={() => { sound.play("click"); setScreen("config"); }} aria-label={t("nav.config")}><Settings2 size={15} /></button>
+                  </section>
+                )}
 
                 <section className={`log-section${logOpen ? " inspector-section--docked" : ""}`}>
                   <div className="section-label-row">
@@ -2475,7 +2772,7 @@ function App() {
                       <div className="filter-chips" role="group" aria-label={t("log.filterSide")}>
                         {(["all", "you", "warden"] as const).map((id) => (
                           <button key={id} type="button" className={`filter-chip${logSide === id ? " is-active" : ""}`} aria-pressed={logSide === id} onClick={() => setLogSide(id)}>
-                            {id === "all" ? t("log.all") : id === "you" ? t("common.you") : t("log.warden")}
+                            {id === "all" ? t("log.all") : localizeName(game.players[id === "you" ? 0 : 1].name, t)}
                           </button>
                         ))}
                       </div>
@@ -2522,7 +2819,7 @@ function App() {
                   <div className="rules-copy">
                     <p>{t("rail.rule1")}</p>
                     <p>{t("rail.rule2")}</p>
-                    <p>{t("rail.rule3", { cost: keyCost(game, 0) })}</p>
+                    <p>{t("rail.rule3", { cost: keyCost(game, humanSide) })}</p>
                   </div>
                 </details>
 
@@ -2622,7 +2919,7 @@ function App() {
           onConfirm={() => {
             const pending = pendingDeck;
             setPendingDeck(null);
-            launchMatch(pending.deck, pending.opponent);
+            launchMatch(pending.deck, pending.opponent, pending.mode);
           }}
           onCancel={() => setPendingDeck(null)}
         />

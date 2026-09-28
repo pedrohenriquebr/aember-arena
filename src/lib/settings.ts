@@ -5,6 +5,9 @@ import type { Language } from "./i18n";
     library deck (`opponentDeckId`) or a random different library deck. */
 export type OpponentMode = "mirror" | "deck" | "random";
 
+/** FEAT-13: solo against the local AI, or two humans sharing the device. */
+export type GameMode = "solo" | "passAndPlay";
+
 export interface AppSettings {
   difficulty: Difficulty;
   thinkingDepth: number;
@@ -17,6 +20,10 @@ export interface AppSettings {
   language: Language;
   opponentMode: OpponentMode;
   opponentDeckId?: string;
+  gameMode: GameMode;
+  /** FEAT-13: pass-and-play decks, one per human (ids from the library). */
+  deckP1Id?: string;
+  deckP2Id?: string;
 }
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
@@ -32,6 +39,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hints: false,
   language: "en",
   opponentMode: "mirror",
+  gameMode: "solo",
 };
 
 export function readSettings(fallbackLanguage: Language): AppSettings {
@@ -51,6 +59,9 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
       language: parsed.language === "en" || parsed.language === "ptBR" ? parsed.language : base.language,
       opponentMode: OPPONENT_MODES.includes(parsed.opponentMode as OpponentMode) ? (parsed.opponentMode as OpponentMode) : base.opponentMode,
       opponentDeckId: typeof parsed.opponentDeckId === "string" ? parsed.opponentDeckId : base.opponentDeckId,
+      gameMode: parsed.gameMode === "passAndPlay" ? "passAndPlay" : base.gameMode,
+      deckP1Id: typeof parsed.deckP1Id === "string" ? parsed.deckP1Id : base.deckP1Id,
+      deckP2Id: typeof parsed.deckP2Id === "string" ? parsed.deckP2Id : base.deckP2Id,
     };
   } catch {
     return base;

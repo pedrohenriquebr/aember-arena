@@ -241,6 +241,23 @@ export function createMatch(playerDeck: DeckInfo, rivalDeck: DeckInfo, options: 
   };
 }
 
+// ---------- pass-and-play (FEAT-13) ----------
+
+/** A two-human match: the same engine state as createMatch, with the solo
+    names ("You"/"The Ember Warden") replaced by neutral side names so the log
+    and the player bands localize them (App's localizeName). Pure — the created
+    state is rebuilt, never mutated. */
+export function createPassAndPlayMatch(deckA: DeckInfo, deckB: DeckInfo, options: { seed?: number } = {}): GameState {
+  const state = createMatch(deckA, deckB, options);
+  return {
+    ...state,
+    players: [
+      { ...state.players[0], name: "Player 1" },
+      { ...state.players[1], name: "Player 2" },
+    ],
+  };
+}
+
 // ---------- mulligan (FEAT-10) ----------
 
 /** True while either side still has to keep or mulligan its opening hand. */

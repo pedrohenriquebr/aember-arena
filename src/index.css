@@ -3250,6 +3250,11 @@ button:disabled {
   backdrop-filter: none;
 }
 
+/* FEAT-13: pass the device — hides the next hand until its player confirms. */
+.pass-shade {
+  z-index: 40;
+}
+
 /* FEAT-12b: replay viewer — a read-only board above the live screen with the
    step controls fixed below it. */
 .replay-overlay {
