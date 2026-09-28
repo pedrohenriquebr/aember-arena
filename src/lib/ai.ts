@@ -10,7 +10,7 @@ import {
   type GameState,
 } from "./game";
 import { rulesOf } from "./abilities";
-import { canResolve } from "./game";
+import { canResolve, seededValue } from "./game";
 
 export type Difficulty = "Easy" | "Medium" | "Hard" | "Very hard" | "Impossible";
 
@@ -168,8 +168,12 @@ export function chooseAiMove(
   const profile = profiles[settings.difficulty];
   const legal = candidateMoves(view, aiIndex, profile.effectAware);
   if (!legal.length) return null;
-  if (Math.random() < profile.randomRate) {
-    return legal[Math.floor(Math.random() * legal.length)];
+  // FEAT-08: the AI draws from the match seed instead of Math.random; the local
+  // cursor keeps chooseAiMove pure (same state in, same answer out).
+  let calls = state.rngCalls;
+  const roll = () => seededValue(state.seed, (calls += 1));
+  if (roll() < profile.randomRate) {
+    return legal[Math.floor(roll() * legal.length)];
   }
 
   const depth = Math.max(1, Math.min(6, settings.thinkingDepth + profile.depthOffset));
@@ -187,7 +191,7 @@ export function chooseAiMove(
             (ability) => ability.on.includes("play") && ability.if && !conditionHolds(ability.if, view, aiIndex),
           ).length
         : 0;
-      return { move, value: search(next, aiIndex, depth - 1, profile, budget) + heldBack + (Math.random() - 0.5) * profile.noise };
+      return { move, value: search(next, aiIndex, depth - 1, profile, budget) + heldBack + (roll() - 0.5) * profile.noise };
     })
     .sort((a, b) => b.value - a.value);
 

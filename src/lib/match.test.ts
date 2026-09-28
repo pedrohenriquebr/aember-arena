@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { chooseAiHouse, chooseAiMove } from "./ai";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
 import { applyMove, chooseHouse, createMatch, endTurn, type DeckInfo, type GameState } from "./game";
-import { seededRandom } from "./testkit";
 
 const zoneTotal = (state: GameState, index: 0 | 1) => {
   const player = state.players[index];
@@ -13,8 +12,8 @@ const zoneTotal = (state: GameState, index: 0 | 1) => {
 
 /** Plays an AI-vs-AI match exactly like App.tsx's turn loop does for the rival. */
 function simulate(deckA: DeckInfo, deckB: DeckInfo, seed: number, maxTurns = 60): GameState {
-  vi.spyOn(Math, "random").mockImplementation(seededRandom(seed));
-  let state = createMatch(deckA, deckB);
+  // FEAT-08: the seed drives the whole match — no Math.random mock needed.
+  let state = createMatch(deckA, deckB, { seed });
   const settings = { difficulty: "Medium" as const, thinkingDepth: 1 };
   for (let step = 0; step < maxTurns * 2 && state.winner === null; step += 1) {
     const actor = state.activePlayer;
@@ -32,8 +31,6 @@ function simulate(deckA: DeckInfo, deckB: DeckInfo, seed: number, maxTurns = 60)
   }
   return state;
 }
-
-afterEach(() => vi.restoreAllMocks());
 
 describe("demo decks", () => {
   it.each([DEMO_DECK, DEMO_DECK_2])("$name is a legal 36-card, 3-house deck that works offline", (deck) => {
@@ -57,5 +54,23 @@ describe("demo decks", () => {
   ])("AI-vs-AI match with the demo decks runs to completion (case %#)", (a, b, seed) => {
     const final = simulate(a, b, seed);
     expect(final.winner === null || final.players[final.winner].keys >= 3).toBe(true);
+  });
+});
+
+describe("FEAT-08 seeded RNG (docs/BUGS_AND_FEATURES.md)", () => {
+  it("the same seed deals the same opening hands and instance ids", () => {
+    const first = createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 77 });
+    const second = createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 77 });
+    expect(second.players.map((player) => player.hand.map((card) => card.instanceId))).toEqual(
+      first.players.map((player) => player.hand.map((card) => card.instanceId)),
+    );
+    expect(second.rngCalls).toBe(first.rngCalls);
+    expect(second.seed).toBe(77);
+  });
+
+  it("seed + moves replay a whole AI-vs-AI match identically", () => {
+    const first = simulate(DEMO_DECK, DEMO_DECK_2, 9, 24);
+    const second = simulate(DEMO_DECK, DEMO_DECK_2, 9, 24);
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first));
   });
 });

@@ -129,6 +129,7 @@ const DICT: Record<string, [string, string]> = {
   "game.youWinSub": ["The forge is yours.", "A forja é sua."],
   "game.aiWinSub": ["The Ember Warden takes this match.", "O Ember Warden vence esta partida."],
   "game.rematch": ["Rematch", "Revanche"],
+  "game.seed": ["Seed: {seed}", "Seed: {seed}"],
   "game.toHome": ["Home", "Início"],
   "inspector.title": ["CARD INSPECTOR", "INSPETOR DE CARTA"],
   "inspector.selectCard": ["Select a card", "Selecione uma carta"],

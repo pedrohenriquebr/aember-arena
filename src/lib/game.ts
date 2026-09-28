@@ -94,6 +94,10 @@ export interface GameState {
   played: number;
   /** An Omega card ended the main step. */
   omega: boolean;
+  /** FEAT-08: PRNG seed and how many draws the match has consumed so far.
+      Both numbers are JSON-safe — the state carries no function. */
+  seed: number;
+  rngCalls: number;
 }
 
 /** `target` optionally names the card chosen for the triggered ability (or the
@@ -114,28 +118,49 @@ const LOG_SIZE = 14;
 type Side = 0 | 1;
 const other = (side: Side): Side => (side === 0 ? 1 : 0);
 
-function shuffle<T>(items: T[]): T[] {
+/** mulberry32: deterministic draw number `n` (1-based) of the stream `seed`.
+    The single random primitive of the engine — `seed` + `rngCalls` are the
+    whole PRNG state, so it survives JSON serialization (FEAT-08). */
+export function seededValue(seed: number, n: number): number {
+  let a = (seed + n * 0x6d2b79f5) >>> 0;
+  let t = a;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** What the PRNG needs: a seed and the number of draws already made. */
+type Rng = Pick<GameState, "seed" | "rngCalls">;
+
+/** Next deterministic draw, advancing the state's counter (callers hold a clone). */
+function roll(rng: Rng): number {
+  rng.rngCalls += 1;
+  return seededValue(rng.seed, rng.rngCalls);
+}
+
+function shuffle<T>(items: T[], rng: Rng): T[] {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(roll(rng) * (i + 1));
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
 }
 
-function makePlayer(name: string, deck: DeckInfo, owner: string): GamePlayer {
+function makePlayer(name: string, deck: DeckInfo, owner: string, rng: Rng): GamePlayer {
   return {
     name,
     deckName: deck.name,
     houses: deck.houses.length ? [...deck.houses] : [...new Set(deck.cards.map((card) => card.house))],
     deck: shuffle(
       deck.cards.map((face, index) => ({
-        instanceId: `${owner}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        instanceId: `${owner}-${index}-${roll(rng).toString(36).slice(2, 8)}`,
         face,
         damage: 0,
         ready: false,
         stunned: false,
       })),
+      rng,
     ),
     hand: [],
     discard: [],
@@ -149,10 +174,10 @@ function makePlayer(name: string, deck: DeckInfo, owner: string): GamePlayer {
 }
 
 /** Draws from the top of the deck (the array's end), reshuffling the discard pile when the deck runs out. */
-function draw(player: GamePlayer, count: number): void {
+function draw(player: GamePlayer, count: number, rng: Rng): void {
   for (let drawn = 0; drawn < count; drawn += 1) {
     if (!player.deck.length && player.discard.length) {
-      player.deck = shuffle(player.discard);
+      player.deck = shuffle(player.discard, rng);
       player.discard = [];
     }
     const card = player.deck.pop();
@@ -163,19 +188,22 @@ function draw(player: GamePlayer, count: number): void {
 
 /** Draw step (keyteki DrawAction refill): up to 6, minus 1 card per 6 chains
     (rounded up), shedding one chain whenever the hand was below its size. */
-function refill(player: GamePlayer): void {
+function refill(player: GamePlayer, rng: Rng): void {
   if (player.hand.length >= HAND_SIZE) return;
-  draw(player, HAND_SIZE - player.hand.length - Math.floor((player.chains + 5) / 6));
+  draw(player, HAND_SIZE - player.hand.length - Math.floor((player.chains + 5) / 6), rng);
   if (player.chains > 0) player.chains -= 1;
 }
 
-export function createMatch(playerDeck: DeckInfo, rivalDeck: DeckInfo): GameState {
-  const rival = makePlayer("The Ember Warden", rivalDeck, "warden");
+export function createMatch(playerDeck: DeckInfo, rivalDeck: DeckInfo, options: { seed?: number } = {}): GameState {
+  // FEAT-08: a numeric seed drives every shuffle, instance id and random
+  // discard, so the same seed and the same moves replay the exact match.
+  const rng: Rng = { seed: (options.seed ?? Math.floor(Math.random() * 4294967296)) >>> 0, rngCalls: 0 };
+  const rival = makePlayer("The Ember Warden", rivalDeck, "warden", rng);
   if (playerDeck.id === rivalDeck.id) rival.deckName = "Warden's mirror deck";
-  const players: [GamePlayer, GamePlayer] = [makePlayer("You", playerDeck, "you"), rival];
+  const players: [GamePlayer, GamePlayer] = [makePlayer("You", playerDeck, "you", rng), rival];
   // First player opens with 7 (keyteki setupphase: +1 hand size on the first refill).
-  draw(players[0], HAND_SIZE + 1);
-  draw(players[1], HAND_SIZE);
+  draw(players[0], HAND_SIZE + 1, rng);
+  draw(players[1], HAND_SIZE, rng);
 
   return {
     players,
@@ -187,6 +215,8 @@ export function createMatch(playerDeck: DeckInfo, rivalDeck: DeckInfo): GameStat
     acted: 0,
     played: 0,
     omega: false,
+    seed: rng.seed,
+    rngCalls: rng.rngCalls,
   };
 }
 
@@ -383,9 +413,9 @@ function sweep(state: GameState, deterministic: boolean): void {
   }
 }
 
-function discardRandom(player: GamePlayer, deterministic: boolean): void {
+function discardRandom(player: GamePlayer, deterministic: boolean, rng: Rng): void {
   if (!player.hand.length) return;
-  const index = deterministic ? 0 : Math.floor(Math.random() * player.hand.length);
+  const index = deterministic ? 0 : Math.floor(roll(rng) * player.hand.length);
   player.discard.push(...player.hand.splice(index, 1));
 }
 
@@ -411,10 +441,10 @@ function run(context: Context, act: Act): void {
       player.chains += amount;
       break;
     case "draw":
-      draw(player, amount);
+      draw(player, amount, state);
       break;
     case "discardRandom":
-      for (let count = 0; count < amount; count += 1) discardRandom(player, deterministic);
+      for (let count = 0; count < amount; count += 1) discardRandom(player, deterministic, state);
       break;
     case "keyCost":
       player.keyCostMod = (player.keyCostMod ?? 0) + amount;
@@ -788,14 +818,13 @@ export function chooseHouse(state: GameState, playerIndex: Side, house: string):
 
 export function endTurn(current: GameState, playerIndex: Side): GameState {
   const state = cloneGame(current);
-  if (playerIndex !== state.activePlayer || state.winner !== null) return state;
   // The turn cannot end before the mandatory house choice (BUG-02).
   if (state.activeHouse === null) return state;
 
   const endingPlayer = state.players[playerIndex];
   // Ready step, then draw step (keyteki ReadyPhase + DrawPhase).
   for (const card of endingPlayer.board) card.ready = true;
-  refill(endingPlayer);
+  refill(endingPlayer, state);
   endingPlayer.keyCostMod = 0;
   for (const card of state.players.flatMap((player) => player.board)) {
     card.armorUsed = 0;

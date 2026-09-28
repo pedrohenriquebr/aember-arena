@@ -1102,6 +1102,7 @@ function GameBoard({
             <span className="eyebrow">{t("game.matchComplete")}</span>
             <h2 id="winner-title">{game.winner === 0 ? t("game.youWin") : t("game.aiWin")}</h2>
             <p>{game.winner === 0 ? t("game.youWinSub") : t("game.aiWinSub")}</p>
+            <p className="winner-seed">{t("game.seed", { seed: game.seed })}</p>
             <div className="winner-actions">
               <button type="button" className="cta-button" onClick={onRematch}><RotateCcw size={15} /> {t("game.rematch")}</button>
               <button type="button" className="ghost-button" onClick={onHome}><Home size={15} /> {t("game.toHome")}</button>
@@ -1653,7 +1654,9 @@ function App() {
   }
 
   function launchMatch(deck: DeckInfo) {
-    const next = createMatch(deck, deck);
+    // FEAT-08: every match gets a fresh random seed, shown on the winner panel
+    // so the opening hands can be replayed.
+    const next = createMatch(deck, deck, { seed: Math.floor(Math.random() * 4294967296) });
     gameRef.current = next;
     prevKeysRef.current = { player: 0, ai: 0 };
     setCurrentDeck(deck);

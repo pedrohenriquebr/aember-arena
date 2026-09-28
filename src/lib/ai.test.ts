@@ -61,13 +61,14 @@ describe("AI", () => {
     expect(move && "instanceId" in move ? state.players[1].hand.find((item) => item.instanceId === move.instanceId)?.face.title : null).toBe("Mind Barb");
   });
 
-  it("only ever proposes legal moves (taunt respected)", () => {
+  it("only ever proposes legal moves (taunt respected), deterministically (FEAT-08)", () => {
     const taunt = card("Guard", { type: "Creature", power: 9, text: "Taunt." });
     const state = setupTest({ inPlay: [card("Weak", { type: "Creature", power: 1 }), taunt] }, { inPlay: ["Headhunter"] }, "Brobnar");
     state.activePlayer = 1;
-    for (let seed = 0; seed < 5; seed += 1) {
-      const move = chooseAiMove(state, 1, "Brobnar", { difficulty: "Easy", thinkingDepth: 1 });
-      if (move) expect(isLegalMove(state, 1, move)).toBe(true);
-    }
+    const first = chooseAiMove(state, 1, "Brobnar", { difficulty: "Easy", thinkingDepth: 1 });
+    const second = chooseAiMove(state, 1, "Brobnar", { difficulty: "Easy", thinkingDepth: 1 });
+    if (first) expect(isLegalMove(state, 1, first)).toBe(true);
+    // Same state -> same move: profile noise comes from the seed, not Math.random.
+    expect(second).toEqual(first);
   });
 });

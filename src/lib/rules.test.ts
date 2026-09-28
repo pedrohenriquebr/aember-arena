@@ -372,3 +372,17 @@ describe("regression: BUG-23 Gigantic halves (docs/BUGS_AND_FEATURES.md)", () =>
     expect(byTitle(played.players[0].hand, "Ultra Gravitron")).toBeUndefined();
   });
 });
+
+describe("FEAT-08 seeded RNG (docs/BUGS_AND_FEATURES.md)", () => {
+  it("a random discard is reproducible from the state's seed", () => {
+    const run = () => {
+      const state = setupTest({ hand: ["Mind Barb"] }, { hand: Array.from({ length: 12 }, (_, i) => card(`Filler ${i}`)) });
+      const barb = state.players[0].hand[0];
+      return titles(applyMove(state, 0, { type: "play", instanceId: barb.instanceId }).players[1].hand);
+    };
+    const first = run();
+    expect(first).toHaveLength(11);
+    expect(run()).toEqual(first);
+  });
+});
+

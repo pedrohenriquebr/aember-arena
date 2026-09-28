@@ -3,7 +3,7 @@
 // inPlay, amber) so specs ported from there read the same way.
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
-import { createMatch, type CardFace, type CardInstance, type GameState } from "./game";
+import { createMatch, seededValue, type CardFace, type CardInstance, type GameState } from "./game";
 
 const faces = new Map<string, CardFace>();
 for (const face of [...DEMO_DECK.cards, ...DEMO_DECK_2.cards]) faces.set(face.title.toLowerCase(), face);
@@ -43,8 +43,8 @@ export interface SideSetup {
 
 const toCards = (items: (string | CardInstance)[] = []) => items.map((item) => (typeof item === "string" ? card(item) : item));
 
-export function setupTest(player1: SideSetup, player2: SideSetup = {}, house?: string | null): GameState {
-  const state = createMatch(DEMO_DECK, DEMO_DECK_2);
+export function setupTest(player1: SideSetup, player2: SideSetup = {}, house?: string | null, seed = 4242): GameState {
+  const state = createMatch(DEMO_DECK, DEMO_DECK_2, { seed });
   state.players.forEach((player, index) => {
     const setup = index === 0 ? player1 : player2;
     player.hand = toCards(setup.hand);
@@ -68,14 +68,9 @@ export function setupTest(player1: SideSetup, player2: SideSetup = {}, house?: s
 export const byTitle = (cards: CardInstance[], title: string) => cards.find((item) => item.face.title === title);
 export const titles = (cards: CardInstance[]) => cards.map((item) => item.face.title);
 
-/** Seeded PRNG (mulberry32) so shuffles/random discards are reproducible in tests. */
+/** Seeded PRNG (mulberry32 through game.ts's seededValue) so shuffles/random
+    discards are reproducible in tests. */
 export function seededRandom(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  let calls = 0;
+  return () => seededValue(seed, (calls += 1));
 }
