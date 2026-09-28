@@ -85,11 +85,13 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **125 kB** (teto revisado em
-   28/09 de 124 → 125: as features FEAT-07/09/15 somam ~1,5 kB gz e o headroom era
-   0,62 kB; a folga veio de `modulePreload: false` + mangle de toplevel no build e da
-   compactação do dicionário i18n, ~0,4 kB). Nova folga só com justificativa explícita.
-   Confira com `npm run e2e:bundle`.
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **126 kB** (teto revisado em
+   28/09 de 125 → 126: as features FEAT-05/08/10 somam ~1,3 kB gz — log completo de
+   400 entradas com filtros, seed determinístico com RNG injetável e mulligan — e o
+   headroom era 0,58 kB; a remoção de código morto (3 chaves i18n, 3 CSS vars e 2
+   regras duplicadas) valeu ~0,15 kB. A revisão anterior, 124 → 125, foi FEAT-07/09/15
+   com `modulePreload: false` + mangle de toplevel + dicionário i18n compacto).
+   Nova folga só com justificativa explícita. Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.

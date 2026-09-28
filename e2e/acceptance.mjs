@@ -3,10 +3,11 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 125 kB — revisado de 124 em 28/09: as features FEAT-07/09/15 somam
-//      ~1,5 kB gz sobre o baseline e o headroom era 0,62 kB (decisao consciente e
-//      documentada no CLAUDE.md §7; a folga veio de modulePreload:false + mangle de
-//      toplevel + dicionario i18n compacto).
+//      Default 126 kB — revisado de 125 em 28/09: as features FEAT-05/08/10 somam
+//      ~1,3 kB gz (log completo, seed determinístico, mulligan) e o headroom era
+//      0,58 kB; a remocao de codigo morto (i18n/CSS) valeu ~0,15 kB (decisao
+//      consciente e documentada no CLAUDE.md §7). A revisao anterior (124 -> 125)
+//      foi FEAT-07/09/15 com modulePreload:false + mangle toplevel + i18n compacto.
 //      Pressupoe "npm run build" recem-rodado.
 //   3. Bloco @media (max-width: 700px) de src/index.css com <= --block-max-lines linhas.
 //      Default 99 ("menos de 100 linhas", §5 criterio 5; hoje o bloco tem ~723).
@@ -33,7 +34,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 125);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 126);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);
