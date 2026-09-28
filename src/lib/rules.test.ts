@@ -334,3 +334,41 @@ describe("regression: BUG-11 'Use a friendly creature' resolves the printed Acti
     expect(forced.players[0].amber).toBe(1);
   });
 });
+
+describe("regression: BUG-06 fight ability targets are choosable (docs/BUGS_AND_FEATURES.md)", () => {
+  it("a targeted After Fight: ability exposes its choices on the fight move", () => {
+    const state = setupTest(
+      { inPlay: [card("Basilisk", { power: 6, text: "Skirmish. After Fight: Exhaust an enemy creature." })] },
+      { inPlay: [card("Low", { power: 1 }), card("Mid", { power: 3 }), card("High", { power: 5 })] },
+    );
+    const fights = getLegalMoves(state, 0, "Brobnar").filter((move): move is Extract<GameMove, { type: "fight" }> => move.type === "fight");
+    expect(fights.some((move) => move.target !== undefined)).toBe(true);
+  });
+});
+
+describe("regression: BUG-23 Gigantic halves (docs/BUGS_AND_FEATURES.md)", () => {
+  const gravitron = () =>
+    card("Ultra Gravitron", {
+      type: "Creature",
+      house: "Logos",
+      power: 12,
+      amber: 1,
+      text: "Gigantic. (Play only with the other half of Ultra Gravitron.)",
+    });
+
+  it("one half alone is not playable", () => {
+    const solo = setupTest({ hand: [gravitron()] }, {}, "Logos");
+    expect(isLegalMove(solo, 0, { type: "play", instanceId: solo.players[0].hand[0].instanceId })).toBe(false);
+  });
+
+  it("both halves enter as one creature; both amber bonuses count; the second half sits under", () => {
+    const state = setupTest({ hand: [gravitron(), gravitron()], amber: 2 }, {}, "Logos");
+    const played = applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId });
+    const creature = byTitle(played.players[0].board, "Ultra Gravitron");
+    expect(creature).toBeDefined();
+    expect(creature!.under).toHaveLength(1);
+    expect(played.players[0].hand).toHaveLength(0);
+    expect(played.players[0].amber).toBe(4);
+    expect(byTitle(played.players[0].hand, "Ultra Gravitron")).toBeUndefined();
+  });
+});

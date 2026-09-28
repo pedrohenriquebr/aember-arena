@@ -56,6 +56,8 @@ export interface CardInstance {
   poisoned?: boolean;
   /** Upgrades: instanceId of the creature they are attached to. */
   attachedTo?: string;
+  /** Gigantic halves: the other half is played "under" this one (BUG-23). */
+  under?: CardInstance[];
 }
 
 export interface GamePlayer {
@@ -195,7 +197,7 @@ export function cloneGame(state: GameState): GameState {
     deck: player.deck.map((card) => ({ ...card })),
     hand: player.hand.map((card) => ({ ...card })),
     discard: player.discard.map((card) => ({ ...card })),
-    board: player.board.map((card) => ({ ...card })),
+    board: player.board.map((card) => ({ ...card, under: card.under?.map((half) => ({ ...half })) })),
     archives: (player.archives ?? []).map((card) => ({ ...card })),
   });
 
@@ -334,6 +336,12 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   for (const upgrade of state.players.flatMap((p) => p.board).filter((item) => item.attachedTo === card.instanceId)) {
     leavePlay(state, upgrade, "discard");
   }
+  // A Gigantic half under this creature leaves play with it (BUG-23).
+  for (const half of card.under ?? []) {
+    Object.assign(half, { damage: 0, ready: false, stunned: false, amber: 0, armorUsed: 0, elusiveUsed: false, poisoned: false });
+    player.discard.push(half);
+  }
+  card.under = undefined;
   Object.assign(card, { damage: 0, ready: false, stunned: false, amber: 0, armorUsed: 0, elusiveUsed: false, poisoned: false, attachedTo: undefined });
   if (destination === "deck") player.deck.push(card);
   else player[destination].push(card);
@@ -544,8 +552,16 @@ function mayPlay(state: GameState, side: Side): boolean {
 function canPlay(state: GameState, side: Side, card: CardInstance): boolean {
   if (keyword(card, "alpha") && side === state.activePlayer && state.acted > 0) return false;
   if (card.face.type === "Upgrade") return state.players.some((player) => battleline(player).length > 0);
+  // Gigantic creatures are one creature printed on two cards: both halves must
+  // be in hand and they leave the hand together (BUG-23). The reminder text is
+  // in parentheses, which normalise() strips — read the raw text.
+  if (isGigantic(card) && !state.players[side].hand.some((item) => item !== card && item.face.title === card.face.title)) {
+    return false;
+  }
   return true;
 }
+
+const isGigantic = (card: CardInstance) => /play only with the other half of/i.test(card.face.text ?? "");
 
 /** Enemy creatures `attacker` may fight: taunt protects its neighbors (keyteki Card.js). */
 export function fightTargets(state: GameState, side: Side, attacker: CardInstance): CardInstance[] {
@@ -637,10 +653,12 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
   return moves;
 }
 
-/** Legal moves, one per choosable target so the AI can search the choice. */
+/** Legal moves, one per choosable target so the AI can search the choice.
+    Fight moves expand too: the ability target of Fight:/Before Fight: is the
+    controller's choice (BUG-06), separate from the defender. */
 export function getLegalMoves(state: GameState, playerIndex: Side, house: string | null = null): GameMove[] {
   return baseMoves(state, playerIndex, house).flatMap((move) => {
-    const choices = move.type === "fight" ? [] : targetChoices(state, playerIndex, move);
+    const choices = targetChoices(state, playerIndex, move);
     return choices.length > 1 ? choices.map((target) => ({ ...move, target }) as GameMove) : [move];
   });
 }
@@ -707,6 +725,17 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     record(state, "log.play", params, silent);
     if (isCreature(source)) {
       placeCreature(player, source, move);
+      // The other Gigantic half leaves the hand with its partner: both amber
+      // bonuses count, the second half sits "under" and is discarded with the
+      // creature (BUG-23). Fidelity note: its power/text are not merged yet.
+      if (isGigantic(source)) {
+        const half = player.hand.find((item) => item !== source && item.face.title === source.face.title);
+        if (half) {
+          player.hand = player.hand.filter((item) => item !== half);
+          player.amber += half.face.amber;
+          source.under = [half];
+        }
+      }
     } else if (source.face.type === "Upgrade") {
       const creatures = state.players.flatMap((side) => battleline(side));
       const host = creatures.find((card) => card.instanceId === choice.id) ?? autoPick(state, playerIndex, creatures, false);
