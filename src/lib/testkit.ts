@@ -59,8 +59,9 @@ export function setupTest(player1: SideSetup, player2: SideSetup = {}, house?: s
   // turn already underway (house of the first card set up) and pass null
   // explicitly to test the pre-choice state.
   state.activeHouse = house !== undefined ? house : (state.players[0].hand[0] ?? state.players[0].board[0])?.face.house ?? "Brobnar";
-  // Past the first-turn rule unless a spec opts back in.
+  // Past the first-turn rule and the mulligan micro-phase unless a spec opts in.
   state.turn = 2;
+  state.pendingMulligan = null;
   state.log = [];
   return state;
 }

@@ -11,8 +11,10 @@ import {
   createMatch,
   endTurn,
   getLegalMoves,
+  keepHand,
   keyCost,
   moveHasEffect,
+  mulligan,
   targetChoices,
   type GameMove,
   type GameState,
@@ -136,7 +138,8 @@ describe("play keywords", () => {
 
 describe("turn structure", () => {
   it("first player opens with 7 cards and may play only one card on turn 1", () => {
-    const state = chooseHouse(createMatch(DEMO_DECK, DEMO_DECK_2), 0, "Brobnar");
+    const opening = keepHand(keepHand(createMatch(DEMO_DECK, DEMO_DECK_2), 0), 1);
+    const state = chooseHouse(opening, 0, "Brobnar");
     expect(state.players[0].hand).toHaveLength(7);
     const first = getLegalMoves(state, 0, "Brobnar").find((move) => move.type === "play")!;
     const after = applyMove(state, 0, first);
@@ -386,3 +389,42 @@ describe("FEAT-08 seeded RNG (docs/BUGS_AND_FEATURES.md)", () => {
   });
 });
 
+describe("FEAT-10 mulligan (docs/BUGS_AND_FEATURES.md)", () => {  const total = (state: GameState, side: 0 | 1) => {
+    const player = state.players[side];
+    return player.deck.length + player.hand.length + player.discard.length + player.board.length + player.archives.length;
+  };
+
+  it("no card is legal, the house cannot be chosen and the turn cannot end before both decide", () => {
+    const state = createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 5 });
+    expect(state.pendingMulligan).toBe(0);
+    expect(getLegalMoves(state, 0)).toHaveLength(0);
+    expect(chooseHouse(state, 0, state.players[0].houses[0]).activeHouse).toBeNull();
+    expect(endTurn(state, 0).activePlayer).toBe(0);
+  });
+
+  it("keeping the hand just advances the micro-phase", () => {
+    const state = keepHand(keepHand(createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 5 }), 0), 1);
+    expect(state.pendingMulligan).toBeNull();
+    expect(state.players[1].hand).toHaveLength(6);
+  });
+
+  it("first player's mulligan shuffles the hand back and draws one fewer; only once", () => {
+    const state = mulligan(createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 5 }), 0);
+    expect(state.players[0].hand).toHaveLength(6);
+    expect(state.players[0].mulliganed).toBe(true);
+    expect(state.pendingMulligan).toBe(1);
+    expect(total(state, 0)).toBe(36);
+    // A second mulligan for the same side is refused (and cannot touch side 1's turn).
+    const again = mulligan(state, 0);
+    expect(again.players[0].hand).toHaveLength(6);
+    expect(again.pendingMulligan).toBe(1);
+  });
+
+  it("second player draws one fewer than its opening 6", () => {
+    const state = mulligan(keepHand(createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 5 }), 0), 1);
+    expect(state.pendingMulligan).toBeNull();
+    expect(state.players[1].hand).toHaveLength(5);
+    expect(state.players[1].mulliganed).toBe(true);
+    expect(total(state, 1)).toBe(36);
+  });
+});

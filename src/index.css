@@ -102,9 +102,6 @@ button,
   font-optical-sizing: auto;
   --ink: #111310;
   --panel: #191b17;
-  --panel-soft: #20221d;
-  --line: rgba(229, 219, 195, 0.12);
-  --line-strong: rgba(229, 219, 195, 0.2);
   --paper: #eee9dc;
   --muted: #96968b;
   /* Texto terciário (contagens, dicas, rótulos de stat): ≥4.5:1 sobre --ink e
@@ -2468,10 +2465,6 @@ button:disabled {
 }
 }
 
-.log-section {
-  border-bottom: 1px solid rgba(225, 216, 194, 0.1);
-}
-
 .log-live {
   display: inline-flex;
   align-items: center;
@@ -2538,10 +2531,6 @@ button:disabled {
 
 .log-entry--latest p {
   color: #ddd8ca;
-}
-
-.quick-rules {
-  border-bottom: 1px solid rgba(225, 216, 194, 0.1);
 }
 
 .quick-rules summary {
@@ -3213,6 +3202,16 @@ button:disabled {
   margin: 0;
   color: #aaa99b;
   font-size: var(--fs-2xs);
+}
+
+/* FEAT-10: mulligan prompt — the winner overlay anchored high, without the
+   blur, so the opening hand stays readable behind the decision. */
+.mulligan-shade {
+  z-index: 30;
+  align-items: start;
+  padding-top: 9dvh;
+  background: rgba(9, 12, 10, 0.45);
+  backdrop-filter: none;
 }
 
 .spin {

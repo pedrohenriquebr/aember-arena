@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { chooseAiHouse, chooseAiMove } from "./ai";
+import { chooseAiHouse, chooseAiMove, shouldMulligan } from "./ai";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
-import { applyMove, chooseHouse, createMatch, endTurn, type DeckInfo, type GameState } from "./game";
+import { applyMove, chooseHouse, createMatch, endTurn, keepHand, mulligan, type DeckInfo, type GameState } from "./game";
 
 const zoneTotal = (state: GameState, index: 0 | 1) => {
   const player = state.players[index];
@@ -14,6 +14,10 @@ const zoneTotal = (state: GameState, index: 0 | 1) => {
 function simulate(deckA: DeckInfo, deckB: DeckInfo, seed: number, maxTurns = 60): GameState {
   // FEAT-08: the seed drives the whole match — no Math.random mock needed.
   let state = createMatch(deckA, deckB, { seed });
+  // FEAT-10: both sides decide the mulligan with the Warden's own heuristic.
+  for (const side of [0, 1] as const) {
+    state = shouldMulligan(state, side) ? mulligan(state, side) : keepHand(state, side);
+  }
   const settings = { difficulty: "Medium" as const, thinkingDepth: 1 };
   for (let step = 0; step < maxTurns * 2 && state.winner === null; step += 1) {
     const actor = state.activePlayer;

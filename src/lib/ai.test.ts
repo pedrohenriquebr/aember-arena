@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chooseAiMove, type Difficulty } from "./ai";
+import { chooseAiMove, shouldMulligan, type Difficulty } from "./ai";
 import { isLegalMove } from "./game";
 import { card, setupTest } from "./testkit";
 
@@ -70,5 +70,21 @@ describe("AI", () => {
     if (first) expect(isLegalMove(state, 1, first)).toBe(true);
     // Same state -> same move: profile noise comes from the seed, not Math.random.
     expect(second).toEqual(first);
+  });
+});
+
+describe("FEAT-10 mulligan heuristic", () => {
+  it("takes the mulligan when the most numerous house holds no creature", () => {
+    const state = setupTest({
+      hand: [card("Plot", { house: "Dis", type: "Action" }), card("Scheme", { house: "Dis", type: "Action" }), card("Grunt", { house: "Brobnar", type: "Creature" })],
+    });
+    expect(shouldMulligan(state, 0)).toBe(true);
+  });
+
+  it("keeps a hand with a creature of its most numerous house", () => {
+    const state = setupTest({
+      hand: [card("Grunt", { house: "Dis", type: "Creature" }), card("Plot", { house: "Dis", type: "Action" }), card("Axe", { house: "Brobnar", type: "Action" })],
+    });
+    expect(shouldMulligan(state, 0)).toBe(false);
   });
 });

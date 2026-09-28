@@ -229,6 +229,11 @@ async function startDemoMatch(page) {
   await page.locator(".config-screen .config-step-pill").nth(3).click();
   await page.locator(".config-screen .cta-button").click();
   await page.waitForSelector(".game-screen", { timeout: 20000 });
+  // FEAT-10: a mao inicial pede a decisao de mulligan; o harness mantem a mao
+  // (e espera o Warden decidir) para o board estabilizar antes de medir/printar.
+  const keep = page.locator(".mulligan-keep");
+  if (await keep.count()) await keep.click();
+  await page.waitForSelector(".mulligan-shade", { state: "detached", timeout: 20000 }).catch(() => {});
 }
 
 // createMatch comeca com activePlayer 0 (src/lib/game.ts:130), entao logo apos

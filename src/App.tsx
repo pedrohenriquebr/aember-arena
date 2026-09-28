@@ -37,7 +37,7 @@ import {
   Zap,
   ZoomIn,
 } from "lucide-react";
-import { chooseAiHouse, chooseAiMove, describeAiThinking, type Difficulty } from "./lib/ai";
+import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, type Difficulty } from "./lib/ai";
 import { cacheDeck, clearSavedMatch, deleteDeck, getCachedDeck, listCachedDecks, loadSavedMatch, saveMatch, setDeckFavorite, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
@@ -49,7 +49,9 @@ import {
   fightTargets,
   getLegalMoves,
   isLegalMove,
+  keepHand,
   keyCost,
+  mulligan,
   targetChoices,
   type CardInstance,
   type DeckInfo,
@@ -113,6 +115,9 @@ function renderLog(entry: LogEntry, t: Translator): string {
   if (params.house) params.house = houseLabel(params.house, t);
   return t(entry.key, params);
 }
+
+/** FEAT-10: the opening-hand micro-phase, before the match really starts. */
+const inMulligan = (game: GameState) => game.pendingMulligan === 0 || game.pendingMulligan === 1;
 
 // ---------- Small shared components ----------
 
@@ -948,6 +953,8 @@ function GameBoard({
   onEndTurn,
   onRematch,
   onHome,
+  onKeepHand,
+  onMulligan,
 }: {
   game: GameState;
   selected: Selection | null;
@@ -962,10 +969,12 @@ function GameBoard({
   onEndTurn: () => void;
   onRematch: () => void;
   onHome: () => void;
+  onKeepHand: () => void;
+  onMulligan: () => void;
 }) {
   const player = game.players[0];
   const ai = game.players[1];
-  const isHumanTurn = game.activePlayer === 0 && game.winner === null;
+  const isHumanTurn = game.activePlayer === 0 && game.winner === null && !inMulligan(game);
   // FEAT-04: ids with at least one legal move, only while it is the player's
   // turn with the house chosen; memoised so lane/tile memos keep working.
   const hintIds = useMemo(() => {
@@ -1069,7 +1078,7 @@ function GameBoard({
             </div>
             <span className="deck-count">{player.deck.length} {t("game.inDeck")}</span>
           </div>
-          {game.activePlayer === 0 && !game.activeHouse && game.winner === null && (
+          {game.activePlayer === 0 && !game.activeHouse && game.winner === null && !inMulligan(game) && (
             <div className="hand-prompt"><Zap size={13} /> {t("game.unlockHint")}</div>
           )}
           <div className="hand-track">
@@ -1094,6 +1103,24 @@ function GameBoard({
           </div>
         </section>
       </div>
+
+      {inMulligan(game) && (
+        <div className="winner-shade mulligan-shade" role="dialog" aria-modal="true" aria-labelledby="mulligan-title">
+          <div className="winner-panel">
+            <span className="eyebrow">{game.pendingMulligan === 0 ? t("game.yourHand") : t("rail.warden")}</span>
+            <h2 id="mulligan-title">{game.pendingMulligan === 0 ? t("game.mulliganTitle") : t("game.thinking")}</h2>
+            {game.pendingMulligan === 0 && (
+              <>
+                <p>{t("game.mulliganBody")}</p>
+                <div className="winner-actions">
+                  <button type="button" className="cta-button mulligan-keep" onClick={onKeepHand}><Check size={15} /> {t("game.mulliganKeep")}</button>
+                  <button type="button" className="ghost-button mulligan-take" onClick={onMulligan}><RotateCcw size={15} /> {t("game.mulliganTake")}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {game.winner !== null && (
         <div className="winner-shade" role="dialog" aria-modal="true" aria-labelledby="winner-title">
@@ -1137,7 +1164,7 @@ function SelectedCardPanel({
   onCancelPick: () => void;
   onClear: () => void;
 }) {
-  const isHumanTurn = game.activePlayer === 0 && game.winner === null;
+  const isHumanTurn = game.activePlayer === 0 && game.winner === null && !inMulligan(game);
   const activeForHouse = Boolean(card && game.activeHouse && card.face.house === game.activeHouse);
   // Legality comes from the engine (house, first-turn rule, Alpha/Omega, taunt…).
   const legal = (move: GameMove) => isHumanTurn && isLegalMove(game, 0, move);
@@ -1630,6 +1657,20 @@ function App() {
     };
   }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen]);
 
+  // FEAT-10: the Warden decides the mulligan on a short pause, so it reads as
+  // an opponent move instead of an instant flip.
+  useEffect(() => {
+    if (!game || screen !== "game" || game.pendingMulligan !== 1) return;
+    const timer = window.setTimeout(() => {
+      const current = gameRef.current;
+      if (!current || current.pendingMulligan !== 1) return;
+      const next = shouldMulligan(current, 1) ? mulligan(current, 1) : keepHand(current, 1);
+      gameRef.current = next;
+      setGame(next);
+    }, 620);
+    return () => window.clearTimeout(timer);
+  }, [game?.pendingMulligan, screen]);
+
   const selectedCard = useMemo(() => {
     if (!selected || !game) return null;
     const player = game.players[selected.playerIndex];
@@ -1718,6 +1759,23 @@ function App() {
     setGame(next);
     setSelected(null);
     setPick(null);
+  }, []);
+
+  // FEAT-10: the human's mulligan decision (keep advances the micro-phase).
+  const keepOpeningHand = useCallback(() => {
+    if (!gameRef.current) return;
+    sound.play("click");
+    const next = keepHand(gameRef.current, 0);
+    gameRef.current = next;
+    setGame(next);
+  }, []);
+
+  const takeMulligan = useCallback(() => {
+    if (!gameRef.current) return;
+    sound.play("select");
+    const next = mulligan(gameRef.current, 0);
+    gameRef.current = next;
+    setGame(next);
   }, []);
 
   const choosePlayerHouse = useCallback((house: string) => {
@@ -2080,6 +2138,8 @@ function App() {
                   onEndTurn={endHumanTurn}
                   onRematch={rematch}
                   onHome={goHome}
+                  onKeepHand={keepOpeningHand}
+                  onMulligan={takeMulligan}
                 />
               </div>
 

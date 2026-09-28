@@ -132,6 +132,23 @@ function search(state: GameState, aiIndex: 0 | 1, depth: number, profile: Profil
   return best;
 }
 
+/** FEAT-10: simple opening heuristic — mulligan when the hand holds no playable
+    creature of its most numerous house. */
+export function shouldMulligan(state: GameState, side: 0 | 1): boolean {
+  const hand = state.players[side].hand;
+  const counts = new Map<string, number>();
+  for (const card of hand) counts.set(card.face.house, (counts.get(card.face.house) ?? 0) + 1);
+  let house = "";
+  let best = 0;
+  for (const [candidate, count] of counts) {
+    if (count > best) {
+      house = candidate;
+      best = count;
+    }
+  }
+  return !hand.some((card) => card.face.house === house && card.face.type === "Creature");
+}
+
 export function chooseAiHouse(state: GameState, aiIndex: 0 | 1): string {
   const player = state.players[aiIndex];
   const houses = player.houses.length ? player.houses : [...new Set(player.hand.map((card) => card.face.house))];

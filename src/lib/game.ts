@@ -74,6 +74,8 @@ export interface GamePlayer {
   chains: number;
   /** Key cost modifier active during this player's current/next turn (e.g. Lash of Broken Dreams). */
   keyCostMod: number;
+  /** FEAT-10: this side already used its one mulligan. */
+  mulliganed?: boolean;
 }
 
 export interface LogEntry {
@@ -98,6 +100,9 @@ export interface GameState {
       Both numbers are JSON-safe — the state carries no function. */
   seed: number;
   rngCalls: number;
+  /** FEAT-10: which side still has to decide its mulligan before turn 1
+      (null once both did). */
+  pendingMulligan: 0 | 1 | null;
 }
 
 /** `target` optionally names the card chosen for the triggered ability (or the
@@ -217,7 +222,41 @@ export function createMatch(playerDeck: DeckInfo, rivalDeck: DeckInfo, options: 
     omega: false,
     seed: rng.seed,
     rngCalls: rng.rngCalls,
+    pendingMulligan: 0,
   };
+}
+
+// ---------- mulligan (FEAT-10) ----------
+
+/** True while either side still has to keep or mulligan its opening hand. */
+const mulliganPending = (state: GameState) => state.pendingMulligan === 0 || state.pendingMulligan === 1;
+
+/** Advances the micro-phase: the first player decides, then the second. */
+function advanceMulligan(state: GameState, side: Side): void {
+  state.pendingMulligan = side === 0 ? 1 : null;
+}
+
+/** Keeps the opening hand (the match starts once both sides decided). */
+export function keepHand(current: GameState, side: Side): GameState {
+  const state = cloneGame(current);
+  if (state.pendingMulligan !== side) return state;
+  advanceMulligan(state, side);
+  return state;
+}
+
+/** One mulligan per side: the hand goes back into the shuffled deck and the
+    side draws one card fewer (first player 7->6, second 6->5). */
+export function mulligan(current: GameState, side: Side): GameState {
+  const state = cloneGame(current);
+  const player = state.players[side];
+  if (state.pendingMulligan !== side || player.mulliganed) return state;
+  player.mulliganed = true;
+  player.deck = shuffle([...player.deck, ...player.hand], state);
+  player.hand = [];
+  draw(player, (side === 0 ? HAND_SIZE + 1 : HAND_SIZE) - 1, state);
+  record(state, "log.mulligan", { name: player.name });
+  advanceMulligan(state, side);
+  return state;
 }
 
 export function cloneGame(state: GameState): GameState {
@@ -572,7 +611,7 @@ const houseAllows = (card: CardInstance, house: string | null) => !house || card
 const hasPrinted = (card: CardInstance, prefix: "Action" | "Omni") => new RegExp(`(^|[\\s/.])${prefix}:`, "i").test(card.face.text);
 
 function mayAct(state: GameState, side: Side): boolean {
-  return state.winner === null && !(side === state.activePlayer && state.omega);
+  return !mulliganPending(state) && state.winner === null && !(side === state.activePlayer && state.omega);
 }
 
 /** First turn (keyteki setupphase firstPlayerEffects): the first player may play or discard only one card. */
@@ -807,7 +846,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
 export function chooseHouse(state: GameState, playerIndex: Side, house: string): GameState {
   const next = cloneGame(state);
   const player = next.players[playerIndex];
-  if (playerIndex !== next.activePlayer || next.activeHouse !== null || !player.houses.includes(house)) return next;
+  if (playerIndex !== next.activePlayer || next.activeHouse !== null || mulliganPending(next) || !player.houses.includes(house)) return next;
   next.activeHouse = house;
   // Archived cards are picked up when the house is chosen (always taken here).
   player.hand.push(...player.archives);
@@ -818,6 +857,7 @@ export function chooseHouse(state: GameState, playerIndex: Side, house: string):
 
 export function endTurn(current: GameState, playerIndex: Side): GameState {
   const state = cloneGame(current);
+  if (playerIndex !== state.activePlayer || state.winner !== null || mulliganPending(state)) return state;
   // The turn cannot end before the mandatory house choice (BUG-02).
   if (state.activeHouse === null) return state;
 
