@@ -221,12 +221,12 @@ async function openHome(page, base) {
   await settle(page);
 }
 
-// Wizard de config tem 4 passos (difficulty, thinking, experience, review -
-// src/App.tsx:329). Vai direto ao pill "review" e aperta o CTA, que chama
-// onStart -> startMatch(selectedDeck) com o deck demo embutido
-// (selectedDeck default = DEMO_DECK, src/App.tsx:1008 e 1433).
+// Wizard de config tem 5 passos (difficulty, opponent, thinking, experience,
+// review - src/App.tsx:334). Vai direto ao ULTIMO pill ("review", FEAT-11)
+// e aperta o CTA, que chama onStart -> startMatch(selectedDeck) com o deck demo
+// embutido (selectedDeck default = DEMO_DECK, src/App.tsx:1008 e 1433).
 async function startDemoMatch(page) {
-  await page.locator(".config-screen .config-step-pill").nth(3).click();
+  await page.locator(".config-screen .config-step-pill").last().click();
   await page.locator(".config-screen .cta-button").click();
   await page.waitForSelector(".game-screen", { timeout: 20000 });
   // FEAT-10: a mao inicial pede a decisao de mulligan; o harness mantem a mao

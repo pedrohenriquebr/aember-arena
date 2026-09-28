@@ -63,7 +63,7 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, vaultErrorText } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
-import { readSettings, saveSettings, type AppSettings } from "./lib/settings";
+import { readSettings, saveSettings, type AppSettings, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
 import { CoverageBadge } from "./components/CoverageBadge";
@@ -478,13 +478,15 @@ function HomeScreen({
 
 // ---------- Config screen (stepper) ----------
 
-const CONFIG_STEPS = ["difficulty", "thinking", "experience", "review"] as const;
+const CONFIG_STEPS = ["difficulty", "opponent", "thinking", "experience", "review"] as const;
 type ConfigStep = (typeof CONFIG_STEPS)[number];
+const OPPONENT_MODES = ["mirror", "deck", "random"] as const;
 
 function ConfigScreen({
   t,
   settings,
   deck,
+  savedDecks,
   hasHover,
   onChange,
   onLanguage,
@@ -494,6 +496,8 @@ function ConfigScreen({
   t: Translator;
   settings: AppSettings;
   deck: DeckInfo;
+  /** FEAT-11: the opponent picker draws from the same library as the Home list. */
+  savedDecks: LibraryDeck[];
   /** T5 — sem "(hover: hover)" o toggle hoverZoom não faz sentido e some. */
   hasHover: boolean;
   onChange: (settings: AppSettings) => void;
@@ -503,6 +507,22 @@ function ConfigScreen({
 }) {
   const [step, setStep] = useState<ConfigStep>("difficulty");
   const stepIndex = CONFIG_STEPS.indexOf(step);
+  // FEAT-11: the mirror deck never appears in its own picker; an invalid pick
+  // falls back to the mirror in launchMatch (a deleted deck must not break it).
+  const opponentChoices = savedDecks.filter((item) => item.id !== deck.id);
+  const pickedOpponent = opponentChoices.find((item) => item.id === settings.opponentDeckId);
+  const opponentLabel =
+    settings.opponentMode === "mirror"
+      ? deck.name
+      : settings.opponentMode === "random"
+        ? t("config.opponent.random")
+        : (pickedOpponent ?? deck).name;
+
+  const chooseOpponent = (mode: OpponentMode) => {
+    sound.play("select");
+    const opponentDeckId = mode === "deck" && !pickedOpponent ? opponentChoices[0]?.id : settings.opponentDeckId;
+    onChange({ ...settings, opponentMode: mode, opponentDeckId });
+  };
 
   const goNext = () => {
     sound.play("click");
@@ -572,6 +592,48 @@ function ConfigScreen({
                 <span>{t("config.algo.sub")}</span>
               </div>
             </div>
+          </section>
+        )}
+
+        {step === "opponent" && (
+          <section className="config-panel">
+            <div className="config-panel-head">
+              <h2>{t("config.opponent.title")}</h2>
+              <p>{t("config.opponent.sub")}</p>
+            </div>
+            <div className="difficulty-list">
+              {OPPONENT_MODES.map((mode, index) => (
+                <button
+                  type="button"
+                  key={mode}
+                  className={`difficulty-choice${settings.opponentMode === mode ? " is-active" : ""}`}
+                  onClick={() => chooseOpponent(mode)}
+                >
+                  <span className="difficulty-level">0{index + 1}</span>
+                  <span className="difficulty-copy">
+                    <strong>{t(`config.opponent.${mode}`)}</strong>
+                    <small>{t(`config.opponent.${mode}Sub`)}</small>
+                  </span>
+                  <span className="difficulty-indicator">{settings.opponentMode === mode && <Check size={13} />}</span>
+                </button>
+              ))}
+            </div>
+            {settings.opponentMode === "deck" && (
+              <div className="filter-chips" style={{ marginTop: 12 }} role="group" aria-label={t("config.opponent.pick")}>
+                {opponentChoices.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`filter-chip${item.id === settings.opponentDeckId ? " is-active" : ""}`}
+                    aria-pressed={item.id === settings.opponentDeckId}
+                    onClick={() => { sound.play("click"); onChange({ ...settings, opponentDeckId: item.id }); }}
+                  >
+                    {item.name}
+                  </button>
+                ))}
+                {!opponentChoices.length && <p className="deck-input-hint">{t("config.opponent.none")}</p>}
+              </div>
+            )}
           </section>
         )}
 
@@ -675,6 +737,7 @@ function ConfigScreen({
                 <ul className="review-list">
                   <li><span>{t("config.step.difficulty")}</span><strong>{t(`difficulty.${settings.difficulty}`)}</strong></li>
                   <li><span>{t("config.step.thinking")}</span><strong>{settings.thinkingDepth} / 6</strong></li>
+                  <li><span>{t("config.review.deck")}</span><strong>{opponentLabel}</strong></li>
                 </ul>
               </div>
               <div className="review-card">
@@ -1401,7 +1464,7 @@ function App() {
   // FEAT-07: library deck queued for the remove confirmation.
   const [deckToRemove, setDeckToRemove] = useState<LibraryDeck | null>(null);
   // FEAT-15: deck que aguarda a confirmação de abandono da partida em curso.
-  const [pendingDeck, setPendingDeck] = useState<DeckInfo | null>(null);
+  const [pendingDeck, setPendingDeck] = useState<{ deck: DeckInfo; opponent?: DeckInfo } | null>(null);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
   const [game, setGame] = useState<GameState | null>(null);
 
@@ -1429,6 +1492,8 @@ function App() {
 
   const gameRef = useRef<GameState | null>(null);
   const settingsRef = useRef(settings);
+  /** FEAT-11: the rival a rematch replays against (random mode does not reroll). */
+  const opponentRef = useRef<DeckInfo | null>(null);
   const aiTurnRef = useRef<string | null>(null);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const prevKeysRef = useRef({ player: 0, ai: 0 });
@@ -1707,22 +1772,38 @@ function App() {
     setToast({ message, kind });
   }
 
-  // FEAT-15: substituir uma partida em curso pede confirmação; reiniciar uma
+  // FEAT-11: substituir uma partida em curso pede confirmação; reiniciar uma
   // partida intocada (mesmo deck, rodada 1) não perde nada e segue direto.
-  function startMatch(deck: DeckInfo) {
+  function startMatch(deck: DeckInfo, opponent?: DeckInfo) {
     const current = gameRef.current;
     if (current && current.winner === null && (currentDeck.id !== deck.id || current.turn > 1)) {
       sound.play("click");
-      setPendingDeck(deck);
+      setPendingDeck({ deck, opponent });
       return;
     }
-    launchMatch(deck);
+    launchMatch(deck, opponent);
   }
 
-  function launchMatch(deck: DeckInfo) {
+  // FEAT-11: "deck" usa o baralho escolhido nas configurações e "random" sorteia
+  // um diferente da biblioteca a cada partida; qualquer escolha inválida (deck
+  // removido da biblioteca) cai no espelho.
+  function resolveOpponent(deck: DeckInfo): DeckInfo {
+    const mode = settingsRef.current.opponentMode;
+    if (mode !== "mirror") {
+      const pool = savedDecks.filter((item) => item.id !== deck.id);
+      const picked = pool.find((item) => item.id === settingsRef.current.opponentDeckId);
+      if (mode === "deck" && picked) return picked;
+      if (mode === "random" && pool.length) return pool[Math.floor(Math.random() * pool.length)];
+    }
+    return deck;
+  }
+
+  function launchMatch(deck: DeckInfo, opponent?: DeckInfo) {
     // FEAT-08: every match gets a fresh random seed, shown on the winner panel
     // so the opening hands can be replayed.
-    const next = createMatch(deck, deck, { seed: Math.floor(Math.random() * 4294967296) });
+    const rival = opponent ?? resolveOpponent(deck);
+    const next = createMatch(deck, rival, { seed: Math.floor(Math.random() * 4294967296) });
+    opponentRef.current = rival;
     gameRef.current = next;
     prevKeysRef.current = { player: 0, ai: 0 };
     setCurrentDeck(deck);
@@ -1820,7 +1901,11 @@ function App() {
     setSelected({ zone: "hand", playerIndex: 0, instanceId: card.instanceId });
   }, []);
 
-  const rematch = useCallback(() => startMatch(currentDeck), [currentDeck]);
+  // FEAT-11: the rematch keeps the same rival; without one (a resumed match)
+  // launchMatch resolves it again from the settings.
+  function rematch() {
+    startMatch(currentDeck, opponentRef.current ?? undefined);
+  }
 
   const goHome = useCallback(() => {
     sound.play("click");
@@ -2127,6 +2212,7 @@ function App() {
             t={t}
             settings={settings}
             deck={selectedDeck}
+            savedDecks={savedDecks}
             hasHover={hasHover}
             onChange={setSettings}
             onLanguage={setLanguage}
@@ -2314,9 +2400,9 @@ function App() {
           confirmLabel={t("abandon.confirm")}
           cancelLabel={t("common.cancel")}
           onConfirm={() => {
-            const deck = pendingDeck;
+            const pending = pendingDeck;
             setPendingDeck(null);
-            launchMatch(deck);
+            launchMatch(pending.deck, pending.opponent);
           }}
           onCancel={() => setPendingDeck(null)}
         />
