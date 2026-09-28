@@ -38,7 +38,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, type Difficulty } from "./lib/ai";
-import { cacheDeck, clearSavedMatch, getCachedDeck, listCachedDecks, loadSavedMatch, saveMatch, type SavedMatch } from "./lib/cache";
+import { cacheDeck, clearSavedMatch, deleteDeck, getCachedDeck, listCachedDecks, loadSavedMatch, saveMatch, setDeckFavorite, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
 import {
@@ -328,6 +328,8 @@ function HomeScreen({
   selectedDeck,
   onSelectDeck,
   onInspectDeck,
+  onToggleFavorite,
+  onRemoveDeck,
   onOpenImport,
   onOpenBrowse,
   onContinue,
@@ -335,10 +337,12 @@ function HomeScreen({
 }: {
   t: Translator;
   language: Language;
-  savedDecks: DeckInfo[];
+  savedDecks: LibraryDeck[];
   selectedDeck: DeckInfo;
   onSelectDeck: (deck: DeckInfo) => void;
   onInspectDeck: (deck: DeckInfo) => void;
+  onToggleFavorite: (deck: LibraryDeck) => void;
+  onRemoveDeck: (deck: LibraryDeck) => void;
   onOpenImport: () => void;
   onOpenBrowse: () => void;
   onContinue: () => void;
@@ -346,7 +350,9 @@ function HomeScreen({
 }) {
   const starterIds = new Set(STARTER_DECKS.map((deck) => deck.id));
   const extraSaved = savedDecks.filter((deck) => !starterIds.has(deck.id));
-  const allDecks = [...STARTER_DECKS, ...extraSaved];
+  // FEAT-07: favorites pin their decks ahead of the bundled ones on the first page.
+  const favoriteDecks = extraSaved.filter((deck) => deck.favorite);
+  const allDecks: LibraryDeck[] = [...favoriteDecks, ...STARTER_DECKS, ...extraSaved.filter((deck) => !deck.favorite)];
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(allDecks.length / HOME_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -382,18 +388,24 @@ function HomeScreen({
         </div>
 
         <div className="deck-grid">
-          {visible.map((deck, index) => (
-            <span className="deck-grid-item" key={deck.id} style={{ animationDelay: `${index * 45}ms` }}>
-              <DeckTile
-                deck={deck}
-                t={t}
-                selected={selectedDeck.id === deck.id}
-                tag={savedIds.has(deck.id) ? t("deck.savedOffline") : undefined}
-                onSelect={() => onSelectDeck(deck)}
-                onInspect={() => onInspectDeck(deck)}
-              />
-            </span>
-          ))}
+          {visible.map((deck, index) => {
+            const library = savedIds.has(deck.id);
+            return (
+              <span className="deck-grid-item" key={deck.id} style={{ animationDelay: `${index * 45}ms` }}>
+                <DeckTile
+                  deck={deck}
+                  t={t}
+                  selected={selectedDeck.id === deck.id}
+                  favorite={deck.favorite === true}
+                  tag={library ? t("deck.savedOffline") : undefined}
+                  onSelect={() => onSelectDeck(deck)}
+                  onInspect={() => onInspectDeck(deck)}
+                  onToggleFavorite={library ? () => onToggleFavorite(deck) : undefined}
+                  onRemove={library ? () => onRemoveDeck(deck) : undefined}
+                />
+              </span>
+            );
+          })}
         </div>
 
         {totalPages > 1 && (
@@ -1286,6 +1298,50 @@ function DeckModal({
   );
 }
 
+// ---------- Confirm dialog ----------
+
+/** Shared destructive-action dialog (FEAT-07 remove deck): same focus contract as the deck modal, Escape/backdrop cancel. */
+function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const dialogRef = useDialogFocus<HTMLDivElement>();
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancelRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
+      <div className="modal-panel confirm-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <h2 id="confirm-title">{title}</h2>
+        <p>{body}</p>
+        <div className="confirm-actions">
+          <button type="button" className="ghost-button" onClick={onCancel}>{cancelLabel}</button>
+          <button type="button" className="cta-button cta-button--danger" onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- App ----------
 
 function App() {
@@ -1302,7 +1358,9 @@ function App() {
   const [resumeMatch, setResumeMatch] = useState<SavedMatch | null>(null);
   const [boundaryEpoch, setBoundaryEpoch] = useState(0);
   const [inspectDeck, setInspectDeck] = useState<DeckInfo | null>(null);
-  const [savedDecks, setSavedDecks] = useState<DeckInfo[]>(STARTER_DECKS);
+  const [savedDecks, setSavedDecks] = useState<LibraryDeck[]>(STARTER_DECKS);
+  // FEAT-07: library deck queued for the remove confirmation.
+  const [deckToRemove, setDeckToRemove] = useState<LibraryDeck | null>(null);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
   const [game, setGame] = useState<GameState | null>(null);
 
@@ -1658,7 +1716,7 @@ function App() {
       } else {
         setSelectedDeck(deck);
       }
-      setSavedDecks((prev) => prev.map((item) => (item.id === deck.id ? deck : item)));
+      setSavedDecks((prev) => prev.map((item) => (item.id === deck.id ? { ...deck, favorite: item.favorite } : item)));
       showToast(t("toast.synced", { name: deck.name, count: deck.cards.length }));
     } catch (error) {
       const cached = await getCachedDeck(target.id);
@@ -1691,7 +1749,14 @@ function App() {
   function useCandidateDeck() {
     if (!deckCandidate) return;
     const deck = deckCandidate;
-    setSavedDecks((prev) => (prev.some((item) => item.id === deck.id) ? prev.map((item) => (item.id === deck.id ? deck : item)) : [...prev, deck]));
+    setSavedDecks((prev) => {
+      const index = prev.findIndex((item) => item.id === deck.id);
+      if (index < 0) return [...prev, deck];
+      const next = [...prev];
+      // FEAT-07: a re-import keeps the favorite flag already in the library row.
+      next[index] = { ...deck, favorite: prev[index].favorite };
+      return next;
+    });
     setSelectedDeck(deck);
     setDeckCandidate(null);
     setDeckModalOpen(false);
@@ -1720,17 +1785,42 @@ function App() {
   // Adopt a deck from the vault or inspector without leaving the current screen flow.
   function adoptDeck(deck: DeckInfo) {
     sound.play("select");
-    setSavedDecks((prev) => (prev.some((item) => item.id === deck.id) ? prev.map((item) => (item.id === deck.id ? deck : item)) : [...prev, deck]));
-    setSelectedDeck(deck);
+    // FEAT-07: re-adopting an already-saved deck keeps its favorite flag.
+    const known = savedDecks.find((item) => item.id === deck.id);
+    const library: LibraryDeck = known?.favorite ? { ...deck, favorite: true } : deck;
+    setSavedDecks((prev) => (prev.some((item) => item.id === deck.id) ? prev.map((item) => (item.id === deck.id ? library : item)) : [...prev, library]));
+    setSelectedDeck(library);
     // Adoption is what makes a deck a library deck; vault page precache rows
     // stay saved:false and out of the Home list (BUG-13).
-    void cacheDeck(deck, { saved: true });
+    void cacheDeck(library, { saved: true });
     try {
       localStorage.setItem("aember-arena-last-deck", deck.id);
     } catch {
       // The deck is already cached in IndexedDB when available.
     }
     showToast(t("toast.deckReady", { name: deck.name }));
+  }
+
+  // FEAT-07: favorite pins a library deck to the front of the Home list.
+  function toggleFavorite(deck: LibraryDeck) {
+    const favorite = deck.favorite !== true;
+    sound.play(favorite ? "select" : "click");
+    setSavedDecks((prev) => prev.map((item) => (item.id === deck.id ? { ...item, favorite } : item)));
+    void setDeckFavorite(deck.id, favorite);
+  }
+
+  // FEAT-07: confirmed from the dialog; bundled decks never reach this path.
+  function removeDeck() {
+    if (!deckToRemove) return;
+    const deck = deckToRemove;
+    setDeckToRemove(null);
+    sound.play("click");
+    setSavedDecks((prev) => prev.filter((item) => item.id !== deck.id));
+    void deleteDeck(deck.id);
+    // The selection falls back to a bundled deck; a live match keeps its
+    // in-memory faces and only loses the resume lookup for this deck.
+    setSelectedDeck((prev) => (prev.id === deck.id ? DEMO_DECK : prev));
+    showToast(t("toast.deckRemoved", { name: deck.name }));
   }
 
   const currentTurnLabel = !game
@@ -1845,6 +1935,8 @@ function App() {
             selectedDeck={selectedDeck}
             onSelectDeck={(deck) => { sound.play("select"); setSelectedDeck(deck); }}
             onInspectDeck={openInspector}
+            onToggleFavorite={toggleFavorite}
+            onRemoveDeck={setDeckToRemove}
             onOpenImport={() => { sound.play("click"); openDeckModal(); }}
             onOpenBrowse={() => { sound.play("click"); setScreen("browse"); }}
             onContinue={() => { sound.play("click"); setScreen("config"); }}
@@ -2001,6 +2093,17 @@ function App() {
           <Swords size={17} /><span>{t("nav.play")}</span>
         </button>
       </nav>
+
+      {deckToRemove && (
+        <ConfirmDialog
+          title={t("deck.removeTitle")}
+          body={t("deck.removeBody", { name: deckToRemove.name })}
+          confirmLabel={t("deck.removeConfirm")}
+          cancelLabel={t("common.cancel")}
+          onConfirm={removeDeck}
+          onCancel={() => setDeckToRemove(null)}
+        />
+      )}
 
       {deckModalOpen && (
         <DeckModal

@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from "react";
-import { Check, Eye, Swords } from "lucide-react";
+import { Check, Eye, Star, Swords, Trash2 } from "lucide-react";
 import type { DeckInfo } from "../lib/game";
 import { summarizeDeck } from "../lib/game";
 import type { Translator } from "../lib/i18n";
@@ -19,18 +19,26 @@ export function DeckTile({
   t,
   selected = false,
   tag,
+  favorite = false,
   onSelect,
   onInspect,
+  onToggleFavorite,
+  onRemove,
 }: {
   deck: DeckInfo;
   t: Translator;
   selected?: boolean;
   tag?: string;
+  /** FEAT-07: library decks only — the flag persists with the cached deck. */
+  favorite?: boolean;
   onSelect: () => void;
   onInspect?: () => void;
+  onToggleFavorite?: () => void;
+  onRemove?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const summary = summarizeDeck(deck);
+  const hasTools = Boolean(onToggleFavorite || onRemove);
 
   return (
     <article
@@ -48,7 +56,34 @@ export function DeckTile({
         {/* In the copy column, not over the art: a tag wider than the art used to
             spill over the stats row and hide the Cards/Creatures values. */}
         {tag && <span className="deck-tile-tag">{tag}</span>}
-        <h3 title={deck.name}>{deck.name}</h3>
+        <div className="deck-tile-head">
+          <h3 title={deck.name}>{deck.name}</h3>
+          {hasTools && (
+            <span className="deck-tile-tools">
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  className={`tile-action tile-action--icon${favorite ? " is-on" : ""}`}
+                  onClick={onToggleFavorite}
+                  aria-pressed={favorite}
+                  aria-label={favorite ? t("deck.favoriteRemove") : t("deck.favoriteAdd")}
+                >
+                  <Star size={13} fill={favorite ? "currentColor" : "none"} />
+                </button>
+              )}
+              {onRemove && (
+                <button
+                  type="button"
+                  className="tile-action tile-action--icon tile-action--danger"
+                  onClick={onRemove}
+                  aria-label={t("deck.removeAria", { name: deck.name })}
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </span>
+          )}
+        </div>
         <HouseRow houses={deck.houses} />
         <dl className="deck-tile-stats">
           <div><dt>{t("common.cards")}</dt><dd>{summary.total}</dd></div>

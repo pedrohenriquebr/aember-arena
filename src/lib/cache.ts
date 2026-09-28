@@ -5,10 +5,22 @@ const DATABASE_VERSION = 2;
 const DECK_STORE = "decks";
 const CARD_STORE = "cards";
 
-interface CachedDeck extends DeckInfo {
+/** A deck in the player's library (FEAT-07): the favorite flag rides along
+    with the deck row, so it survives reloads and the localStorage fallback. */
+export type LibraryDeck = DeckInfo & { favorite?: boolean };
+
+interface CachedDeck extends LibraryDeck {
   cachedAt: number;
   /** Vault page precache rows are not library decks; adoption sets this (BUG-13). */
   saved?: boolean;
+}
+
+function transactionDone(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("Storage transaction failed."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("Storage transaction was interrupted."));
+  });
 }
 
 // One connection for the whole page: every operation awaits the same cached
@@ -103,8 +115,8 @@ export async function cacheDeck(deck: DeckInfo, options: { saved?: boolean } = {
 }
 
 /** Decks stashed in the localStorage fallback (used when IndexedDB is off). */
-function localFallbackDecks(): DeckInfo[] {
-  const decks: DeckInfo[] = [];
+function localFallbackDecks(): CachedDeck[] {
+  const decks: CachedDeck[] = [];
   try {
     for (let index = 0; index < localStorage.length; index += 1) {
       const key = localStorage.key(index);
@@ -112,7 +124,7 @@ function localFallbackDecks(): DeckInfo[] {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       try {
-        decks.push(JSON.parse(raw) as DeckInfo);
+        decks.push(JSON.parse(raw) as CachedDeck);
       } catch {
         // A malformed row must not break the whole library.
       }
@@ -123,7 +135,7 @@ function localFallbackDecks(): DeckInfo[] {
   return decks;
 }
 
-export async function listCachedDecks(): Promise<DeckInfo[]> {
+export async function listCachedDecks(): Promise<LibraryDeck[]> {
   let rows: CachedDeck[] = [];
   try {
     const database = await openDatabase();
@@ -137,12 +149,55 @@ export async function listCachedDecks(): Promise<DeckInfo[]> {
     // IndexedDB unavailable: the localStorage fallback below still has decks
     // the player imported (BUG-16 — they used to vanish from the library).
   }
-  const byId = new Map<string, DeckInfo>();
+  const byId = new Map<string, LibraryDeck>();
   for (const { cachedAt: _cachedAt, ...deck } of rows) {
-    if ((deck as DeckInfo & { saved?: boolean }).saved === true) byId.set((deck as DeckInfo).id, deck as DeckInfo);
+    if (deck.saved === true) byId.set(deck.id, deck);
   }
-  for (const deck of localFallbackDecks()) if (!byId.has(deck.id) && (deck as DeckInfo & { saved?: boolean }).saved === true) byId.set(deck.id, deck);
+  for (const deck of localFallbackDecks()) if (!byId.has(deck.id) && deck.saved === true) byId.set(deck.id, deck);
   return [...byId.values()];
+}
+
+/** FEAT-07: persists the favorite flag inside the deck row itself. The
+    localStorage fallback copy is updated as well — it may be the only copy
+    (BUG-16). Failures are swallowed: the in-memory flag still applies. */
+export async function setDeckFavorite(id: string, favorite: boolean): Promise<void> {
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(DECK_STORE, "readwrite");
+    const store = transaction.objectStore(DECK_STORE);
+    const request = store.get(id);
+    request.onsuccess = () => {
+      const row = request.result as CachedDeck | undefined;
+      if (row) store.put({ ...row, favorite });
+    };
+    await transactionDone(transaction);
+  } catch {
+    // The localStorage copy below still carries the flag when it exists.
+  }
+  try {
+    const raw = localStorage.getItem(localDeckKey(id));
+    if (raw) localStorage.setItem(localDeckKey(id), JSON.stringify({ ...(JSON.parse(raw) as LibraryDeck), favorite }));
+  } catch {
+    // Storage unavailable: the session library keeps the flag.
+  }
+}
+
+/** FEAT-07: removes a library deck from IndexedDB and from the localStorage
+    fallback. Card rows stay cached — decks and the vault precache share them. */
+export async function deleteDeck(id: string): Promise<void> {
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(DECK_STORE, "readwrite");
+    transaction.objectStore(DECK_STORE).delete(id);
+    await transactionDone(transaction);
+  } catch {
+    // IndexedDB unavailable: the localStorage copy below is the only one.
+  }
+  try {
+    localStorage.removeItem(localDeckKey(id));
+  } catch {
+    // Storage unavailable: the deck leaves the session library anyway.
+  }
 }
 
 export async function getCachedDeck(id: string): Promise<DeckInfo | null> {
