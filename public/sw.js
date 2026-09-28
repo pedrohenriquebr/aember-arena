@@ -126,20 +126,35 @@ self.addEventListener("fetch", (event) => {
     if (url.pathname.endsWith("/sw.js")) return;
     if (request.mode === "navigate") {
       event.respondWith(
-        // Relative matches resolve against the SW script URL, same base as the
+        // Network-first with cache refresh: a successful shell fetch replaces
+        // the precached copy, so the NEXT offline open serves the deployed
+        // version instead of the install-day shell forever (BUG-07). Relative
+        // matches resolve against the SW script URL, same base as the
         // precached SHELL_URLS — consistent at root and under a subpath.
-        fetch(request).catch(async () => (await caches.match("./") || await caches.match("./index.html"))),
+        fetch(request).then(async (response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            void caches.open(SHELL_CACHE).then((cache) => cache.put("./index.html", copy));
+          }
+          return response;
+        }).catch(async () => (await caches.match("./") || await caches.match("./index.html"))),
       );
       return;
     }
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          void caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      })),
+      // Stale-while-revalidate for same-origin assets (manifest, icons): the
+      // cached copy answers immediately while the network response refreshes
+      // the cache, so they no longer freeze at install-day state (BUG-07).
+      caches.match(request).then((cached) => {
+        const network = fetch(request).then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            void caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        }).catch(() => cached);
+        return cached || network;
+      }),
     );
     return;
   }

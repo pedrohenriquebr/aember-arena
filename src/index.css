@@ -1429,6 +1429,23 @@ button:disabled {
   opacity: 0.62;
 }
 
+/* BUG-08: âmbar capturado no tile (antes só no inspetor). */
+.amber-label {
+  position: absolute;
+  top: 4px;
+  left: -5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 5px;
+  border: 1px solid rgba(211, 173, 93, 0.55);
+  border-radius: 3px;
+  color: #f4dfae;
+  background: #6f5420;
+  font-size: max(var(--fs-2xs), 7cqi);
+  line-height: 1;
+}
+
 .damage-label {
   position: absolute;
   top: 4px;
@@ -5959,4 +5976,18 @@ button:disabled {
 html .spin {
   animation-duration: 1s !important;
   animation-iteration-count: infinite !important;
+}
+/* BUG-17: chains counter in the player band. */
+.chain-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--paper);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.chain-counter svg {
+  color: var(--gold);
 }

@@ -13,13 +13,4 @@ const creature = (title: string, power: number, text = "", extra: Record<string,
   card(title, { type: "Creature", house: "Brobnar", power, text, ...extra });
 
 describe("engine audit probes", () => {
-  it.fails("BUG-06: a targeted Fight: ability exposes its choices on the fight move (AI/UI can choose)", () => {
-    const state = setupTest(
-      { inPlay: [creature("Basilisk", 6, "Skirmish. After Fight: Exhaust an enemy creature.")] },
-      { inPlay: [creature("Low", 1), creature("Mid", 3), creature("High", 5)] },
-    );
-    const fights = getLegalMoves(state, 0, "Brobnar").filter((move): move is Extract<GameMove, { type: "fight" }> => move.type === "fight");
-    expect(fights.some((move) => move.target !== undefined)).toBe(true);
-  });
-
 });

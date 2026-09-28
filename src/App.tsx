@@ -17,6 +17,7 @@ import {
   Home,
   KeyRound,
   Languages,
+  Link2,
   LoaderCircle,
   Music,
   Radio,
@@ -143,7 +144,9 @@ function sameCardInstance(a: CardInstance, b: CardInstance): boolean {
       a.face === b.face &&
       a.damage === b.damage &&
       a.ready === b.ready &&
-      a.stunned === b.stunned)
+      a.stunned === b.stunned &&
+      (a.amber ?? 0) === (b.amber ?? 0) &&
+      (a.attachedTo ?? "") === (b.attachedTo ?? ""))
   );
 }
 
@@ -205,6 +208,13 @@ const CardTile = memo(function CardTile({
         />
         {size !== "preview" && <span className="card-caption">{face.title}</span>}
         {damageLabel && <span className="damage-label">{damageLabel}</span>}
+        {/* BUG-08: captured amber used to be inspector-only. */}
+        {(card.amber ?? 0) > 0 && (
+          <span className="amber-label" role="img" aria-label={t("game.capturedAria", { count: card.amber ?? 0 })}>
+            <Gem size={10} strokeWidth={2.2} />
+            {card.amber}
+          </span>
+        )}
       </button>
       <CardLightbox face={lightboxOpen ? face : null} t={t} onClose={() => setLightboxOpen(false)} />
     </>
@@ -695,6 +705,7 @@ type PlayerBandProps = {
   isAi: boolean;
   active: boolean;
   thinking?: boolean;
+  chains: number;
   t: Translator;
 };
 
@@ -710,6 +721,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     a.player.name === b.player.name &&
     a.player.deckName === b.player.deckName &&
     a.player.amber === b.player.amber &&
+    a.player.chains === b.player.chains &&
     a.keyCost === b.keyCost &&
     a.player.keys === b.player.keys &&
     a.player.houses.length === b.player.houses.length &&
@@ -723,6 +735,7 @@ const PlayerBand = memo(function PlayerBand({
   isAi,
   active,
   thinking = false,
+  chains,
   t,
 }: PlayerBandProps) {
   return (
@@ -752,6 +765,16 @@ const PlayerBand = memo(function PlayerBand({
         <KeyCounter keys={player.keys} t={t} />
         <div className="resource-divider" />
         <AmberCounter amount={player.amber} cost={keyCost} t={t} />
+        {/* BUG-17: chains were invisible; they shorten the draw step. */}
+        {chains > 0 && (
+          <div className="resource-divider" />
+        )}
+        {chains > 0 && (
+          <span className="chain-counter" role="img" aria-label={t("game.chainsAria", { count: chains })}>
+            <Link2 size={12} strokeWidth={2} />
+            <b>{chains}</b>
+          </span>
+        )}
       </div>
     </div>
   );
@@ -878,7 +901,7 @@ function GameBoard({
     <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label={t("game.board")}>
       <div className="felt-etching" aria-hidden="true" />
       <div className="board-content">
-        <PlayerBand player={ai} keyCost={keyCost(game, 1)} isAi active={game.activePlayer === 1 && game.winner === null} thinking={aiThinking} t={t} />
+        <PlayerBand player={ai} keyCost={keyCost(game, 1)} isAi active={game.activePlayer === 1 && game.winner === null} thinking={aiThinking} chains={ai.chains} t={t} />
 
         <section className="battle-zone battle-zone--opponent" aria-label={t("game.opponentLine")}>
           <div className="zone-heading">
@@ -952,7 +975,7 @@ function GameBoard({
           />
         </section>
 
-        <PlayerBand player={player} keyCost={keyCost(game, 0)} isAi={false} active={game.activePlayer === 0 && game.winner === null} t={t} />
+        <PlayerBand player={player} keyCost={keyCost(game, 0)} isAi={false} active={game.activePlayer === 0 && game.winner === null} chains={player.chains} t={t} />
 
         <section className="hand-zone" aria-label={t("game.yourHand")}>
           <div className="hand-heading">
@@ -1816,7 +1839,7 @@ function App() {
                   <div className="rules-copy">
                     <p>{t("rail.rule1")}</p>
                     <p>{t("rail.rule2")}</p>
-                    <p>{t("rail.rule3")}</p>
+                    <p>{t("rail.rule3", { cost: keyCost(game, 0) })}</p>
                   </div>
                 </details>
 
