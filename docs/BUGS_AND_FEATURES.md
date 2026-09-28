@@ -1,5 +1,12 @@
 # BUGS_AND_FEATURES — varredura de qualidade (auditoria pós-keyteki)
 
+> **Status (29/09): RESOLVIDO.** Todos os 25 BUG-xx foram corrigidos (specs dos probes
+> migrados para `src/lib/*.test.ts`) e todas as 15 FEAT-xx foram implementadas
+> (FEAT-01..04 pelo executor; 05..15 por subagentes deepseek coder-1..5 em lotes
+> sequenciais, cada lote validado independentemente com gates). Ver `git log` a partir
+> de `1d4e385`. Restam como referência de arquitetura: FEAT-13 (limitações de
+> save/stats/undo no modo 2P, documentadas no commit `a268ec6`).
+
 Levantamento para o executor: **nada aqui foi corrigido ou implementado**. Cada `BUG-xx`
 tem severidade, evidência (arquivo:linha em `HEAD` 1d4e385 + passos de repro) e uma
 correção sugerida em uma linha; cada `FEAT-xx` tem problema, comportamento esperado,
