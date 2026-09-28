@@ -194,6 +194,8 @@ const DICT: Record<string, [string, string]> = {
   "toast.synced": ["Synced {name}: {count} card records refreshed.", "Sincronizado {name}: {count} cartas atualizadas."],
   "toast.usingCache": ["Using the saved offline copy of {name}.", "Usando a cópia offline salva de {name}."],
   "toast.langChanged": ["Language set to English.", "Idioma alterado para Português."],
+  "update.title": ["New version available", "Nova versão disponível"],
+  "update.reload": ["Reload", "Recarregar"],
   "toast.deckRemoved": ["{name} removed from your library.", "{name} removido da sua biblioteca."],
   "log.you": ["You", "Você"],
   "log.warden": ["The Ember Warden", "O Ember Warden"],

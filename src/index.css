@@ -2666,6 +2666,18 @@ button:disabled {
   cursor: pointer;
 }
 
+/* FEAT-09: ação de texto dentro do toast (Recarregar). */
+.toast-message .toast-action {
+  width: auto;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid rgba(226, 196, 122, 0.55);
+  border-radius: var(--radius-sm);
+  color: #f0d58c;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+}
+
 .toast-message--error {
   border-color: rgba(200, 112, 85, 0.4);
   color: #efd4c9;

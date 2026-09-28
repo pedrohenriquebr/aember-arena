@@ -102,9 +102,15 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
       .then((cache) => cache.addAll(SHELL_URLS).catch(() => undefined))
-      .then(() => precacheHouseIcons())
-      .then(() => self.skipWaiting()),
+      .then(() => precacheHouseIcons()),
   );
+});
+
+// FEAT-09: o worker novo NAO assume sozinho (skipWaiting sob demanda). O app
+// mostra o toast de atualizacao e envia SKIP_WAITING no "Recarregar", para a
+// troca de versao nunca ser silenciosa no meio de uma partida.
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {

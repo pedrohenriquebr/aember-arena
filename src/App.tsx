@@ -78,7 +78,14 @@ type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanc
 /** Board pick in progress: a fight defender (`targetId` still empty) or the
     target of the move's ability / an upgrade's host. `ids` are the legal cards. */
 type Pick = { move: GameMove; ids: string[] };
-type Toast = { message: string; kind: "success" | "error" } | null;
+type Toast = {
+  message: string;
+  kind: "success" | "error";
+  /** FEAT-09: botão único do toast (ex.: "Recarregar" na atualização do PWA). */
+  action?: { label: string; onClick: () => void };
+  /** Sem auto-dismiss: o aviso de atualização fica até o jogador agir. */
+  sticky?: boolean;
+} | null;
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
 const STARTER_DECKS: DeckInfo[] = [DEMO_DECK, DEMO_DECK_2];
@@ -1379,10 +1386,13 @@ function App() {
   const [deckFromCache, setDeckFromCache] = useState(false);
   const [toast, setToast] = useState<Toast>(null);
   const [matchVersion, setMatchVersion] = useState(0);
+  // FEAT-09: um service worker novo está instalado e esperando o skipWaiting.
+  const [updateReady, setUpdateReady] = useState(false);
 
   const gameRef = useRef<GameState | null>(null);
   const settingsRef = useRef(settings);
   const aiTurnRef = useRef<string | null>(null);
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const prevKeysRef = useRef({ player: 0, ai: 0 });
 
   useEffect(() => { gameRef.current = game; }, [game]);
@@ -1431,9 +1441,24 @@ function App() {
   useEffect(() => {
     void cacheDeck(DEMO_DECK);
     void cacheDeck(DEMO_DECK_2);
+    let disposed = false;
     if ("serviceWorker" in navigator) {
       // T7c/T8: caminho relativo — coerente com SHELL_URLS/manifest; não quebra em subpath.
-      navigator.serviceWorker.register("./sw.js").catch(() => undefined);
+      void navigator.serviceWorker.register("./sw.js").then((registration) => {
+        if (disposed) return;
+        swRegistrationRef.current = registration;
+        // FEAT-09: um worker já esperando (update achado numa sessão anterior)
+        // também avisa o jogador na próxima abertura.
+        if (registration.waiting && navigator.serviceWorker.controller) setUpdateReady(true);
+        registration.addEventListener("updatefound", () => {
+          const installing = registration.installing;
+          if (!installing) return;
+          installing.addEventListener("statechange", () => {
+            // Sem controller é o primeiro install: não há versão antiga a trocar.
+            if (installing.state === "installed" && navigator.serviceWorker.controller) setUpdateReady(true);
+          });
+        });
+      }).catch(() => undefined);
     }
     const setNetwork = () => setOnline(navigator.onLine);
     window.addEventListener("online", setNetwork);
@@ -1442,6 +1467,7 @@ function App() {
     const unlock = () => sound.unlock();
     window.addEventListener("pointerdown", unlock, { once: true });
     return () => {
+      disposed = true;
       window.removeEventListener("online", setNetwork);
       window.removeEventListener("offline", setNetwork);
       window.removeEventListener("pointerdown", unlock);
@@ -1486,10 +1512,23 @@ function App() {
   }, [game, currentDeck.id]);
 
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || toast.sticky) return;
     const timeout = window.setTimeout(() => setToast(null), 3600);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  // FEAT-09: o aviso de atualização só aparece fora de uma partida sem vencedor
+  // (um reload descartaria o jogo em curso).
+  useEffect(() => {
+    if (!updateReady) return;
+    if (screen === "game" && game?.winner === null) return;
+    setToast({
+      message: t("update.title"),
+      kind: "success",
+      sticky: true,
+      action: { label: t("update.reload"), onClick: reloadForUpdate },
+    });
+  }, [updateReady, screen, game?.winner, t]);
 
   useEffect(() => {
     if (!deckModalOpen) return;
@@ -1685,6 +1724,18 @@ function App() {
     sound.play("click");
     setScreen("home");
   }, []);
+
+  // FEAT-09: libera o worker novo e só recarrega quando ele assumir o controle —
+  // recarregar antes disso traria a versão antiga de volta.
+  function reloadForUpdate() {
+    const waiting = swRegistrationRef.current?.waiting;
+    if (!waiting) {
+      window.location.reload();
+      return;
+    }
+    navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
+    waiting.postMessage({ type: "SKIP_WAITING" });
+  }
 
   async function updateAppShell() {
     try {
@@ -1889,6 +1940,9 @@ function App() {
         <div className={`toast-message toast-message--${toast.kind}`} role="status">
           {toast.kind === "success" ? <Check size={15} /> : <CircleHelp size={15} />}
           <span>{toast.message}</span>
+          {toast.action && (
+            <button type="button" className="toast-action" onClick={toast.action.onClick}>{toast.action.label}</button>
+          )}
           <button type="button" onClick={() => setToast(null)} aria-label={t("common.close")}><X size={14} /></button>
         </div>
       )}
