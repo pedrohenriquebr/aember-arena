@@ -165,7 +165,13 @@ function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creat
     }
     ability.acts.push(...parsed.acts);
   }
-  return ability.acts.length ? ability : null;
+  if (!ability.acts.length) return null;
+  // "Sacrifice X. Destroy an artifact." — the sacrifice consumed the source, so
+  // the printed target cannot be the source itself (BUG-10).
+  if (ability.target && ability.acts.some((act) => act.k === "destroy" && "s" in act && act.s === "self")) {
+    ability.target = { ...ability.target, other: true };
+  }
+  return ability;
 }
 
 export function parseCardText(face: CardFace): CardRules {

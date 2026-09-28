@@ -575,7 +575,14 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
   if (move.type === "play" && isCreature(source)) {
     const players = [...state.players] as [GamePlayer, GamePlayer];
     players[side] = { ...players[side], board: [...players[side].board, source] };
-    view = { ...state, players };
+    view = { ...view, players };
+  }
+  // The bonus amber is granted before "Play:" fires (applyMove), so a target
+  // condition like "If you have 3A or more" must count it (BUG-09).
+  if (move.type === "play" && source.face.amber > 0) {
+    const players = [...view.players] as [GamePlayer, GamePlayer];
+    players[side] = { ...players[side], amber: players[side].amber + source.face.amber };
+    view = { ...view, players };
   }
   const card = source;
   const triggers = triggersFor(move);

@@ -22,23 +22,6 @@ describe("engine audit probes", () => {
     expect(fights.some((move) => move.target !== undefined)).toBe(true);
   });
 
-  it.fails("BUG-09: target choices for a Play: condition count the card's own bonus amber", () => {
-    const scrapper = card("Scrapper", { type: "Creature", house: "Brobnar", power: 5, amber: 1, text: "Play: If you have 3A or more, deal 3D to an enemy creature." });
-    const state = setupTest({ hand: [scrapper], amber: 2 }, { inPlay: [creature("A", 4), creature("B", 4)] });
-    const move: GameMove = { type: "play", instanceId: scrapper.instanceId };
-    // The engine fires the ability (2 + 1 bonus = 3 amber)…
-    const after = applyMove(state, 0, move);
-    expect(after.players[1].board.filter((c) => c.damage === 3)).toHaveLength(1);
-    // …but the UI was offered no choice, so the target was auto-picked.
-    expect(targetChoices(state, 0, move)).toHaveLength(2);
-  });
-
-  it.fails("BUG-10: 'Sacrifice X. Destroy an artifact.' has no effect when X is the only artifact", () => {
-    const gorm = card("Gorm of Omm", { type: "Artifact", house: "Brobnar", text: "Omni: Sacrifice Gorm of Omm. Destroy an artifact." });
-    const state = setupTest({ inPlay: [gorm] });
-    expect(moveHasEffect(state, 0, { type: "use", instanceId: gorm.instanceId })).toBe(false);
-  });
-
   it.fails("BUG-11: 'Use a friendly creature' lets the creature fight or use its Action, not only reap", () => {
     const bauble = card("Dominator Bauble", { type: "Artifact", house: "Brobnar", text: "Action: Use a friendly creature." });
     const thief = creature("Thief", 2, "Action: Steal 2A.");

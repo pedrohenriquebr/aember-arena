@@ -296,3 +296,22 @@ describe("regression: BUG-04 upgrade on an enemy host (docs/BUGS_AND_FEATURES.md
     expect(byTitle(state.players[0].discard, "Mark")).toBeDefined();
   });
 });
+
+describe("regression: BUG-09 target condition counts the card's bonus amber (docs/BUGS_AND_FEATURES.md)", () => {
+  it("a Play: 'If you have 3A or more' condition sees the card's own bonus amber", () => {
+    const scrapper = card("Scrapper", { type: "Creature", house: "Brobnar", power: 5, amber: 1, text: "Play: If you have 3A or more, deal 3D to an enemy creature." });
+    const state = setupTest({ hand: [scrapper], amber: 2 }, { inPlay: [card("A", { power: 4 }), card("B", { power: 4 })] });
+    const move: GameMove = { type: "play", instanceId: scrapper.instanceId };
+    expect(targetChoices(state, 0, move)).toHaveLength(2);
+    const after = applyMove(state, 0, move);
+    expect(after.players[1].board.filter((c) => c.damage === 3)).toHaveLength(1);
+  });
+});
+
+describe("regression: BUG-10 self-sacrifice excludes the source from its own target (docs/BUGS_AND_FEATURES.md)", () => {
+  it("'Sacrifice X. Destroy an artifact.' has no effect when X is the only artifact", () => {
+    const gorm = card("Gorm of Omm", { type: "Artifact", house: "Brobnar", text: "Omni: Sacrifice Gorm of Omm. Destroy an artifact." });
+    const state = setupTest({ inPlay: [gorm] });
+    expect(moveHasEffect(state, 0, { type: "use", instanceId: gorm.instanceId })).toBe(false);
+  });
+});
