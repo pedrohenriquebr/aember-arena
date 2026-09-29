@@ -1927,9 +1927,13 @@ function App() {
     (prev: GameState, next: GameState, step: ReplayStep | undefined, move: GameMove | undefined, side: 0 | 1): Promise<void> => {
       let plan: FxPlan | null = null;
       let flight: string | undefined;
+      // FX-03: "da IA" é o lado 1 do modo SOLO — no pass-and-play os dois lados
+      // são humanos, então nada do palco da IA (legenda, hold de leitura, rush)
+      // se aplica: as jogadas do Jogador 2 seguem o ritmo natural dele.
+      const ai = side === 1 && matchModeRef.current === "solo";
       // Turno do Warden acelerado (opção rápida ou toque): o hold do voo encolhe
       // junto com as batidas, senão a carta continuaria 420ms parada no centro.
-      const rush = side === 1 && (rushRef.current || settingsRef.current.aiSpeed === "fast");
+      const rush = ai && (rushRef.current || settingsRef.current.aiSpeed === "fast");
       if (move) {
         // Guard de movimento (plano §0): sem isto o voo ignoraria o toggle.
         if (motionEnabled(settingsRef.current.animations)) {
@@ -1958,7 +1962,7 @@ function App() {
               face: source && !source.node ? prev.players[side].hand.find((card) => card.instanceId === flight)?.face : undefined,
               // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
               // ainda — é a jogada que o jogador precisa ler.
-              holdMs: Math.round((side === 1 ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1)),
+              holdMs: Math.round((ai ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1)),
               gone,
               actorId: actor,
               amber: gained ? { side: gained.side, delta: gained.delta } : undefined,
@@ -1966,7 +1970,7 @@ function App() {
               hits,
               // A jogada do Warden leva legenda: o jogador sabe o que entrou na
               // mesa sem caçar a linha no log (UX review #1).
-              caption: side === 1 && flight ? t("log.play", { name: t("log.warden"), card: prev.players[1].hand.find((card) => card.instanceId === flight)?.face.title ?? "" }) : undefined,
+              caption: ai && flight ? t("log.play", { name: t("log.warden"), card: prev.players[1].hand.find((card) => card.instanceId === flight)?.face.title ?? "" }) : undefined,
               // VAL-04: o thump do pouso acompanha o slam do voo, não o commit.
               onSlam: () => sound.play("land", 0.24),
             };
@@ -2480,6 +2484,9 @@ function App() {
     stepsRef.current = [];
     gameRef.current = next;
     prevKeysRef.current = { player: 0, ai: 0 };
+    // FX-03: um toque acelerando o último turno do Warden não pode vazar o rush
+    // para a partida seguinte (no 2P ele compactaria as batidas dos humanos).
+    rushRef.current = false;
     setCurrentDeck(deck);
     setGame(next);
     setMatchMode(mode);
