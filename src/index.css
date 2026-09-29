@@ -1646,6 +1646,18 @@ button:disabled {
   font-size: var(--fs-2xs);
 }
 
+/* FX-04: narração viva do turno da IA — invisível, mas anunciada; o resumo
+   visível continua sendo o :last-child acima. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .house-picker {
   display: flex;
   min-width: 0;

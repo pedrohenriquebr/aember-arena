@@ -1336,6 +1336,11 @@ function GameBoard({
   // solo board only prompts for side 0 and lets the AI decide side 1).
   const mulliganSide = inMulligan(game) ? (game.pendingMulligan as 0 | 1) : null;
   const mulliganDeciding = mulliganSide !== null && (passAndPlay || mulliganSide === 0);
+  // FX-04: a narração do turno da IA (plano §3) — o resumo do fim do turno e a
+  // última linha do Warden no log alimentam a região viva do console; o portal
+  // dos FX é aria-hidden, então sem isto o turno inteiro passa em silêncio.
+  const lastAiLog = passAndPlay ? undefined : game.log.filter((entry) => entry.params.name === enemy.name).pop();
+  const narration = [aiSummary, lastAiLog && renderLog(lastAiLog, t)].filter(Boolean).join(" ");
 
   return (
     <section className={`game-board${settings.animations ? "" : " no-anim"}`} aria-label={t("game.board")}>
@@ -1380,6 +1385,8 @@ function GameBoard({
                 ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
                 : game.activePlayer === 0 ? t("game.yourTurn") : aiPhase === "thinking" ? t("game.thinking") : t("game.opponentTurn")}
             </strong>
+            {/* FX-04: região viva antes do resumo — o :last-child do CSS continua no span visível. */}
+            <span className="sr-only" aria-live="polite">{narration}</span>
             <span>{aiSummary ?? (game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse"))}</span>
           </div>
           <div className="house-picker" role="group" aria-label={t("game.chooseHouse")}>
