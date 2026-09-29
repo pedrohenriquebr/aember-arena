@@ -102,6 +102,9 @@ export type FxDirector = {
   spot(actorId?: string): void;
   /** Banner central de transição ("Seu turno") por ~900ms. */
   banner(text: string): void;
+  /** Legenda estática (sem voo) da jogada do Warden — reduzir movimento não
+      pode remover informação (FX-08). */
+  caption(text: string): void;
   /** Forja de chave (plano §4.1): o glow nasce no lado de quem forjou. */
   forge(side: FxSide): void;
 };

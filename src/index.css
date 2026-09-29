@@ -5319,6 +5319,31 @@ button:disabled {
   100% { opacity: 0; }
 }
 
+/* Legenda sem voo (reduce-motion ou toggle OFF): o ghost não nasce e o texto da
+   jogada do Warden é informação — fica fixo sob o centro até o timer do diretor
+   (900ms) removê-lo. */
+.fx-caption--static {
+  position: fixed;
+  top: calc(46% + 112px);
+  animation: none;
+}
+
+/* Banner e glow da forja terminam em opacity 0 (forwards) e o override global
+   do reduce-motion os apagaria; sem movimento os dois ficam visíveis até o
+   timer de 900ms do diretor / a classe da forja saírem (o glow é informação de
+   quem forjou, UX §1.6). */
+.reduce-motion .fx-banner,
+.reduce-motion .game-board.forge-flash::before {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-banner,
+  .game-board.forge-flash::before {
+    animation: none;
+  }
+}
+
 /* ---------- Winner actions ---------- */
 .winner-actions {
   display: flex;

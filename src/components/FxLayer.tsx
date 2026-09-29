@@ -125,18 +125,23 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     window.setTimeout(() => board.classList.remove("forge-flash"), 900);
   };
 
-  /** Banner de transição: só texto e tempo (não passa pelo guard de movimento). */
-  const banner = (text: string) => {
+  /** Texto transitório no portal: aparece e sai por timer — é tempo, não
+      movimento, então vale igual no reduce-motion (FX-08: legenda e banner são
+      informação). Um texto novo da mesma classe substitui o anterior. */
+  const flash = (cls: string, text: string) => {
     const host = hostRef.current;
     if (!host) return;
+    host.querySelector(`.${cls}`)?.remove();
     const el = document.createElement("div");
-    el.className = "fx-caption fx-banner";
+    el.className = `fx-caption ${cls}`;
     el.textContent = text;
     host.appendChild(el);
     window.setTimeout(() => el.remove(), 900);
   };
+  const banner = (text: string) => flash("fx-banner", text);
+  const caption = (text: string) => flash("fx-caption--static", text);
 
-  useImperativeHandle(ref, () => ({ run, cancelAll, spot, banner, forge }));
+  useImperativeHandle(ref, () => ({ run, cancelAll, spot, banner, forge, caption }));
 
   async function reveal(plan: FxPlan, host: HTMLElement, run: Run) {
     const alive = () => runRef.current === run;

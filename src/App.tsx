@@ -1942,6 +1942,12 @@ function App() {
       // junto com as batidas, senão a carta continuaria 420ms parada no centro.
       const rush = ai && (rushRef.current || settingsRef.current.aiSpeed === "fast");
       if (move) {
+        // A carta jogada sai da mão no commit: título para a legenda e face para
+        // o ghost sem clone (FX-02) — o Warden joga da mão, fora do DOM.
+        const played = move.type === "play" ? prev.players[side].hand.find((card) => card.instanceId === move.instanceId) : undefined;
+        // A jogada do Warden leva legenda (UX review #1); legenda é informação,
+        // então vale também sem movimento (FX-08).
+        const playCaption = ai && played ? t("log.play", { name: t("log.warden"), card: played.face.title }) : undefined;
         // Guard de movimento (plano §0): sem isto o voo ignoraria o toggle.
         if (motionEnabled(settingsRef.current.animations)) {
           const events = diffFx(prev, next);
@@ -1966,7 +1972,7 @@ function App() {
               destId: flight,
               // O Warden joga da mão (fora do DOM): sem clone capturado, a face
               // desenha o ghost — é o que faz a Ação dele aparecer (FX-02).
-              face: source && !source.node ? prev.players[side].hand.find((card) => card.instanceId === flight)?.face : undefined,
+              face: source && !source.node ? played?.face : undefined,
               // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
               // ainda — é a jogada que o jogador precisa ler.
               holdMs: Math.round((ai ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1)),
@@ -1977,11 +1983,14 @@ function App() {
               hits,
               // A jogada do Warden leva legenda: o jogador sabe o que entrou na
               // mesa sem caçar a linha no log (UX review #1).
-              caption: ai && flight ? t("log.play", { name: t("log.warden"), card: prev.players[1].hand.find((card) => card.instanceId === flight)?.face.title ?? "" }) : undefined,
+              caption: flight ? playCaption : undefined,
               // VAL-04: o thump do pouso acompanha o slam do voo, não o commit.
               onSlam: () => sound.play("land", 0.24),
             };
           }
+        } else if (playCaption) {
+          // Sem voo o ghost não nasce: a legenda estática do diretor a mantém.
+          fxRef.current?.caption(playCaption);
         }
         // Som da jogada (VAL-04): com voo o `play` é só o whoosh e o pouso vira
         // o `land` no slam; sem voo o par whoosh+thump toca como sempre tocou.
