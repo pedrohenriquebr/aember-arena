@@ -85,7 +85,7 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **141 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **143,5 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
@@ -120,7 +120,17 @@ src/
    "sem uso" são dinâmicos (`card-art--${size}`) e os overrides `.reduce-motion`
    restantes são intencionais (o `*` global só encurta a duração, não remove o
    fill).
-   Confira com `npm run e2e:bundle`.
+   → **143,5** (VIEW3D H3D-03..06, `docs/VIEW3D_PLAN.md` §2.1-§2.5: mesa
+   inclinada a 40°/32° com playmat em gradientes + billboards, cartas de pé e
+   levitando (pose em propriedades individuais, --n por lane com sobreposição),
+   sombras difusas no tapete com o ready-breathe/sel-breathe convertidos para
+   opacity e mão em leque com recuo lateral, mais os checks novos do probe
+   `_3d-chain` (pose, sombra, teto de animações por propriedade e leque). Só
+   CSS/TS, zero dependência; medido 141,38 kB gz (+1,25 sobre os 140,13 da
+   fundação: +0,26 no 03, +0,45 no 04, +0,25 no 05 e +0,29 no 06). Varredura de
+   mortos pré-revisão (`_dead-css`): 0 removível — os "sem uso" são nomes
+   dinâmicos (`card-art--${size}`, `house-icon--${size}`). Confira com
+   `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
