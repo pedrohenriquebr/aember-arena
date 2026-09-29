@@ -311,6 +311,13 @@ class SoundEngine {
     if (!this.prefs.sfx) return;
     const context = this.ensureContext();
     if (!context) return;
+    // VAL-06: com o contexto suspenso (antes do primeiro gesto, "interrupted" no
+    // iOS, app em segundo plano) o currentTime congela: as vozes agendadas não
+    // terminam, o onended não roda, o teto de 32 enche e na retomada todas soam
+    // no mesmo instante (rajada fantasma). Fora de gesto não há como ouvir;
+    // dentro do gesto userActivation está ativa e o som (incluindo o primeiro
+    // toque que retoma o contexto) passa.
+    if (context.state !== "running" && !navigator.userActivation?.isActive) return;
     // Anti-spam: a key re-fired within 50 ms (double click, AI burst) is one sound.
     // Wall clock, not currentTime: that one freezes while the context is suspended.
     const now = performance.now();
