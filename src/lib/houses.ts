@@ -10,6 +10,9 @@ export interface HouseInfo {
   /** Simple silhouette used when the official art cannot be loaded. */
   glyph?: string;
   short: string;
+  /** BUG2-14: emblema desproporcional ao uso (Star Alliance/Saurian têm
+      2,3 MB); offline o HouseIcon renderiza o fallback sem tocar na rede. */
+  heavy?: boolean;
 }
 
 export const HOUSES: Record<string, HouseInfo> = {
@@ -91,6 +94,8 @@ export const HOUSES: Record<string, HouseInfo> = {
     color: "#4a86c8",
     icon: `${CDN}/Star_Alliance.png`,
     short: "ST",
+    // BUG2-14: 2,35 MB no S3 (curl; sem variante menor — 200/64/_small dão 403).
+    heavy: true,
   },
   Saurian: {
     id: "Saurian",
@@ -98,6 +103,8 @@ export const HOUSES: Record<string, HouseInfo> = {
     color: "#8aa04c",
     icon: `${CDN}/Saurian.png`,
     short: "SA",
+    // BUG2-14: 2,36 MB no S3, também sem variante menor.
+    heavy: true,
   },
   Unfathomable: {
     id: "Unfathomable",

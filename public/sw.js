@@ -13,7 +13,9 @@ const ART_HOSTS = ["mastervault-storage-prod.s3.amazonaws.com", "cdn.keyforgegam
 // Only the seven original emblems (~45 KB total, and the ones whose offline
 // rendering matters most) are precached in their own fixed, uncapped cache and
 // never pruned. The heavier expansion emblems stay out: Star Alliance and
-// Saurian are 2.3 MB each, and HouseIcon's glyph/initials fallback covers them.
+// Saurian are 2.3 MB each and have no smaller variant on the bucket (BUG2-14:
+// Star_Alliance200/64/_small all 403), so HouseIcon renders their initials
+// offline without a request and keeps the URL for the online path.
 const HOUSE_ICONS = [
   "Brobnar_RTivg44.png",
   "Dis_OooSNPO.png",

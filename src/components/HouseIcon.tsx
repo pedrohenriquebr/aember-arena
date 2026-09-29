@@ -24,9 +24,22 @@ export function HouseIcon({
   const info = houseInfo(house);
   const label = houseLabel(house);
   const [failed, setFailed] = useState(false);
+  // BUG2-14: os emblemas "heavy" (2,3 MB) só são buscados online — offline o
+  // fallback aparece de imediato, sem a requisição condenada.
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && navigator.onLine === false);
   const pixels = PIXELS[size];
 
   useEffect(() => setFailed(false), [info.icon]);
+  useEffect(() => {
+    if (!info.heavy) return;
+    const update = () => setOffline(navigator.onLine === false);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, [info.heavy]);
 
   return (
     <span
@@ -36,7 +49,7 @@ export function HouseIcon({
       role="img"
       aria-label={label}
     >
-      {!failed && info.icon ? (
+      {!failed && info.icon && !(info.heavy && offline) ? (
         <img src={info.icon} alt="" loading="lazy" draggable={false} onError={() => setFailed(true)} />
       ) : info.glyph ? (
         <svg viewBox="0 0 24 24" aria-hidden="true">
