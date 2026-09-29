@@ -59,8 +59,11 @@ export type FxRect = DOMRect;
 
 /** Nó medido antes do commit + o clone do que ele desenhava. O clone é
     necessário porque o DOM de origem (a mão, uma peça destruída) muda ou some
-    no setGame — depois dele ninguém mais pode desenhá-lo. */
-export type FxSource = { rect: FxRect; node: HTMLElement | null };
+    no commit — depois dele ninguém mais pode desenhá-lo. `w`/`h`/`rot` só
+    existem quando a origem está girada (a carta do leque 3D, H3D-08): a caixa
+    projetada de um retângulo girado é maior que a carta, então o ghost nasce no
+    tamanho de layout e alinhado ao leque em vez de "pular". */
+export type FxSource = { rect: FxRect; node: HTMLElement | null; w?: number; h?: number; rot?: string };
 
 /** Plano de uma revelação. O diretor (FxLayer) só executa; quem decide é o App.
     O guard de movimento vive lá: com animações desligadas não nasce plano. */

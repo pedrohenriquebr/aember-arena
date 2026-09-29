@@ -65,13 +65,33 @@ function faceEl(face: CardFace): HTMLElement {
 
 /** Captura PRÉ-commit (plano §0.4): o DOM de que a revelação precisa muda ou
     desaparece no setGame, então a origem do voo é medida e clonada antes. Só
-    leituras de DOM — nada de estado. */
+    leituras de DOM — nada de estado.
+    H3D-08: a pose do leque vive na TILE (o art é filho e `rotate`/`scale` não
+    são herdados), e a caixa projetada de uma carta girada é maior que a carta.
+    Aí valem o tamanho de layout do art (× o `scale` da tile) e a rotação da
+    tile, para o ghost nascer do tamanho da CARTA e alinhado ao leque. No 2D
+    nenhuma das duas propriedades é usada (a pose 2D é `transform`), então o
+    objeto sai exatamente como sempre saiu. */
 export function captureFx(id: string | undefined, side: FxSide): FxSource | undefined {
   const tile = id ? byIid(id) : null;
   const art = tile?.querySelector(".card-art") ?? null;
   // A mão do Warden não está no DOM: a origem é o avatar do band dele.
   const el = art ?? tile ?? document.querySelector(`[data-side="${side}"] .player-avatar`);
-  return el ? { rect: el.getBoundingClientRect(), node: cloneEl(art) } : undefined;
+  if (!(el instanceof HTMLElement)) return undefined;
+  const rect = el.getBoundingClientRect();
+  const owner = tile ?? el;
+  const ownerCs = getComputedStyle(owner);
+  const rot = ownerCs.rotate;
+  const scale = parseFloat(ownerCs.scale) || 1;
+  const turned = Boolean(rot && rot !== "none");
+  if (!turned && scale === 1) return { rect, node: cloneEl(art) };
+  return {
+    rect,
+    node: cloneEl(art),
+    w: el.offsetWidth * scale,
+    h: el.offsetHeight * scale,
+    rot: turned ? `${rot}` : undefined,
+  };
 }
 
 /** Peças que o diff marca como `leave`: o clone (a `.board-piece` inteira, com
@@ -178,23 +198,43 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         destPiece.setAttribute("data-landed", "");
         if (destTile && destTile !== destPiece) destTile.setAttribute("data-landed", "");
       }
-      const destArt = destTile?.querySelector(".card-art") ?? destTile;
+      const destArt = destTile?.querySelector<HTMLElement>(".card-art") ?? destTile;
       const to = destArt ? destArt.getBoundingClientRect() : null;
+
+      // H3D-08: o destino 3D tem pose — lean de 12/10° e, quando a carta já
+      // está deitada (exausta = `rotate: z 12deg` na arte), um giro no plano. O
+      // ghost pousa com a MESMA pose: tira a inflação do giro da caixa projetada
+      // (w·cos + h·sin) para nascer no tamanho da carta, escala por ele e
+      // reaplica a pose no fim do voo (--fx-slot). Sem 3D nenhum dos dois
+      // valores existe: `pose` sai vazia e o 2D não muda um pixel. A marca no
+      // host leva o lean ao clone de quem sai, que nasce fora do contexto 3D.
+      const lean = destPiece ? getComputedStyle(destPiece).getPropertyValue("--lean").trim() : "";
+      const destSpin = destArt ? getComputedStyle(destArt).rotate : "";
+      const spin = destSpin && destSpin !== "none" ? destSpin : "";
+      const pose = [lean ? `rotateX(${lean})` : "", spin ? `rotateZ(${spin})` : ""].filter(Boolean).join(" ");
+      const spinRad = spin ? (Math.abs(parseFloat(spin)) * Math.PI) / 180 : 0;
+      const aspect = destArt && destArt.offsetWidth ? destArt.offsetHeight / destArt.offsetWidth : 1.4;
+      const toWidth = to ? to.width / (Math.cos(spinRad) + aspect * Math.sin(spinRad)) : undefined;
+      host.classList.toggle("fx-layer--3d", Boolean(lean));
 
       const { innerWidth: vw, innerHeight: vh } = window;
       const cy = vh * 0.46;
       // O ghost nasce centrado e com o tamanho da apresentação (CSS): as custom
       // properties do host dizem só de onde ele vem e onde aterrissa, já
-      // relativas ao centro.
+      // relativas ao centro. A origem girada (leque 3D) usa o tamanho de layout
+      // e a própria rotação no quadro 0 (H3D-08).
       const from = plan.from?.rect ?? to ?? { left: vw / 2 - 40, top: vh / 2 - 56, width: 80, height: 112 };
+      const fromWidth = plan.from?.w ?? from.width;
+      const fromRot = plan.from?.rot ? ` rotate(${plan.from.rot})` : "";
       // Destino fora da viewport (mão abaixo da dobra, no mobile): termina na
       // borda + fade, em vez de voar para um ponto que o jogador não vê.
       const slotY = to ? Math.max(16, Math.min(vh - 16, to.top + to.height / 2)) : cy;
       const hold = Math.max(60, plan.holdMs);
       host.style.cssText =
         `--fx-hold:${hold}ms;` +
-        `--fx-from:translate(${from.left + from.width / 2 - vw / 2}px,${from.top + from.height / 2 - cy}px) scale(${from.width / STAGE_WIDTH});` +
-        `--fx-slot:translate(${(to ? to.left + to.width / 2 : vw / 2) - vw / 2}px,${slotY - cy}px) scale(${(to ? to.width : from.width) / STAGE_WIDTH})`;
+        (lean ? `--fx-land-lean:${lean};` : "") +
+        `--fx-from:translate(${from.left + from.width / 2 - vw / 2}px,${from.top + from.height / 2 - cy}px) scale(${fromWidth / STAGE_WIDTH})${fromRot};` +
+        `--fx-slot:translate(${(to ? to.left + to.width / 2 : vw / 2) - vw / 2}px,${slotY - cy}px) scale(${((toWidth ?? fromWidth) / STAGE_WIDTH).toFixed(4)})${pose ? ` ${pose}` : ""}`;
 
       // O conteúdo do ghost: arte da mão (clone capturado antes do commit, o
       // caso da Ação sem slot) ou a do tile que acabou de nascer (o Warden joga
