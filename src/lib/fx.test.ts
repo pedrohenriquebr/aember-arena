@@ -1,7 +1,7 @@
 // Specs do diff determinístico que alimenta o diretor de FX (plano §0.2):
 // o motor segue puro e o estado não ganha eventos — tudo sai de prev → next.
 import { describe, expect, it } from "vitest";
-import { applyMove, type GameMove } from "./game";
+import { applyMove, endTurn, type GameMove } from "./game";
 import { diffFx } from "./fx";
 import { byTitle, card, setupTest } from "./testkit";
 
@@ -44,8 +44,31 @@ describe("diffFx", () => {
     const state = setupTest({ hand: ["Coward's End"], inPlay: ["Valdr"] }, { inPlay: [doomed] });
     state.players[0].board[0].damage = 1; // a danificada sobrevive; a intacta morre
     const { next } = play(state, "Coward's End");
-    // Sem enter (Coward's End é Ação) e sem leave da sobrevivente.
-    expect(diffFx(state, next)).toEqual([{ kind: "leave", side: 1, id: doomed.instanceId }]);
+    const events = diffFx(state, next);
+    // Sem enter (Coward's End é Ação); a danificada sobrevive (leva dano) e a
+    // intacta sai de jogo.
+    expect(events).toContainEqual({ kind: "leave", side: 1, id: doomed.instanceId });
+    expect(events.some((event) => event.kind === "enter")).toBe(false);
+  });
+
+  it("reports the damage a surviving creature took (the '-N' over the tile)", () => {
+    const attacker = card("Valdr", { power: 1 });
+    const target = card("Headhunter", { power: 9 });
+    const state = setupTest({ inPlay: [attacker] }, { inPlay: [target] });
+    const next = applyMove(state, 0, { type: "fight", attackerId: attacker.instanceId, targetId: target.instanceId });
+    expect(diffFx(state, next)).toContainEqual({ kind: "damage", id: target.instanceId, amount: 1 });
+  });
+
+  it("reports the chains a card cost (the elo falling into the counter)", () => {
+    const state = setupTest({ hand: ["Coward's End"] });
+    const { next } = play(state, "Coward's End");
+    expect(diffFx(state, next)).toContainEqual({ kind: "chains", side: 0, delta: 3 });
+  });
+
+  it("reports a forged key for the side that forges (the glow side)", () => {
+    const state = setupTest({}, { amber: 6 });
+    const next = endTurn(state, 0);
+    expect(diffFx(state, next)).toContainEqual({ kind: "key", side: 1 });
   });
 
   it("an upgrade entering the board is an enter for its owner", () => {

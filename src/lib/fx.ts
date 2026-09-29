@@ -12,11 +12,17 @@ export type FxSide = 0 | 1;
  * voo — `placeCreature` preserva o instanceId do clone).
  * `leave`: saiu do board (destruída, devolvida, arquivada, descartada).
  * `amber`: o placar mudou (colheita, bônus, roubo) — é o "+N Æ" que voa.
+ * `damage`: uma criatura levou dano — é o "-N" que flutua sobre ela.
+ * `chains`: correntes ganhas/perdidas na compra (o elo que cai no contador).
+ * `key`: uma chave foi forjada (o glow no lado de quem forjou).
  */
 export type FxEvent =
   | { kind: "enter"; side: FxSide; id: string }
   | { kind: "leave"; side: FxSide; id: string }
-  | { kind: "amber"; side: FxSide; delta: number };
+  | { kind: "amber"; side: FxSide; delta: number }
+  | { kind: "damage"; id: string; amount: number }
+  | { kind: "chains"; side: FxSide; delta: number }
+  | { kind: "key"; side: FxSide };
 
 const boardIds = (state: GameState, side: FxSide) => new Set(state.players[side].board.map((card) => card.instanceId));
 
@@ -36,6 +42,13 @@ export function diffFx(prev: GameState, next: GameState): FxEvent[] {
     }
     const amber = next.players[side].amber - prev.players[side].amber;
     if (amber) events.push({ kind: "amber", side, delta: amber });
+    const chains = next.players[side].chains - prev.players[side].chains;
+    if (chains) events.push({ kind: "chains", side, delta: chains });
+    if (next.players[side].keys > prev.players[side].keys) events.push({ kind: "key", side });
+    for (const card of next.players[side].board) {
+      const before = prev.players[side].board.find((item) => item.instanceId === card.instanceId);
+      if (before && card.damage > before.damage) events.push({ kind: "damage", id: card.instanceId, amount: card.damage - before.damage });
+    }
   }
   return events;
 }
@@ -68,6 +81,10 @@ export type FxPlan = {
   actorId?: string;
   /** "+N Æ" do card que gerou para o contador do band dono (plano §4.2). */
   amber?: { side: FxSide; delta: number };
+  /** "-N" sobre cada criatura que levou dano neste commit (plano §4.2). */
+  hits?: { id: string; amount: number }[];
+  /** Correntes ganhas: o elo cai no contador do lado (plano §4.4). */
+  chains?: { side: FxSide; delta: number };
 };
 
 /** Diretor imperativo do portal de FX (FxLayer). */
@@ -82,6 +99,8 @@ export type FxDirector = {
   spot(actorId?: string): void;
   /** Banner central de transição ("Seu turno") por ~900ms. */
   banner(text: string): void;
+  /** Forja de chave (plano §4.1): o glow nasce no lado de quem forjou. */
+  forge(side: FxSide): void;
 };
 
 /** Guard de movimento: sem isto o voo ignoraria o toggle de animações. */

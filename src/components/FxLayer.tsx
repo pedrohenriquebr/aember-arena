@@ -57,7 +57,7 @@ export function captureGone(ids: string[]): FxSource[] {
 }
 
 /** A revelação em andamento: nós a remover, a marca a limpar, timer e o wake. */
-type Run = { nodes: HTMLElement[]; mark: HTMLElement | null; timer: number; wake: (() => void) | null };
+type Run = { nodes: HTMLElement[]; marks: HTMLElement[]; mark: HTMLElement | null; timer: number; wake: (() => void) | null };
 
 export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -73,6 +73,7 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     run.wake?.();
     for (const node of run.nodes) node.remove();
     run.mark?.removeAttribute("data-fx");
+    for (const mark of run.marks) mark.removeAttribute("data-fx");
   }, []);
 
   /** PRE do move: quem age acende com a marca `acting` (plano §3). */
@@ -81,6 +82,17 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     const tile = actorId ? byIid(actorId) : null;
     spotRef.current = tile ? [tile] : [];
     tile?.setAttribute("data-fx", "acting");
+  };
+
+  /** Forja (onda 3): o board ganha o glow do lado que forjou + o shake. */
+  const forge = (side: FxSide) => {
+    const board = document.querySelector<HTMLElement>(".game-board");
+    if (!board) return;
+    board.style.setProperty("--forge-y", side === 1 ? "8%" : "88%");
+    board.classList.remove("forge-flash");
+    void board.offsetWidth; // reinicia a animação de um glow repetido
+    board.classList.add("forge-flash");
+    window.setTimeout(() => board.classList.remove("forge-flash"), 900);
   };
 
   /** Banner de transição: só texto e tempo (não passa pelo guard de movimento). */
@@ -94,7 +106,7 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     window.setTimeout(() => el.remove(), 900);
   };
 
-  useImperativeHandle(ref, () => ({ run, cancelAll, spot, banner }));
+  useImperativeHandle(ref, () => ({ run, cancelAll, spot, banner, forge }));
 
   async function reveal(plan: FxPlan, host: HTMLElement, run: Run) {
     const alive = () => runRef.current === run;
@@ -168,6 +180,22 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         run.nodes.push(source.node);
       }
 
+      // Dano (onda 3): "-N" flutua sobre cada criatura atingida e o tile leva a
+      // marca `hit` (tremida + flash de um quadro) — tudo aria-hidden no portal.
+      for (const hit of plan.hits ?? []) {
+        const tile = byIid(hit.id);
+        if (!tile) continue;
+        tile.setAttribute("data-fx", "hit");
+        run.marks.push(tile);
+        const box = tile.getBoundingClientRect();
+        const node = document.createElement("b");
+        node.className = "fx-dmg";
+        node.textContent = `-${hit.amount}`;
+        node.style.cssText = `left:${box.left + box.width / 2}px;top:${box.top + box.height / 3}px`;
+        host.appendChild(node);
+        run.nodes.push(node);
+      }
+
       // Âmbar ganho (colheita/captura): o número nasce no card que gerou e voa
       // até o contador do dono (plano §4.2).
       if (plan.amber) {
@@ -181,6 +209,24 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
           node.style.cssText = `left:${box.left + box.width / 2}px;top:${box.top + box.height / 2}px;--fx-dx:${to.left + to.width / 2 - box.left - box.width / 2}px;--fx-dy:${to.top + to.height / 2 - box.top - box.height / 2}px`;
           host.appendChild(node);
           run.nodes.push(node);
+        }
+      }
+
+      // Correntes (onda 3): o elo cai do topo até o contador do lado.
+      if (plan.chains) {
+        const counter = document.querySelector<HTMLElement>(`[data-side="${plan.chains.side}"] .chain-counter`);
+        const box = counter?.getBoundingClientRect();
+        if (counter && box) {
+          const node = document.createElement("b");
+          node.className = "fx-chain";
+          node.textContent = "⛓";
+          node.style.cssText = `left:${box.left + box.width / 2}px;top:${box.top + box.height / 2}px;--fx-dy:${box.top + box.height / 2}px`;
+          host.appendChild(node);
+          run.nodes.push(node);
+          counter.classList.remove("is-hit");
+          void counter.offsetWidth;
+          counter.classList.add("is-hit");
+          window.setTimeout(() => counter.classList.remove("is-hit"), 600);
         }
       }
 
@@ -200,7 +246,9 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
       if (alive()) {
         for (const node of run.nodes) node.remove();
         run.mark?.removeAttribute("data-fx");
+        for (const mark of run.marks) mark.removeAttribute("data-fx");
         run.nodes = [];
+        run.marks = [];
         run.mark = null;
       }
     }
@@ -210,7 +258,7 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     cancelAll();
     const host = hostRef.current;
     if (!host) return Promise.resolve();
-    const current: Run = { nodes: [], mark: null, timer: 0, wake: null };
+    const current: Run = { nodes: [], marks: [], mark: null, timer: 0, wake: null };
     runRef.current = current;
     return reveal(plan, host, current);
   }

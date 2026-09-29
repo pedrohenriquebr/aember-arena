@@ -1264,7 +1264,6 @@ function GameBoard({
   aiSummary,
   settings,
   t,
-  forgeFlash,
   onHouse,
   onSelectHand,
   onSelectBoard,
@@ -1289,7 +1288,6 @@ function GameBoard({
   aiSummary: string | null;
   settings: AppSettings;
   t: Translator;
-  forgeFlash: boolean;
   /** FEAT-12b: read-only board for the replay viewer — controls disabled and
       the mulligan/winner overlays suppressed. */
   replay?: boolean;
@@ -1340,7 +1338,7 @@ function GameBoard({
   const mulliganDeciding = mulliganSide !== null && (passAndPlay || mulliganSide === 0);
 
   return (
-    <section className={`game-board${settings.animations ? "" : " no-anim"}${forgeFlash ? " forge-flash" : ""}`} aria-label={t("game.board")}>
+    <section className={`game-board${settings.animations ? "" : " no-anim"}`} aria-label={t("game.board")}>
       <div className="felt-etching" aria-hidden="true" />
       <div className="board-content">
         <PlayerBand
@@ -1838,7 +1836,6 @@ function App() {
   const [aiPhase, setAiPhase] = useState<"idle" | "thinking" | "acting">("idle");
   /** Resumo do turno do Warden na faixa do round, até a primeira ação do jogador. */
   const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [forgeFlash, setForgeFlash] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
 
@@ -1945,17 +1942,23 @@ function App() {
           // "+N Æ" (colheita/bônus): o número voa do card que gerou ao placar.
           const amberEvent = events.find((event) => event.kind === "amber");
           const gained = amberEvent?.kind === "amber" && amberEvent.delta > 0 ? amberEvent : undefined;
+          const chainEvent = events.find((event) => event.kind === "chains");
+          const chains = chainEvent?.kind === "chains" && chainEvent.delta > 0 ? chainEvent : undefined;
+          // O evento de dano já tem o formato que o diretor usa ({ id, amount }).
+          const hits = events.filter((event) => event.kind === "damage") as { id: string; amount: number }[];
           const actor = move.type === "fight" ? move.attackerId : "instanceId" in move ? move.instanceId : undefined;
-          if (flight || gone.length || gained) {
+          if (flight || gone.length || gained || chains || hits.length) {
             plan = {
               from: flight ? captureFx(flight, side) : undefined,
               destId: flight,
               // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
               // ainda — é a jogada que o jogador precisa ler.
-              holdMs: (side === 1 ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1),
+              holdMs: Math.round((side === 1 ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1)),
               gone,
               actorId: actor,
               amber: gained ? { side: gained.side, delta: gained.delta } : undefined,
+              chains: chains ? { side: chains.side, delta: chains.delta } : undefined,
+              hits,
               // A jogada do Warden leva legenda: o jogador sabe o que entrou na
               // mesa sem caçar a linha no log (UX review #1).
               caption: side === 1 && flight ? t("log.play", { name: t("log.warden"), card: prev.players[1].hand.find((card) => card.instanceId === flight)?.face.title ?? "" }) : undefined,
@@ -2220,8 +2223,7 @@ function App() {
     if (nextKeys.player > prevKeysRef.current.player || nextKeys.ai > prevKeysRef.current.ai) {
       sound.play("forge");
       if (settingsRef.current.animations) {
-        setForgeFlash(true);
-        window.setTimeout(() => setForgeFlash(false), 700);
+        fxRef.current?.forge(nextKeys.player > prevKeysRef.current.player ? 0 : 1);
       }
     }
     prevKeysRef.current = nextKeys;
@@ -2987,7 +2989,6 @@ function App() {
                   aiSummary={aiSummary}
                   settings={settings}
                   t={t}
-                  forgeFlash={forgeFlash}
                   onHouse={choosePlayerHouse}
                   onSelectHand={selectHandCard}
                   onSelectBoard={pickBoardCard}
@@ -3148,7 +3149,6 @@ function App() {
               aiSummary={null}
               settings={settings}
               t={t}
-              forgeFlash={false}
               replay
               onHouse={NOOP}
               onSelectHand={NOOP}
