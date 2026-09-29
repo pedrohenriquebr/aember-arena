@@ -3345,6 +3345,47 @@ button:disabled {
   to { transform: rotate(360deg); }
 }
 
+/* ---------- Tutorial wizard ---------- */
+/* Primeiro acesso: reusa o diálogo de confirmação (.confirm-panel) e os chips do
+   inspetor (.filter-chip); só a barra de progresso e o palco da miniatura são novos. */
+.tutorial-open {
+  margin-top: 14px;
+}
+
+.tutorial-progress {
+  height: 3px;
+  margin: 10px 0 16px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.tutorial-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--gold-bright);
+  transition: width 240ms var(--ease-out);
+}
+
+.tutorial-body {
+  animation: rise-in 220ms var(--ease-out) backwards;
+}
+
+.tutorial-body p + p,
+.tutorial-body .exp-row {
+  margin-top: 9px;
+}
+
+.tutorial-visual {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 14px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+  pointer-events: none;
+}
+
 /* ---------- Header nav ---------- */
 /* T6 — default = escondido (mobile usa .mobile-tabs); desktop ao lado. */
 .header-nav {

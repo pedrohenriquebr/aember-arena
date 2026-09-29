@@ -9,22 +9,142 @@ export type SfxName =
   | "win"
   | "lose"
   | "error"
-  | "endTurn";
+  | "endTurn"
+  | "turn"
+  | "shuffle"
+  | "sparkle";
 
 export interface SoundPrefs {
   sfx: boolean;
   music: boolean;
 }
 
+// One synth layer. f = 0 plays the shared noise buffer instead of an oscillator.
+interface Voice {
+  f: number;
+  /** Pitch glide target, reached at the end of the voice. */
+  to?: number;
+  w?: OscillatorType;
+  /** Start offset (s). */
+  at?: number;
+  /** Attack (s). */
+  a?: number;
+  /** Length after the attack (s). */
+  d: number;
+  /** Peak gain. */
+  g: number;
+  /** Sustain as a fraction of the peak; 0 = percussive decay. */
+  s?: number;
+  flt?: BiquadFilterType;
+  fq?: number;
+  /** Filter sweep target. */
+  fto?: number;
+  q?: number;
+  /** Also feed the echo bus. */
+  wet?: 1;
+}
+
+const MAX_VOICES = 32;
+
+const brass = (f: number, at: number, d: number, g: number, s = 0.6): Voice[] => [
+  { f, w: "sawtooth", at, a: 0.02, d, g, s, flt: "lowpass", fq: 2600, fto: 900, wet: 1 },
+  { f: f / 2, w: "triangle", at, a: 0.02, d, g: g * 0.8, s },
+];
+
+const sparkle = (at: number, g: number): Voice[] =>
+  [1568, 1760, 2093, 2349, 2637].map((f, i) => ({ f, at: at + i * 0.045, d: 0.3, g, wet: 1 }));
+
+const bell = (f: number, at: number, g: number): Voice[] => [
+  { f, at, d: 0.9, g, wet: 1 },
+  // 2.76x is the first inharmonic partial of a struck bar: reads as crystal, not organ.
+  { f: f * 2.76, at, d: 0.3, g: g * 0.3 },
+];
+
+const PALETTE: Record<SfxName, () => Voice[]> = {
+  click: () => [
+    { f: 0, flt: "bandpass", fq: 2400, q: 2, d: 0.03, g: 0.5 },
+    { f: 900, w: "triangle", d: 0.03, g: 0.08 },
+  ],
+  select: () => [
+    { f: 1560, to: 2080, d: 0.06, g: 0.05 },
+    { f: 0, flt: "highpass", fq: 5000, d: 0.02, g: 0.08 },
+  ],
+  house: () => [
+    { f: 0, flt: "bandpass", fq: 900, fto: 3000, a: 0.08, d: 0.12, g: 0.2 },
+    { f: 440, w: "triangle", d: 0.18, g: 0.18, wet: 1 },
+    { f: 660, w: "triangle", at: 0.07, d: 0.28, g: 0.16, wet: 1 },
+  ],
+  // Whoosh while the card travels, then a felt thump as it lands.
+  play: () => [
+    { f: 0, flt: "bandpass", fq: 500, fto: 2600, q: 1.4, a: 0.12, d: 0.08, g: 0.35 },
+    { f: 160, to: 70, at: 0.15, d: 0.14, g: 0.45 },
+    { f: 0, flt: "lowpass", fq: 1400, at: 0.15, d: 0.05, g: 0.4 },
+  ],
+  fight: () => [
+    { f: 0, flt: "lowpass", fq: 3500, fto: 250, a: 0.002, d: 0.3, g: 0.6, wet: 1 },
+    { f: 120, to: 42, a: 0.002, d: 0.35, g: 0.6 },
+    { f: 260, to: 90, w: "square", flt: "lowpass", fq: 1200, d: 0.09, g: 0.15 },
+  ],
+  reap: () => [...bell(1319, 0, 0.2), ...bell(1976, 0.07, 0.14)],
+  // C5-G5-C6 call over a low hit, the last note held with an air swell.
+  forge: () => [
+    ...brass(523.25, 0, 0.16, 0.14),
+    ...brass(783.99, 0.13, 0.16, 0.14),
+    ...brass(1046.5, 0.26, 0.9, 0.16),
+    { f: 131, to: 65, d: 0.5, g: 0.4 },
+    { f: 0, flt: "highpass", fq: 4000, at: 0.26, a: 0.05, d: 0.6, g: 0.08, wet: 1 },
+  ],
+  endTurn: () => [
+    { f: 587, w: "triangle", d: 0.16, g: 0.12, wet: 1 },
+    { f: 440, w: "triangle", at: 0.1, d: 0.3, g: 0.12, wet: 1 },
+  ],
+  turn: () => [
+    { f: 440, w: "triangle", d: 0.16, g: 0.12, wet: 1 },
+    { f: 659, w: "triangle", at: 0.1, d: 0.35, g: 0.12, wet: 1 },
+  ],
+  // A riffle: short bright noise flicks at uneven spacing.
+  shuffle: () =>
+    Array.from({ length: 9 }, (_, i) => ({
+      f: 0, flt: "bandpass" as const, fq: 2600 + Math.random() * 1800, q: 1.2,
+      at: i * 0.045 + Math.random() * 0.012, d: 0.035, g: 0.35,
+    })),
+  sparkle: () => sparkle(0, 0.07),
+  win: () => [
+    ...brass(523.25, 0, 0.14, 0.12),
+    ...brass(659.25, 0.12, 0.14, 0.12),
+    ...brass(783.99, 0.24, 0.14, 0.12),
+    ...[523.25, 659.25, 783.99, 1046.5].flatMap((f) => brass(f, 0.38, 2.2, 0.07, 0.7)),
+    ...sparkle(0.4, 0.05),
+    { f: 130.81, at: 0.38, d: 1.6, g: 0.3 },
+  ],
+  lose: () => [
+    { f: 392, w: "triangle", d: 0.3, g: 0.15, wet: 1 },
+    { f: 311.13, w: "triangle", at: 0.2, d: 0.3, g: 0.15, wet: 1 },
+    { f: 261.63, w: "triangle", at: 0.4, d: 0.3, g: 0.15, wet: 1 },
+    ...[130.81, 155.56, 196].map((f): Voice => (
+      { f, w: "sawtooth", at: 0.6, a: 0.05, d: 2, s: 0.6, g: 0.1, flt: "lowpass", fq: 1800, fto: 300, wet: 1 }
+    )),
+    { f: 0, flt: "lowpass", fq: 300, at: 0.6, a: 0.1, d: 1.2, g: 0.2 },
+  ],
+  error: () => [
+    { f: 180, to: 140, w: "square", flt: "lowpass", fq: 900, d: 0.08, g: 0.12 },
+    { f: 170, to: 130, w: "square", flt: "lowpass", fq: 900, at: 0.1, d: 0.1, g: 0.12 },
+  ],
+};
+
 // A tiny synthesized audio engine so the build stays self-contained (no asset files).
 class SoundEngine {
   private context: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private echo: GainNode | null = null;
+  private noiseBuffer: AudioBuffer | null = null;
   private musicGain: GainNode | null = null;
   private musicNodes: OscillatorNode[] = [];
   private prefs: SoundPrefs = { sfx: true, music: false };
   private musicPlaying = false;
   private kicked = false;
+  private voices = 0;
+  private lastPlayed: Partial<Record<SfxName, number>> = {};
 
   setPrefs(prefs: SoundPrefs): void {
     this.prefs = prefs;
@@ -48,14 +168,35 @@ class SoundEngine {
       } catch {
         return null;
       }
+      const context = this.context;
       // Limiter lets the master sit near full scale without clipping stacked voices.
-      const limiter = this.context.createDynamicsCompressor();
+      const limiter = context.createDynamicsCompressor();
       limiter.threshold.value = -8;
+      limiter.knee.value = 0;
       limiter.ratio.value = 12;
-      limiter.connect(this.context.destination);
-      this.masterGain = this.context.createGain();
-      this.masterGain.gain.value = 1;
+      limiter.connect(context.destination);
+      this.masterGain = context.createGain();
+      this.masterGain.gain.value = 0.8;
       this.masterGain.connect(limiter);
+      // Poor man's room: two damped feedback delays at unrelated lengths.
+      this.echo = context.createGain();
+      this.echo.gain.value = 0.3;
+      for (const time of [0.089, 0.137]) {
+        const delay = context.createDelay();
+        delay.delayTime.value = time;
+        const damp = context.createBiquadFilter();
+        damp.frequency.value = 2600;
+        const feedback = context.createGain();
+        feedback.gain.value = 0.4;
+        this.echo.connect(delay);
+        delay.connect(damp);
+        damp.connect(feedback);
+        feedback.connect(delay);
+        damp.connect(this.masterGain);
+      }
+      this.noiseBuffer = context.createBuffer(1, context.sampleRate, context.sampleRate);
+      const data = this.noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
     }
     // "interrupted" (iOS call/background) needs a resume as much as "suspended".
     if (this.context.state !== "running") {
@@ -90,109 +231,71 @@ class SoundEngine {
     };
   }
 
-  private tone(
-    context: AudioContext,
-    options: {
-      freq: number;
-      endFreq?: number;
-      type?: OscillatorType;
-      duration: number;
-      gain?: number;
-      delay?: number;
-    },
-  ): void {
-    if (!this.masterGain) return;
-    const now = context.currentTime + (options.delay ?? 0);
-    const osc = context.createOscillator();
-    const gain = context.createGain();
-    osc.type = options.type ?? "sine";
-    osc.frequency.setValueAtTime(options.freq, now);
-    if (options.endFreq) {
-      osc.frequency.exponentialRampToValueAtTime(Math.max(1, options.endFreq), now + options.duration);
+  private voice(context: AudioContext, v: Voice, dry: boolean): void {
+    if (!this.masterGain || !this.noiseBuffer || this.voices >= MAX_VOICES) return;
+    const t = context.currentTime + (v.at ?? 0);
+    const attack = v.a ?? 0.004;
+    const end = t + attack + v.d;
+    let source: AudioScheduledSourceNode;
+    let offset = 0;
+    if (v.f) {
+      const osc = context.createOscillator();
+      osc.type = v.w ?? "sine";
+      osc.frequency.setValueAtTime(v.f, t);
+      if (v.to) osc.frequency.exponentialRampToValueAtTime(v.to, end);
+      source = osc;
+    } else {
+      const noise = context.createBufferSource();
+      noise.buffer = this.noiseBuffer;
+      noise.loop = true;
+      offset = Math.random() * 0.5;
+      source = noise;
     }
-    const peak = options.gain ?? 0.22;
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(peak, now + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + options.duration);
-    osc.connect(gain);
-    gain.connect(this.masterGain);
-    osc.start(now);
-    osc.stop(now + options.duration + 0.05);
-  }
-
-  private noise(context: AudioContext, duration: number, gainValue = 0.14, delay = 0): void {
-    if (!this.masterGain) return;
-    const now = context.currentTime + delay;
-    const bufferSize = Math.floor(context.sampleRate * duration);
-    const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i += 1) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    let tail: AudioNode = source;
+    if (v.flt) {
+      const filter = context.createBiquadFilter();
+      filter.type = v.flt;
+      filter.Q.value = v.q ?? 1;
+      filter.frequency.setValueAtTime(v.fq ?? 1000, t);
+      if (v.fto) filter.frequency.exponentialRampToValueAtTime(v.fto, end);
+      tail.connect(filter);
+      tail = filter;
     }
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    const filter = context.createBiquadFilter();
-    filter.type = "highpass";
-    filter.frequency.value = 900;
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(gainValue, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    source.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterGain);
-    source.start(now);
-    source.stop(now + duration + 0.02);
+    // ADSR: linear attack, decay toward sustain (or silence), release at 60% of a held note.
+    const env = context.createGain();
+    const sustain = v.s ?? 0;
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(v.g, t + attack);
+    env.gain.setTargetAtTime(v.g * sustain, t + attack, sustain ? 0.06 : v.d / 5);
+    if (sustain) env.gain.setTargetAtTime(0, t + attack + v.d * 0.6, v.d * 0.08);
+    tail.connect(env);
+    env.connect(this.masterGain);
+    if (v.wet && !dry && this.echo) env.connect(this.echo);
+    this.voices += 1;
+    source.onended = () => {
+      this.voices -= 1;
+    };
+    (source as AudioBufferSourceNode).start(t, offset);
+    source.stop(end + 0.02);
   }
 
   play(name: SfxName): void {
     if (!this.prefs.sfx) return;
     const context = this.ensureContext();
     if (!context) return;
-
-    switch (name) {
-      case "click":
-        this.tone(context, { freq: 320, type: "triangle", duration: 0.06, gain: 0.12 });
-        break;
-      case "select":
-        this.tone(context, { freq: 520, endFreq: 720, type: "sine", duration: 0.09, gain: 0.13 });
-        break;
-      case "house":
-        this.tone(context, { freq: 300, endFreq: 480, type: "sawtooth", duration: 0.14, gain: 0.12 });
-        this.tone(context, { freq: 600, type: "sine", duration: 0.12, gain: 0.08, delay: 0.04 });
-        break;
-      case "play":
-        this.tone(context, { freq: 380, endFreq: 560, type: "triangle", duration: 0.16, gain: 0.16 });
-        this.noise(context, 0.12, 0.08, 0.02);
-        break;
-      case "reap":
-        this.tone(context, { freq: 660, endFreq: 990, type: "sine", duration: 0.2, gain: 0.15 });
-        this.tone(context, { freq: 880, endFreq: 1320, type: "sine", duration: 0.22, gain: 0.09, delay: 0.05 });
-        break;
-      case "fight":
-        this.noise(context, 0.18, 0.2);
-        this.tone(context, { freq: 180, endFreq: 90, type: "sawtooth", duration: 0.22, gain: 0.2 });
-        break;
-      case "forge":
-        this.tone(context, { freq: 440, endFreq: 880, type: "sine", duration: 0.28, gain: 0.18 });
-        this.tone(context, { freq: 660, endFreq: 1320, type: "triangle", duration: 0.3, gain: 0.12, delay: 0.08 });
-        this.tone(context, { freq: 1320, type: "sine", duration: 0.4, gain: 0.08, delay: 0.16 });
-        break;
-      case "endTurn":
-        this.tone(context, { freq: 400, endFreq: 260, type: "triangle", duration: 0.16, gain: 0.13 });
-        break;
-      case "win":
-        [523, 659, 784, 1047].forEach((freq, index) => {
-          this.tone(context, { freq, type: "triangle", duration: 0.38, gain: 0.16, delay: index * 0.12 });
-        });
-        break;
-      case "lose":
-        [392, 330, 262, 196].forEach((freq, index) => {
-          this.tone(context, { freq, type: "sawtooth", duration: 0.34, gain: 0.14, delay: index * 0.14 });
-        });
-        break;
-      case "error":
-        this.tone(context, { freq: 200, endFreq: 140, type: "square", duration: 0.16, gain: 0.13 });
-        break;
+    // Anti-spam: a key re-fired within 50 ms (double click, AI burst) is one sound.
+    // Wall clock, not currentTime: that one freezes while the context is suspended.
+    const now = performance.now();
+    if (now - (this.lastPlayed[name] ?? -1e3) < 50) return;
+    this.lastPlayed[name] = now;
+    // Reduced motion also means no echo tails: same cues, drier and shorter.
+    const dry =
+      document.documentElement.classList.contains("reduce-motion") ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    try {
+      for (const v of PALETTE[name]()) this.voice(context, v, dry);
+    } catch {
+      // A failed voice must never break the gesture that triggered it.
     }
   }
 

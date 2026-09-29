@@ -76,6 +76,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DeckInspector } from "./components/DeckInspector";
 import { Pagination } from "./components/Pagination";
 import { useDialogFocus } from "./components/useDialogFocus";
+import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 
 type Screen = "home" | "config" | "game" | "browse" | "inspect";
 type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanceId: string };
@@ -399,6 +400,7 @@ function HomeScreen({
   onOpenBrowse,
   onContinue,
   onLanguage,
+  onOpenTutorial,
 }: {
   t: Translator;
   language: Language;
@@ -412,6 +414,7 @@ function HomeScreen({
   onOpenBrowse: () => void;
   onContinue: () => void;
   onLanguage: (language: Language) => void;
+  onOpenTutorial: () => void;
 }) {
   const starterIds = new Set(STARTER_DECKS.map((deck) => deck.id));
   const extraSaved = savedDecks.filter((deck) => !starterIds.has(deck.id));
@@ -438,6 +441,9 @@ function HomeScreen({
           <ChevronRight size={13} />
           <span className="home-step"><i>3</i>{t("home.step.play")}</span>
         </div>
+        <button type="button" className="ghost-button tutorial-open" onClick={onOpenTutorial}>
+          <CircleHelp size={15} /> {t("tutorial.open")}
+        </button>
       </div>
 
       <section className="home-section">
@@ -565,6 +571,7 @@ function ConfigScreen({
   onLanguage,
   onBack,
   onStart,
+  onOpenTutorial,
 }: {
   t: Translator;
   settings: AppSettings;
@@ -577,6 +584,7 @@ function ConfigScreen({
   onLanguage: (language: Language) => void;
   onBack: () => void;
   onStart: () => void;
+  onOpenTutorial: () => void;
 }) {
   const [step, setStep] = useState<ConfigStep>("mode");
   const steps: readonly ConfigStep[] = settings.gameMode === "passAndPlay" ? PASS_CONFIG_STEPS : MODE_CONFIG_STEPS;
@@ -637,6 +645,9 @@ function ConfigScreen({
           <span className="eyebrow">{t("config.title")}</span>
           <h1>{settings.gameMode === "passAndPlay" ? t("config.subtitle2p") : t("config.subtitle")}</h1>
         </div>
+        <button type="button" className="ghost-button tutorial-open" onClick={onOpenTutorial}>
+          <CircleHelp size={15} /> {t("tutorial.open")}
+        </button>
       </div>
 
       <div className="config-stepper">
@@ -856,7 +867,7 @@ function ConfigScreen({
               <div className="exp-row">
                 <span className="exp-icon"><Eye size={16} /></span>
                 <div className="exp-copy"><strong>{t("config.experience.hints")}</strong><small>{t("config.experience.hintsSub")}</small></div>
-                <Toggle checked={settings.hints} label={t("config.experience.hints")} onChange={(value) => onChange({ ...settings, hints: value })} />
+                <Toggle checked={settings.hints} label={t("config.experience.hints")} onChange={(value) => { if (value) sound.play("sparkle"); onChange({ ...settings, hints: value }); }} />
               </div>
               {hasHover && (
                 <div className="exp-row">
@@ -1764,6 +1775,8 @@ function App() {
   const [updateReady, setUpdateReady] = useState(false);
   // FEAT-12b: the read-only replay viewer — derived states, never the live one.
   const [replay, setReplay] = useState<{ states: GameState[]; index: number } | null>(null);
+  // Tutorial: opens by itself only on the first real visit (always on Home).
+  const [tutorialOpen, setTutorialOpen] = useState(isFirstVisit);
   const replayRef = useDialogFocus<HTMLDivElement>(replay !== null);
 
   const gameRef = useRef<GameState | null>(null);
@@ -2064,7 +2077,8 @@ function App() {
         await wait(260);
         if (cancelled) return;
         const ended = endTurn(next, 1);
-        sound.play("endTurn");
+        // The Warden handing over is the player's turn starting.
+        sound.play("turn");
         commitGame(next, ended, { kind: "end", side: 1 });
         next = ended;
       }
@@ -2268,7 +2282,7 @@ function App() {
     const prev = gameRef.current;
     if (!prev) return;
     const side = humanSideOf(prev, matchModeRef.current);
-    sound.play(take ? "select" : "click");
+    sound.play(take ? "shuffle" : "click");
     const next = take ? mulligan(prev, side) : keepHand(prev, side);
     commitGame(prev, next, { kind: take ? "mulligan" : "keep", side });
     if (matchModeRef.current === "passAndPlay") {
@@ -2613,6 +2627,7 @@ function App() {
             onOpenBrowse={() => { sound.play("click"); setScreen("browse"); }}
             onContinue={() => { sound.play("click"); setScreen("config"); }}
             onLanguage={(next) => { setLanguage(next); showToast(t("toast.langChanged")); }}
+            onOpenTutorial={() => { sound.play("click"); setTutorialOpen(true); }}
           />
         )}
 
@@ -2648,6 +2663,7 @@ function App() {
             hasHover={hasHover}
             onChange={setSettings}
             onLanguage={setLanguage}
+            onOpenTutorial={() => { sound.play("click"); setTutorialOpen(true); }}
             onBack={() => setScreen("home")}
             onStart={() => {
               if (settings.gameMode !== "passAndPlay") {
@@ -2920,6 +2936,17 @@ function App() {
             launchMatch(pending.deck, pending.opponent, pending.mode);
           }}
           onCancel={() => setPendingDeck(null)}
+        />
+      )}
+
+      {/* Never over a match: only Home and Settings open it. */}
+      {tutorialOpen && (screen === "home" || screen === "config") && (
+        <TutorialWizard
+          t={t}
+          houses={selectedDeck.houses}
+          hintsToggle={<Toggle checked={settings.hints} label={t("config.experience.hints")} onChange={(value) => setSettings({ ...settings, hints: value })} />}
+          onOpenVault={() => { markTutorialSeen(); setTutorialOpen(false); setScreen("browse"); }}
+          onClose={() => { markTutorialSeen(); setTutorialOpen(false); }}
         />
       )}
 

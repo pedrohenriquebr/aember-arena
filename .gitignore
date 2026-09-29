@@ -2,6 +2,7 @@ node_modules/
 dist/
 graphify-out/
 e2e/shots/
+e2e/clips/
 .playwright-mcp/
 docs/advisor/*.log
 e2e/probes/shots/

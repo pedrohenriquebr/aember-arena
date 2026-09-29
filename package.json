@@ -12,6 +12,7 @@
     "e2e:capture": "node e2e/capture.mjs --out e2e/shots/current",
     "e2e:floor": "node e2e/capture.mjs --floor-only",
     "e2e:smoke": "node e2e/capture.mjs --match-smoke --out e2e/shots/match-smoke",
+    "e2e:record": "node e2e/record-session.mjs",
     "e2e:bundle": "node e2e/bundle-size.mjs",
     "e2e:acceptance": "node e2e/acceptance.mjs",
     "test": "vitest run"

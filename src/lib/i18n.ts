@@ -363,6 +363,18 @@ const DICT: Record<string, [string, string]> = {
   "browse.noResultsTitle": ["No decks named “{query}”", "Nenhum baralho chamado “{query}”"],
   "browse.noResultsBody": ["The Master Vault searches by deck name. Check the spelling or try a shorter part of the name.", "O Master Vault busca pelo nome do baralho. Confira a grafia ou tente um trecho menor do nome."],
   "browse.clearSearch": ["Clear search", "Limpar busca"],
+  // Tutorial: per step "title|paragraph|paragraph" (TutorialWizard).
+  "tutorial.open": ["Replay tutorial", "Rever tutorial"],
+  "tutorial.skip": ["Skip tutorial", "Pular tutorial"],
+  "tutorial.finish": ["Let's forge", "Vamos forjar"],
+  "tutorial.flank": ["Flank", "Flanco"],
+  "tutorial.welcome": ["Welcome to Aember Arena|Forge 3 keys before the Warden: at the start of your turn, 6 amber forge a key.|Chains cost cards: your refill draws 1 fewer per 6 chains.", "Boas-vindas à Aember Arena|Forje 3 chaves antes do Warden: no início do seu turno, 6 âmbar forjam uma chave.|Correntes custam cartas: a reposição compra 1 a menos a cada 6."],
+  "tutorial.houses": ["One house per turn|Each deck has 3 houses. Every turn you choose one: only its cards can be played or used.", "Uma casa por turno|Cada baralho tem 3 casas. A cada turno você escolhe uma: só cartas dela podem ser jogadas ou usadas."],
+  "tutorial.board": ["Hand and battleline|Creatures enter exhausted on a flank, either end of the line; many abilities hit neighbors.|Artifacts stay in play; upgrades attach to a creature.", "Mão e linha de batalha|Criaturas entram exaustas num flanco, uma ponta da linha; muitas habilidades afetam vizinhos.|Artefatos ficam em jogo; melhorias se prendem a uma criatura."],
+  "tutorial.actions": ["Reap, fight or use|Each ready creature of the house acts once per turn. Reap: +1 amber. Use: artifact or Action ability.|Fight: both deal their power to each other. Elusive dodges the first attack; Taunt shields neighbors.", "Colher, lutar ou usar|Cada criatura pronta da casa age uma vez por turno. Colher: +1 âmbar. Usar: artefato ou habilidade Action.|Lutar: as duas causam seu poder uma na outra. Elusive esquiva do primeiro ataque; Taunt protege vizinhos."],
+  "tutorial.mulligan": ["Mulligan and hints|Before turn 1 you may mulligan once, drawing one card fewer. The first player plays one card on turn 1.", "Mulligan e dicas|Antes do turno 1 você pode fazer mulligan uma vez, comprando uma carta a menos. Quem começa joga uma carta no turno 1."],
+  "tutorial.research": ["Where to look things up|The Vault imports real Master Vault decks. Long-press or hover a card to enlarge it.|Unsure of a rule? Archon Arcana is the community wiki.", "Onde pesquisar|O Vault importa baralhos reais do Master Vault. Segure ou passe o mouse numa carta para ampliá-la.|Dúvida numa regra? A Archon Arcana é a wiki da comunidade."],
+  "tutorial.ready": ["May your first forge happen|Reopen this guide any time from Home or Settings.", "Que a primeira forja aconteça|Reabra este guia pela Home ou por Ajustes."],
 };
 
 
