@@ -1,4 +1,40 @@
-# HANDOFF — estado da pausa (29/09, véspera de desligamento)
+# HANDOFF — estado da pausa (29/09, noite — atualizado)
+
+> **⚠️ ESTE É O ESTADO VIGENTE.** A seção "primeira pausa" (fim do arquivo) é
+> histórica. O que mudou desde ela:
+
+## Segunda pausa (noite de 29/09)
+
+**Completado e commitado desde a primeira pausa:**
+- Gravação do clipe: `e2e/clips/session-1280x800.webm` + 32 frames ✅
+- Opus UX-REVIEW: `docs/UX_REVIEW.md` (Top 8 melhorias com evidência de frame) ✅
+- Opus ANIM: `docs/ANIMATIONS_PLAN.md` (526 linhas, 3 ondas com âncoras) ✅
+- Opus AUDIT2: `docs/BUGS_ROUND2.md` (15 bugs) ✅ → **todos corrigidos**:
+  - BUG2-01..07 (alta/média): commits `9114c33..e44b686` (7 commits com repro)
+  - BUG2-08..15 (baixa): commits `a7891ba..5ba16cd` (8 commits com probe)
+- Opus AUDIO: fix do unlock (`0373e97`) + **paleta procedural completa de 14
+  timbres** (`b1480bc`, probe real: 27 vozes, zero erros) ✅
+- Tutorial: o Opus já tinha entregue completo no snapshot; coder-9 validou em
+  Chrome real (22/22) + corrigiu a regra do turno 1 (`76c6e2b`) ✅
+- Teto de bundle: revisões documentadas até **135 kB** (histórico no CLAUDE.md §7)
+- HEAD atual: `5ba16cd` — **115 specs verdes, acceptance OK**
+
+**Em andamento (STASH `stash@{0}`):** coder-12 estava implementando a **onda 1
+do ANIM** quando foi parado — `src/lib/fx.ts` + `fx.test.ts` + `FxLayer.tsx`
+criados, integração em App/index.css parcial, sweep scripts em e2e/probes/_*.
+**Não commitado.** Para retomar: `git stash pop` e continuar a onda 1
+(integração do commitWithFx no App + ondas 2 e 3).
+
+**Fila restante:**
+1. Terminar onda 1 + ondas 2 (palco do turno da IA) e 3 (impacto) do ANIM
+2. **Validação pelo Opus** das animações/áudio (quota reseta 12:20am — usar o
+   padrão de despacho: `cat docs/advisor/PROMPT-X.md | claude -p ...`)
+3. Catálogo dinâmico (`docs/DYNAMIC_CATALOG_PLAN.md`) aguardando aprovação
+   do dono para a onda 1
+
+---
+
+# Histórico — primeira pausa (29/09, véspera de desligamento)
 
 Documento de retomada. **HEAD: `d872ae1`** — 112 specs verdes, acceptance OK,
 bundle 130,73/132 kB. Tudo do ciclo anterior (25 bugs + 15 features + emblemas das
