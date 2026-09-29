@@ -22,7 +22,21 @@ describe("diffFx", () => {
   it("does not invent a destination for an Action (it goes to the discard)", () => {
     const state = setupTest({ hand: ["Smith"] });
     const { next } = play(state, "Smith");
-    expect(diffFx(state, next)).toEqual([]);
+    // Só o bônus de âmbar da carta: nada de board (a Ação vai para o discard).
+    expect(diffFx(state, next).filter((event) => event.kind !== "amber")).toEqual([]);
+  });
+
+  it("reports the amber a play adds (the '+N Æ' that flies to the band)", () => {
+    const state = setupTest({ hand: ["Smith"] });
+    const { next } = play(state, "Smith");
+    expect(diffFx(state, next)).toContainEqual({ kind: "amber", side: 0, delta: 1 });
+  });
+
+  it("reports the amber of a reap on the reaping side", () => {
+    const state = setupTest({ inPlay: ["Valdr"] });
+    const valdr = byTitle(state.players[0].board, "Valdr")!;
+    const next = applyMove(state, 0, { type: "reap", instanceId: valdr.instanceId });
+    expect(diffFx(state, next)).toEqual([{ kind: "amber", side: 0, delta: 1 }]);
   });
 
   it("reports a destroyed creature as leaving the board", () => {

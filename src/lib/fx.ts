@@ -11,10 +11,12 @@ export type FxSide = 0 | 1;
  * `enter`: a carta chegou ao board (o id da carta jogada é o próprio destino do
  * voo — `placeCreature` preserva o instanceId do clone).
  * `leave`: saiu do board (destruída, devolvida, arquivada, descartada).
+ * `amber`: o placar mudou (colheita, bônus, roubo) — é o "+N Æ" que voa.
  */
 export type FxEvent =
   | { kind: "enter"; side: FxSide; id: string }
-  | { kind: "leave"; side: FxSide; id: string };
+  | { kind: "leave"; side: FxSide; id: string }
+  | { kind: "amber"; side: FxSide; delta: number };
 
 const boardIds = (state: GameState, side: FxSide) => new Set(state.players[side].board.map((card) => card.instanceId));
 
@@ -32,6 +34,8 @@ export function diffFx(prev: GameState, next: GameState): FxEvent[] {
     for (const card of prev.players[side].board) {
       if (before.has(card.instanceId)) events.push({ kind: "leave", side, id: card.instanceId });
     }
+    const amber = next.players[side].amber - prev.players[side].amber;
+    if (amber) events.push({ kind: "amber", side, delta: amber });
   }
   return events;
 }
@@ -58,6 +62,12 @@ export type FxPlan = {
   gone?: FxSource[];
   /** No início do SLAM (VAL-04: o pouso do som), com o ghost já no destino. */
   onSlam?: () => void;
+  /** Legenda sob a carta em cena (a jogada do Warden precisa ser lida). */
+  caption?: string;
+  /** Pulso de quem age (colheita, uso, luta): o `spot` que o App já marcou. */
+  actorId?: string;
+  /** "+N Æ" do card que gerou para o contador do band dono (plano §4.2). */
+  amber?: { side: FxSide; delta: number };
 };
 
 /** Diretor imperativo do portal de FX (FxLayer). */
@@ -67,6 +77,11 @@ export type FxDirector = {
   /** Pula tudo para o fim e limpa todo data-fx. O estado já está certo, então
       "pular" a animação nunca dessincroniza nada. */
   cancelAll(): void;
+  /** PRE: acende quem vai agir antes do commit — marcação, não movimento, então
+      vale igual no reduce-motion (o jogador precisa do ritmo). */
+  spot(actorId?: string): void;
+  /** Banner central de transição ("Seu turno") por ~900ms. */
+  banner(text: string): void;
 };
 
 /** Guard de movimento: sem isto o voo ignoraria o toggle de animações. */

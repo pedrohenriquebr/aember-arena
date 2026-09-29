@@ -135,6 +135,18 @@ const STARTER_DECKS: DeckInfo[] = [DEMO_DECK, DEMO_DECK_2];
 /** FEAT-12a: how many past states the undo history keeps (memory cap). */
 const UNDO_LIMIT = 40;
 
+// ---------- Ritmo do turno da IA (onda 2, plano §3) ----------
+// PRE = destaque antes de resolver; os totais caem na janela 700-900ms pedida
+// pelo UX review (#1) somando PRE + FX (voo/animação) + GAP.
+/** Abertura: a dificuldade define quanto o Warden "pensa" antes de agir. */
+const aiThinkMs = (difficulty: Difficulty) => 250 + DIFFICULTIES.indexOf(difficulty) * 100;
+const AI_PRE: Record<GameMove["type"], number> = { play: 120, fight: 260, reap: 200, use: 200, unstun: 160, discard: 80 };
+const AI_HOUSE_MS = 450;
+/** Pausa que substitui o voo quando as animações estão desligadas. */
+const AI_HOLD = 520;
+const AI_GAP = 220;
+const AI_END_MS = 300;
+
 // T5: hover só existe quando o dispositivo anuncia "(hover: hover)"; em touch o
 // toggle hoverZoom some e a inspeção vai por long-press (CardLightbox).
 function prefersHover() {
@@ -890,6 +902,25 @@ function ConfigScreen({
                 <div className="exp-copy"><strong>{t("config.experience.animations")}</strong><small>{t("config.experience.animationsSub")}</small></div>
                 <Toggle checked={settings.animations} label={t("config.experience.animations")} onChange={(value) => onChange({ ...settings, animations: value })} />
               </div>
+              {settings.gameMode === "solo" && (
+                <div className="exp-row">
+                  <span className="exp-icon"><Clock3 size={16} /></span>
+                  <div className="exp-copy"><strong>{t("config.experience.speed")}</strong></div>
+                  <div className="filter-chips" role="group" aria-label={t("config.experience.speed")}>
+                    {(["normal", "fast"] as const).map((speed) => (
+                      <button
+                        key={speed}
+                        type="button"
+                        className={`filter-chip${settings.aiSpeed === speed ? " is-active" : ""}`}
+                        aria-pressed={settings.aiSpeed === speed}
+                        onClick={() => onChange({ ...settings, aiSpeed: speed })}
+                      >
+                        {t(`config.speed.${speed}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="exp-row">
                 <span className="exp-icon"><Eye size={16} /></span>
                 <div className="exp-copy"><strong>{t("config.experience.hints")}</strong><small>{t("config.experience.hintsSub")}</small></div>
@@ -943,6 +974,7 @@ function ConfigScreen({
                   <li><span>{t("config.experience.music")}</span><strong>{settings.music ? t("config.on") : t("config.off")}</strong></li>
                   <li><span>{t("config.experience.animations")}</span><strong>{settings.animations ? t("config.on") : t("config.off")}</strong></li>
                   {hasHover && <li><span>{t("config.experience.zoom")}</span><strong>{settings.hoverZoom ? t("config.on") : t("config.off")}</strong></li>}
+                  {settings.gameMode === "solo" && <li><span>{t("config.experience.speed")}</span><strong>{t(`config.speed.${settings.aiSpeed}`)}</strong></li>}
                   <li><span>{t("config.experience.language")}</span><strong>{LANGUAGES.find((l) => l.id === settings.language)?.short}</strong></li>
                 </ul>
               </div>
@@ -1003,7 +1035,10 @@ type PlayerBandProps = {
   keyCost: number;
   isAi: boolean;
   active: boolean;
+  /** Onda 2: o Warden está pensando (aria do tag). */
   thinking?: boolean;
+  /** Casa escolhida pelo dono do band (selo no placar durante o turno). */
+  house?: string | null;
   chains: number;
   /** Lado dono do band: ancora o diretor de FX (âmbar/chaves/avatar). */
   side: 0 | 1;
@@ -1021,6 +1056,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     a.active === b.active &&
     a.side === b.side &&
     (a.thinking ?? false) === (b.thinking ?? false) &&
+    (a.house ?? "") === (b.house ?? "") &&
     (a.avatarLabel ?? "") === (b.avatarLabel ?? "") &&
     a.t === b.t &&
     a.player.name === b.player.name &&
@@ -1040,6 +1076,7 @@ const PlayerBand = memo(function PlayerBand({
   isAi,
   active,
   thinking = false,
+  house,
   chains,
   side,
   avatarLabel,
@@ -1069,6 +1106,11 @@ const PlayerBand = memo(function PlayerBand({
         </div>
       </div>
       <div className="player-resources">
+        {house && (
+          <span className="filter-chip">
+            <HouseMark house={house} small />{houseLabel(house, t)}
+          </span>
+        )}
         <KeyCounter keys={player.keys} t={t} />
         <div className="resource-divider" />
         <AmberCounter amount={player.amber} cost={keyCost} t={t} />
@@ -1218,7 +1260,8 @@ function GameBoard({
   game,
   selected,
   pick,
-  aiThinking,
+  aiPhase,
+  aiSummary,
   settings,
   t,
   forgeFlash,
@@ -1241,7 +1284,9 @@ function GameBoard({
   game: GameState;
   selected: Selection | null;
   pick: Pick | null;
-  aiThinking: boolean;
+  aiPhase: "idle" | "thinking" | "acting";
+  /** Onda 2: resumo do turno da IA (substitui a linha da casa até o jogador agir). */
+  aiSummary: string | null;
   settings: AppSettings;
   t: Translator;
   forgeFlash: boolean;
@@ -1303,7 +1348,8 @@ function GameBoard({
           keyCost={keyCost(game, enemySide)}
           isAi={!passAndPlay}
           active={game.activePlayer === enemySide && game.winner === null}
-          thinking={aiThinking}
+          thinking={aiPhase === "thinking"}
+          house={game.activePlayer === enemySide ? game.activeHouse : null}
           chains={enemy.chains}
           side={enemySide}
           avatarLabel={passAndPlay ? String(enemySide + 1) : undefined}
@@ -1334,9 +1380,9 @@ function GameBoard({
             <strong>
               {passAndPlay
                 ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
-                : game.activePlayer === 0 ? t("game.yourTurn") : aiThinking ? t("game.thinking") : t("game.opponentTurn")}
+                : game.activePlayer === 0 ? t("game.yourTurn") : aiPhase === "thinking" ? t("game.thinking") : t("game.opponentTurn")}
             </strong>
-            <span>{game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse")}</span>
+            <span>{aiSummary ?? (game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse"))}</span>
           </div>
           <div className="house-picker" role="group" aria-label={t("game.chooseHouse")}>
             {player.houses.map((house) => {
@@ -1394,6 +1440,7 @@ function GameBoard({
           keyCost={keyCost(game, humanSide)}
           isAi={false}
           active={game.activePlayer === humanSide && game.winner === null}
+          house={game.activePlayer === humanSide ? game.activeHouse : null}
           chains={player.chains}
           side={humanSide}
           avatarLabel={passAndPlay ? String(humanSide + 1) : undefined}
@@ -1786,7 +1833,11 @@ function App() {
 
   const [selected, setSelected] = useState<Selection | null>(null);
   const [pick, setPick] = useState<Pick | null>(null);
-  const [aiThinking, setAiThinking] = useState(false);
+  /** Onda 2 (plano §3): fase do turno da IA — pensando, agindo ou fora de cena.
+      "acting" existe para o placar contar a história sem o jogador abrir o log. */
+  const [aiPhase, setAiPhase] = useState<"idle" | "thinking" | "acting">("idle");
+  /** Resumo do turno do Warden na faixa do round, até a primeira ação do jogador. */
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [forgeFlash, setForgeFlash] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
@@ -1841,6 +1892,8 @@ function App() {
       layout effect que roda a revelação depois do DOM novo e antes do paint. */
   const fxRef = useRef<FxDirector | null>(null);
   const fxPlanRef = useRef<{ plan: FxPlan; resolve: () => void } | null>(null);
+  /** Onda 2: o jogador tocou no board durante o turno da IA — compacta o resto. */
+  const rushRef = useRef(false);
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -1877,6 +1930,9 @@ function App() {
     (prev: GameState, next: GameState, step: ReplayStep | undefined, move: GameMove | undefined, side: 0 | 1): Promise<void> => {
       let plan: FxPlan | null = null;
       let flight: string | undefined;
+      // Turno do Warden acelerado (opção rápida ou toque): o hold do voo encolhe
+      // junto com as batidas, senão a carta continuaria 420ms parada no centro.
+      const rush = side === 1 && (rushRef.current || settingsRef.current.aiSpeed === "fast");
       if (move) {
         // Guard de movimento (plano §0): sem isto o voo ignoraria o toggle.
         if (motionEnabled(settingsRef.current.animations)) {
@@ -1886,14 +1942,23 @@ function App() {
           // que vai para o discard — aí o ghost dissolve no centro).
           flight = move.type === "play" ? move.instanceId : undefined;
           const gone = captureGone(events.filter((event) => event.kind === "leave").map((event) => event.id));
-          if (flight || gone.length) {
+          // "+N Æ" (colheita/bônus): o número voa do card que gerou ao placar.
+          const amberEvent = events.find((event) => event.kind === "amber");
+          const gained = amberEvent?.kind === "amber" && amberEvent.delta > 0 ? amberEvent : undefined;
+          const actor = move.type === "fight" ? move.attackerId : "instanceId" in move ? move.instanceId : undefined;
+          if (flight || gone.length || gained) {
             plan = {
               from: flight ? captureFx(flight, side) : undefined,
               destId: flight,
               // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
               // ainda — é a jogada que o jogador precisa ler.
-              holdMs: side === 1 ? (flight ? 420 : 600) : flight ? 140 : 260,
+              holdMs: (side === 1 ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1),
               gone,
+              actorId: actor,
+              amber: gained ? { side: gained.side, delta: gained.delta } : undefined,
+              // A jogada do Warden leva legenda: o jogador sabe o que entrou na
+              // mesa sem caçar a linha no log (UX review #1).
+              caption: side === 1 && flight ? t("log.play", { name: t("log.warden"), card: prev.players[1].hand.find((card) => card.instanceId === flight)?.face.title ?? "" }) : undefined,
               // VAL-04: o thump do pouso acompanha o slam do voo, não o commit.
               onSlam: () => sound.play("land"),
             };
@@ -1916,7 +1981,7 @@ function App() {
         fxPlanRef.current = { plan, resolve };
       });
     },
-    [commitGame],
+    [commitGame, t],
   );
 
   // A revelação roda aqui: o DOM novo já está montado e o paint ainda não
@@ -2177,10 +2242,13 @@ function App() {
   }, [game, matchVersion, currentDeck.id, matchMode]);
 
   // AI turn loop. FEAT-13: pass-and-play has no AI — the effect stays dormant.
+  // Onda 2 (plano §3): cada ação vira uma BATIDA legível, com o cálculo feito
+  // antes da espera, degradação graciosa por tempo e toque para acelerar. As
+  // batidas são tempo, não movimento: valem igual no reduce-motion (UX #1.6).
   useEffect(() => {
     if (!game || screen !== "game" || matchMode === "passAndPlay") return;
     if (game.activePlayer !== 1 || game.winner !== null) {
-      if (game.winner !== null || game.activePlayer === 0) setAiThinking(false);
+      if (game.winner !== null || game.activePlayer === 0) setAiPhase("idle");
       return;
     }
 
@@ -2188,11 +2256,29 @@ function App() {
     if (aiTurnRef.current === turnKey) return;
     aiTurnRef.current = turnKey;
     let cancelled = false;
-    const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+    let actions = 0;
+    const fast = settingsRef.current.aiSpeed === "fast";
+    // A batida em curso é cancelável: o toque no board corta a espera agora.
+    let wake: (() => void) | null = null;
+    const sleep = (ms: number) => new Promise<void>((resolve) => {
+      wake = resolve;
+      window.setTimeout(resolve, ms);
+    });
+    /** Curva do plano §3: 1 nas 4 primeiras ações, -0.1 por ação até 0.45
+        (toque no board ou opção rápida compactam na hora). */
+    const tempo = () => (fast || rushRef.current ? 0.45 : Math.max(0.45, 1 - 0.1 * Math.max(0, actions - 4)));
+    const beat = (ms: number) => sleep(Math.round(ms * tempo()));
+    const rush = () => {
+      rushRef.current = true;
+      wake?.();
+      cancelFx();
+    };
+    rushRef.current = false;
+    window.addEventListener("pointerdown", rush);
 
     const takeAiTurn = async () => {
-      setAiThinking(true);
-      await wait(520);
+      setAiPhase("thinking");
+      await beat(aiThinkMs(settingsRef.current.difficulty));
       if (cancelled || !gameRef.current) return;
 
       let next = gameRef.current;
@@ -2200,46 +2286,63 @@ function App() {
       const house = next.activeHouse ?? chooseAiHouse(next, 1);
       const opening = chooseHouse(next, 1, house);
       sound.play("house");
-      commitGame(next, opening, { kind: "house", side: 1, house });
+      setAiPhase("acting");
+      commitWithFx(next, opening, { kind: "house", side: 1, house }, undefined, 1);
       next = opening;
+      const amberStart = next.players[1].amber;
+      let plays = 0;
+      await beat(AI_HOUSE_MS);
+      if (cancelled) return;
 
       // No fixed cap: play until nothing is worth doing (safety cap against a
       // loop the evaluator cannot see an end to, BUG-12 was a hard 7).
       for (let action = 0; action < 40; action += 1) {
-        await wait(settingsRef.current.difficulty === "Impossible" ? 460 : 340);
-        if (cancelled) return;
         const move = chooseAiMove(next, 1, house, settingsRef.current);
         if (!move) break;
+        // PRE: quem vai agir acende antes de resolver (marca + pulso, plano §3).
+        fxRef.current?.spot(move.type === "fight" ? move.attackerId : "instanceId" in move ? move.instanceId : undefined);
+        await beat(AI_PRE[move.type]);
+        if (cancelled) return;
         const applied = applyMove(next, 1, move);
-        // Onda 1: a carta do Warden voa igual à do jogador (a revelação é
-        // aguardada para o próximo commit não atropelar o voo; o som do move
-        // sai de dentro do commit, VAL-04).
         await commitWithFx(next, applied, { kind: "move", side: 1, move }, move, 1);
         if (cancelled) return;
+        // Sem animação não houve voo: a batida vira pausa (mesmo ritmo).
+        if (!motionEnabled(settingsRef.current.animations)) await beat(AI_HOLD);
+        if (cancelled) return;
+        fxRef.current?.spot();
         next = applied;
+        actions += 1;
+        if (move.type === "play") plays += 1;
         if (next.winner !== null) break;
+        await beat(AI_GAP);
+        if (cancelled) return;
       }
 
       if (!cancelled && next.winner === null) {
-        await wait(260);
+        await beat(AI_END_MS);
         if (cancelled) return;
         const ended = endTurn(next, 1);
         // The Warden handing over is the player's turn starting.
         sound.play("turn");
         commitGame(next, ended, { kind: "end", side: 1 });
-        next = ended;
+        // Resumo + banner: o jogador entende o turno sem abrir o log, e o resumo
+        // fica na faixa do round até a primeira ação dele.
+        setAiSummary(t("game.aiSummary", { cards: plays, amber: Math.max(0, ended.players[1].amber - amberStart), house: houseLabel(house, t) }));
+        fxRef.current?.banner(t("game.yourTurn"));
       }
-      setAiThinking(false);
+      setAiPhase("idle");
     };
 
     void takeAiTurn();
     return () => {
       cancelled = true;
+      window.removeEventListener("pointerdown", rush);
       // Leaving the board mid-turn cancels the loop; clearing the marker lets
       // the effect resume the same turn from gameRef.current on return (BUG-03).
       aiTurnRef.current = null;
+      setAiPhase("idle");
     };
-  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen, commitWithFx, matchMode]);
+  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen, commitWithFx, matchMode, cancelFx, t]);
 
   // FEAT-10: the Warden decides the mulligan on a short pause, so it reads as
   // an opponent move instead of an instant flip. FEAT-13: side 1 is a human in
@@ -2378,7 +2481,8 @@ function App() {
     }
     setSelected(null);
     setPick(null);
-    setAiThinking(false);
+    setAiPhase("idle");
+    setAiSummary(null);
     setLogOpen(false);
     setMatchVersion((version) => version + 1);
     setScreen("game");
@@ -2399,6 +2503,8 @@ function App() {
       setPick({ move, ids: choices });
       return;
     }
+    // O resumo do turno do Warden morre na primeira ação do jogador.
+    setAiSummary(null);
     // O som da jogada sai de dentro do commitWithFx (VAL-04: o pouso acompanha o voo).
     void commitWithFx(prev, applyMove(prev, side, move), { kind: "move", side, move }, move, side);
     setSelected(null);
@@ -2468,6 +2574,7 @@ function App() {
     if (!prev) return;
     const side = humanSideOf(prev, matchModeRef.current);
     sound.play("house");
+    setAiSummary(null);
     // FEAT-12a: the state right after the house choice is the undo anchor — the
     // start of the turn, before any of the player's moves.
     commitGame(prev, chooseHouse(prev, side, house), { kind: "house", side, house });
@@ -2777,7 +2884,8 @@ function App() {
               opponentRef.current = deckFromState(saved.players[1], "rival");
               setMatchMode("solo");
               setPassPending(null);
-              setAiThinking(false);
+              setAiPhase("idle");
+              setAiSummary(null);
               setMatchVersion((version) => version + 1);
               setScreen("game");
               setResumeMatch(null);
@@ -2875,7 +2983,8 @@ function App() {
                   game={game}
                   selected={selected}
                   pick={pick}
-                  aiThinking={aiThinking}
+                  aiPhase={aiPhase}
+                  aiSummary={aiSummary}
                   settings={settings}
                   t={t}
                   forgeFlash={forgeFlash}
@@ -3035,7 +3144,8 @@ function App() {
               game={replay.states[replay.index]}
               selected={null}
               pick={null}
-              aiThinking={false}
+              aiPhase="idle"
+              aiSummary={null}
               settings={settings}
               t={t}
               forgeFlash={false}

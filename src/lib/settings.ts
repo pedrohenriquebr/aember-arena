@@ -8,6 +8,9 @@ export type OpponentMode = "mirror" | "deck" | "random";
 /** FEAT-13: solo against the local AI, or two humans sharing the device. */
 export type GameMode = "solo" | "passAndPlay";
 
+/** Onda 2 (ANIM §3): ritmo do turno da IA — normal (leitura) ou compactado. */
+export type AiSpeed = "normal" | "fast";
+
 export interface AppSettings {
   difficulty: Difficulty;
   thinkingDepth: number;
@@ -21,6 +24,8 @@ export interface AppSettings {
   opponentMode: OpponentMode;
   opponentDeckId?: string;
   gameMode: GameMode;
+  /** Onda 2: duração das batidas do turno do Warden. */
+  aiSpeed: AiSpeed;
   /** FEAT-13: pass-and-play decks, one per human (ids from the library). */
   deckP1Id?: string;
   deckP2Id?: string;
@@ -28,6 +33,7 @@ export interface AppSettings {
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
 const OPPONENT_MODES: OpponentMode[] = ["mirror", "deck", "random"];
+const AI_SPEEDS: AiSpeed[] = ["normal", "fast"];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   difficulty: "Medium",
@@ -40,6 +46,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: "en",
   opponentMode: "mirror",
   gameMode: "solo",
+  aiSpeed: "normal",
 };
 
 export function readSettings(fallbackLanguage: Language): AppSettings {
@@ -60,6 +67,7 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
       opponentMode: OPPONENT_MODES.includes(parsed.opponentMode as OpponentMode) ? (parsed.opponentMode as OpponentMode) : base.opponentMode,
       opponentDeckId: typeof parsed.opponentDeckId === "string" ? parsed.opponentDeckId : base.opponentDeckId,
       gameMode: parsed.gameMode === "passAndPlay" ? "passAndPlay" : base.gameMode,
+      aiSpeed: AI_SPEEDS.includes(parsed.aiSpeed as AiSpeed) ? (parsed.aiSpeed as AiSpeed) : base.aiSpeed,
       deckP1Id: typeof parsed.deckP1Id === "string" ? parsed.deckP1Id : base.deckP1Id,
       deckP2Id: typeof parsed.deckP2Id === "string" ? parsed.deckP2Id : base.deckP2Id,
     };

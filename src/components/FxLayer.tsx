@@ -18,8 +18,9 @@ import type { FxDirector, FxPlan, FxSide, FxSource } from "../lib/fx";
 const PRESENT_MS = 260;
 const SLAM_MS = 270;
 const DISSOLVE_MS = 260;
-/** Desvanecimento de quem sai do board — igual ao da regra .fx-gone do CSS. */
-const GONE_MS = 320;
+/** Ação sem voo (colher, lutar): o pulso de quem age + a gema, no mesmo tempo
+    do beat da IA (plano §3, reap ≈ 700ms). Também cobre o fade de .fx-gone. */
+const ACTION_MS = 620;
 /** Largura da carta em cena: ~1,6× a da mão no desktop (plano §2-B). */
 const STAGE_WIDTH = 160;
 
@@ -61,6 +62,7 @@ type Run = { nodes: HTMLElement[]; mark: HTMLElement | null; timer: number; wake
 export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
   const hostRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<Run | null>(null);
+  const spotRef = useRef<HTMLElement[]>([]);
 
   const cancelAll = useCallback(() => {
     const run = runRef.current;
@@ -73,7 +75,26 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     run.mark?.removeAttribute("data-fx");
   }, []);
 
-  useImperativeHandle(ref, () => ({ run, cancelAll }));
+  /** PRE do move: quem age acende com a marca `acting` (plano §3). */
+  const spot = (actorId?: string) => {
+    for (const el of spotRef.current) el.removeAttribute("data-fx");
+    const tile = actorId ? byIid(actorId) : null;
+    spotRef.current = tile ? [tile] : [];
+    tile?.setAttribute("data-fx", "acting");
+  };
+
+  /** Banner de transição: só texto e tempo (não passa pelo guard de movimento). */
+  const banner = (text: string) => {
+    const host = hostRef.current;
+    if (!host) return;
+    const el = document.createElement("div");
+    el.className = "fx-caption fx-banner";
+    el.textContent = text;
+    host.appendChild(el);
+    window.setTimeout(() => el.remove(), 900);
+  };
+
+  useImperativeHandle(ref, () => ({ run, cancelAll, spot, banner }));
 
   async function reveal(plan: FxPlan, host: HTMLElement, run: Run) {
     const alive = () => runRef.current === run;
@@ -128,6 +149,12 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         ghost = document.createElement("div");
         ghost.className = to ? "fx-ghost" : "fx-ghost fx-ghost--action";
         ghost.appendChild(content);
+        if (plan.caption) {
+          const caption = document.createElement("b");
+          caption.className = "fx-caption";
+          caption.textContent = plan.caption;
+          ghost.appendChild(caption);
+        }
         host.appendChild(ghost);
         run.nodes.push(ghost);
       }
@@ -141,6 +168,22 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         run.nodes.push(source.node);
       }
 
+      // Âmbar ganho (colheita/captura): o número nasce no card que gerou e voa
+      // até o contador do dono (plano §4.2).
+      if (plan.amber) {
+        const counter = document.querySelector<HTMLElement>(`[data-side="${plan.amber.side}"] .amber-counter`);
+        const box = ((plan.actorId ? byIid(plan.actorId) : null) ?? counter)?.getBoundingClientRect();
+        const to = counter?.getBoundingClientRect();
+        if (box && to) {
+          const node = document.createElement("b");
+          node.className = "fx-amber";
+          node.textContent = `+${plan.amber.delta} Æ`;
+          node.style.cssText = `left:${box.left + box.width / 2}px;top:${box.top + box.height / 2}px;--fx-dx:${to.left + to.width / 2 - box.left - box.width / 2}px;--fx-dy:${to.top + to.height / 2 - box.top - box.height / 2}px`;
+          host.appendChild(node);
+          run.nodes.push(node);
+        }
+      }
+
       if (ghost) {
         await step(PRESENT_MS + hold);
         if (!alive()) return;
@@ -148,8 +191,8 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         // e o som do pouso tem que soar (VAL-04).
         plan.onSlam?.();
         await step(to ? SLAM_MS : DISSOLVE_MS);
-      } else if (plan.gone?.length) {
-        await step(GONE_MS);
+      } else if (plan.gone?.length || plan.actorId) {
+        await step(ACTION_MS);
       }
     } finally {
       window.removeEventListener("scroll", onViewport, { capture: true });

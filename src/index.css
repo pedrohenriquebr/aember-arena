@@ -5151,6 +5151,80 @@ button:disabled {
   visibility: hidden;
 }
 
+/* ---------- Palco do turno da IA (onda 2, plano §3) ---------- */
+
+/* PRE do move: quem age acende com aura QUENTE (oposta à seleção ciano do
+   jogador) e o alvo fica tracejado. Tudo marcação + tempo: o ritmo é do loop,
+   então vale igual no reduce-motion. */
+[data-fx="acting"] {
+  z-index: 5;
+  transform: translateY(6px) scale(1.12);
+  animation: fx-pulse 420ms var(--ease-out) infinite;
+}
+
+@keyframes fx-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* Legenda da apresentação ("o Warden jogou X"): vive dentro do ghost. */
+.fx-caption {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-top: 7px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--paper);
+  background: rgba(12, 16, 20, 0.86);
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* "+N Æ" do card que agiu até o contador do dono (colheita/captura). */
+.fx-amber {
+  position: fixed;
+  color: #ffd98a;
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  pointer-events: none;
+  text-shadow: 0 2px 0 #3a2a08;
+  transform: translate(-50%, -50%);
+  animation: fx-amber 560ms var(--ease-out) forwards;
+}
+
+@keyframes fx-amber {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--fx-dx)), calc(-50% + var(--fx-dy) - 16px)) scale(0.75); }
+}
+
+/* Banner central de transição ("Seu turno"): herda a base da legenda e troca
+   posição/tipografia — é o que marca a troca de lado. */
+.fx-banner {
+  position: fixed;
+  white-space: nowrap;
+  top: 38%;
+  left: 50%;
+  padding: 10px 26px;
+  border: 1px solid rgb(var(--sel-core) / 0.45);
+  background: rgba(10, 14, 18, 0.9);
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%);
+  animation: fx-banner 900ms var(--ease-out) forwards;
+}
+
+@keyframes fx-banner {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  18%, 72% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* ---------- Winner actions ---------- */
 .winner-actions {
   display: flex;

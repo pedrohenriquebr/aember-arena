@@ -91,6 +91,9 @@ const DICT: Record<string, [string, string]> = {
   "config.experience.animationsSub": ["Card motion and transitions.", "Movimento de cartas e transições."],
   "config.experience.zoom": ["Hover zoom", "Zoom ao passar o mouse"],
   "config.experience.zoomSub": ["Enlarge cards when hovering.", "Amplia as cartas ao passar o mouse."],
+  "config.experience.speed": ["Warden turns", "Turnos do Warden"],
+  "config.speed.normal": ["Normal", "Normal"],
+  "config.speed.fast": ["Fast", "Rápido"],
   "config.experience.language": ["Language", "Idioma"],
   "config.review.title": ["Ready to forge", "Pronto para forjar"],
   "config.review.sub": ["Review your setup and start the match.", "Revise sua configuração e comece a partida."],
@@ -142,6 +145,8 @@ const DICT: Record<string, [string, string]> = {
   "game.aember": ["AEMBER", "ÂMBAR"],
   "game.capturedAria": ["{count} captured amber", "{count} âmbar capturado"],
   "game.hintPlayable": ["playable", "jogável"],
+  // Onda 2 (ANIM §3): resumo persistente do turno da IA na faixa do round.
+  "game.aiSummary": ["Warden: {cards} cards · +{amber} Æ · {house}", "Warden: {cards} cartas · +{amber} Æ · {house}"],
   "error.title": ["Something went wrong", "Algo deu errado"],
   "error.body": ["The screen hit an unexpected error. Your match is preserved — go back to the start to resume it.", "A tela bateu num erro inesperado. Sua partida está preservada — volte ao início para retomá-la."],
   "error.back": ["Back to start", "Voltar ao início"],
