@@ -1,17 +1,19 @@
 const SHELL_CACHE = "aember-arena-shell-v2";
-const ART_CACHE = "aember-arena-art-v2";
+const HOUSE_CACHE = "aember-arena-houses-v1";
 // Relative paths: resolved against the service worker script URL, so the shell
 // precache works at the deployment root, under a subpath, wherever the SW is.
 const SHELL_URLS = ["./", "./index.html", "./manifest.webmanifest", "./forge-icon.svg"];
 const ART_HOSTS = ["mastervault-storage-prod.s3.amazonaws.com", "cdn.keyforgegame.com"];
 
-// Simple LRU cap on the art cache. Cache.keys() returns requests in insertion
-// order, so the head of the list is the least recently used and re-putting a
-// hit moves it to the tail. Keeps offline browsing of the Master Vault from
-// growing the cache without bound until the browser evicts it silently.
-const ART_CACHE_LIMIT = 300;
-
-// Official house emblems: precached so faction badges render offline.
+// BUG2-05: the S3 buckets answer WITHOUT Access-Control-Allow-Origin (verified
+// with curl: 200 with no ACAO on the emblems, 403 on the preflight), so every
+// art response is opaque and Chromium bills ~7 MB of quota per cached opaque
+// entry no matter its real size (20 entries measured 140 MB). Card art is left
+// to the browser's own HTTP cache — the SW does not intercept it at all.
+// Only the seven original emblems (~45 KB total, and the ones whose offline
+// rendering matters most) are precached in their own fixed, uncapped cache and
+// never pruned. The heavier expansion emblems stay out: Star Alliance and
+// Saurian are 2.3 MB each, and HouseIcon's glyph/initials fallback covers them.
 const HOUSE_ICONS = [
   "Brobnar_RTivg44.png",
   "Dis_OooSNPO.png",
@@ -20,93 +22,23 @@ const HOUSE_ICONS = [
   "Sanctum_lUWPG7x.png",
   "Shadows_z0n69GG.png",
   "Untamed_bXh9SJD.png",
-  "Star_Alliance.png",
-  "Saurian.png",
-  "Unfathomable.png",
-  "Ekwidon200.png",
-  "KF_Geistoid.png",
-  "Skyborn.png",
-  "Redemption.png",
-  "KF_Keyraken.png",
-  "ouboros.png",
-  "Rebels.png",
-  "Elders.png",
 ].map((file) => `https://mastervault-storage-prod.s3.amazonaws.com/media/houses/${file}`);
 
 async function precacheHouseIcons() {
-  const cache = await caches.open(ART_CACHE);
+  const cache = await caches.open(HOUSE_CACHE);
   await Promise.all(
     HOUSE_ICONS.map(async (url) => {
       try {
         if (await cache.match(url)) return;
         const response = await fetch(url, { mode: "no-cors", credentials: "omit" });
-        if (response.ok || response.type === "opaque") await cache.put(url, response);
+        // A no-cors hit is opaque (status 0), so a transient 403/5xx cannot be
+        // told apart from success; for this fixed 7-file set that is accepted.
+        if (response.type === "opaque") await cache.put(url, response);
       } catch {
         // The in-app SVG fallback covers this emblem.
       }
     }),
   );
-}
-
-function isQuotaError(error) {
-  return (
-    error?.name === "QuotaExceededError" ||
-    error?.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
-    (typeof error?.message === "string" && /quota/i.test(error.message))
-  );
-}
-
-// Drops the oldest half of the cache. Used when the storage quota is hit so a
-// fresh entry can still be stored on the retry.
-async function pruneOldestArt(cache) {
-  const keys = await cache.keys();
-  const count = Math.ceil(keys.length / 2);
-  await Promise.all(keys.slice(0, count).map((request) => cache.delete(request)));
-}
-
-// Enforces the cap after a put: deletes from the head (oldest) until the cache
-// holds at most ART_CACHE_LIMIT entries.
-async function trimArtCache(cache) {
-  const keys = await cache.keys();
-  const count = keys.length - ART_CACHE_LIMIT;
-  if (count <= 0) return;
-  await Promise.all(keys.slice(0, count).map((request) => cache.delete(request)));
-}
-
-// Best-effort put with quota handling. On QuotaExceededError it prunes the
-// oldest half and retries once; every remaining failure is swallowed on
-// purpose — the page already holds the network response, so caching is an
-// optimization, never a gate.
-async function putArtEntry(cache, request, entry) {
-  const retryCopy = entry.clone();
-  try {
-    await cache.put(request, entry);
-  } catch (error) {
-    if (!isQuotaError(error)) return;
-    try {
-      await pruneOldestArt(cache);
-      await cache.put(request, retryCopy);
-    } catch {
-      // Still over quota: give up on this entry.
-    }
-    return;
-  }
-  try {
-    await trimArtCache(cache);
-  } catch {
-    // A failed trim is retried on the next put.
-  }
-}
-
-// LRU touch: deleting and re-putting a hit moves it to the tail (most
-// recently used) of the cache's insertion order.
-async function touchArtEntry(cache, request, entry) {
-  try {
-    await cache.delete(request);
-    await cache.put(request, entry);
-  } catch {
-    // Worst case the entry keeps its old position; it is still served.
-  }
 }
 
 self.addEventListener("install", (event) => {
@@ -128,7 +60,8 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys
-        .filter((key) => key.startsWith("aember-arena-") && ![SHELL_CACHE, ART_CACHE].includes(key))
+        // Anything else under the prefix (the retired art cache included) goes.
+        .filter((key) => key.startsWith("aember-arena-") && ![SHELL_CACHE, HOUSE_CACHE].includes(key))
         .map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
@@ -176,31 +109,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (ART_HOSTS.includes(url.hostname)) {
+  // BUG2-05: emblems come from the fixed HOUSE_CACHE first; anything else on
+  // the art hosts (card faces, the heavier expansion emblems) is not
+  // intercepted — the browser's HTTP cache handles it, and no opaque response
+  // is ever written to our caches.
+  if (ART_HOSTS.includes(url.hostname) && url.pathname.startsWith("/media/houses/")) {
     event.respondWith(
-      caches.open(ART_CACHE).then(async (cache) => {
-        const cached = await cache.match(request);
-        if (cached) {
-          // Clone while the body is still unused; the page gets the original.
-          const copy = cached.clone();
-          event.waitUntil(touchArtEntry(cache, request, copy));
-          return cached;
-        }
-        // CORS first: an opaque response is billed ~7 MB of quota in Chromium
-        // no matter its real size, which cycled the LRU for nothing (BUG-25).
-        // The S3/CDN art hosts send Access-Control-Allow-Origin: *.
-        let response;
-        try {
-          response = await fetch(request, { mode: "cors", credentials: "omit" });
-        } catch {
-          response = await fetch(request);
-        }
-        if (response.ok || response.type === "opaque") {
-          const copy = response.clone();
-          event.waitUntil(putArtEntry(cache, request, copy));
-        }
-        return response;
-      }),
+      caches.open(HOUSE_CACHE).then(async (cache) => (await cache.match(request)) || fetch(request)),
     );
   }
 });
