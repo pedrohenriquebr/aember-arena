@@ -84,9 +84,12 @@ const PALETTE: Record<SfxName, () => Voice[]> = {
   ],
   // Whoosh while the card travels (500 -> 2600 Hz band sweep, 120 ms attack).
   play: () => [{ f: 0, flt: "bandpass", fq: 500, fto: 2600, q: 1.4, a: 0.12, d: 0.08, g: 0.35 }],
-  // VAL-04: o pouso separado do whoosh — com o voo da ANIM onda 1 o FxLayer
-  // dispara este cue no INÍCIO do slam; sem animação ele toca 150 ms depois do
-  // `play` (sound.play("land", 0.15)), reproduzindo o timbre antigo.
+  // VAL-04: o pouso separado do whoosh. Com voo, o FxLayer dispara no início do
+  // slam com delayS = 0,24 (VAL-04b): o `fx-slam` usa ease-in e a carta só chega
+  // ao slot aos ~92% de 270 ms — o thump tem que soar no contato, não no começo
+  // do trecho. `delayS` desloca TODAS as vozes do timbre (play()). Sem animação
+  // ele toca 150 ms depois do `play` (sound.play("land", 0.15)), reproduzindo o
+  // timbre antigo.
   land: () => [
     { f: 160, to: 70, d: 0.14, g: 0.45 },
     { f: 0, flt: "lowpass", fq: 1400, d: 0.05, g: 0.4 },
@@ -191,6 +194,14 @@ class SoundEngine {
         return null;
       }
       const context = this.context;
+      // VAL-05: rearme do kick — ele só vale enquanto a saída está destravada. Se o
+      // sistema interrompe o áudio (ligação, segundo plano: "interrupted" no iOS,
+      // "suspended" ao voltar), `kicked` precisa voltar a false — senão o próximo
+      // gesto não repete o destrave e o som fica mudo. É o caso do WebKit antigo
+      // (o alvo do kick), onde `navigator.userActivation` nem existe.
+      context.onstatechange = () => {
+        if (context.state !== "running") this.kicked = false;
+      };
       // Limiter lets the master sit near full scale without clipping stacked voices.
       const limiter = context.createDynamicsCompressor();
       limiter.threshold.value = -8;
