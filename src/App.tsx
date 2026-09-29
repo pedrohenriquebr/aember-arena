@@ -154,6 +154,11 @@ function prefersHover() {
   return typeof window !== "undefined" && window.matchMedia?.("(hover: hover)")?.matches === true;
 }
 
+/** H3D-09 (VIEW3D_PLAN §3): hardware fraco (<= 2 núcleos) troca o 3D real pelo
+    perfil 2.5D — a mesa inclinada vira só cenário e as cartas ficam planas. Sem
+    UA sniffing; a detecção é uma só, no primeiro import. */
+const LITE_TABLE = typeof navigator !== "undefined" && (navigator.hardwareConcurrency || 8) <= 2;
+
 // game.ts is pure and language-agnostic, so the fixed player/deck names it
 // creates are localized at render time (score bands and the log alike).
 function localizeName(name: string, t: Translator): string {
@@ -1360,11 +1365,14 @@ function GameBoard({
   const narration = [aiSummary, lastAiLog && renderLog(lastAiLog, t)].filter(Boolean).join(" ");
   // H3D-01/02: a visão é uma classe no board (não é memo) — nenhuma prop nova
   // desce para BoardLane/CardTile ao alternar, então nenhum tile re-renderiza.
+  // H3D-09: no hardware fraco a classe é `--lite` (2.5D, mesa só de cenário) —
+  // o _table-plane_ do 3D real exige `--3d`, então um nunca vem com o outro.
   const view3d = settings.tableView === "3d";
+  const tableClass = view3d ? (LITE_TABLE ? " game-board--lite" : " game-board--3d") : "";
 
   return (
     <section
-      className={`game-board${settings.animations ? "" : " no-anim"}${view3d ? " game-board--3d" : ""}${viewSwitching ? " game-board--switching" : ""}`}
+      className={`game-board${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
       aria-label={t("game.board")}
     >
@@ -1976,6 +1984,8 @@ function App() {
       board?.removeEventListener("animationend", onEnd);
     };
   }, [viewSwitching]);
+
+
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with
