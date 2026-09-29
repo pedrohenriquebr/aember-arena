@@ -231,6 +231,12 @@ class SoundEngine {
   unlock(): void {
     const context = this.ensureContext();
     if (!context || this.kicked) return;
+    // VAL-05: pointerdown só concede ativação para mouse (HTML spec); em toque
+    // ele chega antes do gesto real. Sem ativação o kick é gasto sem destravar o
+    // WebKit — start() não lança em contexto suspenso, então `kicked` ficava true
+    // e o retry do próximo gesto nunca acontecia. Quem faz o kick no toque é o
+    // pointerup/touchend/keydown, que são os eventos de ativação.
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;
     try {
       const source = context.createBufferSource();
       source.buffer = context.createBuffer(1, 1, 22050);
