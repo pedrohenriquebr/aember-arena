@@ -85,7 +85,7 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **139,5 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **141 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
@@ -106,7 +106,20 @@ src/
    → **139,5** (ANIM onda 3, `docs/ANIMATIONS_PLAN.md` §4: impacto — forja com
    glow no lado de quem forjou + shake, números flutuantes de dano (aria-hidden)
    com marca de impacto, morte com dissolve do clone e correntes com elo no
-   contador. Medido 138,68 kB).
+   contador. Medido 138,68 kB)
+   → **141** (VIEW3D H3D-01..10, `docs/VIEW3D_PLAN.md` §2/§5 — fundação do modo
+   3D: `settings.tableView` persistido ("2d" default) com toggle na Config e
+   botão de 44px na partida, wrapper `.table-plane` (`display: contents` no 2D)
+   e a cadeia `perspective`/`preserve-3d` até a `.board-piece`, `@property
+   --tilt` + transição de 420ms e fade da troca de modo, probe
+   `e2e/probes/_3d-chain.mjs`. Só CSS/TS, zero dependência; a fundação mediu
+   +0,87 kB gz (139,26 → 140,13) e o modo completo (H3D-03..12, mesa
+   inclinada/leque/FX) ainda pede a revisão dos marcos M2/M3 — estimativa do
+   plano: +2,0 a +2,6 kB no total. Varredura de mortos pré-revisão
+   (`_dead-css`): 0 removível — os nomes
+   "sem uso" são dinâmicos (`card-art--${size}`) e os overrides `.reduce-motion`
+   restantes são intencionais (o `*` global só encurta a duração, não remove o
+   fill).
    Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
