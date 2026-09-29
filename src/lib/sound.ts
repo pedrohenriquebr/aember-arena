@@ -369,6 +369,12 @@ class SoundEngine {
     }
     const nodesToStop = this.musicNodes;
     this.musicNodes = [];
+    // VAL-02: capturar o gain DESTE disparo. Se a música for religada antes do
+    // timer (toggle < 700 ms), `this.musicGain` já aponta para o gain novo —
+    // desconectar/anular pelo campo deixaria os osciladores novos órfãos
+    // (música muda até o próximo toggle + CPU presa). O timer só para os nós
+    // capturados e só limpa o campo se ele ainda for este gain.
+    const gain = this.musicGain;
     window.setTimeout(() => {
       for (const node of nodesToStop) {
         try {
@@ -377,10 +383,8 @@ class SoundEngine {
           // Node may already be stopped.
         }
       }
-      if (this.musicGain) {
-        this.musicGain.disconnect();
-        this.musicGain = null;
-      }
+      gain?.disconnect();
+      if (this.musicGain === gain) this.musicGain = null;
     }, 700);
   }
 }
