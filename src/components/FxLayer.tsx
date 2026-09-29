@@ -278,8 +278,9 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         await step(PRESENT_MS + hold);
         if (!alive()) return;
         // O ghost está no destino (início do slam): é aqui que a carta "pousa"
-        // e o som do pouso tem que soar (VAL-04).
-        plan.onSlam?.();
+        // e o som do pouso tem que soar (VAL-04). Sem destino (`to` falso) é
+        // dissolve (Ação do Warden, FX-02): não há pouso, então sem som (VAL-04c).
+        if (to) plan.onSlam?.();
         await step(to ? SLAM_MS : DISSOLVE_MS);
       } else if (plan.gone?.length || plan.actorId) {
         await step(ACTION_MS);
