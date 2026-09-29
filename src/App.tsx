@@ -2758,7 +2758,8 @@ function App() {
                 <div className="match-heading">
                   <div>
                     <div className="match-eyebrow"><span>{passAndPlay ? t("game.eyebrow2p") : t("game.eyebrow")}</span><span className="eyebrow-line" /><span>{t("game.table")}</span></div>
-                    <h1>{currentDeck.name}</h1>
+                    {/* BUG2-12: no 2P o título acompanha o lado ativo (o board gira junto). */}
+                    <h1>{passAndPlay ? localizeName(game.players[humanSide].deckName, t) : currentDeck.name}</h1>
                   </div>
                   <div className="match-chip">
                     <span className="match-chip-icon"><Radio size={14} /></span>
