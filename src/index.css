@@ -7052,3 +7052,87 @@ html .spin {
   0%, 100% { opacity: 0.72; }
   50% { opacity: 1; }
 }
+
+/* ---------- Mão em leque (H3D-06, VIEW3D_PLAN §2.5) ---------- */
+/* A mão é HUD (fora do plano): segue grande e legível, agora em leque na base.
+   O índice da carta vem do CSS (12 regras nth-child; sibling-index() onde
+   houver) e o --n vem do App. A carta erguida (hover/foco/seleção) sobe 30px,
+   endireita e cresce 1,14x — no toque a seleção ergue igual (nada hover-only).
+   O leque só vale >= 701px: no celular o scroll-snap fica como no 2D (H3D-09). */
+@media (min-width: 701px) {
+  .game-board--3d .hand-track {
+    overflow: visible;
+    padding-top: 36px; /* espaço para a carta erguida não encostar no heading */
+    /* O canto da carta girada sai para fora da caixa de layout (~1,3 × altura
+       × sin θ): sem este recuo o leque cheio bate na borda do board e o
+       overflow: hidden corta os cantos. Com o recuo, o flex encolhe as cartas
+       o necessário para o leque inteiro caber. */
+    padding-inline: 34px;
+  }
+
+  .game-board--3d .hand-track > .card-tile--hand {
+    --d: calc(var(--i, 0) - (var(--n, 1) - 1) / 2);
+    width: 118px;
+    /* A partir de 7 cartas o leque sobrepõe um pouco (o leque do Arena). */
+    margin-inline: calc(-1 * max(0px, (var(--n, 1) - 6) * 4px));
+    transform-origin: 50% 130%;
+    rotate: calc(var(--d) * 3.5deg);
+    translate: 0 calc(var(--d) * var(--d) * 2.2px);
+    transition: rotate 200ms var(--ease-out), translate 200ms var(--ease-out), scale 200ms var(--ease-out);
+  }
+
+  .game-board--3d .hand-track > .card-tile--hand .card-art {
+    width: 100%;
+  }
+
+  /* Fallback do índice (cartas 13+ ficam na posição da 12ª). */
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(1) { --i: 0; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(2) { --i: 1; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(3) { --i: 2; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(4) { --i: 3; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(5) { --i: 4; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(6) { --i: 5; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(7) { --i: 6; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(8) { --i: 7; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(9) { --i: 8; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(10) { --i: 9; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(11) { --i: 10; }
+  .game-board--3d .hand-track > .card-tile--hand:nth-child(12) { --i: 11; }
+
+  /* Seleção e foco erguem (informação; valem no reduce-motion). O transform da
+     onda 1 sairia compondo com a pose — aqui ele sai. */
+  .game-board--3d .hand-track > .card-tile--hand:is(.is-selected, :focus-visible) {
+    transform: none;
+    rotate: 0deg;
+    translate: 0 -30px;
+    scale: 1.14;
+    z-index: 5;
+  }
+}
+
+/* No desktop a mão é maior (118px): o recuo cresce junto com o canto que sai. */
+@media (min-width: 1041px) {
+  .game-board--3d .hand-track {
+    padding-inline: 44px;
+  }
+}
+
+/* sibling-index() (Chromium 138+) cobre mãos grandes; sem ele, o nth-child. */
+@supports (width: calc(sibling-index() * 1px)) {
+  @media (min-width: 701px) {
+    .game-board--3d .hand-track > .card-tile--hand {
+      --i: sibling-index();
+    }
+  }
+}
+
+/* Hover puxa a carta do leque — decoração: desligado no reduce-motion. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .game-board--3d .hand-track > .card-tile--hand:not(:disabled):hover {
+    transform: none;
+    rotate: 0deg;
+    translate: 0 -30px;
+    scale: 1.14;
+    z-index: 5;
+  }
+}

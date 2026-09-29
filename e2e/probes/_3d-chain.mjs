@@ -354,6 +354,43 @@ try {
   });
   check("H3D-05: zero box-shadow/filter animado dentro do plano", costly.length === 0, JSON.stringify(costly));
 
+  // ---- H3D-06: mao em leque (>= 701px; o probe roda a 1280)
+  const fan = await page.evaluate(() => {
+    const track = document.querySelector(".hand-track");
+    const cards = [...document.querySelectorAll(".hand-track > .card-tile--hand")];
+    const cs = getComputedStyle(track);
+    const rots = cards.map((el) => parseFloat(getComputedStyle(el).rotate));
+    return { n: cards.length, overflow: cs.overflowX, paddingTop: cs.paddingTop, first: rots[0], last: rots[rots.length - 1] };
+  });
+  const expectedRot = ((fan.n - 1) / 2) * 3.5;
+  check(
+    "H3D-06: leque aberto (track sem clip, pontas na rotacao 3,5/carta)",
+    fan.n > 0 && fan.overflow === "visible" && parseFloat(fan.paddingTop) >= 30 && Math.abs(-fan.first - expectedRot) < 0.6 && Math.abs(fan.last - expectedRot) < 0.6,
+    JSON.stringify({ ...fan, expectedRot }),
+  );
+  const midPoint = await page.evaluate((i) => {
+    const el = document.querySelectorAll(".hand-track > .card-tile--hand")[i];
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height * 0.55 };
+  }, Math.floor(fan.n / 2));
+  let fanHover = null;
+  if (midPoint) {
+    await page.mouse.move(midPoint.x, midPoint.y);
+    await page.waitForTimeout(280);
+    fanHover = await page.evaluate(() => {
+      const el = document.querySelector(".hand-track > .card-tile--hand:hover");
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      const board = document.querySelector(".game-board").getBoundingClientRect();
+      return { rotate: cs.rotate, translate: cs.translate, scale: cs.scale, visible: r.top >= board.top && r.bottom <= board.bottom && r.left >= board.left && r.right <= board.right };
+    });
+    await page.mouse.move(4, 4);
+    await page.waitForTimeout(200);
+  }
+  check("H3D-06: hover puxa a carta do leque (0deg / -30px / 1,14) inteira visivel", Boolean(fanHover) && fanHover.rotate === "0deg" && fanHover.translate === "0px -30px" && fanHover.scale === "1.14" && fanHover.visible, JSON.stringify(fanHover));
+
   // ---- 4. Projecao: tilt 0 -> 40 e translateZ na peca
   // H3D-03: o default do 3D ja e 40deg (32 no tablet), entao o probe ZERA o
   // tilt inline para ter a referencia plana — comparar 40 com 40 nao mede nada.

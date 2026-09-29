@@ -1492,7 +1492,12 @@ function GameBoard({
           {game.activePlayer === humanSide && !game.activeHouse && game.winner === null && !inMulligan(game) && !handHidden && (
             <div className="hand-prompt"><Zap size={13} /> {t("game.unlockHint")}</div>
           )}
-          <div className="hand-track">
+          <div
+            className="hand-track"
+            /* H3D-06: --n abre o leque no 3D (rotação/arco por carta); no 2D é
+               inerte. O GameBoard não é memo — nenhuma prop desce para a mão. */
+            style={{ "--n": Math.max(1, player.hand.length) } as CSSProperties}
+          >
             {!handHidden && player.hand.map((card) => {
               const playable = Boolean(game.activeHouse && card.face.house === game.activeHouse);
               return (
