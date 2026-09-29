@@ -90,6 +90,8 @@ type Toast = {
   action?: { label: string; onClick: () => void };
   /** Sem auto-dismiss: o aviso de atualização fica até o jogador agir. */
   sticky?: boolean;
+  /** BUG2-13: efeito lateral do X (ex.: dispensar o aviso de atualização de vez). */
+  onDismiss?: () => void;
 } | null;
 
 /** FEAT-12a: one step of the undo history — the state a transition left behind,
@@ -1793,6 +1795,9 @@ function App() {
   const [logType, setLogType] = useState<"all" | LogType>("all");
   // FEAT-09: um service worker novo está instalado e esperando o skipWaiting.
   const [updateReady, setUpdateReady] = useState(false);
+  // BUG2-13: o X do toast dispensa a atualização pela sessão (sem isso o toast
+  // voltava a cada troca de tela); um worker novo zera o dismiss.
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   // FEAT-12b: the read-only replay viewer — derived states, never the live one.
   const [replay, setReplay] = useState<{ states: GameState[]; index: number } | null>(null);
   // Tutorial: opens by itself only on the first real visit (always on Home).
@@ -1939,7 +1944,10 @@ function App() {
           if (!installing) return;
           installing.addEventListener("statechange", () => {
             // Sem controller é o primeiro install: não há versão antiga a trocar.
-            if (installing.state === "installed" && navigator.serviceWorker.controller) setUpdateReady(true);
+            if (installing.state === "installed" && navigator.serviceWorker.controller) {
+              setUpdateDismissed(false);
+              setUpdateReady(true);
+            }
           });
         });
       }).catch(() => undefined);
@@ -2006,7 +2014,7 @@ function App() {
   // em nenhuma tela — um reload descartaria o jogo em curso (no 2P nem save).
   // Um toast já visível quando a partida começa sai da tela junto.
   useEffect(() => {
-    if (!updateReady) return;
+    if (!updateReady || updateDismissed) return;
     if (game?.winner === null) {
       setToast(null);
       return;
@@ -2015,9 +2023,10 @@ function App() {
       message: t("update.title"),
       kind: "success",
       sticky: true,
+      onDismiss: () => setUpdateDismissed(true),
       action: { label: t("update.reload"), onClick: reloadForUpdate },
     });
-  }, [updateReady, game?.winner, t]);
+  }, [updateReady, game?.winner, t, updateDismissed]);
 
   useEffect(() => {
     if (!deckModalOpen) return;
@@ -2628,7 +2637,7 @@ function App() {
           {toast.action && (
             <button type="button" className="toast-action" onClick={toast.action.onClick}>{toast.action.label}</button>
           )}
-          <button type="button" onClick={() => setToast(null)} aria-label={t("common.close")}><X size={14} /></button>
+          <button type="button" onClick={() => { toast.onDismiss?.(); setToast(null); }} aria-label={t("common.close")}><X size={14} /></button>
         </div>
       )}
 
