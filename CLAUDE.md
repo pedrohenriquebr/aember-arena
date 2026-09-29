@@ -85,12 +85,19 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **135 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **136,5 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
-   → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → **135** (fixes BUG2-01..07:
+   → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
    +0,15 kB líquidos, dos quais 56 bytes são do BUG2-04 — reconstrução de DeckInfo
-   retomado, lógica nova real; varredura de mortos exaustiva pré-revisão: 0 removível).
+   retomado, lógica nova real; varredura de mortos exaustiva pré-revisão: 0 removível)
+   → **136,5** (ANIM onda 1, `docs/ANIMATIONS_PLAN.md`: infra de FX — `lib/fx.ts`
+   (diff determinístico, puro), diretor `FxLayer` no portal, `data-iid`/`data-side`,
+   voo da carta com assento no slot, fade de quem sai do board, glow de seleção com
+   a aura fria, e VAL-04 (whoosh `play` + `land` no slam). Medido 136,46 kB;
+   varredura de mortos pré-revisão: 6 overrides `.reduce-motion` redundantes
+   (superseded pelo `*` global) e 2 metadados do `card-tile--enter`/`ready-breathe`
+   removidos — as ondas 2 e 3 têm teto próprio: 138 e 139,5).
    Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).

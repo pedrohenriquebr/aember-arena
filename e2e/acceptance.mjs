@@ -3,16 +3,17 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 134 kB — revisado de 132 em 28/09 no fechamento do tutorial de
-//      primeiro acesso: o snapshot WIP (cd81435) ja trazia TutorialWizard + i18n
-//      + CSS, medindo 133.88 kB gz; a auditoria de codigo morto (i18n, CSS,
-//      duplicatas) nao achou peso removivel e o build final mediu 133.90 kB gz
-//      (decisao no CLAUDE.md §7). A revisao anterior (129.5 -> 132) foi o FEAT-13
-//      (multiplayer local pass-and-play: tela de passe, pickers de deck por
-//      jogador, wizard por modo e chaves i18n novas; mediu 130.45 kB gz).
-//      Antes dela: 127.5 -> 129.5 com FEAT-12a/12b; 126 -> 127.5 com FEAT-11/14/06;
-//      125 -> 126 com FEAT-05/08/10 e 124 -> 125 com modulePreload:false + mangle
-//      toplevel + i18n compacto.
+//      Default 136.5 kB — revisado de 135 em 29/09 pela ANIM onda 1
+//      (docs/ANIMATIONS_PLAN.md): infra de FX (lib/fx.ts puro, diretor FxLayer no
+//      portal, data-iid/data-side, voo da carta, fade de quem sai do board, glow
+//      de seleção) + VAL-04; mediu 136.46 kB gz e a varredura de mortos previa
+//      removeu 6 overrides .reduce-motion redundantes (CLAUDE.md §7). Antes:
+//      134 (fechamento do tutorial de primeiro acesso, 28/09: o snapshot WIP
+//      (cd81435) trazia TutorialWizard + i18n + CSS, 133.88 kB gz; auditoria de
+//      codigo morto nao achou peso removivel e o build final mediu 133.90) e
+//      132 (FEAT-13 pass-and-play, 130.45). Antes dela: 127.5 -> 129.5 com
+//      FEAT-12a/12b; 126 -> 127.5 com FEAT-11/14/06; 125 -> 126 com FEAT-05/08/10
+//      e 124 -> 125 com modulePreload:false + mangle toplevel + i18n compacto.
 //      Pressupoe "npm run build" recem-rodado.
 //   3. Bloco @media (max-width: 700px) de src/index.css com <= --block-max-lines linhas.
 //      Default 99 ("menos de 100 linhas", §5 criterio 5; hoje o bloco tem ~723).
@@ -39,7 +40,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 135);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 136.5);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);
