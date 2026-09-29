@@ -2,7 +2,7 @@
 // de um estado que já foi commitado — o GameState nunca ganha uma lista de
 // eventos (regra 2 do CLAUDE.md). Tudo é derivado do diff `prev → next`, que o
 // App já tem em mãos, então undo/log/stats/save/replay seguem intactos.
-import type { GameState } from "./game";
+import type { CardFace, GameState } from "./game";
 
 /** Lados do motor (o tipo Side não é exportado por game.ts). */
 export type FxSide = 0 | 1;
@@ -69,6 +69,9 @@ export type FxPlan = {
   from?: FxSource;
   /** `enter` da carta jogada: onde o ghost aterrissa. */
   destId?: string;
+  /** Face da carta quando não há clone no DOM (o Warden joga da mão): sem ela
+      a Ação não tem de onde desenhar o ghost (FX-02). */
+  face?: CardFace;
   /** Pausa no centro: a carta do Warden fica mais tempo (precisa ser lida). */
   holdMs: number;
   /** Peças que saíram do board: cada uma desvanece no lugar em vez de sumir. */

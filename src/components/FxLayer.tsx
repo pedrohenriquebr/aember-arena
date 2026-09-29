@@ -1,5 +1,7 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import { createPortal } from "react-dom";
+import type { CardFace } from "../lib/game";
+import { houseColor } from "../lib/houses";
 import type { FxDirector, FxPlan, FxSide, FxSource } from "../lib/fx";
 
 // Diretor de FX (docs/ANIMATIONS_PLAN.md §0.3): portal no <body> com
@@ -32,6 +34,34 @@ const cloneEl = (el: Element | null) => {
   return clone;
 };
 const byIid = (id: string) => document.querySelector<HTMLElement>(`[data-iid="${id}"]`);
+
+/** O Warden joga da mão (fora do DOM) e a Ação não ganha slot: sem clone, o
+    ghost nasce da face — imagem quando há arte; senão o fallback textual, como
+    o CardImage (FX-02). */
+function faceEl(face: CardFace): HTMLElement {
+  const art = document.createElement("div");
+  art.className = "card-art";
+  art.style.setProperty("--house-color", houseColor(face.house));
+  const fallback = () => {
+    art.classList.add("card-fallback");
+    const title = document.createElement("strong");
+    title.textContent = face.title;
+    art.appendChild(title);
+  };
+  if (face.image) {
+    const img = document.createElement("img");
+    img.src = face.image;
+    img.alt = face.title;
+    img.decoding = "async";
+    img.draggable = false;
+    img.onerror = () => {
+      img.remove();
+      fallback();
+    };
+    art.appendChild(img);
+  } else fallback();
+  return art;
+}
 
 /** Captura PRÉ-commit (plano §0.4): o DOM de que a revelação precisa muda ou
     desaparece no setGame, então a origem do voo é medida e clonada antes. Só
@@ -155,8 +185,8 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
 
       // O conteúdo do ghost: arte da mão (clone capturado antes do commit, o
       // caso da Ação sem slot) ou a do tile que acabou de nascer (o Warden joga
-      // da mão, que não está no DOM).
-      const content = plan.from?.node ?? cloneEl(destArt);
+      // da mão, que não está no DOM — sem tile e sem clone vale a face, FX-02).
+      const content = plan.from?.node ?? cloneEl(destArt) ?? (plan.face ? faceEl(plan.face) : null);
       let ghost: HTMLElement | null = null;
       if (content) {
         ghost = document.createElement("div");

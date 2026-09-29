@@ -1938,6 +1938,8 @@ function App() {
           // destino exato do voo (o byIid do diretor devolve null para Ação,
           // que vai para o discard — aí o ghost dissolve no centro).
           flight = move.type === "play" ? move.instanceId : undefined;
+          // A origem do voo (rect + clone) é medida ANTES do commit: a mão some nele.
+          const source = flight ? captureFx(flight, side) : undefined;
           const gone = captureGone(events.filter((event) => event.kind === "leave").map((event) => event.id));
           // "+N Æ" (colheita/bônus): o número voa do card que gerou ao placar.
           const amberEvent = events.find((event) => event.kind === "amber");
@@ -1949,8 +1951,11 @@ function App() {
           const actor = move.type === "fight" ? move.attackerId : "instanceId" in move ? move.instanceId : undefined;
           if (flight || gone.length || gained || chains || hits.length) {
             plan = {
-              from: flight ? captureFx(flight, side) : undefined,
+              from: source,
               destId: flight,
+              // O Warden joga da mão (fora do DOM): sem clone capturado, a face
+              // desenha o ghost — é o que faz a Ação dele aparecer (FX-02).
+              face: source && !source.node ? prev.players[side].hand.find((card) => card.instanceId === flight)?.face : undefined,
               // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
               // ainda — é a jogada que o jogador precisa ler.
               holdMs: Math.round((side === 1 ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1)),
@@ -1963,7 +1968,7 @@ function App() {
               // mesa sem caçar a linha no log (UX review #1).
               caption: side === 1 && flight ? t("log.play", { name: t("log.warden"), card: prev.players[1].hand.find((card) => card.instanceId === flight)?.face.title ?? "" }) : undefined,
               // VAL-04: o thump do pouso acompanha o slam do voo, não o commit.
-              onSlam: () => sound.play("land"),
+              onSlam: () => sound.play("land", 0.24),
             };
           }
         }
