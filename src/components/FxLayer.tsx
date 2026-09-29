@@ -144,10 +144,18 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
       run.wake = resolve;
       run.timer = window.setTimeout(resolve, ms);
     });
-    // Scroll/resize no meio do voo: pular para o fim (rects de viewport não valem mais).
-    const onViewport = () => cancelAll();
-    window.addEventListener("scroll", onViewport, { passive: true, capture: true });
-    window.addEventListener("resize", onViewport);
+    // Scroll DO DOCUMENTO no meio do voo: pular para o fim (rects de viewport
+    // não valem mais). O clamp automático de um scroller interno (mão, log)
+    // também dispara `scroll` em captura sem o jogador rolar a página, então só
+    // o root conta — e um deslocamento ≤ 8px não cancela (FX-05).
+    const startY = window.scrollY;
+    const onScroll = (event: Event) => {
+      if (event.target !== document && event.target !== document.documentElement) return;
+      if (Math.abs(window.scrollY - startY) > 8) cancelAll();
+    };
+    const onResize = () => cancelAll();
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    window.addEventListener("resize", onResize);
     try {
       // Prefixo SÍNCRONO (antes do primeiro await): o layout effect do App roda
       // antes do paint do DOM novo, então o destino já fica escondido no frame
@@ -272,8 +280,8 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         await step(ACTION_MS);
       }
     } finally {
-      window.removeEventListener("scroll", onViewport, { capture: true });
-      window.removeEventListener("resize", onViewport);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onResize);
       if (alive()) {
         for (const node of run.nodes) node.remove();
         run.mark?.removeAttribute("data-fx");
