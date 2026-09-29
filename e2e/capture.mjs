@@ -14,9 +14,16 @@
 //       Inicia a partida demo, clica "end turn" 2x (esperando a vez da IA
 //       terminar entre os cliques) e screenshot o board em DIR/match-smoke-<w>x<h>.png.
 //
+// H3D-11: --view 3d (default 2d) semeia `tableView: "3d"` nas settings, entao os
+// MESMOS modos gravam a mesa 3D: capture (mesmas 5 telas), --match-smoke e
+// --floor-only com o piso VISUAL (fontPx * fator de projecao, plano §2.6) a 360,
+// 768, 1280 e 1440 — o 3D so existe no game screen, entao o piso 3D caminha
+// home/config/game (o 2D continua nas 5 telas a 360).
+//
 // Determinismo: cada viewport roda em browser context isolado com localStorage
-// pre-populado (animations/sfx/music OFF, idioma "en") + reducedMotion "reduce" —
-// docs/WORKFLOW.md §7 lista animacao como fonte de flake de screenshots.
+// pre-populado (animations/sfx/music OFF, idioma "en", tableView fixo) +
+// reducedMotion "reduce" — docs/WORKFLOW.md §7 lista animacao como fonte de
+// flake de screenshots.
 //
 // Driver: playwright-core SEM download de navegador — usa o Edge/Chrome do
 // sistema via channel ("msedge" -> "chrome") ou executablePath padrao do Windows.
@@ -35,10 +42,20 @@ const VIEWPORTS = [
   { w: 768, h: 1024 },
   { w: 1280, h: 800 },
 ];
+// H3D-11/§2.6: o piso visual do 3D vale nas 4 larguras de referencia.
+const VIEWPORTS_3D_FLOOR = [
+  { w: 360, h: 800 },
+  { w: 768, h: 1024 },
+  { w: 1280, h: 800 },
+  { w: 1440, h: 900 },
+];
 const DEFAULT_PORT = 5199;
 const FLOOR_PX = 11;
 const CAPS_FLOOR_PX = 10;
 const INPUT_FLOOR_PX = 16;
+
+/** H3D-11: "2d" (default) ou "3d" — vira `tableView` no seed de cada contexto. */
+let VIEW = "2d";
 
 // Ordem fixa dos controles de navegacao no DOM:
 //   .header-nav .nav-link  = home, browse, config, [game]  (src/App.tsx:1341-1354)
@@ -46,18 +63,23 @@ const INPUT_FLOOR_PX = 16;
 const NAV_INDEX = { home: 0, browse: 1, config: 2, game: 3 };
 
 function parseArgs(argv) {
-  const args = { port: DEFAULT_PORT, out: null, floorOnly: false, matchSmoke: false, baseUrl: null };
+  const args = { port: DEFAULT_PORT, out: null, floorOnly: false, matchSmoke: false, baseUrl: null, view: VIEW };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--out") args.out = argv[(i += 1)];
     else if (a === "--port") args.port = Number(argv[(i += 1)]);
     else if (a === "--base-url") args.baseUrl = argv[(i += 1)];
+    else if (a === "--view") args.view = argv[(i += 1)];
     else if (a === "--floor-only") args.floorOnly = true;
     else if (a === "--match-smoke") args.matchSmoke = true;
     else {
       console.error(`capture: argumento desconhecido "${a}"`);
       process.exit(2);
     }
+  }
+  if (args.view !== "2d" && args.view !== "3d") {
+    console.error(`capture: --view aceita "2d" ou "3d" (recebi "${args.view}")`);
+    process.exit(2);
   }
   if (args.floorOnly && args.matchSmoke) {
     console.error("capture: use apenas um modo (--floor-only ou --match-smoke)");
@@ -169,13 +191,16 @@ async function launchBrowser() {
 // ---------- navegacao no app ----------
 
 // Pre-popula storage para baseline estavel (src/lib/settings.ts:29,
-// src/lib/i18n.ts:559): idioma fixo em "en" e efeitos desligados.
+// src/lib/i18n.ts:559): idioma fixo em "en" e efeitos desligados. O tableView
+// segue o --view (H3D-11): o mesmo harness grava 2D e 3D. O aiSpeed "fast"
+// encurta as batidas do Warden nos modos que o deixam jogar (floor 3D e smoke)
+// sem mexer nas telas capturadas (nelas a vez ainda e do humano).
 // Aplicado DEPOIS do primeiro goto + reload: init scripts podem rodar antes da
 // origem existir e o localStorage falha silenciosamente nessa fase.
-const SEED_BODY = `(() => {
+const seedBody = () => `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
-    difficulty: "Medium", thinkingDepth: 2,
-    sfx: false, music: false, animations: false, hoverZoom: true, language: "en",
+    difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: false,
+    hoverZoom: true, language: "en", tableView: "${VIEW}", aiSpeed: "fast",
   }));
   localStorage.setItem("aember-arena-language", "en");
 })()`;
@@ -185,7 +210,7 @@ async function newPage(browser, { w, h }) {
     viewport: { width: w, height: h },
     reducedMotion: "reduce",
   });
-  await context.addInitScript(SEED_BODY);
+  await context.addInitScript(seedBody());
   const page = await context.newPage();
   return { context, page };
 }
@@ -215,7 +240,7 @@ async function openHome(page, base) {
   await page.goto(base, { waitUntil: "domcontentloaded" });
   // Semeia o storage com a origem ja estabelecida e recarrega para o app ler
   // os valores fixos (settings.ts:26-44 le na inicializacao).
-  await page.evaluate(SEED_BODY);
+  await page.evaluate(seedBody());
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector(".home-screen", { timeout: 30000 });
   await settle(page);
@@ -253,6 +278,46 @@ async function endTurnOnce(page, i, aiTimeoutMs = 45000) {
     }, null, { timeout: 10000 })
     .catch(() => {});
   await page.waitForFunction(enabledFn, null, { timeout: aiTimeoutMs });
+}
+
+/** H3D-11 (floor 3D): joga UMA CRIATURA da mao para o board ter pecas de
+ *  verdade na auditoria (pose, sombra e piso visual dos textos in-card). Sem
+ *  criatura jogavel, cai na primeira carta que o inspetor deixar jogar. */
+async function playOneCard(page) {
+  const house = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll(".hand-track .card-tile")].map((el) => el.getAttribute("aria-label") ?? "");
+    const pick = labels.find((label) => label.includes(" Creature")) ?? labels[0] ?? "";
+    return (pick.split(", ")[1] ?? "").replace(/ (Creature|Action|Artifact|Upgrade)$/, "");
+  });
+  await page.evaluate((name) => {
+    const picks = [...document.querySelectorAll(".house-picker .house-choice:not([disabled])")];
+    (picks.find((el) => el.textContent?.includes(name)) ?? picks[0])?.click();
+  }, house);
+  await page.waitForTimeout(250);
+  const tiles = page.locator(".hand-track .card-tile");
+  let fallback = null;
+  for (let i = 0; i < (await tiles.count()); i += 1) {
+    await tiles.nth(i).click();
+    await page.waitForTimeout(140);
+    const play = page.locator(".inspector-actions button.primary-action").first();
+    if (!((await play.count()) && (await play.isEnabled().catch(() => false)))) continue;
+    const isCreature = await page.evaluate(() => /creature/i.test(document.querySelector(".selected-card-heading .card-type-label")?.textContent ?? ""));
+    if (isCreature) {
+      await play.click().catch(() => {});
+      await page.waitForTimeout(400);
+      return "criatura";
+    }
+    if (fallback === null) fallback = i;
+  }
+  if (fallback !== null) {
+    await tiles.nth(fallback).click();
+    await page.waitForTimeout(140);
+    const play = page.locator(".inspector-actions button.primary-action").first();
+    await play.click().catch(() => {});
+    await page.waitForTimeout(400);
+    return "outra carta";
+  }
+  return "nada jogavel";
 }
 
 // Caminhada pelas 5 telas. Retorna a lista de telas visitadas; usa os callbacks
@@ -298,10 +363,11 @@ async function runCapture(browser, base, outDir) {
   const manifest = {
     mode: "capture",
     base,
+    view: VIEW,
     generatedAt: new Date().toISOString(),
     viewports: VIEWPORTS.map(({ w, h }) => `${w}x${h}`),
     screens: ["home", "config", "game", "browse", "inspect"],
-    determinism: "localStorage seedado (animations/sfx/music off, lang en) + reducedMotion:reduce",
+    determinism: `localStorage seedado (animations/sfx/music off, lang en, tableView ${VIEW}) + reducedMotion:reduce`,
     note: "browse depende da API do Master Vault ao vivo; os demais funcionam offline",
     files: [],
     errors: [],
@@ -331,7 +397,7 @@ async function runCapture(browser, base, outDir) {
 
 // ---------- modo --floor-only ----------
 
-function floorAuditFn({ floor, capsFloor, inputFloor }) {
+function floorAuditFn({ floor, capsFloor, inputFloor, visual }) {
   const describe = (el) => {
     const parts = [];
     let node = el;
@@ -344,6 +410,35 @@ function floorAuditFn({ floor, capsFloor, inputFloor }) {
       parts.unshift(part);
     }
     return parts.join(" > ");
+  };
+  // H3D-11/VIEW3D_PLAN §2.6: o piso VISUAL do 3D. O font-size computado nao
+  // enxerga transforms; o fator de projecao e a razao altura projetada /
+  // altura de layout do ancestral TRANSFORMADO mais proximo (a peca, o plano,
+  // a carta da mao), que ja carrega a cadeia inteira (rotateX + --depth-k +
+  // perspectiva + giro do leque). Fora de um ancestral transformado o fator e
+  // 1: sem transform nao ha supressao a medir, e o arredondamento de caixas
+  // pequenas (offsetHeight inteiro) so criaria falso positivo em texto 2D.
+  // Fator > 1 (bbox inflada por rotacao em Z do leque) trava em 1 — girar nao
+  // encolhe nem cresce glifo.
+  const transformed = (el) => {
+    const cs = getComputedStyle(el);
+    return (
+      (cs.transform && cs.transform !== "none") ||
+      (cs.rotate && cs.rotate !== "none") ||
+      (cs.translate && cs.translate !== "none") ||
+      (cs.scale && cs.scale !== "none")
+    );
+  };
+  const visualFactor = (el) => {
+    if (!visual) return 1;
+    for (let node = el, depth = 0; node && node.nodeType === 1 && depth < 8; node = node.parentElement, depth += 1) {
+      if (!transformed(node)) continue;
+      const layout = node.offsetHeight;
+      const height = node.getBoundingClientRect().height;
+      if (layout < 12 || !height) return 1; // caixa pequena: o inteiro de offsetHeight domina
+      return Math.min(1, height / layout);
+    }
+    return 1;
   };
   const violations = [];
   const report = (kind, el, cs, fontSize, pseudo, text) => {
@@ -358,7 +453,7 @@ function floorAuditFn({ floor, capsFloor, inputFloor }) {
     if (allowedCaps) return;
     violations.push({
       kind,
-      fontSize,
+      fontSize: Math.round(fontSize * 100) / 100,
       selector: `${describe(el)}${pseudo}`,
       text,
       letterSpacingPx: ls,
@@ -370,7 +465,8 @@ function floorAuditFn({ floor, capsFloor, inputFloor }) {
     const cs = getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) continue;
     if (!el.getClientRects().length) continue;
-    const fontSize = parseFloat(cs.fontSize);
+    const factor = visualFactor(el);
+    const fontSize = parseFloat(cs.fontSize) * factor;
     if (!Number.isFinite(fontSize)) continue;
     const isField =
       el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
@@ -378,7 +474,7 @@ function floorAuditFn({ floor, capsFloor, inputFloor }) {
       if (fontSize < inputFloor) {
         violations.push({
           kind: "input",
-          fontSize,
+          fontSize: Math.round(fontSize * 100) / 100,
           selector: describe(el),
           text: "",
           letterSpacingPx: NaN,
@@ -400,7 +496,7 @@ function floorAuditFn({ floor, capsFloor, inputFloor }) {
       if (!content || content === "none" || content === "normal") continue;
       const text = content.replace(/^["']|["']$/g, "").trim();
       if (!text) continue;
-      const pfs = parseFloat(pcs.fontSize);
+      const pfs = parseFloat(pcs.fontSize) * factor;
       if (Number.isFinite(pfs) && pfs < floor) {
         report("pseudo", el, pcs, pfs, pseudo, text.slice(0, 48));
       }
@@ -409,22 +505,121 @@ function floorAuditFn({ floor, capsFloor, inputFloor }) {
   return violations;
 }
 
+// Diagnostico do teste do teste: os menores tamanhos VISUAIS dentro do plano
+// (mesmo fator do gate), com o ancestral que o produziu. Só aparece quando o
+// stressor nao acusa — e o que diz ONDE o fator deixou de medir.
+function floorSamplesFn({ floor }) {
+  const transformed = (el) => {
+    const cs = getComputedStyle(el);
+    return (
+      (cs.transform && cs.transform !== "none") ||
+      (cs.rotate && cs.rotate !== "none") ||
+      (cs.translate && cs.translate !== "none") ||
+      (cs.scale && cs.scale !== "none")
+    );
+  };
+  const factorOf = (el) => {
+    for (let node = el, depth = 0; node && node.nodeType === 1 && depth < 8; node = node.parentElement, depth += 1) {
+      if (!transformed(node)) continue;
+      const layout = node.offsetHeight;
+      const height = node.getBoundingClientRect().height;
+      if (layout < 12 || !height) return { who: `${node.tagName.toLowerCase()}.${String(node.className).split(" ")[0]}`, factor: 1 };
+      return { who: `${node.tagName.toLowerCase()}.${String(node.className).split(" ")[0]}`, factor: Math.min(1, height / layout) };
+    }
+    return { who: null, factor: 1 };
+  };
+  const out = [];
+  for (const el of document.querySelectorAll(".table-plane *, .hand-track *")) {
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) continue;
+    if (!el.getClientRects().length) continue;
+    let own = "";
+    for (const node of el.childNodes) if (node.nodeType === Node.TEXT_NODE) own += node.textContent;
+    own = own.trim();
+    if (!own) continue;
+    const font = parseFloat(cs.fontSize);
+    if (!Number.isFinite(font)) continue;
+    const { who, factor } = factorOf(el);
+    out.push({ text: own.slice(0, 24), font, factor: Math.round(factor * 1000) / 1000, visual: Math.round(font * factor * 100) / 100, who, below: font * factor < floor });
+  }
+  return out.sort((a, b) => a.visual - b.visual).slice(0, 6);
+}
+
 async function runFloorOnly(browser, base) {
-  const vp = { w: 360, h: 800 };
-  const { context, page } = await newPage(browser, vp);
+  const visual = VIEW === "3d";
+  const viewports = visual ? VIEWPORTS_3D_FLOOR : [{ w: 360, h: 800 }];
+  const auditArgs = { floor: FLOOR_PX, capsFloor: CAPS_FLOOR_PX, inputFloor: INPUT_FLOOR_PX, visual };
   const perScreen = [];
-  try {
-    await walkScreens(page, base, async (screen) => {
-      const violations = await page.evaluate(floorAuditFn, {
-        floor: FLOOR_PX,
-        capsFloor: CAPS_FLOOR_PX,
-        inputFloor: INPUT_FLOOR_PX,
-      });
-      perScreen.push({ screen, violations });
-      console.log(`[floor] ${screen}: ${violations.length} elemento(s) abaixo do piso`);
-    });
-  } finally {
-    await context.close().catch(() => {});
+  const notes = [];
+  for (const vp of viewports) {
+    const vpName = `${vp.w}x${vp.h}`;
+    const { context, page } = await newPage(browser, vp);
+    const audit = async (screen) => {
+      const violations = await page.evaluate(floorAuditFn, auditArgs);
+      const label = visual ? `${screen}@${vpName}` : screen;
+      perScreen.push({ screen: label, violations });
+      console.log(`[floor] ${label}: ${violations.length} elemento(s) abaixo do piso`);
+      return violations;
+    };
+    try {
+      if (visual) {
+        // O 3D so muda o game screen; home/config entram para nao perder
+        // regressao de layout do shell (2D) que o seed 3D expoe.
+        await openHome(page, base);
+        await audit("home");
+        await navTo(page, "config");
+        await page.waitForSelector(".config-screen", { timeout: 15000 });
+        await settle(page);
+        await audit("config");
+        await startDemoMatch(page);
+        await settle(page, 900);
+        const played = await playOneCard(page);
+        await settle(page, 700);
+        console.log(`[floor] 3d: carta jogada na mesa = ${played}`);
+        const gameViolations = await audit("game");
+        // Teste do teste: tirar a COMPENSACAO que mantem o texto de pe tem de
+        // fazer o piso VISUAL acusar — sem isto um fator quebrado passaria em
+        // silencio. Sao dois compensadores: o billboard do texto do plano (§2.6)
+        // e o contra-tilt das cartas (a pose as deixa a lean graus da tela).
+        // O stressor zera os dois e inclina a mesa a 60 graus; no 2.5D, onde nao
+        // ha pose nem billboard, a mesa inclinada sozinha ja achata o texto.
+        const tilted = await page.evaluate(() => {
+          const plane = document.querySelector(".table-plane");
+          if (!plane) return false;
+          plane.style.setProperty("--tilt", "60deg");
+          for (const piece of plane.querySelectorAll(".board-piece")) piece.style.setProperty("--lean", "60deg");
+          for (const el of plane.querySelectorAll(".zone-heading, .turn-console, .fight-instruction, .empty-battleline")) {
+            el.style.setProperty("rotate", "none");
+          }
+          return true;
+        });
+        await page.waitForTimeout(700);
+        const blindViolations = tilted ? await page.evaluate(floorAuditFn, auditArgs) : [];
+        if (tilted) {
+          await page.evaluate(() => {
+            const plane = document.querySelector(".table-plane");
+            plane?.style.removeProperty("--tilt");
+            for (const piece of plane?.querySelectorAll(".board-piece") ?? []) piece.style.removeProperty("--lean");
+            for (const el of plane?.querySelectorAll(".zone-heading, .turn-console, .fight-instruction, .empty-battleline") ?? []) {
+              el.style.removeProperty("rotate");
+            }
+          });
+        }
+        if (!tilted) notes.push(`${vpName}: sem .table-plane para o teste do teste`);
+        else if (!blindViolations.length) {
+          const samples = await page.evaluate(floorSamplesFn, { floor: FLOOR_PX });
+          notes.push(`${vpName}: teste do teste FALHOU - sem os compensadores o piso visual nao acusa (amostras: ${samples.map((s) => `${s.text}=${s.visual}px(f=${s.factor},${s.who ?? "sem-ancestral"})`).join(" | ")})`);
+        } else {
+          notes.push(`${vpName}: teste do teste OK - sem os compensadores acusa ${blindViolations.length} elemento(s) (ex.: ${blindViolations[0].selector} ${blindViolations[0].fontSize}px)`);
+          // O stressor so vale como teste se o estado normal estiver limpo.
+          if (gameViolations.length) notes.push(`${vpName}: game screen com ${gameViolations.length} violacao(oes) no estado normal`);
+        }
+      } else {
+        await walkScreens(page, base, audit);
+      }
+    } finally {
+      await context.close().catch(() => {});
+    }
   }
 
   const seen = new Map();
@@ -438,8 +633,10 @@ async function runFloorOnly(browser, base) {
   const all = [...seen.values()].sort(
     (a, b) => a.screen.localeCompare(b.screen) || a.fontSize - b.fontSize || a.selector.localeCompare(b.selector),
   );
+  const scope = visual ? `3D (piso visual) a ${viewports.map((v) => `${v.w}x${v.h}`).join(", ")}` : "a 360x800 (5 telas)";
+  for (const note of notes) console.log(`[floor] ${note}`);
   if (all.length) {
-    console.error(`\nfloor-only: FALHOU - ${all.length} violacao(oes) unica(s) a 360x800 (piso ${FLOOR_PX}px, caps 10px c/ letter-spacing >= 0.1em, inputs ${INPUT_FLOOR_PX}px):\n`);
+    console.error(`\nfloor-only: FALHOU - ${all.length} violacao(oes) unica(s) ${scope} (piso ${FLOOR_PX}px, caps 10px c/ letter-spacing >= 0.1em, inputs ${INPUT_FLOOR_PX}px):\n`);
     for (const v of all) {
       const label = v.kind === "input" ? "input" : v.kind === "pseudo" ? "texto(::before/::after)" : "texto";
       const extra = v.ariaHidden ? " [aria-hidden]" : "";
@@ -450,7 +647,11 @@ async function runFloorOnly(browser, base) {
     }
     process.exit(1);
   }
-  console.log(`\nfloor-only: OK - 0 violacoes (piso ${FLOOR_PX}px, inputs ${INPUT_FLOOR_PX}px) nas 5 telas a 360x800`);
+  if (visual && notes.some((note) => note.includes("teste do teste FALHOU"))) {
+    console.error("\nfloor-only: FALHOU - o gate 3D nao reagiu ao tilt de teste (teste do teste)");
+    process.exit(1);
+  }
+  console.log(`\nfloor-only: OK - 0 violacoes (piso ${FLOOR_PX}px, inputs ${INPUT_FLOOR_PX}px) ${scope}`);
 }
 
 // ---------- modo --match-smoke ----------
@@ -493,6 +694,7 @@ async function runMatchSmoke(browser, base, outDir) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  VIEW = args.view;
   const server = args.baseUrl ? null : startDevServer(args.port);
   const base = args.baseUrl ?? server.url;
   let browser;
@@ -500,7 +702,7 @@ async function main() {
     if (server) {
       console.log(`[capture] subindo vite dev server em ${base} ...`);
       await server.waitReady();
-      console.log("[capture] dev server pronto");
+      console.log(`[capture] dev server pronto (view=${VIEW})`);
     }
     browser = await launchBrowser();
     if (args.floorOnly) await runFloorOnly(browser, base);

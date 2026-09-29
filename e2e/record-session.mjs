@@ -1,6 +1,6 @@
 // Gravador de sessao em video para revisao de UX (artefato de analise, nao gate).
 //
-//   node e2e/record-session.mjs [--port N] [--base-url URL]
+//   node e2e/record-session.mjs [--port N] [--base-url URL] [--animations] [--view 3d]
 //
 // Sobe o vite dev server sozinho (porta alta propria, derrubado ao sair) e abre
 // UM contexto Playwright com recordVideo a 1280x800. Percorre o fluxo real de
@@ -9,6 +9,10 @@
 // da IA -> turno 2 humano (colhe + jogadas) -> scroll do board/rail + log
 // completo com filtro -> Home -> Vault com scroll. Pausas de 600-1200ms entre
 // as acoes deixam o video "respirar".
+//
+// H3D-11: --view 3d (default 2d) semeia `tableView: "3d"` e o video/frames saem
+// da mesa inclinada — a prova visual do modo (com --animations os voos do
+// FxLayer aparecem sobre o plano em 3D). Os frames mantem os MESMOS nomes.
 //
 // Nota de roteiro: o motor implementa a regra de abertura do KeyForge (turno 1
 // do primeiro jogador permite UMA carta, src/lib/game.ts:670-672), entao as
@@ -31,9 +35,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const VITE_BIN = join(ROOT, "node_modules", "vite", "bin", "vite.js");
 const CLIPS_DIR = join(ROOT, "e2e", "clips");
-const FRAMES_DIR = join(CLIPS_DIR, "frames");
 const TMP_VIDEO_DIR = join(CLIPS_DIR, ".tmp-video");
-const VIDEO_NAME = "session-1280x800.webm";
+// H3D-11: o modo 3D grava em pasta propria (frames-3d / session-1280x800-3d)
+// para o clipe da mesa inclinada nao sobrescrever o do 2D.
+let VIEW = "2d";
+let FRAMES_DIR = join(CLIPS_DIR, "frames");
+let VIDEO_NAME = "session-1280x800.webm";
 const MIN_VIDEO_BYTES = 200 * 1024;
 const MIN_FRAMES = 8;
 
@@ -45,16 +52,21 @@ const VIEWPORT = { width: 1280, height: 800 };
 const NAV_INDEX = { home: 0, browse: 1, config: 2, game: 3 };
 
 function parseArgs(argv) {
-  const args = { port: DEFAULT_PORT, baseUrl: null, animations: false };
+  const args = { port: DEFAULT_PORT, baseUrl: null, animations: false, view: "2d" };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--port") args.port = Number(argv[(i += 1)]);
     else if (a === "--base-url") args.baseUrl = argv[(i += 1)];
     else if (a === "--animations") args.animations = true;
+    else if (a === "--view") args.view = argv[(i += 1)];
     else {
       console.error(`record: argumento desconhecido "${a}"`);
       process.exit(2);
     }
+  }
+  if (args.view !== "2d" && args.view !== "3d") {
+    console.error(`record: --view aceita "2d" ou "3d" (recebi "${args.view}")`);
+    process.exit(2);
   }
   return args;
 }
@@ -161,12 +173,12 @@ async function launchBrowser() {
 // desligados. Aplicado DEPOIS do primeiro goto + reload porque init scripts
 // podem rodar antes da origem existir e o localStorage falha silenciosamente.
 // --animations liga o motion (animações on, reduced-motion off) para o clipe
-// provar o voo de carta das ondas de animação.
+// provar o voo de carta das ondas de animação; --view 3d liga a mesa inclinada.
 let MOTION = false;
 const seedBody = () => `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
     difficulty: "Medium", thinkingDepth: 2,
-    sfx: false, music: false, animations: ${MOTION}, hoverZoom: true, language: "en",
+    sfx: false, music: false, animations: ${MOTION}, hoverZoom: true, language: "en", tableView: "${VIEW}",
   }));
   localStorage.setItem("aember-arena-language", "en");
 })()`;
@@ -560,6 +572,27 @@ async function recordSession(browser, base) {
     await page.waitForSelector(".mulligan-shade", { state: "detached", timeout: 20000 }).catch(() => {});
     await settle(page, 900);
     await frames.shot("board-start");
+    if (VIEW === "3d") {
+      // Prova numerica no log do harness: o video sozinho nao mede a pose.
+      const geometry = await page.evaluate(() => {
+        const board = document.querySelector(".game-board");
+        const content = document.querySelector(".board-content");
+        const plane = document.querySelector(".table-plane");
+        const piece = document.querySelector(".table-plane .board-piece");
+        const hand = document.querySelector(".hand-track > .card-tile--hand");
+        const read = (el, prop) => (el ? getComputedStyle(el).getPropertyValue(prop).trim() : null);
+        return {
+          view: board?.getAttribute("data-view") ?? null,
+          tilt: read(plane, "--tilt"),
+          // A perspectiva fica no pai do plano (o plano carrega a inclinacao).
+          perspective: content ? getComputedStyle(content).perspective : null,
+          pieceRotate: read(piece, "rotate"),
+          pieceTranslate: read(piece, "translate"),
+          handRotate: read(hand, "rotate"),
+        };
+      });
+      console.log(`[record] 3D: ${JSON.stringify(geometry)}`);
+    }
     await waitForHumanTurn(page);
     await chooseHouse(page, await pickHouse(page, true));
     await breathe(page);
@@ -668,6 +701,11 @@ function finalizeVideo(src) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   MOTION = args.animations;
+  VIEW = args.view;
+  if (VIEW === "3d") {
+    FRAMES_DIR = join(CLIPS_DIR, "frames-3d");
+    VIDEO_NAME = "session-1280x800-3d.webm";
+  }
   const server = args.baseUrl ? null : startDevServer(args.port);
   const base = args.baseUrl ?? server.url;
   let browser;
@@ -675,7 +713,7 @@ async function main() {
     if (server) {
       console.log(`[record] subindo vite dev server em ${base} ...`);
       await server.waitReady();
-      console.log("[record] dev server pronto");
+      console.log(`[record] dev server pronto (view=${VIEW}${MOTION ? ", animations" : ""})`);
     }
     browser = await launchBrowser();
     const result = await recordSession(browser, base);
