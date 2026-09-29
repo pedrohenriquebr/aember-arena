@@ -1793,8 +1793,10 @@ function App() {
   /** FEAT-12a: undo history — see commitGame below (capped at UNDO_LIMIT). */
   const historyRef = useRef<UndoEntry[]>([]);
   /** FEAT-12b: every transition of the live match, in order (in memory only —
-      the save stays the plain GameState, no new persistence format). */
-  const stepsRef = useRef<ReplayStep[]>([]);
+      the save stays the plain GameState, no new persistence format). BUG2-03:
+      null after a resume — the steps of the part already played are gone, so a
+      replay would rebuild from turn 1 and turn every step into a no-op. */
+  const stepsRef = useRef<ReplayStep[] | null>([]);
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -1806,9 +1808,9 @@ function App() {
   // replay step count at that point; FEAT-12b appends the step itself.
   const commitGame = useCallback((prev: GameState, next: GameState, step?: ReplayStep) => {
     const stack = historyRef.current;
-    stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next), step: stepsRef.current.length });
+    stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next), step: stepsRef.current?.length ?? 0 });
     if (stack.length > UNDO_LIMIT) stack.shift();
-    if (step) stepsRef.current.push(step);
+    if (step) stepsRef.current?.push(step);
     gameRef.current = next;
     setGame(next);
   }, []);
@@ -1841,7 +1843,7 @@ function App() {
     // history is truncated the same way — keeping the undone branch would let
     // the cap evict the turn-start anchor and rewind into a state that never
     // existed on the current line.
-    stepsRef.current.splice(info.step);
+    stepsRef.current?.splice(info.step);
     historyRef.current.splice(info.at + 1);
     gameRef.current = info.anchor;
     setGame(info.anchor);
@@ -2151,7 +2153,8 @@ function App() {
   // FEAT-12b: the replay viewer needs the recorded steps (same session); the
   // seed always lives in the state. FEAT-13: neither undo nor replay exists in
   // pass-and-play — a rewind would re-show cards the other player already saw.
-  const canReplay = Boolean(game && matchMode === "solo" && stepsRef.current.length > 0);
+  // BUG2-03: a resumed match has no steps for the part already played.
+  const canReplay = Boolean(game && matchMode === "solo" && stepsRef.current?.length);
   const passAndPlay = matchMode === "passAndPlay";
   const humanSide: 0 | 1 = game ? humanSideOf(game, matchMode) : 0;
 
@@ -2341,7 +2344,7 @@ function App() {
     const live = gameRef.current;
     if (!live || matchModeRef.current !== "solo") return;
     const states = [createMatch(currentDeck, opponentRef.current ?? currentDeck, { seed: live.seed })];
-    for (const step of stepsRef.current) states.push(applyStep(states[states.length - 1], step));
+    for (const step of stepsRef.current ?? []) states.push(applyStep(states[states.length - 1], step));
     sound.play("select");
     setSelected(null);
     setPick(null);
@@ -2598,10 +2601,10 @@ function App() {
             onClick={() => {
               sound.play("forge");
               const saved = resumeMatch.game as GameState;
-              // FEAT-12a: a resumed match has no in-memory history to undo (and
-              // FEAT-12b has no step list to replay it).
+              // FEAT-12a: a resumed match has no in-memory history to undo; its
+              // step list stays null so replay stays off (BUG2-03).
               historyRef.current = [];
-              stepsRef.current = [];
+              stepsRef.current = null;
               gameRef.current = saved;
               prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
               setGame(saved);
