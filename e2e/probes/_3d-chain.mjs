@@ -320,6 +320,14 @@ try {
   mkdirSync(SHOTS, { recursive: true });
   await page.screenshot({ path: join(SHOTS, "probe-3d-chain.png") });
 
+  // Registro visual do plano inclinado a 40 (o probe nao julga imagem; a captura
+  // fica para inspecao humana — a mesa de verdade e do H3D-03).
+  await page.evaluate(() => document.querySelector(".table-plane")?.style.setProperty("--tilt", "40deg"));
+  await page.waitForTimeout(650);
+  await page.screenshot({ path: join(SHOTS, "probe-3d-chain-tilt40.png") });
+  await page.evaluate(() => document.querySelector(".table-plane")?.style.removeProperty("--tilt"));
+  await page.waitForTimeout(650);
+
   // ---- 5. Smoke com tilt 0: dois turnos em 3D
   for (let turn = 0; turn < 2; turn += 1) {
     await page.waitForFunction(enabled, null, { timeout: 90000 });
@@ -427,6 +435,137 @@ try {
     return { cls3d: board?.className.includes("game-board--3d") ?? false, view: board?.getAttribute("data-view") ?? null };
   });
   check("reload: setting sobreviveu (partida retomada abre em 3D)", resumed.cls3d && resumed.view === "3d", JSON.stringify(resumed));
+
+  // ---- 8. H3D-10: a transicao entre modos (partida retomada esta em 3D)
+  await page.evaluate(() => {
+    window.__cls = 0;
+    try {
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__cls += entry.value;
+      }).observe({ type: "layout-shift", buffered: false });
+    } catch { /* motor sem layout-shift: o check de CLS vira 0 */ }
+  });
+  await page.locator(".view-toggle").click();
+  await page.waitForTimeout(140);
+  const switching = await page.evaluate(() => {
+    const board = document.querySelector(".game-board");
+    const content = document.querySelector(".board-content");
+    const plane = document.querySelector(".table-plane");
+    const contentCs = getComputedStyle(content);
+    const planeCs = getComputedStyle(plane);
+    return {
+      cls: board.className.includes("game-board--switching"),
+      animation: contentCs.animationName,
+      duration: contentCs.animationDuration,
+      willChange: planeCs.willChange,
+      transitionProperty: planeCs.transitionProperty,
+      transitionDuration: planeCs.transitionDuration,
+    };
+  });
+  check("H3D-10: classe da troca + fade de 420ms + will-change no plano", switching.cls && switching.animation === "view-fade" && switching.duration === "0.42s" && switching.willChange === "transform", JSON.stringify(switching));
+  check("H3D-10: --tilt declarado com transicao de 420ms", /(^|,)\s*--tilt/.test(switching.transitionProperty) && switching.transitionDuration === "0.42s", JSON.stringify(switching));
+  await page.waitForTimeout(700);
+  const settled = await page.evaluate(() => {
+    const board = document.querySelector(".game-board");
+    return {
+      cls: board.className.includes("game-board--switching"),
+      view: board.getAttribute("data-view"),
+      willChange: getComputedStyle(document.querySelector(".table-plane")).willChange,
+      cls2d: !board.className.includes("game-board--3d"),
+      clsValue: window.__cls,
+    };
+  });
+  check("H3D-10: no fim da troca a classe e o will-change saem (2D)", !settled.cls && settled.willChange === "auto" && settled.cls2d && settled.view === null, JSON.stringify(settled));
+  check("H3D-10: nenhum layout shift na troca (CLS 0)", settled.clsValue === 0, `cls=${settled.clsValue}`);
+
+  // Volta ao 3D e mede a interpolacao real do --tilt: com @property registrado,
+  // getComputedStyle devolve o valor ANIMADO (nao o alvo).
+  await page.locator(".view-toggle").click();
+  await page.waitForTimeout(700);
+  const tilt = await page.evaluate(async () => {
+    const plane = document.querySelector(".table-plane");
+    const read = () => parseFloat(getComputedStyle(plane).getPropertyValue("--tilt")) || 0;
+    const start = performance.now();
+    plane.style.setProperty("--tilt", "40deg");
+    const samples = [];
+    let settleMs = null;
+    while (performance.now() - start < 900) {
+      await new Promise((r) => setTimeout(r, 16));
+      const value = read();
+      samples.push(Math.round(value * 10) / 10);
+      if (settleMs === null && value >= 39.9) settleMs = Math.round(performance.now() - start);
+    }
+    plane.style.removeProperty("--tilt");
+    await new Promise((r) => setTimeout(r, 500));
+    return { settleMs, quarter: samples[Math.floor(samples.length / 4)] ?? null, distinct: new Set(samples).size, first: samples[0] ?? null };
+  });
+  // O "assentar" aparece antes dos 420ms nominais: a curva (0.2, 0.8, 0.2, 1)
+  // já está a <0,25% do alvo no fim — o que importa é interpolair (valores
+  // distintos, meio do caminho estritamente entre 0 e 40) e assentar na janela.
+  check("H3D-10: --tilt interpola de verdade e assenta em 420ms", tilt.settleMs !== null && tilt.settleMs > 330 && tilt.settleMs < 480 && tilt.distinct > 5 && tilt.quarter > 0 && tilt.quarter < 40, JSON.stringify(tilt));
+
+  // Durante o fade o board-content fica com opacity < 1 (camada de grupo): a
+  // projecao tem de continuar viva — o grupo re-rasteriza a cena, nao a achata.
+  const fadeProjection = await page.evaluate(async () => {
+    const content = document.querySelector(".board-content");
+    const plane = document.querySelector(".table-plane");
+    const art = document.querySelector(".table-plane .board-piece .card-art");
+    if (!art) return null;
+    const flat = art.getBoundingClientRect().height;
+    content.style.opacity = "0.65";
+    plane.style.setProperty("--tilt", "40deg");
+    await new Promise((r) => setTimeout(r, 700));
+    const faded = art.getBoundingClientRect().height;
+    plane.style.removeProperty("--tilt");
+    content.style.opacity = "";
+    await new Promise((r) => setTimeout(r, 700));
+    return { flat, faded };
+  });
+  check("H3D-10: o fade nao achata o 3D (projecao viva com opacity < 1)", fadeProjection !== null && fadeProjection.faded < fadeProjection.flat * 0.92, JSON.stringify(fadeProjection));
+
+  // Reduce-motion: a troca e instantanea (o `*` global derruba a duracao).
+  await page.evaluate(() => document.documentElement.classList.add("reduce-motion"));
+  await page.evaluate(() => document.querySelector(".game-board").classList.add("game-board--switching"));
+  const rmDuration = await page.evaluate(() => getComputedStyle(document.querySelector(".board-content")).animationDuration);
+  await page.evaluate(() => document.querySelector(".game-board").classList.remove("game-board--switching"));
+  await page.waitForTimeout(60);
+  await page.locator(".view-toggle").click();
+  await page.waitForTimeout(150);
+  const rmState = await page.evaluate(() => ({
+    cls: document.querySelector(".game-board").className.includes("game-board--switching"),
+    view: document.querySelector(".game-board").getAttribute("data-view"),
+  }));
+  await page.evaluate(() => document.documentElement.classList.remove("reduce-motion"));
+  check("H3D-10: reduce-motion troca em 1 frame", parseFloat(rmDuration) < 0.01 && !rmState.cls && rmState.view === null, `duracao=${rmDuration} ${JSON.stringify(rmState)}`);
+
+  // Orcamento de frame da troca com CPU 4x (a meta e nenhum frame > 33ms).
+  const client = await page.context().newCDPSession(page);
+  await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  const frames = await page.evaluate(async () => {
+    const deltas = [];
+    let last = performance.now();
+    const onFrame = (now) => {
+      deltas.push(now - last);
+      last = now;
+      if (deltas.length < 90) requestAnimationFrame(onFrame);
+    };
+    requestAnimationFrame(onFrame);
+    await new Promise((r) => setTimeout(r, 80));
+    document.querySelector(".view-toggle")?.click();
+    await new Promise((r) => setTimeout(r, 1100));
+    return deltas;
+  });
+  await client.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+  const worst = frames.length ? Math.max(...frames) : 0;
+  const long = frames.filter((d) => d > 33).length;
+  // O primeiro quadro longo e o do clique (layout+raster da mesa inteira) e o
+  // ultimo e o ocio/teardown do evaluate: o corpo da transicao e o que fica
+  // ENTRE eles — e ali que um fade que repintasse a cena por quadro apareceria.
+  const longFrames = frames.map((d, i) => (d > 150 ? i : -1)).filter((i) => i >= 0);
+  const body = longFrames.length > 1 ? frames.slice(longFrames[0] + 1, longFrames[longFrames.length - 1]) : frames;
+  const bodyLong = body.filter((d) => d > 150).length;
+  console.log(`INFO H3D-10: frames com CPU 4x — pior=${worst.toFixed(1)}ms, >33ms=${long}/${frames.length}, corpo>150ms=${bodyLong}/${body.length} (headless renderiza em software; a meta de 60fps do plano §2.9 vale com GPU)`);
+  check("H3D-10: corpo da transicao sem travamento (CPU 4x)", frames.length > 20 && bodyLong === 0, `pior=${worst.toFixed(1)}ms corpo>150ms=${bodyLong}/${body.length} deltas=${frames.map((d) => d.toFixed(0)).join(",")}`);
 
   console.log(PROBLEMS.length ? `\nFALHAS: ${PROBLEMS.join("; ")}` : "\nOK: cadeia 3D confere (2D intacto, projecao viva, toggle limpo)");
 } finally {

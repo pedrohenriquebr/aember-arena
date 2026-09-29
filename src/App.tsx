@@ -1287,6 +1287,7 @@ function GameBoard({
   humanSide = 0,
   passPending = null,
   onPassConfirm = NOOP,
+  viewSwitching = false,
 }: {
   game: GameState;
   selected: Selection | null;
@@ -1309,6 +1310,8 @@ function GameBoard({
   /** FEAT-13: side that must confirm the pass before its hand renders. */
   passPending?: 0 | 1 | null;
   onPassConfirm?: () => void;
+  /** H3D-10: troca de visão em curso — liga o fade e o will-change. */
+  viewSwitching?: boolean;
   onHouse: (house: string) => void;
   onSelectHand: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
@@ -1355,7 +1358,7 @@ function GameBoard({
 
   return (
     <section
-      className={`game-board${settings.animations ? "" : " no-anim"}${view3d ? " game-board--3d" : ""}`}
+      className={`game-board${settings.animations ? "" : " no-anim"}${view3d ? " game-board--3d" : ""}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
       aria-label={t("game.board")}
     >
@@ -1855,6 +1858,8 @@ function App() {
   const [matchMode, setMatchMode] = useState<GameMode>("solo");
   /** FEAT-13: side that must confirm the pass before its hand renders again. */
   const [passPending, setPassPending] = useState<0 | 1 | null>(null);
+  /** H3D-10: a troca 2D ↔ 3D está em curso (fade de 420ms + will-change). */
+  const [viewSwitching, setViewSwitching] = useState(false);
 
   const [selected, setSelected] = useState<Selection | null>(null);
   const [pick, setPick] = useState<Pick | null>(null);
@@ -1939,8 +1944,27 @@ function App() {
       foco fica no botão — o nó é o mesmo, quem troca é a classe do board. */
   const toggleTableView = useCallback(() => {
     cancelFx();
+    setViewSwitching(true);
     setSettings((prev) => ({ ...prev, tableView: prev.tableView === "3d" ? "2d" : "3d" }));
   }, [cancelFx]);
+
+  // H3D-10: a classe da transição vive 420ms (o fade do board-content) e sai no
+  // animationend — é ela que carrega o will-change do plano, então em repouso
+  // nada fica promovido. O timeout cobre os motores que não emitem o evento.
+  useEffect(() => {
+    if (!viewSwitching) return;
+    const board = document.querySelector<HTMLElement>(".game-board");
+    const done = () => setViewSwitching(false);
+    const onEnd = (event: AnimationEvent) => {
+      if (event.animationName === "view-fade") done();
+    };
+    board?.addEventListener("animationend", onEnd);
+    const timer = window.setTimeout(done, 500);
+    return () => {
+      window.clearTimeout(timer);
+      board?.removeEventListener("animationend", onEnd);
+    };
+  }, [viewSwitching]);
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with
@@ -3078,6 +3102,7 @@ function App() {
                   humanSide={humanSide}
                   passPending={passPending}
                   onPassConfirm={() => { sound.play("click"); setPassPending(null); }}
+                  viewSwitching={viewSwitching}
                 />
               </div>
 

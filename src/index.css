@@ -6689,6 +6689,19 @@ html .spin {
    Mudou o board? Rode `node e2e/probes/_3d-chain.mjs`. */
 .table-plane {
   display: contents;
+  /* H3D-10: a mesa "deita" em 420ms. O --tilt é registrado como <angle> para
+     poder transicionar (sem o registro o valor troca seco) e a pose das cartas
+     usa calc(var(--lean) - var(--tilt)) — elas acompanham no mesmo frame, sem
+     timeline própria (H3D-04). A transição fica na regra base para valer nas
+     DUAS direções (ao sair do 3D o "after style" é esta regra). Navegador sem
+     @property (Firefox < 128): troca instantânea, sem erro. */
+  transition: --tilt 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@property --tilt {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
 }
 
 .game-board--3d .table-plane {
@@ -6738,4 +6751,22 @@ html .spin {
 .game-board--3d .board-content > .hand-zone {
   position: relative;
   z-index: 2;
+}
+
+/* ---------- Transição entre modos (H3D-10, VIEW3D_PLAN §2.11) ---------- */
+/* A classe `--switching` vive só durante a troca (o App a remove no
+   `animationend`): o layout novo entra no frame 0 e o fade 1 → 0,65 → 1 mascara
+   o salto; o will-change promove o plano apenas enquanto o tilt roda (nunca em
+   repouso). Com reduce-motion ou animações off a regra global `*` derruba a
+   duração para 0,01ms — a troca acontece em 1 frame. */
+.game-board--switching .board-content {
+  animation: view-fade 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.game-board--switching .table-plane {
+  will-change: transform;
+}
+
+@keyframes view-fade {
+  50% { opacity: 0.65; }
 }
