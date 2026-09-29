@@ -1,4 +1,30 @@
-# HANDOFF — estado da pausa (29/09, noite — atualizado)
+# HANDOFF — estado da pausa (29/09, tardia — antes de desligar)
+
+> **⚠️ ESTE É O ESTADO VIGENTE.** As seções abaixo são históricas.
+
+## Terceira pausa (noite de 29/09)
+
+**Landed e commitado desde a segunda pausa:**
+- coder-12b: ondas de animação confirmadas (o WIP do stash já estava commitado) ✅
+- Opus VALIDATE-AUDIO: `docs/VALIDATION_AUDIO.md` — APROVADO COM RESSALVAS (VAL-01..06) ✅
+- coder-13: VAL-01/02/03/05/06 corrigidos (5 commits) ✅
+- Opus VALIDATE-FX: `docs/VALIDATION_FX.md` — APROVADO COM RESSALVAS (FX-01..08 obrigatórios + VAL-04b/04c/05) ✅
+- coder-14: FX-01..05+08 corrigidos (browser real) ✅ · coder-15: VAL-04b/05 ✅ · VAL-04c pelo coordenador ✅
+- Opus VALIDATE-CLOSE: **PRONTO PARA FECHAR** (9/9 resolvidos) `docs/VALIDATION_CLOSE.md` ✅
+- Opus VIEW3D (coder-16/17/18): **12 histórias H3D implementadas** + `docs/VIEW3D_VALIDATE.md` — PRONTO COM RESSALVAS
+- Opus UX-FIT: `docs/UX_FIT_PLAN.md` (654 l) — plano do palco de viewport medido NO NOTEBOOK do dono (1296×668) ✅
+
+**Pendências para retomar (especs completas nos docs):**
+1. VIEW3D punch list (docs/VIEW3D_VALIDATE.md §5): legendas do leque cortadas (H3D-06), playmat do --lite vazando (H3D-09), assert do parallax instável no _3d-chain
+2. UX-FIT implementação: FIT-01..08 (docs/UX_FIT_PLAN.md — palco 100dvh, preview maior, aiDelayMs) em 3 lotes deepseek
+3. Opus re-valida 3D + FIT no fim
+4. Catálogo dinâmico (docs/DYNAMIC_CATALOG_PLAN.md) aguardando aprovação do dono
+
+Estado: 127+ specs verdes, bundle 142,57/143,5 kB (teto revisado no histórico do CLAUDE.md §7), árvore limpa. **Nenhum processo rodando.**
+
+---
+
+# Histórico — segunda pausa (noite de 29/09)
 
 > **⚠️ ESTE É O ESTADO VIGENTE.** A seção "primeira pausa" (fim do arquivo) é
 > histórica. O que mudou desde ela:
