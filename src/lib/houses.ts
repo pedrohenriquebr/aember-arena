@@ -139,7 +139,8 @@ export const HOUSES: Record<string, HouseInfo> = {
     namePt: "Redenção",
     color: "#c8a04a",
     icon: `${CDN}/Redemption.png`,
-    short: "RE",
+    // BUG2-15: "RE" colidia com Rebels no fallback por iniciais.
+    short: "RD",
   },
   Keyraken: {
     id: "Keyraken",
@@ -160,7 +161,8 @@ export const HOUSES: Record<string, HouseInfo> = {
     namePt: "Rebels",
     color: "#a3796a",
     icon: `${CDN}/Rebels.png`,
-    short: "RE",
+    // BUG2-15: era "RE", igual a Redemption.
+    short: "RB",
   },
   Elders: {
     id: "Elders",
