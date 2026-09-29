@@ -713,6 +713,50 @@ button:disabled {
   }
 }
 
+/* H3D-01: o chip do round ganha companhia — o atalho da visão da mesa fica
+   encostado nele (à direita do cabeçalho), fora do fluxo do board. */
+.match-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Alvo de 44px (regra 9): em perspectiva o que conta é o alvo visual, mas o
+   botão vive no HUD plano — 44px de layout já é o alvo. */
+.view-toggle {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(226, 218, 196, 0.12);
+  border-radius: var(--radius-sm);
+  color: #c4c2b6;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+/* Ligado (aria-pressed): mesma linguagem do .header-button--sync — o estado
+   não pode depender só do atributo para quem enxerga. */
+.view-toggle[aria-pressed="true"] {
+  border-color: rgba(211, 173, 93, 0.5);
+  color: #e9cd8a;
+  background: rgba(211, 173, 93, 0.14);
+}
+
+@media (hover: hover) {
+.view-toggle:hover {
+  border-color: rgba(220, 181, 103, 0.38);
+  color: #f3d590;
+  background: rgba(211, 173, 93, 0.1);
+}
+
+.view-toggle[aria-pressed="true"]:hover {
+  background: rgba(211, 173, 93, 0.2);
+}
+}
+
 .game-board {
   position: relative;
   isolation: isolate;

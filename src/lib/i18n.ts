@@ -89,6 +89,9 @@ const DICT: Record<string, [string, string]> = {
   "config.experience.hintsSub": ["Highlight cards with a legal move while it is your turn", "Destaca as cartas com jogada legal no seu turno"],
   "config.experience.animations": ["Animations", "Animações"],
   "config.experience.animationsSub": ["Card motion and transitions.", "Movimento de cartas e transições."],
+  // H3D-01 (VIEW3D_PLAN §2.11): o modo 3D é uma visão da mesa, não um modo de jogo.
+  "config.experience.view3d": ["3D table", "Mesa 3D"],
+  "config.experience.view3dSub": ["Tilted table with cards floating over it.", "Mesa inclinada com cartas flutuando."],
   "config.experience.zoom": ["Hover zoom", "Zoom ao passar o mouse"],
   "config.experience.zoomSub": ["Enlarge cards when hovering.", "Amplia as cartas ao passar o mouse."],
   "config.experience.speed": ["Warden turns", "Turnos do Warden"],
@@ -117,6 +120,7 @@ const DICT: Record<string, [string, string]> = {
   "game.eyebrow": ["SOLO MATCH", "PARTIDA SOLO"],
   "game.table": ["TABLE 01", "MESA 01"],
   "game.board": ["KeyForge game board", "Tabuleiro de jogo KeyForge"],
+  "game.view3dToggle": ["Toggle 3D table", "Alternar mesa 3D"],
   "game.yourTurn": ["Your turn", "Seu turno"],
   "game.opponentTurn": ["Opponent turn", "Turno do oponente"],
   "game.turnOf": ["{name}'s turn", "Vez do {name}"],

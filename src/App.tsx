@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
+  Box,
   Check,
   ChevronRight,
   CircleHelp,
@@ -902,6 +903,12 @@ function ConfigScreen({
                 <div className="exp-copy"><strong>{t("config.experience.animations")}</strong><small>{t("config.experience.animationsSub")}</small></div>
                 <Toggle checked={settings.animations} label={t("config.experience.animations")} onChange={(value) => onChange({ ...settings, animations: value })} />
               </div>
+              {/* H3D-01: a visão da mesa (2D padrão / 3D) mora junto do movimento. */}
+              <div className="exp-row">
+                <span className="exp-icon"><Box size={16} /></span>
+                <div className="exp-copy"><strong>{t("config.experience.view3d")}</strong><small>{t("config.experience.view3dSub")}</small></div>
+                <Toggle checked={settings.tableView === "3d"} label={t("config.experience.view3d")} onChange={(value) => onChange({ ...settings, tableView: value ? "3d" : "2d" })} />
+              </div>
               {settings.gameMode === "solo" && (
                 <div className="exp-row">
                   <span className="exp-icon"><Clock3 size={16} /></span>
@@ -973,6 +980,7 @@ function ConfigScreen({
                   <li><span>{t("config.experience.sfx")}</span><strong>{settings.sfx ? t("config.on") : t("config.off")}</strong></li>
                   <li><span>{t("config.experience.music")}</span><strong>{settings.music ? t("config.on") : t("config.off")}</strong></li>
                   <li><span>{t("config.experience.animations")}</span><strong>{settings.animations ? t("config.on") : t("config.off")}</strong></li>
+                  <li><span>{t("config.experience.view3d")}</span><strong>{settings.tableView === "3d" ? t("config.on") : t("config.off")}</strong></li>
                   {hasHover && <li><span>{t("config.experience.zoom")}</span><strong>{settings.hoverZoom ? t("config.on") : t("config.off")}</strong></li>}
                   {settings.gameMode === "solo" && <li><span>{t("config.experience.speed")}</span><strong>{t(`config.speed.${settings.aiSpeed}`)}</strong></li>}
                   <li><span>{t("config.experience.language")}</span><strong>{LANGUAGES.find((l) => l.id === settings.language)?.short}</strong></li>
@@ -1341,9 +1349,16 @@ function GameBoard({
   // dos FX é aria-hidden, então sem isto o turno inteiro passa em silêncio.
   const lastAiLog = passAndPlay ? undefined : game.log.filter((entry) => entry.params.name === enemy.name).pop();
   const narration = [aiSummary, lastAiLog && renderLog(lastAiLog, t)].filter(Boolean).join(" ");
+  // H3D-01/02: a visão é uma classe no board (não é memo) — nenhuma prop nova
+  // desce para BoardLane/CardTile ao alternar, então nenhum tile re-renderiza.
+  const view3d = settings.tableView === "3d";
 
   return (
-    <section className={`game-board${settings.animations ? "" : " no-anim"}`} aria-label={t("game.board")}>
+    <section
+      className={`game-board${settings.animations ? "" : " no-anim"}${view3d ? " game-board--3d" : ""}`}
+      data-view={view3d ? "3d" : undefined}
+      aria-label={t("game.board")}
+    >
       <div className="felt-etching" aria-hidden="true" />
       <div className="board-content">
         <PlayerBand
@@ -1912,6 +1927,15 @@ function App() {
     fxRef.current?.cancelAll();
     pending?.resolve();
   }, []);
+
+  /** H3D-01: troca a visão da mesa (2D ↔ 3D) sem recarregar. Nobre das
+      revelações em curso: os rects de viewport foram medidos no modo antigo e
+      deixam de valer (mesmo contrato de scroll/resize, VIEW3D_PLAN §2.8.6). O
+      foco fica no botão — o nó é o mesmo, quem troca é a classe do board. */
+  const toggleTableView = useCallback(() => {
+    cancelFx();
+    setSettings((prev) => ({ ...prev, tableView: prev.tableView === "3d" ? "2d" : "3d" }));
+  }, [cancelFx]);
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with
@@ -3008,9 +3032,22 @@ function App() {
                     {/* BUG2-12: no 2P o título acompanha o lado ativo (o board gira junto). */}
                     <h1>{passAndPlay ? localizeName(game.players[humanSide].deckName, t) : currentDeck.name}</h1>
                   </div>
-                  <div className="match-chip">
-                    <span className="match-chip-icon"><Radio size={14} /></span>
-                    <span><small>{t("game.round")} {String(game.turn).padStart(2, "0")}</small><strong>{currentTurnLabel}</strong></span>
+                  <div className="match-actions">
+                    {/* H3D-01: atalho da visão da mesa — alterna sem sair da
+                        partida. 44px (regra 9), estado no aria-pressed. */}
+                    <button
+                      type="button"
+                      className="view-toggle"
+                      aria-pressed={settings.tableView === "3d"}
+                      aria-label={t("game.view3dToggle")}
+                      onClick={toggleTableView}
+                    >
+                      <Box size={16} />
+                    </button>
+                    <div className="match-chip">
+                      <span className="match-chip-icon"><Radio size={14} /></span>
+                      <span><small>{t("game.round")} {String(game.turn).padStart(2, "0")}</small><strong>{currentTurnLabel}</strong></span>
+                    </div>
                   </div>
                 </div>
 

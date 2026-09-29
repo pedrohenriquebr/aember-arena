@@ -11,6 +11,10 @@ export type GameMode = "solo" | "passAndPlay";
 /** Onda 2 (ANIM §3): ritmo do turno da IA — normal (leitura) ou compactado. */
 export type AiSpeed = "normal" | "fast";
 
+/** H3D-01 (VIEW3D_PLAN §2.11): visão da mesa — 2D (padrão, o board de sempre)
+    ou 3D (a camada CSS inclinada, ligada pela classe `.game-board--3d`). */
+export type TableView = "2d" | "3d";
+
 export interface AppSettings {
   difficulty: Difficulty;
   thinkingDepth: number;
@@ -26,6 +30,8 @@ export interface AppSettings {
   gameMode: GameMode;
   /** Onda 2: duração das batidas do turno do Warden. */
   aiSpeed: AiSpeed;
+  /** H3D-01: "2d" (default) ou "3d" — sobrevive a reload; save antigo lê 2D. */
+  tableView: TableView;
   /** FEAT-13: pass-and-play decks, one per human (ids from the library). */
   deckP1Id?: string;
   deckP2Id?: string;
@@ -47,6 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   opponentMode: "mirror",
   gameMode: "solo",
   aiSpeed: "normal",
+  tableView: "2d",
 };
 
 export function readSettings(fallbackLanguage: Language): AppSettings {
@@ -68,6 +75,7 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
       opponentDeckId: typeof parsed.opponentDeckId === "string" ? parsed.opponentDeckId : base.opponentDeckId,
       gameMode: parsed.gameMode === "passAndPlay" ? "passAndPlay" : base.gameMode,
       aiSpeed: AI_SPEEDS.includes(parsed.aiSpeed as AiSpeed) ? (parsed.aiSpeed as AiSpeed) : base.aiSpeed,
+      tableView: parsed.tableView === "3d" ? "3d" : base.tableView,
       deckP1Id: typeof parsed.deckP1Id === "string" ? parsed.deckP1Id : base.deckP1Id,
       deckP2Id: typeof parsed.deckP2Id === "string" ? parsed.deckP2Id : base.deckP2Id,
     };
