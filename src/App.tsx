@@ -1895,14 +1895,12 @@ function App() {
     const setNetwork = () => setOnline(navigator.onLine);
     window.addEventListener("online", setNetwork);
     window.addEventListener("offline", setNetwork);
-    // Unlock audio on the first gesture.
-    const unlock = () => sound.unlock();
-    window.addEventListener("pointerdown", unlock, { once: true });
+    const unbindAudio = sound.bindUnlock();
     return () => {
       disposed = true;
       window.removeEventListener("online", setNetwork);
       window.removeEventListener("offline", setNetwork);
-      window.removeEventListener("pointerdown", unlock);
+      unbindAudio();
     };
   }, []);
 

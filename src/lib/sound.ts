@@ -24,6 +24,7 @@ class SoundEngine {
   private musicNodes: OscillatorNode[] = [];
   private prefs: SoundPrefs = { sfx: true, music: false };
   private musicPlaying = false;
+  private kicked = false;
 
   setPrefs(prefs: SoundPrefs): void {
     this.prefs = prefs;
@@ -39,20 +40,54 @@ class SoundEngine {
     if (!this.context) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return null;
-      this.context = new Ctor();
+      try {
+        // iOS routes Web Audio through the ringer switch unless the page asks for playback.
+        const session = (navigator as { audioSession?: { type: string } }).audioSession;
+        if (session) session.type = "playback";
+        this.context = new Ctor();
+      } catch {
+        return null;
+      }
+      // Limiter lets the master sit near full scale without clipping stacked voices.
+      const limiter = this.context.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.ratio.value = 12;
+      limiter.connect(this.context.destination);
       this.masterGain = this.context.createGain();
-      this.masterGain.gain.value = 0.5;
-      this.masterGain.connect(this.context.destination);
+      this.masterGain.gain.value = 1;
+      this.masterGain.connect(limiter);
     }
-    if (this.context.state === "suspended") {
-      void this.context.resume();
+    // "interrupted" (iOS call/background) needs a resume as much as "suspended".
+    if (this.context.state !== "running") {
+      this.context.resume().catch(() => undefined);
     }
     return this.context;
   }
 
-  // Call from a user gesture to unlock audio on mobile browsers.
+  // Must run inside a gesture: WebKit only opens the output once a buffer starts there.
   unlock(): void {
-    this.ensureContext();
+    const context = this.ensureContext();
+    if (!context || this.kicked) return;
+    try {
+      const source = context.createBufferSource();
+      source.buffer = context.createBuffer(1, 1, 22050);
+      source.connect(context.destination);
+      source.start();
+      this.kicked = true;
+    } catch {
+      // Output stays locked; the next gesture retries.
+    }
+  }
+
+  // pointerdown only counts as user activation for mice (HTML spec); touch and pen
+  // activate on pointerup/touchend. Stays bound so an interrupted context revives.
+  bindUnlock(): () => void {
+    const unlock = () => this.unlock();
+    const events = ["pointerdown", "pointerup", "touchend", "keydown"];
+    for (const name of events) window.addEventListener(name, unlock, true);
+    return () => {
+      for (const name of events) window.removeEventListener(name, unlock, true);
+    };
   }
 
   private tone(
