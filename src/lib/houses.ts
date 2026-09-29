@@ -164,10 +164,6 @@ export const HOUSES: Record<string, HouseInfo> = {
   },
 };
 
-export const HOUSE_ORDER = ["Brobnar", "Dis", "Logos", "Mars", "Sanctum", "Shadows", "Untamed"];
-
-export const HOUSE_ICON_URLS = HOUSE_ORDER.map((house) => HOUSES[house].icon);
-
 export function houseInfo(house: string): HouseInfo {
   return (
     HOUSES[house] ?? {

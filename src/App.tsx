@@ -124,7 +124,7 @@ const UNDO_LIMIT = 40;
 // T5: hover só existe quando o dispositivo anuncia "(hover: hover)"; em touch o
 // toggle hoverZoom some e a inspeção vai por long-press (CardLightbox).
 function prefersHover() {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: hover)").matches;
+  return typeof window !== "undefined" && window.matchMedia?.("(hover: hover)")?.matches === true;
 }
 
 // game.ts is pure and language-agnostic, so the fixed player/deck names it
@@ -168,6 +168,16 @@ function resolvePassDecks(savedDecks: LibraryDeck[], fallback: DeckInfo, setting
     savedDecks.find((item) => item.id !== p1.id) ??
     fallback;
   return [p1, p2];
+}
+
+/** BUG2-04: rebuilds the DeckInfo a saved match played with, straight from the
+    state — a deck removed from the library (or not loaded yet) must not fall
+    into the demo deck and steal its title, W/L record and rematch. */
+function deckFromState(player: GameState["players"][number], id: string): DeckInfo {
+  const cards = [player.deck, player.hand, player.discard, player.board, player.archives ?? []]
+    .flat()
+    .flatMap((card) => [card.face, ...(card.under ?? []).map((half) => half.face)]);
+  return { id, name: player.deckName, houses: player.houses, cards };
 }
 
 /** FEAT-05: log keys the type filter knows about (the rest pass every filter). */
@@ -2247,7 +2257,7 @@ function App() {
       setPick({ move, ids: choices });
       return;
     }
-    sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : move.type === "use" ? "play" : "play");
+    sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : "play");
     commitGame(prev, applyMove(prev, side, move), { kind: "move", side, move });
     setSelected(null);
     setPick(null);
@@ -2609,7 +2619,11 @@ function App() {
               gameRef.current = saved;
               prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
               setGame(saved);
-              setCurrentDeck(savedDecks.find((item) => item.id === resumeMatch.deckId) ?? DEMO_DECK);
+              // BUG2-04: a deck removed from the library (or not loaded yet) is
+              // rebuilt from the state instead of falling into the demo deck;
+              // the rival comes back too, so the rematch keeps its deck.
+              setCurrentDeck(deckFromState(saved.players[0], resumeMatch.deckId));
+              opponentRef.current = deckFromState(saved.players[1], "rival");
               setMatchMode("solo");
               setPassPending(null);
               setAiThinking(false);
