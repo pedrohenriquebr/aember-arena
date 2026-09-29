@@ -39,7 +39,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 134);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 135);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);

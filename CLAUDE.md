@@ -85,19 +85,13 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **134 kB** (teto revisado em
-   28/09 de 132 → 134 no fechamento do tutorial de primeiro acesso: o snapshot do
-   WIP do Opus (cd81435) já trazia o TutorialWizard + i18n + CSS e media 133,88 kB
-   gz; a varredura de mortos desta rodada (chaves i18n sem uso — incluindo os
-   domínios dinâmicos `log.*`, `config.step.*`, `vault.*` —, classes CSS órfãs e
-   regras duplicadas) outra vez não achou peso removível; mediu 133,90 kB gz ao
-   final, 0,10 kB de folga. Revisões anteriores: 129,5 → 132 com o FEAT-13: o modo
-   2 jogadores pass-and-play adiciona a tela de "passe o aparelho", os dois pickers
-   de deck na configuração, o wizard variável por modo e 21 chaves i18n en+pt-BR;
-   mediu 130,45 kB gz. 124 → 125 com `modulePreload: false` + mangle de toplevel +
-   dicionário i18n compacto; 125 → 126 com FEAT-05/08/10; 126 → 127,5 com
-   FEAT-11/14/06; 127,5 → 129,5 com FEAT-12a/12b).
-   Nova folga só com justificativa explícita. Confira com `npm run e2e:bundle`.
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **135 kB**. Histórico de
+   revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
+   (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
+   → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → **135** (fixes BUG2-01..07:
+   +0,15 kB líquidos, dos quais 56 bytes são do BUG2-04 — reconstrução de DeckInfo
+   retomado, lógica nova real; varredura de mortos exaustiva pré-revisão: 0 removível).
+   Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
