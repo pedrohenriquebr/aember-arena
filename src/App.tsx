@@ -2174,9 +2174,17 @@ function App() {
 
   // FEAT-11: substituir uma partida em curso pede confirmação; reiniciar uma
   // partida intocada (mesmo deck, rodada 1) não perde nada e segue direto.
+  // BUG2-09: "intocada" é o estado que createMatch acabou de criar — o turno 1
+  // dura até a IA devolver a vez (o `turn` só sobe quando o lado 0 volta), então
+  // o que marca progresso é ter saído do mulligan (pendingMulligan 0) ou já ter
+  // agido/jogado.
+  function untouchedMatch(state: GameState): boolean {
+    return state.turn === 1 && state.pendingMulligan === 0 && state.acted === 0 && state.played === 0;
+  }
+
   function startMatch(deck: DeckInfo, opponent?: DeckInfo) {
     const current = gameRef.current;
-    if (current && current.winner === null && (currentDeck.id !== deck.id || current.turn > 1)) {
+    if (current && current.winner === null && (matchModeRef.current !== "solo" || !untouchedMatch(current) || currentDeck.id !== deck.id)) {
       sound.play("click");
       setPendingDeck({ mode: "solo", deck, opponent });
       return;
@@ -2185,10 +2193,15 @@ function App() {
   }
 
   // FEAT-13: a pass-and-play match confirms the replacement the same way (the
-  // second deck rides along in `opponent`).
+  // second deck rides along in `opponent`). BUG2-09: o rival do 2P e o modo
+  // também contam — trocar o deck do Jogador 2 reinicia o confronto.
   function startPassAndPlay(deck1: DeckInfo, deck2: DeckInfo) {
     const current = gameRef.current;
-    if (current && current.winner === null && (currentDeck.id !== deck1.id || current.turn > 1)) {
+    if (
+      current &&
+      current.winner === null &&
+      (matchModeRef.current !== "passAndPlay" || !untouchedMatch(current) || currentDeck.id !== deck1.id || opponentRef.current?.id !== deck2.id)
+    ) {
       sound.play("click");
       setPendingDeck({ mode: "passAndPlay", deck: deck1, opponent: deck2 });
       return;
