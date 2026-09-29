@@ -2,6 +2,7 @@ export type SfxName =
   | "click"
   | "select"
   | "play"
+  | "land"
   | "reap"
   | "fight"
   | "forge"
@@ -81,12 +82,14 @@ const PALETTE: Record<SfxName, () => Voice[]> = {
     { f: 440, w: "triangle", d: 0.18, g: 0.18, wet: 1 },
     { f: 660, w: "triangle", at: 0.07, d: 0.28, g: 0.16, wet: 1 },
   ],
-  // Whoosh while the card travels (500 -> 2600 Hz band sweep, 120 ms attack),
-  // then a felt thump as it lands (160 -> 70 Hz drop plus a lowpassed noise slap).
-  play: () => [
-    { f: 0, flt: "bandpass", fq: 500, fto: 2600, q: 1.4, a: 0.12, d: 0.08, g: 0.35 },
-    { f: 160, to: 70, at: 0.15, d: 0.14, g: 0.45 },
-    { f: 0, flt: "lowpass", fq: 1400, at: 0.15, d: 0.05, g: 0.4 },
+  // Whoosh while the card travels (500 -> 2600 Hz band sweep, 120 ms attack).
+  play: () => [{ f: 0, flt: "bandpass", fq: 500, fto: 2600, q: 1.4, a: 0.12, d: 0.08, g: 0.35 }],
+  // VAL-04: o pouso separado do whoosh — com o voo da ANIM onda 1 o FxLayer
+  // dispara este cue no INÍCIO do slam; sem animação ele toca 150 ms depois do
+  // `play` (sound.play("land", 0.15)), reproduzindo o timbre antigo.
+  land: () => [
+    { f: 160, to: 70, d: 0.14, g: 0.45 },
+    { f: 0, flt: "lowpass", fq: 1400, d: 0.05, g: 0.4 },
   ],
   // Fight: full-band noise slam low-passed 3500 -> 250 Hz, 120 -> 42 Hz body
   // drop and a short 260 Hz square crack to keep it punchy.
@@ -298,7 +301,7 @@ class SoundEngine {
     source.stop(end + 0.02);
   }
 
-  play(name: SfxName): void {
+  play(name: SfxName, delayS = 0): void {
     if (!this.prefs.sfx) return;
     const context = this.ensureContext();
     if (!context) return;
@@ -308,7 +311,7 @@ class SoundEngine {
     if (now - (this.lastPlayed[name] ?? -1e3) < 50) return;
     this.lastPlayed[name] = now;
     try {
-      for (const v of PALETTE[name]()) this.voice(context, v);
+      for (const v of PALETTE[name]()) this.voice(context, delayS ? { ...v, at: (v.at ?? 0) + delayS } : v);
     } catch {
       // A failed voice must never break the gesture that triggered it.
     }

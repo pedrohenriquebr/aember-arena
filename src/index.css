@@ -146,6 +146,10 @@ button,
   /* Curva de saída única das entradas/microinterações. */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 
+  /* Onda 1 (plano §1): aura de seleção "Æmber-éter" — ciano-branca, cromaticamente
+     oposta ao dourado da dica (FEAT-04), para os dois estados nunca se confundirem. */
+  --sel-core: 160 232 255;
+
   /* Altura da tab bar mobile (44px de alvo + 2×5px + 1px de borda ≈ 54px) mais a
      safe-area: âncora dos docks fixos/sticky que ficam logo acima dela. */
   --tabbar-h: calc(54px + env(safe-area-inset-bottom, 0px));
@@ -538,10 +542,6 @@ button:disabled {
 .screen {
   width: 100%;
   animation: screen-in 420ms var(--ease-out) backwards;
-}
-
-.reduce-motion .screen {
-  animation: none;
 }
 
 @keyframes screen-in {
@@ -1297,9 +1297,64 @@ button:disabled {
 }
 }
 
+/* Onda 1 (plano §1): a seleção é uma aura fria no ::before do TILE, não na
+   .card-art — a box-shadow dela já é disputada pelo ready-breathe (animação
+   vence declaração estática e a seleção de uma peça pronta quase sumia).
+   container-type: inline-size no tile cria stacking context, então z-index: -1
+   fica atrás da arte e dentro do tile; o ::after segue sendo o ✦ da dica. */
+.card-tile.is-selected::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 1px auto; /* largura da .card-art (tile - 2px) */
+  aspect-ratio: 0.714;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px rgb(var(--sel-core) / 0.95),
+    0 0 10px 3px rgb(var(--sel-core) / 0.5),
+    0 0 26px 8px rgb(var(--sel-core) / 0.16);
+  /* respira em 1,8s (fora de fase do ready-breathe de 2,6s, então a
+     selecionada se destaca mesmo numa peça pronta). */
+  animation: sel-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes sel-breathe {
+  0%, 100% { opacity: 0.78; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.025); }
+}
+
 .card-tile.is-selected .card-art {
-  border-color: #e5c476;
-  box-shadow: 0 0 0 2px rgba(221, 184, 103, 0.65), 0 7px 18px rgba(0, 0, 0, 0.45), 0 0 18px rgba(221, 184, 103, 0.18);
+  border-color: rgb(var(--sel-core) / 0.9);
+}
+
+/* O leve brilho fica no TILE: no .card-art ele brigaria com o filtro de
+   atordoada (que precisa ganhar) e a seleção de uma peça pronta sumiria. */
+.card-tile.is-selected {
+  filter: brightness(1.08) saturate(1.06);
+}
+
+/* elevação: a mão sobe mais; o board, um pouco. No mobile a mão sobe menos
+   porque .hand-track é um scroller horizontal (overflow clipa o topo). */
+.card-tile--hand.is-selected {
+  z-index: 4;
+  transform: translateY(-8px) scale(1.05);
+}
+
+.card-tile--board.is-selected {
+  z-index: 4;
+  transform: translateY(-4px) scale(1.04);
+}
+
+@media (min-width: 701px) {
+  .card-tile--hand.is-selected {
+    transform: translateY(-12px) scale(1.06);
+  }
+}
+
+/* Seleção + dica: fica só o ✦ (não empilhar dois aros no mesmo tile). */
+.card-tile--hint.is-selected {
+  outline-color: transparent;
 }
 
 .card-tile.is-dimmed {
@@ -3863,10 +3918,6 @@ button:disabled {
   animation: rise-in 340ms var(--ease-out) backwards;
 }
 
-.reduce-motion .deck-grid-item {
-  animation: none;
-}
-
 .deck-list-head {
   display: flex;
   align-items: baseline;
@@ -4537,10 +4588,6 @@ button:disabled {
   }
 }
 
-.reduce-motion .config-panel {
-  animation: none;
-}
-
 .config-panel-head {
   margin-bottom: 18px;
 }
@@ -4880,10 +4927,6 @@ button:disabled {
   -webkit-box-orient: vertical;
 }
 
-.reduce-motion .card-zoom {
-  animation: none;
-}
-
 /* ---------- Card lightbox (T5 — inspeção touch: long-press na carta) ---------- */
 .card-lightbox {
   position: relative;
@@ -4986,7 +5029,6 @@ button:disabled {
   animation: card-deal 340ms var(--ease-out) both;
 }
 
-.reduce-motion .card-tile--enter,
 .no-anim .card-tile--enter {
   animation: none;
 }
@@ -5013,6 +5055,102 @@ button:disabled {
   100% { opacity: 0; }
 }
 
+/* ---------- FX layer (Onda 1: portal de voo/efeitos) ---------- */
+/* O board tem overflow: hidden; tudo que voa vive neste portal no <body>, como
+   o zoom/lightbox do CardArt. z-index 55: acima do board e do header, abaixo
+   dos modais (100), da tab bar (70) e do zoom de carta (200). A coreografia
+   vive aqui; o JS só posiciona o nó e passa a geometria em custom properties
+   (--fx-* no host), o que mantém o diretor pequeno e o movimento no compositor. */
+.fx-layer {
+  position: fixed;
+  z-index: 55;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Voo: o ghost nasce centrado (50%/46% da viewport) e no tamanho da
+   apresentação; as custom properties do host dizem de onde ele vem e onde
+   aterrissa, sempre relativas a esse centro. lift+travel (fx-present) e
+   slam+land (fx-slam) encadeados pelo delay do hold — fill forwards no segundo:
+   durante o delay ele não pinta nada e a primeira animação segura o centro.
+   O quadro 0% é implícito: vale o transform base (--fx-from), o que economiza
+   três blocos de keyframe. */
+.fx-ghost {
+  position: fixed;
+  left: 50%;
+  top: 46%;
+  width: 160px;
+  aspect-ratio: 0.714;
+  margin: -112px 0 0 -80px; /* metade da caixa: centra sem translate */
+  transform: var(--fx-from);
+  animation: fx-present 260ms var(--ease-out) both, fx-slam 270ms cubic-bezier(0.55, 0, 0.75, 0.25) forwards;
+  animation-delay: 0s, calc(260ms + var(--fx-hold, 140ms));
+}
+
+/* Peça que saiu do board: o clone capturado antes do commit desvanece no rect
+   antigo (a onda 3 troca isto pelo dissolve com fagulhas e FLIP das vizinhas). */
+.fx-gone {
+  position: fixed;
+  animation: fx-gone 320ms var(--ease-out) forwards;
+}
+
+/* O clone não pode replayar a card-arrive/card-deal da peça real. */
+.fx-gone * {
+  animation: none;
+}
+
+@keyframes fx-gone {
+  to { opacity: 0; }
+}
+
+/* Ação não tem slot: dissolve no centro em vez de assentar. */
+.fx-ghost--action {
+  animation-name: fx-present, fx-dissolve;
+}
+
+/* A largura da arte vem do ghost, não da classe de tamanho do tile. */
+.fx-ghost .card-art {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes fx-present {
+  35% {
+    transform: translate(0, -18px) scale(1.06);
+    /* expo-out no trecho de viagem: chega rápido e freia no centro */
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes fx-slam {
+  92% {
+    transform: var(--fx-slot) scale(1.06);
+    animation-timing-function: cubic-bezier(0.2, 1.6, 0.4, 1);
+  }
+  100% {
+    transform: var(--fx-slot);
+    opacity: 0;
+  }
+}
+
+@keyframes fx-dissolve {
+  100% {
+    transform: translate(0, 0) scale(1.18);
+    opacity: 0;
+    filter: blur(4px) brightness(1.6);
+  }
+}
+
+/* O destino do voo espera escondido: quem aparece é o ghost. As animações de
+   entrada ficam desligadas inline no elemento (FxLayer) — nunca replayam quando
+   a marca sai e não afetam o ready-breathe da .card-art. */
+[data-fx="landing"] {
+  visibility: hidden;
+}
+
 /* ---------- Winner actions ---------- */
 .winner-actions {
   display: flex;
@@ -5036,7 +5174,6 @@ button:disabled {
   50% { box-shadow: 0 5px 14px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(190, 202, 155, 0.35), 0 0 12px rgba(150, 190, 120, 0.14); }
 }
 
-.reduce-motion .game-board .board-piece--ready .card-art,
 .no-anim .board-piece--ready .card-art {
   animation: none;
 }
@@ -5805,10 +5942,6 @@ button:disabled {
   transition: transform 170ms ease;
 }
 
-.reduce-motion .card-cell {
-  animation: none;
-}
-
 @media (hover: hover) {
 .card-cell:hover {
   transform: translateY(-4px);
@@ -5909,10 +6042,6 @@ button:disabled {
   border-radius: var(--radius-lg);
   background: linear-gradient(160deg, #24261f, #1a1c17 72%);
   animation: rise-in 260ms ease backwards;
-}
-
-.reduce-motion .card-detail-inner {
-  animation: none;
 }
 
 .card-detail-head {

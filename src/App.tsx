@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -67,6 +67,7 @@ import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language,
   cardTypeLabel,} from "./lib/i18n";
 import { readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
+import { diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
 import { CoverageBadge, DeckCoverageChip } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
@@ -74,6 +75,7 @@ import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser, type BrowseState } from "./components/DeckBrowser";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DeckInspector } from "./components/DeckInspector";
+import { FxLayer, captureFx, captureGone } from "./components/FxLayer";
 import { Pagination } from "./components/Pagination";
 import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
@@ -285,6 +287,8 @@ const CardTile = memo(function CardTile({
       <button
         className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}${hinted ? " card-tile--hint" : ""}`}
         type="button"
+        /* O diretor de FX acha a carta por aqui (destaque imperativo, sem prop). */
+        data-iid={card.instanceId}
         onClick={() => {
           // T5: o long-press já abriu a inspeção — o click sintético do toque não seleciona.
           if (Date.now() - longPressAt.current < 700) return;
@@ -1001,6 +1005,8 @@ type PlayerBandProps = {
   active: boolean;
   thinking?: boolean;
   chains: number;
+  /** Lado dono do band: ancora o diretor de FX (âmbar/chaves/avatar). */
+  side: 0 | 1;
   /** FEAT-13: pass-and-play avatars show the player number instead of "You". */
   avatarLabel?: string;
   t: Translator;
@@ -1013,6 +1019,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
   return (
     a.isAi === b.isAi &&
     a.active === b.active &&
+    a.side === b.side &&
     (a.thinking ?? false) === (b.thinking ?? false) &&
     (a.avatarLabel ?? "") === (b.avatarLabel ?? "") &&
     a.t === b.t &&
@@ -1034,11 +1041,12 @@ const PlayerBand = memo(function PlayerBand({
   active,
   thinking = false,
   chains,
+  side,
   avatarLabel,
   t,
 }: PlayerBandProps) {
   return (
-    <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}`}>
+    <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}`} data-side={side}>
       <div className={`player-avatar${isAi ? " player-avatar--ai" : ""}`}>
         {isAi ? <Cpu size={18} strokeWidth={1.6} /> : <span>{avatarLabel ?? t("common.you")}</span>}
         {active && <span className="avatar-live-dot" />}
@@ -1297,6 +1305,7 @@ function GameBoard({
           active={game.activePlayer === enemySide && game.winner === null}
           thinking={aiThinking}
           chains={enemy.chains}
+          side={enemySide}
           avatarLabel={passAndPlay ? String(enemySide + 1) : undefined}
           t={t}
         />
@@ -1386,6 +1395,7 @@ function GameBoard({
           isAi={false}
           active={game.activePlayer === humanSide && game.winner === null}
           chains={player.chains}
+          side={humanSide}
           avatarLabel={passAndPlay ? String(humanSide + 1) : undefined}
           t={t}
         />
@@ -1827,24 +1837,109 @@ function App() {
       null after a resume — the steps of the part already played are gone, so a
       replay would rebuild from turn 1 and turn every step into a no-op. */
   const stepsRef = useRef<ReplayStep[] | null>([]);
+  /** Onda 1: diretor de FX (portal) + o plano capturado no commit à espera do
+      layout effect que roda a revelação depois do DOM novo e antes do paint. */
+  const fxRef = useRef<FxDirector | null>(null);
+  const fxPlanRef = useRef<{ plan: FxPlan; resolve: () => void } | null>(null);
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
   useEffect(() => { currentDeckRef.current = currentDeck; }, [currentDeck]);
   useEffect(() => { matchModeRef.current = matchMode; }, [matchMode]);
 
+  /** Pula toda revelação em curso e limpa os data-fx. O estado commitado já é o
+      final, então cancelar nunca dessincroniza nada (plano §0.5). */
+  const cancelFx = useCallback(() => {
+    const pending = fxPlanRef.current;
+    fxPlanRef.current = null;
+    fxRef.current?.cancelAll();
+    pending?.resolve();
+  }, []);
+
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with
   // whether the transition revealed hidden information (draw/shuffle) and the
   // replay step count at that point; FEAT-12b appends the step itself.
   const commitGame = useCallback((prev: GameState, next: GameState, step?: ReplayStep) => {
+    cancelFx();
     const stack = historyRef.current;
     stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next), step: stepsRef.current?.length ?? 0, deck: currentDeckRef.current });
     if (stack.length > UNDO_LIMIT) stack.shift();
     if (step) stepsRef.current?.push(step);
     gameRef.current = next;
     setGame(next);
-  }, []);
+  }, [cancelFx]);
+
+  /** Commit com revelação (plano §0.4): captura os rects/clones ANTES do
+      setGame, commita na hora (undo/log/stats/save leem o estado final) e
+      devolve a Promise do diretor — o loop da IA a espera para dar ritmo. */
+  const commitWithFx = useCallback(
+    (prev: GameState, next: GameState, step: ReplayStep | undefined, move: GameMove | undefined, side: 0 | 1): Promise<void> => {
+      let plan: FxPlan | null = null;
+      let flight: string | undefined;
+      if (move) {
+        // Guard de movimento (plano §0): sem isto o voo ignoraria o toggle.
+        if (motionEnabled(settingsRef.current.animations)) {
+          const events = diffFx(prev, next);
+          // Uma carta jogada entra no board com o próprio instanceId: ele é o
+          // destino exato do voo (o byIid do diretor devolve null para Ação,
+          // que vai para o discard — aí o ghost dissolve no centro).
+          flight = move.type === "play" ? move.instanceId : undefined;
+          const gone = captureGone(events.filter((event) => event.kind === "leave").map((event) => event.id));
+          if (flight || gone.length) {
+            plan = {
+              from: flight ? captureFx(flight, side) : undefined,
+              destId: flight,
+              // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
+              // ainda — é a jogada que o jogador precisa ler.
+              holdMs: side === 1 ? (flight ? 420 : 600) : flight ? 140 : 260,
+              gone,
+              // VAL-04: o thump do pouso acompanha o slam do voo, não o commit.
+              onSlam: () => sound.play("land"),
+            };
+          }
+        }
+        // Som da jogada (VAL-04): com voo o `play` é só o whoosh e o pouso vira
+        // o `land` no slam; sem voo o par whoosh+thump toca como sempre tocou.
+        if (move.type === "fight") sound.play("fight");
+        else if (move.type === "reap") sound.play("reap");
+        else {
+          sound.play("play");
+          if (!flight) sound.play("land", 0.15);
+        }
+      }
+      // O commit primeiro: ele cancela a revelação anterior (e zeraria o plano
+      // recém-armado). O layout effect roda no render do setGame, depois daqui.
+      commitGame(prev, next, step);
+      if (!plan) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        fxPlanRef.current = { plan, resolve };
+      });
+    },
+    [commitGame],
+  );
+
+  // A revelação roda aqui: o DOM novo já está montado e o paint ainda não
+  // aconteceu — o diretor esconde o destino, mede e anima sem flash.
+  useLayoutEffect(() => {
+    const pending = fxPlanRef.current;
+    fxPlanRef.current = null;
+    if (!pending) return;
+    const fx = fxRef.current;
+    if (!fx) {
+      pending.resolve();
+      return;
+    }
+    void fx.run(pending.plan).then(pending.resolve, pending.resolve);
+  }, [game]);
+
+  // Each screen is a fresh page: without this the new screen opens at the
+  // previous one's scroll offset (e.g. config mid-list, board without header).
+  // Trocar de tela também derruba qualquer voo pendente (plano §0.5).
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    cancelFx();
+  }, [screen, cancelFx]);
 
   /** FEAT-12a: where undo would land, or null when it cannot — not the player's
       turn, nothing done yet, or a move this turn already revealed hidden
@@ -1870,6 +1965,8 @@ function App() {
     const info = undoInfo(gameRef.current);
     if (!info || info.blocked) return;
     sound.play("click");
+    // O estado ancorado já é final: qualquer voo em curso é descartado.
+    cancelFx();
     // FEAT-12b: the rewind also rolls the replay list back to the anchor, so a
     // later replay never applies moves the player undid. BUG2-07: the undo
     // history is truncated the same way — keeping the undone branch would let
@@ -1885,7 +1982,7 @@ function App() {
     setGame(info.anchor);
     setSelected(null);
     setPick(null);
-  }, [undoInfo]);
+  }, [undoInfo, cancelFx]);
 
   // Persist settings + language, and drive the audio engine prefs.
   useEffect(() => {
@@ -1897,12 +1994,6 @@ function App() {
     saveLanguage(language);
     setSettings((prev) => (prev.language === language ? prev : { ...prev, language }));
   }, [language]);
-
-  // Each screen is a fresh page: without this the new screen opens at the
-  // previous one's scroll offset (e.g. config mid-list, board without header).
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [screen]);
 
   // The motion switch lives on <html>, not on .app-root: the card zoom and the
   // long-press lightbox are portaled to <body> and must obey it too.
@@ -2120,8 +2211,11 @@ function App() {
         const move = chooseAiMove(next, 1, house, settingsRef.current);
         if (!move) break;
         const applied = applyMove(next, 1, move);
-        sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : "play");
-        commitGame(next, applied, { kind: "move", side: 1, move });
+        // Onda 1: a carta do Warden voa igual à do jogador (a revelação é
+        // aguardada para o próximo commit não atropelar o voo; o som do move
+        // sai de dentro do commit, VAL-04).
+        await commitWithFx(next, applied, { kind: "move", side: 1, move }, move, 1);
+        if (cancelled) return;
         next = applied;
         if (next.winner !== null) break;
       }
@@ -2145,7 +2239,7 @@ function App() {
       // the effect resume the same turn from gameRef.current on return (BUG-03).
       aiTurnRef.current = null;
     };
-  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen, commitGame, matchMode]);
+  }, [game?.activePlayer, game?.turn, game?.winner, matchVersion, screen, commitWithFx, matchMode]);
 
   // FEAT-10: the Warden decides the mulligan on a short pause, so it reads as
   // an opponent move instead of an instant flip. FEAT-13: side 1 is a human in
@@ -2259,6 +2353,7 @@ function App() {
     // so the opening hands can be replayed.
     const seed = Math.floor(Math.random() * 4294967296);
     const rival = opponent ?? resolveOpponent(deck);
+    cancelFx();
     // BUG2-11: registra a configuração com que a partida nasce; o modo efetivo
     // vira "mirror" quando o deck pedido caiu no espelho (removido/igual).
     matchSetupRef.current = { difficulty: settingsRef.current.difficulty, opponentMode: rival === deck ? "mirror" : settingsRef.current.opponentMode };
@@ -2304,11 +2399,11 @@ function App() {
       setPick({ move, ids: choices });
       return;
     }
-    sound.play(move.type === "fight" ? "fight" : move.type === "reap" ? "reap" : "play");
-    commitGame(prev, applyMove(prev, side, move), { kind: "move", side, move });
+    // O som da jogada sai de dentro do commitWithFx (VAL-04: o pouso acompanha o voo).
+    void commitWithFx(prev, applyMove(prev, side, move), { kind: "move", side, move }, move, side);
     setSelected(null);
     setPick(null);
-  }, [commitGame]);
+  }, [commitWithFx]);
 
   const pickBoardCard = useCallback(
     (owner: 0 | 1, card: CardInstance) => {
@@ -3050,6 +3145,10 @@ function App() {
           onClose={() => setDeckModalOpen(false)}
         />
       )}
+
+      {/* Onda 1: o portal onde a carta e os efeitos voam (fora do board, que
+          tem overflow: hidden). O React só desenha o host vazio. */}
+      <FxLayer ref={fxRef} />
     </div>
   );
 }

@@ -45,11 +45,12 @@ const VIEWPORT = { width: 1280, height: 800 };
 const NAV_INDEX = { home: 0, browse: 1, config: 2, game: 3 };
 
 function parseArgs(argv) {
-  const args = { port: DEFAULT_PORT, baseUrl: null };
+  const args = { port: DEFAULT_PORT, baseUrl: null, animations: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--port") args.port = Number(argv[(i += 1)]);
     else if (a === "--base-url") args.baseUrl = argv[(i += 1)];
+    else if (a === "--animations") args.animations = true;
     else {
       console.error(`record: argumento desconhecido "${a}"`);
       process.exit(2);
@@ -159,10 +160,13 @@ async function launchBrowser() {
 // Seed identico ao capture.mjs (src/lib/settings.ts): idioma "en" e efeitos
 // desligados. Aplicado DEPOIS do primeiro goto + reload porque init scripts
 // podem rodar antes da origem existir e o localStorage falha silenciosamente.
-const SEED_BODY = `(() => {
+// --animations liga o motion (animações on, reduced-motion off) para o clipe
+// provar o voo de carta das ondas de animação.
+let MOTION = false;
+const seedBody = () => `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
     difficulty: "Medium", thinkingDepth: 2,
-    sfx: false, music: false, animations: false, hoverZoom: true, language: "en",
+    sfx: false, music: false, animations: ${MOTION}, hoverZoom: true, language: "en",
   }));
   localStorage.setItem("aember-arena-language", "en");
 })()`;
@@ -211,7 +215,7 @@ async function navTo(page, key) {
 
 async function openHome(page, base) {
   await page.goto(base, { waitUntil: "domcontentloaded" });
-  await page.evaluate(SEED_BODY);
+  await page.evaluate(seedBody());
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector(".home-screen", { timeout: 30000 });
   await settle(page);
@@ -353,7 +357,15 @@ async function playSelectedHandCard(page, frames, shotLabel) {
   await frames.shot(shotLabel);
   const handBefore = await page.locator(".hand-track .card-tile").count();
   await playBtn.click().catch(() => {});
-  await page.waitForTimeout(550);
+  // Com --animations o voo dura ~690ms: o frame do meio do hold (~330ms) é a
+  // prova visual de que a carta sai da mão e se apresenta no centro.
+  if (MOTION) {
+    await page.waitForTimeout(330);
+    await frames.shot("play-flight");
+    await page.waitForTimeout(220);
+  } else {
+    await page.waitForTimeout(550);
+  }
   if ((await page.locator(".hand-track .card-tile").count()) < handBefore) return true;
   if (await page.locator(".fight-instruction").count()) {
     const resolved = await resolveTargetPick(page, frames);
@@ -435,8 +447,17 @@ async function runAiTurn(page, frames) {
   await page.locator(".end-turn-button").click();
   await page.waitForTimeout(450);
   await frames.shot("turn-ended");
-  await page.waitForTimeout(1300);
-  await frames.shot("ai-turn-live");
+  if (MOTION) {
+    // Voo da IA: a batida de cada jogada dura ~1s (hold 420ms no centro), então
+    // frames espaçados pegam a carta em pleno voo.
+    for (const [i, ms] of [700, 600, 700, 700, 700].entries()) {
+      await page.waitForTimeout(ms);
+      await frames.shot(`ai-turn-${i + 1}`);
+    }
+  } else {
+    await page.waitForTimeout(1300);
+    await frames.shot("ai-turn-live");
+  }
   await waitForHumanTurn(page);
   await settle(page, 700);
   await frames.shot("ai-turn-done");
@@ -498,10 +519,10 @@ async function recordSession(browser, base) {
 
   const context = await browser.newContext({
     viewport: VIEWPORT,
-    reducedMotion: "reduce",
+    reducedMotion: MOTION ? "no-preference" : "reduce",
     recordVideo: { dir: TMP_VIDEO_DIR, size: VIEWPORT },
   });
-  await context.addInitScript(SEED_BODY);
+  await context.addInitScript(seedBody());
   const page = await context.newPage();
   const video = page.video();
   const frames = createFrameSaver(page);
@@ -646,6 +667,7 @@ function finalizeVideo(src) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  MOTION = args.animations;
   const server = args.baseUrl ? null : startDevServer(args.port);
   const base = args.baseUrl ?? server.url;
   let browser;
