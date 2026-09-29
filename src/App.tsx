@@ -1969,18 +1969,22 @@ function App() {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
-  // FEAT-09: o aviso de atualização só aparece fora de uma partida sem vencedor
-  // (um reload descartaria o jogo em curso).
+  // FEAT-09/BUG2-01: o aviso de atualização nunca aparece com uma partida viva,
+  // em nenhuma tela — um reload descartaria o jogo em curso (no 2P nem save).
+  // Um toast já visível quando a partida começa sai da tela junto.
   useEffect(() => {
     if (!updateReady) return;
-    if (screen === "game" && game?.winner === null) return;
+    if (game?.winner === null) {
+      setToast(null);
+      return;
+    }
     setToast({
       message: t("update.title"),
       kind: "success",
       sticky: true,
       action: { label: t("update.reload"), onClick: reloadForUpdate },
     });
-  }, [updateReady, screen, game?.winner, t]);
+  }, [updateReady, game?.winner, t]);
 
   useEffect(() => {
     if (!deckModalOpen) return;
