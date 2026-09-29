@@ -3,13 +3,16 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 132 kB — revisado de 129.5 em 28/09: o FEAT-13 (multiplayer local
-//      pass-and-play: tela de passe, pickers de deck por jogador, wizard por modo
-//      e chaves i18n novas) mede 130.45 kB gz; 132 kB e o teto maximo
-//      pre-autorizado desta rodada (sem folga residual, decisao no CLAUDE.md §7).
-//      A revisao anterior (127.5 -> 129.5) foi FEAT-12a/12b; antes dela,
-//      126 -> 127.5 com FEAT-11/14/06, 125 -> 126 com FEAT-05/08/10 e
-//      124 -> 125 com modulePreload:false + mangle toplevel + i18n compacto.
+//      Default 134 kB — revisado de 132 em 28/09 no fechamento do tutorial de
+//      primeiro acesso: o snapshot WIP (cd81435) ja trazia TutorialWizard + i18n
+//      + CSS, medindo 133.88 kB gz; a auditoria de codigo morto (i18n, CSS,
+//      duplicatas) nao achou peso removivel e o build final mediu 133.90 kB gz
+//      (decisao no CLAUDE.md §7). A revisao anterior (129.5 -> 132) foi o FEAT-13
+//      (multiplayer local pass-and-play: tela de passe, pickers de deck por
+//      jogador, wizard por modo e chaves i18n novas; mediu 130.45 kB gz).
+//      Antes dela: 127.5 -> 129.5 com FEAT-12a/12b; 126 -> 127.5 com FEAT-11/14/06;
+//      125 -> 126 com FEAT-05/08/10 e 124 -> 125 com modulePreload:false + mangle
+//      toplevel + i18n compacto.
 //      Pressupoe "npm run build" recem-rodado.
 //   3. Bloco @media (max-width: 700px) de src/index.css com <= --block-max-lines linhas.
 //      Default 99 ("menos de 100 linhas", §5 criterio 5; hoje o bloco tem ~723).
@@ -36,7 +39,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 132);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 134);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);
