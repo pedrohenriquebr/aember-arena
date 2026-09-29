@@ -2221,7 +2221,12 @@ function App() {
     if (!game) return;
     const nextKeys = { player: game.players[0].keys, ai: game.players[1].keys };
     if (nextKeys.player > prevKeysRef.current.player || nextKeys.ai > prevKeysRef.current.ai) {
-      sound.play("forge");
+      // VAL-03: a 3ª chave também decide o vencedor (game.ts:897), então forja e
+      // stinger cairiam no mesmo frame: as duas fanfarras de metais embolam e as
+      // últimas camadas do `win` eram descartadas no teto de 32 vozes. Quando há
+      // vencedor só o stinger soa (a vitória nasce da forja); o flash visual da
+      // forja continua nos dois casos.
+      if (game.winner === null) sound.play("forge");
       if (settingsRef.current.animations) {
         fxRef.current?.forge(nextKeys.player > prevKeysRef.current.player ? 0 : 1);
       }
