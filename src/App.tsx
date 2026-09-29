@@ -1985,7 +1985,60 @@ function App() {
     };
   }, [viewSwitching]);
 
-
+  // H3D-12 (VIEW3D_PLAN §2.9/§4): parallax sutil da câmera. UM listener de
+  // pointermove passivo no board + rAF com lerp de 0,12/frame; escreve só duas
+  // custom properties no plano (zero commit do React — nenhum CardTile vê o
+  // movimento). Só com 3D real, mouse ("hover: hover" descarta toque) e
+  // movimento ligado; o ponteiro fora do board volta ao neutro, e o cleanup
+  // devolve o plano ao repouso (trocar de tela/modo não deixa câmera torta).
+  useEffect(() => {
+    if (screen !== "game" || settings.tableView !== "3d" || LITE_TABLE) return;
+    if (!motionEnabled(settings.animations) || !prefersHover()) return;
+    const board = document.querySelector<HTMLElement>(".game-board--3d");
+    const plane = board?.querySelector<HTMLElement>(".table-plane");
+    if (!board || !plane) return;
+    let targetX = 0;
+    let targetY = 0;
+    let x = 0;
+    let y = 0;
+    let frame = 0;
+    const step = () => {
+      x += (targetX - x) * 0.12;
+      y += (targetY - y) * 0.12;
+      const settled = Math.abs(targetX - x) < 0.002 && Math.abs(targetY - y) < 0.002;
+      if (settled) {
+        x = targetX;
+        y = targetY;
+      }
+      plane.style.setProperty("--cam-x", x.toFixed(3));
+      plane.style.setProperty("--cam-y", y.toFixed(3));
+      frame = settled ? 0 : window.requestAnimationFrame(step);
+    };
+    const wake = () => {
+      if (!frame) frame = window.requestAnimationFrame(step);
+    };
+    const onMove = (event: PointerEvent) => {
+      const rect = board.getBoundingClientRect();
+      // -1..1 nas duas bordas; o clamp protege o arrasto para fora do board.
+      targetX = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1));
+      targetY = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1));
+      wake();
+    };
+    const onLeave = () => {
+      targetX = 0;
+      targetY = 0;
+      wake();
+    };
+    board.addEventListener("pointermove", onMove, { passive: true });
+    board.addEventListener("pointerleave", onLeave);
+    return () => {
+      board.removeEventListener("pointermove", onMove);
+      board.removeEventListener("pointerleave", onLeave);
+      if (frame) window.cancelAnimationFrame(frame);
+      plane.style.removeProperty("--cam-x");
+      plane.style.removeProperty("--cam-y");
+    };
+  }, [screen, settings.tableView, settings.animations]);
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with

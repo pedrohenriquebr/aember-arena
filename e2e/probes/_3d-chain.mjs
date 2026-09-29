@@ -466,6 +466,43 @@ try {
   });
   if (clicked) check("hit-test 3D (tilt 40): o centro visual acerta a carta", clicked.same, JSON.stringify(clicked));
 
+  // ---- H3D-12: parallax da camera (ponteiro -> --cam-x/--cam-y -> ±2,5°/±1,5°)
+  // O probe corre a 1280 com animacoes ligadas: o hook esta ativo. O ponteiro
+  // move de verdade; o que se mede e o transform computado do plano. O
+  // matrix3d do CSS e COLUMN-major: o 3o valor (m[2]) e -sin(rotY).
+  const boardBox = await page.locator(".game-board").boundingBox();
+  if (boardBox) {
+    const vpSize = page.viewportSize();
+    const midY = Math.min(boardBox.y + boardBox.height * 0.5, vpSize.height - 60);
+    await page.evaluate(() => { window.__tileCommits = 0; });
+    await page.mouse.move(boardBox.x + boardBox.width * 0.03, midY);
+    await page.waitForTimeout(450);
+    const readCam = (key) => page.evaluate((k) => {
+      const plane = document.querySelector(".table-plane");
+      const parts = getComputedStyle(plane).transform.match(/matrix3d\(([^)]+)\)/);
+      const m = parts ? parts[1].split(",").map(Number) : [];
+      return { camX: plane.style.getPropertyValue("--cam-x"), camY: plane.style.getPropertyValue("--cam-y"), m13: m[2] ?? null, m22: m[5] ?? null, commits: window.__tileCommits, key: k };
+    }, key);
+    const left = await readCam("esquerda");
+    await page.mouse.move(boardBox.x + boardBox.width * 0.97, midY);
+    await page.waitForTimeout(450);
+    const right = await readCam("direita");
+    const degY = (value) => (value === null ? NaN : (Math.asin(Math.max(-1, Math.min(1, -value))) * 180) / Math.PI);
+    check("H3D-12: ponteiro a esquerda inclina a camera em -2,5 graus (Y)", left.m13 !== null && Math.abs(degY(left.m13) + 2.5) < 0.6, JSON.stringify(left));
+    check("H3D-12: ponteiro a direita em +2,5 graus (Y)", right.m13 !== null && Math.abs(degY(right.m13) - 2.5) < 0.6, JSON.stringify(right));
+    check("H3D-12: parallax nao re-renderiza CardTile", left.commits === 0 && right.commits === 0, `commits=${left.commits}/${right.commits}`);
+    // Ponteiro fora do board: volta ao neutro (lerp de 0,12/frame).
+    await page.mouse.move(4, 4);
+    await page.waitForTimeout(900);
+    const neutral = await page.evaluate(() => {
+      const plane = document.querySelector(".table-plane");
+      return { camX: plane.style.getPropertyValue("--cam-x"), camY: plane.style.getPropertyValue("--cam-y") };
+    });
+    check("H3D-12: ponteiro fora do board volta ao neutro", Number(neutral.camX || 0) === 0 && Number(neutral.camY || 0) === 0, JSON.stringify(neutral));
+  } else {
+    check("H3D-12: board medivel", false, "sem boundingBox do board");
+  }
+
   // ---- 6. Volta ao 2D
   await page.evaluate(() => { window.__tileCommits = 0; });
   await page.locator(".view-toggle").click();
