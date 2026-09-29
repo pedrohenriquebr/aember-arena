@@ -323,9 +323,13 @@ class SoundEngine {
     if (!context || !this.masterGain) return;
     this.musicPlaying = true;
 
+    const now = context.currentTime;
     this.musicGain = context.createGain();
-    this.musicGain.gain.value = 0;
-    this.musicGain.gain.linearRampToValueAtTime(0.05, context.currentTime + 2);
+    // VAL-01: sem evento ancorado em `now` a rampa interpola do último evento
+    // agendado (nenhum no start), então o fade-in precisa do setValueAtTime
+    // explícito em 0 antes da rampa.
+    this.musicGain.gain.setValueAtTime(0, now);
+    this.musicGain.gain.linearRampToValueAtTime(0.05, now + 2);
     this.musicGain.connect(this.masterGain);
 
     const frequencies = [65.41, 98, 130.81];
@@ -351,7 +355,17 @@ class SoundEngine {
     if (!this.musicPlaying) return;
     this.musicPlaying = false;
     if (this.context && this.musicGain) {
-      this.musicGain.gain.linearRampToValueAtTime(0, this.context.currentTime + 0.6);
+      // VAL-01: linearRampToValueAtTime interpola do evento ANTERIOR (o fim do
+      // fade-in, t0+2s com valor 0,05), não do currentTime. Sem âncora o ganho
+      // saltaria de 0,05 para ~0 num quantum (pop) e, parando durante o
+      // fade-in, voltaria a subir depois do zero. cancelScheduledValues +
+      // setValueAtTime(g.value) fixa a partida da rampa no valor que está
+      // soando agora.
+      const gain = this.musicGain.gain;
+      const now = this.context.currentTime;
+      gain.cancelScheduledValues(now);
+      gain.setValueAtTime(gain.value, now);
+      gain.linearRampToValueAtTime(0, now + 0.6);
     }
     const nodesToStop = this.musicNodes;
     this.musicNodes = [];
