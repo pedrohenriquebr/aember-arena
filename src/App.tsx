@@ -2217,10 +2217,11 @@ function App() {
     setGame(next);
     setMatchMode(mode);
     setPassPending(null);
+    // BUG2-02: uma partida nova nunca deixa o banner apontar para o save antigo.
+    setResumeMatch(null);
     if (mode === "passAndPlay") {
-      // FEAT-13: 2P matches are never saved, and the solo save slot must not
+      // FEAT-13: 2P matches are never saved; the solo save slot must not
       // resurface on Home pointing at a match that was just replaced.
-      setResumeMatch(null);
       clearSavedMatch();
     }
     setSelected(null);
