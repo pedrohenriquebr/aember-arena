@@ -98,6 +98,10 @@ type Toast = {
     with it (BUG2-10: o Sync troca as faces e o undo precisa devolver o deck). */
 type UndoEntry = { state: GameState; revealed: boolean; step: number; deck: DeckInfo };
 
+/** BUG2-11: setup congelado no início da partida — o W/L grava a dificuldade e
+    o modo de oponente que valeram, não os que estiverem nas settings ao fim. */
+type MatchSetup = { difficulty: Difficulty; opponentMode: OpponentMode };
+
 /** FEAT-12b: one recorded transition of the match. The seed plus this list
     rebuilds every state of the match (createMatch + applyStep), which is what
     the replay viewer walks — the live match is never touched. BUG2-10: o Sync
@@ -1804,6 +1808,8 @@ function App() {
   const matchModeRef = useRef<GameMode>("solo");
   /** FEAT-11: the rival a rematch replays against (random mode does not reroll). */
   const opponentRef = useRef<DeckInfo | null>(null);
+  /** BUG2-11: configuração que valeu na partida viva (ver MatchSetup). */
+  const matchSetupRef = useRef<MatchSetup | null>(null);
   const aiTurnRef = useRef<string | null>(null);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const prevKeysRef = useRef({ player: 0, ai: 0 });
@@ -2065,7 +2071,8 @@ function App() {
   useEffect(() => {
     if (!game || game.winner === null || recordedMatchRef.current === matchVersion || matchMode !== "solo") return;
     recordedMatchRef.current = matchVersion;
-    const { opponentMode, difficulty } = settingsRef.current;
+    // BUG2-11: as configurações congeladas no início da partida, não as atuais.
+    const { opponentMode, difficulty } = matchSetupRef.current ?? settingsRef.current;
     void recordMatchResult(currentDeck.id, game.winner === 0, opponentMode, difficulty);
   }, [game, matchVersion, currentDeck.id, matchMode]);
 
@@ -2243,6 +2250,9 @@ function App() {
     // so the opening hands can be replayed.
     const seed = Math.floor(Math.random() * 4294967296);
     const rival = opponent ?? resolveOpponent(deck);
+    // BUG2-11: registra a configuração com que a partida nasce; o modo efetivo
+    // vira "mirror" quando o deck pedido caiu no espelho (removido/igual).
+    matchSetupRef.current = { difficulty: settingsRef.current.difficulty, opponentMode: rival === deck ? "mirror" : settingsRef.current.opponentMode };
     // FEAT-13: a 2P match renames the sides at creation (no AI is coming).
     const next = mode === "passAndPlay" ? createPassAndPlayMatch(deck, rival, { seed }) : createMatch(deck, rival, { seed });
     opponentRef.current = rival;
@@ -2642,6 +2652,13 @@ function App() {
             onClick={() => {
               sound.play("forge");
               const saved = resumeMatch.game as GameState;
+              // BUG2-11: a partida retomada não guardou o setup; o estado ainda
+              // prova o espelho pelo deck renomeado do Warden, o resto vem das
+              // settings no momento da retomada.
+              matchSetupRef.current = {
+                difficulty: settingsRef.current.difficulty,
+                opponentMode: saved.players[1].deckName === "Warden's mirror deck" ? "mirror" : settingsRef.current.opponentMode === "mirror" ? "deck" : settingsRef.current.opponentMode,
+              };
               // FEAT-12a: a resumed match has no in-memory history to undo; its
               // step list stays null so replay stays off (BUG2-03).
               historyRef.current = [];
