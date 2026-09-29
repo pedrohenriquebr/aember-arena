@@ -93,23 +93,29 @@ type Toast = {
 } | null;
 
 /** FEAT-12a: one step of the undo history — the state a transition left behind,
-    whether that transition consumed hidden information, and how many replay
-    steps were recorded while that state was live. */
-type UndoEntry = { state: GameState; revealed: boolean; step: number };
+    whether that transition consumed hidden information, how many replay
+    steps were recorded while that state was live, and the deck that was live
+    with it (BUG2-10: o Sync troca as faces e o undo precisa devolver o deck). */
+type UndoEntry = { state: GameState; revealed: boolean; step: number; deck: DeckInfo };
 
 /** FEAT-12b: one recorded transition of the match. The seed plus this list
     rebuilds every state of the match (createMatch + applyStep), which is what
-    the replay viewer walks — the live match is never touched. */
+    the replay viewer walks — the live match is never touched. BUG2-10: o Sync
+    na mesa também vira passo; o replay posterior é PARCIAL — a reconstrução
+    usa o currentDeck já sincronizado desde o turno 1, então os passos
+    anteriores rodam com as faces novas (só a entrada do log é reproduzida). */
 type ReplayStep =
   | { kind: "house"; side: 0 | 1; house: string }
   | { kind: "keep" | "mulligan"; side: 0 | 1 }
   | { kind: "end"; side: 0 | 1 }
-  | { kind: "move"; side: 0 | 1; move: GameMove };
+  | { kind: "move"; side: 0 | 1; move: GameMove }
+  | { kind: "sync"; deck: string };
 
 function applyStep(state: GameState, step: ReplayStep): GameState {
   if (step.kind === "house") return chooseHouse(state, step.side, step.house);
   if (step.kind === "move") return applyMove(state, step.side, step.move);
   if (step.kind === "end") return endTurn(state, step.side);
+  if (step.kind === "sync") return { ...state, log: [...state.log, { key: "log.synced", params: { deck: step.deck }, turn: state.turn }] };
   return step.kind === "mulligan" ? mulligan(state, step.side) : keepHand(state, step.side);
 }
 
@@ -1791,6 +1797,9 @@ function App() {
 
   const gameRef = useRef<GameState | null>(null);
   const settingsRef = useRef(settings);
+  /** BUG2-10: espelho do currentDeck para o commit registrar com que deck cada
+      estado da pilha de undo vivia (o Sync troca o deck no meio do turno). */
+  const currentDeckRef = useRef(currentDeck);
   /** FEAT-13: the live match mode, read by the hot callbacks (like gameRef). */
   const matchModeRef = useRef<GameMode>("solo");
   /** FEAT-11: the rival a rematch replays against (random mode does not reroll). */
@@ -1810,6 +1819,7 @@ function App() {
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { currentDeckRef.current = currentDeck; }, [currentDeck]);
   useEffect(() => { matchModeRef.current = matchMode; }, [matchMode]);
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
@@ -1818,7 +1828,7 @@ function App() {
   // replay step count at that point; FEAT-12b appends the step itself.
   const commitGame = useCallback((prev: GameState, next: GameState, step?: ReplayStep) => {
     const stack = historyRef.current;
-    stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next), step: stepsRef.current?.length ?? 0 });
+    stack.push({ state: prev, revealed: revealsHiddenInfo(prev, next), step: stepsRef.current?.length ?? 0, deck: currentDeckRef.current });
     if (stack.length > UNDO_LIMIT) stack.shift();
     if (step) stepsRef.current?.push(step);
     gameRef.current = next;
@@ -1838,7 +1848,8 @@ function App() {
     if (!anchor || anchor.state === live) return null;
     // BUG2-07: `at` is the anchor's position — undoing truncates the stale
     // branch after it (otherwise the cap shifts a ghost state into stack[0]).
-    return { anchor: anchor.state, step: anchor.step, at: index + 1, blocked: stack.slice(index + 1).some((entry) => entry.revealed) };
+    // BUG2-10: the deck live with that state comes back too.
+    return { anchor: anchor.state, step: anchor.step, at: index + 1, deck: anchor.deck, blocked: stack.slice(index + 1).some((entry) => entry.revealed) };
   }, []);
 
   const undoLastMove = useCallback(() => {
@@ -1855,6 +1866,10 @@ function App() {
     // existed on the current line.
     stepsRef.current?.splice(info.step);
     historyRef.current.splice(info.at + 1);
+    // BUG2-10: o deck volta junto — sem isso o undo devolvia as faces antigas
+    // mas o título/revanche/W-L ficavam no deck sincronizado.
+    currentDeckRef.current = info.deck;
+    setCurrentDeck(info.deck);
     gameRef.current = info.anchor;
     setGame(info.anchor);
     setSelected(null);
@@ -2416,7 +2431,9 @@ function App() {
         // caller — BUG-21); the log entry comes from the engine itself.
         if (gameRef.current && gameRef.current.winner === null) {
           const next = refreshGameFaces(gameRef.current, deck);
-          commitGame(gameRef.current, next);
+          // BUG2-10: o Sync entra como passo do replay (o undo reverte o deck
+          // pela ref paralela; aqui a ref ainda aponta o deck antigo).
+          commitGame(gameRef.current, next, { kind: "sync", deck: deck.name });
         }
       } else {
         setSelectedDeck(deck);
