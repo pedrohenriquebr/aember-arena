@@ -6674,3 +6674,68 @@ html .spin {
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
   pointer-events: none;
 }
+
+/* ---------- Mesa 3D — base da cena (H3D-02, VIEW3D_PLAN §2.1) ---------- */
+/* O modo 3D é uma camada de CSS sobre o MESMO DOM, ligada por
+   `.game-board--3d` (H3D-01). No 2D `.table-plane` é `display: contents`: não
+   existe para o layout nem para a árvore de acessibilidade — o board fica
+   pixel-idêntico. Toda regra 3D vive sob `.game-board--3d`; o 2D não paga nada.
+
+   CADEIA SEM AGRUPAMENTO (o que o probe e2e/probes/_3d-chain.mjs guarda):
+   entre a raiz de perspectiva (.board-content) e a `.board-piece`, nenhum
+   ancestral pode computar overflow != visible, opacity < 1, filter,
+   clip-path/mask, isolation ou transform-style != preserve-3d — qualquer um
+   desses achata o 3D em silêncio (css-transforms-2, modelo de renderização 3D).
+   Mudou o board? Rode `node e2e/probes/_3d-chain.mjs`. */
+.table-plane {
+  display: contents;
+}
+
+.game-board--3d .table-plane {
+  display: block;
+  /* O plano inclinado. --tilt: 0deg é o default NEUTRO da fundação (o modo 3D
+     já é jogável antes de a mesa inclinar); o H3D-03 afina por faixa (40°
+     desktop / 32° tablet) e a transição de entrada é do H3D-10. O probe mede a
+     projeção forçando 40°. */
+  --tilt: 0deg;
+  transform: rotateX(var(--tilt));
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+}
+
+/* A câmera fica no pai do plano (não no plano): a perspectiva precisa dos
+   filhos em 3D, e os HUDs (bands, mão) são irmãos do plano. --persp existe
+   para o H3D-03 afinar a distância por faixa (1100px desktop / 1000px tablet). */
+.game-board--3d .board-content {
+  perspective: var(--persp, 1100px);
+  perspective-origin: 50% 38%;
+}
+
+/* preserve-3d até a peça (a folha é o `.card-tile`: a carta é um plano só,
+   daí para baixo pode achatar à vontade). A faixa de artefatos/upgrades
+   (`.board-attachments`) também é ancestral de `.board-piece` — sem ela a
+   cadeia dos anexos achataria. */
+.game-board--3d .table-plane .battle-zone,
+.game-board--3d .table-plane .board-lane,
+.game-board--3d .table-plane .board-attachments,
+.game-board--3d .table-plane .board-piece {
+  transform-style: preserve-3d;
+}
+
+/* A lane do 3D não pode rolar: overflow != visible acha o preserve-3d. O
+   dimensionamento por carta (clamp com --n) é do H3D-04; aqui a lane só para
+   de recortar. `container-type: inline-size` é contenção de layout/estilo
+   (nunca de paint) — o probe confirma que ela não achata o 3D. */
+.game-board--3d .board-lane {
+  overflow: visible;
+  container-type: inline-size;
+}
+
+/* HUDs são irmãos do plano, sem transform: z-index: 2 para pintar por cima de
+   qualquer carta que avance em Z (o board-content não é preserve-3d, então o
+   plano não é z-ordenado com eles). */
+.game-board--3d .board-content > .player-band,
+.game-board--3d .board-content > .hand-zone {
+  position: relative;
+  z-index: 2;
+}

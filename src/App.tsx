@@ -1374,86 +1374,91 @@ function GameBoard({
           t={t}
         />
 
-        <section className="battle-zone battle-zone--opponent" aria-label={t("game.opponentLine")}>
-          <div className="zone-heading">
-            <span>{t("game.opponentLine")}</span>
-            <span className="zone-card-count">{enemy.board.length} {t("game.onTable")}</span>
-          </div>
-          <BoardLane
-            cards={enemy.board}
-            owner={enemySide}
-            humanSide={humanSide}
-            activeHouse={null}
-            selectedId={selected?.zone === "enemy" ? selected.instanceId : undefined}
-            targetIds={pick?.ids}
-            settings={settings}
-            t={t}
-            onSelect={readOnly ? undefined : selectOpponentCard}
-          />
-        </section>
+        {/* H3D-02: no 2D o wrapper é `display: contents` — não existe para
+            layout nem para a árvore de acessibilidade. No 3D ele é o plano da
+            mesa (perspectiva + preserve-3d); fora dele ficam os HUDs. */}
+        <div className="table-plane">
+          <section className="battle-zone battle-zone--opponent" aria-label={t("game.opponentLine")}>
+            <div className="zone-heading">
+              <span>{t("game.opponentLine")}</span>
+              <span className="zone-card-count">{enemy.board.length} {t("game.onTable")}</span>
+            </div>
+            <BoardLane
+              cards={enemy.board}
+              owner={enemySide}
+              humanSide={humanSide}
+              activeHouse={null}
+              selectedId={selected?.zone === "enemy" ? selected.instanceId : undefined}
+              targetIds={pick?.ids}
+              settings={settings}
+              t={t}
+              onSelect={readOnly ? undefined : selectOpponentCard}
+            />
+          </section>
 
-        <div className={`turn-console${isHumanTurn ? " turn-console--human" : ""}`}>
-          <div className="turn-console-copy">
-            <div className="round-kicker"><span className="round-dot" /> {t("game.round")} {String(game.turn).padStart(2, "0")}</div>
-            <strong>
-              {passAndPlay
-                ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
-                : game.activePlayer === 0 ? t("game.yourTurn") : aiPhase === "thinking" ? t("game.thinking") : t("game.opponentTurn")}
-            </strong>
-            {/* FX-04: região viva antes do resumo — o :last-child do CSS continua no span visível. */}
-            <span className="sr-only" aria-live="polite">{narration}</span>
-            <span>{aiSummary ?? (game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse"))}</span>
+          <div className={`turn-console${isHumanTurn ? " turn-console--human" : ""}`}>
+            <div className="turn-console-copy">
+              <div className="round-kicker"><span className="round-dot" /> {t("game.round")} {String(game.turn).padStart(2, "0")}</div>
+              <strong>
+                {passAndPlay
+                  ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
+                  : game.activePlayer === 0 ? t("game.yourTurn") : aiPhase === "thinking" ? t("game.thinking") : t("game.opponentTurn")}
+              </strong>
+              {/* FX-04: região viva antes do resumo — o :last-child do CSS continua no span visível. */}
+              <span className="sr-only" aria-live="polite">{narration}</span>
+              <span>{aiSummary ?? (game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse"))}</span>
+            </div>
+            <div className="house-picker" role="group" aria-label={t("game.chooseHouse")}>
+              {player.houses.map((house) => {
+                const chosen = game.activeHouse === house;
+                return (
+                  <button
+                    key={house}
+                    type="button"
+                    className={`house-choice${chosen ? " is-chosen" : ""}${game.activeHouse && !chosen ? " is-locked" : ""}`}
+                    style={{ "--house-color": houseColor(house) } as CSSProperties}
+                    onClick={() => onHouse(house)}
+                    disabled={!isHumanTurn || Boolean(game.activeHouse)}
+                    aria-pressed={chosen}
+                  >
+                    <HouseMark house={house} small />
+                    <span>{houseLabel(house, t)}</span>
+                    {chosen && <Check size={13} className="house-check" />}
+                  </button>
+                );
+              })}
+            </div>
+            <button className="end-turn-button" type="button" onClick={onEndTurn} disabled={!isHumanTurn}>
+              <span>{t("game.endTurn")}</span>
+              <ArrowRight size={15} />
+            </button>
           </div>
-          <div className="house-picker" role="group" aria-label={t("game.chooseHouse")}>
-            {player.houses.map((house) => {
-              const chosen = game.activeHouse === house;
-              return (
-                <button
-                  key={house}
-                  type="button"
-                  className={`house-choice${chosen ? " is-chosen" : ""}${game.activeHouse && !chosen ? " is-locked" : ""}`}
-                  style={{ "--house-color": houseColor(house) } as CSSProperties}
-                  onClick={() => onHouse(house)}
-                  disabled={!isHumanTurn || Boolean(game.activeHouse)}
-                  aria-pressed={chosen}
-                >
-                  <HouseMark house={house} small />
-                  <span>{houseLabel(house, t)}</span>
-                  {chosen && <Check size={13} className="house-check" />}
-                </button>
-              );
-            })}
-          </div>
-          <button className="end-turn-button" type="button" onClick={onEndTurn} disabled={!isHumanTurn}>
-            <span>{t("game.endTurn")}</span>
-            <ArrowRight size={15} />
-          </button>
+
+          {pick && (
+            <div className="fight-instruction" role="status">
+              {pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
+            </div>
+          )}
+
+          <section className="battle-zone battle-zone--player" aria-label={t("game.yourLine")}>
+            <div className="zone-heading">
+              <span>{t("game.yourLine")}</span>
+              <span className="zone-card-count">{player.board.length} {t("game.onTable")}</span>
+            </div>
+            <BoardLane
+              cards={player.board}
+              owner={humanSide}
+              humanSide={humanSide}
+              hintIds={hintIds}
+              activeHouse={game.activeHouse}
+              selectedId={selected?.zone === "board" ? selected.instanceId : undefined}
+              targetIds={pick?.ids}
+              settings={settings}
+              t={t}
+              onSelect={readOnly ? undefined : selectPlayerCard}
+            />
+          </section>
         </div>
-
-        {pick && (
-          <div className="fight-instruction" role="status">
-            {pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
-          </div>
-        )}
-
-        <section className="battle-zone battle-zone--player" aria-label={t("game.yourLine")}>
-          <div className="zone-heading">
-            <span>{t("game.yourLine")}</span>
-            <span className="zone-card-count">{player.board.length} {t("game.onTable")}</span>
-          </div>
-          <BoardLane
-            cards={player.board}
-            owner={humanSide}
-            humanSide={humanSide}
-            hintIds={hintIds}
-            activeHouse={game.activeHouse}
-            selectedId={selected?.zone === "board" ? selected.instanceId : undefined}
-            targetIds={pick?.ids}
-            settings={settings}
-            t={t}
-            onSelect={readOnly ? undefined : selectPlayerCard}
-          />
-        </section>
 
         <PlayerBand
           player={player}
