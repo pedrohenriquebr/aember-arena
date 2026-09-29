@@ -504,6 +504,12 @@ try {
     const degY = (value) => (value === null ? NaN : (Math.asin(Math.max(-1, Math.min(1, -value))) * 180) / Math.PI);
     check("H3D-12: ponteiro a esquerda inclina a camera em -2,5 graus (Y)", left.m13 !== null && Math.abs(degY(left.m13) + 2.5) < 0.6, JSON.stringify(left));
     check("H3D-12: ponteiro a direita em +2,5 graus (Y)", right.m13 !== null && Math.abs(degY(right.m13) - 2.5) < 0.6, JSON.stringify(right));
+    // Eixo X: o topo do board soma -1,5 grau ao tilt (40 -> 38,5; cos = 0,7825).
+    await page.mouse.move(boardBox.x + boardBox.width * 0.5, boardBox.y + 6);
+    await page.waitForTimeout(450);
+    const top = await readCam("topo");
+    const degX = (value) => (value === null ? NaN : (Math.acos(Math.max(-1, Math.min(1, value))) * 180) / Math.PI);
+    check("H3D-12: ponteiro no topo tira 1,5 grau do tilt (X)", top.m22 !== null && Math.abs(degX(top.m22) - 38.5) < 0.8, `tilt=${degX(top.m22)?.toFixed(2)} ${JSON.stringify(top)}`);
     check("H3D-12: parallax nao re-renderiza CardTile", left.commits === 0 && right.commits === 0, `commits=${left.commits}/${right.commits}`);
     // Ponteiro fora do board: volta ao neutro (lerp de 0,12/frame).
     await page.mouse.move(4, 4);
