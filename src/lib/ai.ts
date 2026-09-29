@@ -187,8 +187,11 @@ export function chooseAiMove(
   if (!legal.length) return null;
   // FEAT-08: the AI draws from the match seed instead of Math.random; the local
   // cursor keeps chooseAiMove pure (same state in, same answer out).
-  let calls = state.rngCalls;
-  const roll = () => seededValue(state.seed, (calls += 1));
+  // BUG2-06: a salted stream keyed by the decision's position (turn/acted/
+  // rngCalls) and a per-draw cursor, so each decision gets fresh values instead
+  // of repeating seededValue(seed, rngCalls + 1) until the engine consumes RNG.
+  let calls = 0;
+  const roll = () => seededValue((state.seed ^ 0x5bf03635) >>> 0, state.turn * 1009 + state.acted * 4093 + state.rngCalls * 8191 + (calls += 1));
   if (roll() < profile.randomRate) {
     return legal[Math.floor(roll() * legal.length)];
   }
