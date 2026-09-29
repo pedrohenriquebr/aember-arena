@@ -295,6 +295,65 @@ try {
   });
   check("H3D-04: peca em pe com pose propria (rotate -28deg, lift em Z, sem animacao residual)", Boolean(pose) && pose.rotate === "x -28deg" && pose.translate !== "none" && pose.animation === "none", JSON.stringify(pose));
 
+  // ---- H3D-05: sombra difusa separada, deitada no tapete e reativa ao lift
+  const shadow = await page.evaluate(() => {
+    const piece = document.querySelector(".table-plane .board-piece");
+    if (!piece) return null;
+    const cs = getComputedStyle(piece, "::before");
+    const pr = piece.getBoundingClientRect();
+    return {
+      content: cs.content,
+      opacity: cs.opacity,
+      scale: cs.scale,
+      background: cs.backgroundImage,
+      pointerEvents: cs.pointerEvents,
+      box: { w: parseFloat(cs.width), h: parseFloat(cs.height) },
+      piece: { w: pr.width, h: pr.height },
+    };
+  });
+  check(
+    "H3D-05: sombra difusa deitada sob a carta (gradiente, pointer-events none, mais larga que alta)",
+    Boolean(shadow) && shadow.content === '""' && /radial-gradient/.test(shadow.background) && shadow.pointerEvents === "none" && shadow.box.w > shadow.box.h,
+    JSON.stringify(shadow ? { ...shadow, background: shadow.background.slice(0, 40) } : null),
+  );
+  check("H3D-05: em repouso a sombra fica em 0,62 / escala 1", Boolean(shadow) && Number(shadow.opacity) === 0.62 && parseFloat(shadow.scale) === 1, JSON.stringify({ opacity: shadow?.opacity, scale: shadow?.scale }));
+
+  const hoverPoint = await page.evaluate(() => {
+    const piece = document.querySelector(".table-plane .board-piece");
+    if (!piece) return null;
+    const r = piece.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height * 0.4 };
+  });
+  let spread = null;
+  if (hoverPoint) {
+    await page.mouse.move(hoverPoint.x, hoverPoint.y);
+    await page.waitForTimeout(260);
+    spread = await page.evaluate(() => {
+      const piece = document.querySelector(".table-plane .board-piece");
+      const cs = getComputedStyle(piece, "::before");
+      return { opacity: cs.opacity, scale: cs.scale, tile: getComputedStyle(piece.querySelector(".card-tile")).translate };
+    });
+    await page.mouse.move(4, 4);
+    await page.waitForTimeout(200);
+  }
+  check("H3D-05: hover ergue a carta e espalha a sombra (0,32 / 1,18)", Boolean(spread) && Number(spread.opacity) === 0.32 && Number(spread.scale) === 1.18, JSON.stringify(spread));
+
+  // H3D-05/§2.9: dentro do plano so transform/opacity animam — nenhum
+  // box-shadow/filter animado (o ready-breathe/sel-breathe/status-glow viram
+  // pulsos de opacity no 3D).
+  const costly = await page.evaluate(() => {
+    const out = [];
+    for (const a of document.getAnimations()) {
+      const el = a.effect?.target;
+      if (!el?.closest?.(".table-plane")) continue;
+      const props = (a.effect?.getKeyframes?.() ?? []).flatMap((k) => Object.keys(k));
+      const bad = [...new Set(props)].filter((p) => /box-?shadow|filter/i.test(p.replace(/([a-z])([A-Z])/g, "$1-$2")));
+      if (bad.length) out.push({ name: a.animationName ?? null, target: String(el.className).split(" ").slice(0, 2).join("."), props: bad });
+    }
+    return out;
+  });
+  check("H3D-05: zero box-shadow/filter animado dentro do plano", costly.length === 0, JSON.stringify(costly));
+
   // ---- 4. Projecao: tilt 0 -> 40 e translateZ na peca
   // H3D-03: o default do 3D ja e 40deg (32 no tablet), entao o probe ZERA o
   // tilt inline para ter a referencia plana — comparar 40 com 40 nao mede nada.

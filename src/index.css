@@ -6974,3 +6974,81 @@ html .spin {
     font-size: max(calc(var(--fs-card-floor) * var(--depth-k, 1)), 7cqi);
   }
 }
+
+/* ---------- Sombras no chão (H3D-05, VIEW3D_PLAN §2.4) ---------- */
+/* A sombra é o ::before da peça desfazendo a pose: contra-rotaciona (volta a
+   deitar no tapete) e desce o lift em Z (+1px só para não brigar com o playmat
+   coplanar — Safari pisca com planos coplanares). Gradiente estático; quem
+   anima é opacity/scale (compositor), e a carta erguida espalha a sombra. */
+@media (min-width: 701px) {
+  .game-board--3d .table-plane .board-piece::before {
+    content: "";
+    position: absolute;
+    inset: auto 6% -6px;
+    height: 34%;
+    transform-origin: 50% 100%;
+    transform: rotateX(calc(var(--tilt) - var(--lean))) translateZ(calc(1px - var(--lift)));
+    background: radial-gradient(closest-side, rgb(0 0 0 / 0.5), transparent);
+    opacity: calc(0.62 - var(--lift-n, 0) * 0.3);
+    scale: calc(1 + var(--lift-n, 0) * 0.18);
+    transition: opacity 150ms var(--ease-out), scale 150ms var(--ease-out);
+    pointer-events: none;
+  }
+
+  /* Estado ergue E espalha a sombra (informação: vale no reduce-motion);
+     o hover é decoração e fica junto do bloco de movimento abaixo. */
+  .game-board--3d .table-plane .board-piece:has(> .card-tile.is-selected),
+  .game-board--3d .table-plane .board-piece:has(> .card-tile[data-fx="acting"]) {
+    --lift-n: 1;
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .game-board--3d .table-plane .board-piece:hover {
+    --lift-n: 1;
+  }
+}
+
+/* O ready-breathe (2D) anima box-shadow — no 3D isso re-rasteriza a camada a
+   cada frame (§2.9). A arte perde a animação e o brilho vira um ::after do tile
+   com opacity animada: mesma leitura, custo de compositor. */
+.game-board--3d .board-piece--ready .card-art {
+  animation: none;
+}
+
+.game-board--3d .board-piece--ready > .card-tile:not(.card-tile--hint)::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  aspect-ratio: 0.714;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(190, 202, 155, 0.35), 0 0 12px rgba(150, 190, 120, 0.14);
+  pointer-events: none;
+  opacity: 0;
+  animation: ready-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes ready-glow {
+  50% { opacity: 1; }
+}
+
+/* Mesma conversão para a aura da seleção (sel-breathe) e para o pulso do
+   round-dot: no 3D o box-shadow fica estático e a animação é só opacity. */
+.game-board--3d .table-plane .card-tile.is-selected::before {
+  animation: aura-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes aura-glow {
+  0%, 100% { opacity: 0.78; }
+  50% { opacity: 1; }
+}
+
+.game-board--3d .turn-console--human .round-dot {
+  box-shadow: 0 0 0 4px rgba(136, 177, 138, 0.08), 0 0 10px rgba(136, 177, 138, 0.24);
+  animation: dot-glow 2.2s ease-in-out infinite;
+}
+
+@keyframes dot-glow {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
