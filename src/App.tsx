@@ -1824,7 +1824,9 @@ function App() {
     while (index >= 0 && inTurn(stack[index].state)) index -= 1;
     const anchor = stack[index + 1];
     if (!anchor || anchor.state === live) return null;
-    return { anchor: anchor.state, step: anchor.step, blocked: stack.slice(index + 1).some((entry) => entry.revealed) };
+    // BUG2-07: `at` is the anchor's position — undoing truncates the stale
+    // branch after it (otherwise the cap shifts a ghost state into stack[0]).
+    return { anchor: anchor.state, step: anchor.step, at: index + 1, blocked: stack.slice(index + 1).some((entry) => entry.revealed) };
   }, []);
 
   const undoLastMove = useCallback(() => {
@@ -1835,8 +1837,12 @@ function App() {
     if (!info || info.blocked) return;
     sound.play("click");
     // FEAT-12b: the rewind also rolls the replay list back to the anchor, so a
-    // later replay never applies moves the player undid.
+    // later replay never applies moves the player undid. BUG2-07: the undo
+    // history is truncated the same way — keeping the undone branch would let
+    // the cap evict the turn-start anchor and rewind into a state that never
+    // existed on the current line.
     stepsRef.current.splice(info.step);
+    historyRef.current.splice(info.at + 1);
     gameRef.current = info.anchor;
     setGame(info.anchor);
     setSelected(null);
