@@ -32,10 +32,17 @@ npm run build          # tsc --noEmit && vite build  (gate: tipos + bundle)
 npm run typecheck      # tsc --noEmit
 npm run preview        # serve o build
 npm run e2e:capture    # screenshots 4 viewports × 5 telas -> e2e/shots/current
+npm run e2e:capture:3d # o mesmo com tableView: "3d" -> e2e/shots/current-3d
 npm run e2e:floor      # piso tipográfico medido a 360px (exit != 0 se violado)
+npm run e2e:floor:3d   # piso VISUAL do 3D (fator de projeção) a 360/768/1280/1440
 npm run e2e:smoke      # inicia a partida demo e passa 2 turnos, headless
+npm run e2e:smoke:3d   # o mesmo na mesa 3D -> e2e/shots/match-smoke-3d
 npm run e2e:bundle     # imprime gzipKB do dist/index.html
-npm run e2e:acceptance # piso + bundle + tamanho do bloco 700px em um gate
+npm run e2e:acceptance # piso 2D + piso visual 3D + bundle + bloco 700px
+node e2e/probes/_3d-chain.mjs   # cadeia preserve-3d, toggle, sombras, leque, câmera
+node e2e/probes/_3d-hit.mjs     # hit-test/click/alvo de luta com 1/6/12 cartas
+node e2e/probes/_3d-fx.mjs      # voo do leque ao slot 3D (quadro 0, pouso, hold)
+npm run e2e:record:3d  # clipe + frames da mesa 3D (e2e/clips/frames-3d)
 ```
 
 ## Layout
@@ -131,18 +138,47 @@ src/
    mortos pré-revisão (`_dead-css`): 0 removível — os "sem uso" são nomes
    dinâmicos (`card-art--${size}`, `house-icon--${size}`). Confira com
    `npm run e2e:bundle`.
+   → **143,5 mantido** (VIEW3D H3D-07/08/09/12, `docs/VIEW3D_PLAN.md` §2.7-§3:
+   interação (alvo do pick sobe/afunda), FX no 3D (pouso com a pose do slot,
+   origem do leque por layout+scale, shake no plano), perfil 2.5D do celular +
+   modo lite (<= 2 núcleos) + `@supports` que anula o 3D sem suporte, parallax
+   da câmera e os instrumentos (capture/floor visual/smoke/record 3D + probes
+   `_3d-hit`/`_3d-fx` e os checks de câmera no `_3d-chain`). Só CSS/TS, zero
+   dependência: medido **142,57 kB gz** (+1,19 sobre os 141,38) — dentro do teto,
+   sem necessidade de nova revisão. Varredura de mortos pós-mudança
+   (`_dead-css`): 0 removível (mesmos nomes dinâmicos de antes).
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
+10. **Mesa 3D (H3D) — o 2D é o default e não muda um pixel.** O 3D é só CSS
+    escopado em `.game-board--3d` sobre o MESMO DOM (o `--lite` troca o 3D real
+    pelo perfil 2.5D; nunca coexistem) e vive sob
+    `@supports (transform-style: preserve-3d)`. Regras:
+    - **Nada de agrupamento** entre `.table-plane` e `.board-piece` (overflow ≠
+      visible, opacity < 1, filter, clip-path/mask, isolation, contain: paint
+      achata o 3D em silêncio). Mudou o board? `node e2e/probes/_3d-chain.mjs`.
+    - Pose 3D sempre em propriedades INDIVIDUAIS (`translate`/`rotate`/`scale`):
+      `transform` pertence ao `card-arrive`, que vence uma pose estática.
+    - Texto do plano é billboard (contra-rotacionado) ou HUD; no 3D o gate é
+      `e2e:floor:3d` (piso VISUAL = fontSize × projeção), não o `e2e:floor` 2D.
+    - Mudou board/hand? Rode capture 2D **e** 3D, `e2e:floor` **e** `e2e:floor:3d`
+      e os três probes (`_3d-chain`, `_3d-hit`, `_3d-fx`).
 
 ## Verification gates (rode antes de commitar mudança relevante)
 
 1. `npm run build` — tipos + bundle (obrigatório sempre)
-2. `npm run e2e:floor` — se tocou tipografia/layout
+2. `npm run e2e:floor` — se tocou tipografia/layout (2D)
 3. `npm run e2e:capture` + olhar `e2e/shots/current` contra `e2e/shots/baseline` —
    se tocou visual (espera-se diferença intencional; diferença acidental é regressão)
 4. `npm run e2e:smoke` — se tocou o board/partida
-5. `npm run e2e:acceptance` — fechamento
+5. `npm run e2e:acceptance` — fechamento (piso 2D + piso visual 3D + bundle + bloco)
+6. Mudou a mesa 3D? `e2e:capture:3d`, `e2e:floor:3d`, `e2e:smoke:3d`,
+   `node e2e/probes/_3d-chain.mjs`, `_3d-hit.mjs`, `_3d-fx.mjs` e
+   `e2e:record:3d` (frames em `e2e/clips/frames-3d`).
+   Para o 2D pixel-idêntico, o `e2e:capture` oficial sorteia a mão demo a cada
+   rodada (o `game.png` nunca bate entre duas execuções); o gate determinístico é
+   a ferramenta local `e2e/shots/_2d-freeze.mjs` (save fixo + `_png-diff.mjs`),
+   que compara o board 2D antes/depois de um diff de CSS.
 
 ## Pontos de atenção conhecidos (pós-passada de polish, ver `docs/POLISH_REPORT.md`)
 
@@ -156,6 +192,16 @@ src/
 - Erros do Master Vault são `VaultError` (chave `vault.*`), texto via `vaultErrorText(e, t)`.
 - Em aberto: sombras ainda ad-hoc; emblemas de casas novas caem em iniciais; a 1280×800
   a mão começa perto da dobra (lanes com min-height para não pular).
+- Mesa 3D, limites conhecidos (medidos nos probes): (a) com a lane cheia a carta de
+  pé avança ~30px acima da própria caixa e cobre parte do texto do `zone-heading`
+  (o do oponente fica ~8px atrás no desktop) — fechar isso com padding na lane
+  exigiria somar altura à mesa e o desconto na margem puxava o `player-band` por
+  cima das cartas (o hit-test caía para 50%), então ficou documentado; (b) o
+  `--depth-k` do oponente não é load-bearing hoje (a pose billboard das cartas já
+  mantém o texto acima do piso visual) — o teste do teste do `e2e:floor:3d` usa o
+  stressor que remove o billboard/contra-tilt; (c) Firefox/WebKit dos probes
+  dependem do binário do `playwright-core` (ausente na máquina de referência:
+  `_3d-hit` PULA com aviso; Safari iOS é verificação manual).
 
 ## Conventions
 
