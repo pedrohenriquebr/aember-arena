@@ -456,13 +456,27 @@ try {
   }));
   check("smoke 3D: dois turnos completos", Boolean(smoke.round), JSON.stringify(smoke));
 
+  // H3D-12: o parallax da camera e alimentado por pointermove de verdade e o
+  // lerp leva ~600ms para assentar; o hit-test mede em repouso (ponteiro fora
+  // do board) para nao pegar a camera no meio do caminho.
+  await page.mouse.move(4, 4);
+  await page.waitForTimeout(900);
   const clicked = await page.evaluate(() => {
     const tile = document.querySelector(".table-plane .board-piece .card-tile");
     if (!tile) return null;
     const r = tile.getBoundingClientRect();
-    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    const cx = r.x + r.width / 2;
+    const cy = r.y + r.height / 2;
+    const hit = document.elementFromPoint(cx, cy);
     const target = hit && hit.closest(".card-tile");
-    return { same: target === tile, selected: tile.classList.contains("is-selected") };
+    return {
+      same: target === tile,
+      selected: tile.classList.contains("is-selected"),
+      point: [Math.round(cx), Math.round(cy)],
+      what: hit ? `${hit.tagName.toLowerCase()}.${String(hit.className).split(" ").slice(0, 2).join(".")}` : "nada",
+      iid: tile.dataset.iid ?? null,
+      camera: document.querySelector(".table-plane")?.style.getPropertyValue("--cam-x") || "0",
+    };
   });
   if (clicked) check("hit-test 3D (tilt 40): o centro visual acerta a carta", clicked.same, JSON.stringify(clicked));
 
