@@ -3,7 +3,10 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 138 kB — revisado de 136.5 em 29/09 pela ANIM onda 2 (plano §3:
+//      Default 139.5 kB — revisado de 138 em 29/09 pela ANIM onda 3 (plano §4:
+//      impacto — forja com glow localizado + shake, numeros flutuantes de dano,
+//      morte com dissolve do clone e correntes com elo no contador); mediu
+//      138.68 kB gz. A revisao anterior (136.5 -> 138) foi a ANIM onda 2 (plano §3:
 //      palco do turno da IA — batidas por ação, legenda, pulso + "+N Æ", selo da
 //      casa, banner "Seu turno", resumo persistente, toque para acelerar e
 //      aiSpeed em settings); mediu 137.92 kB gz. A revisao anterior (135 -> 136.5)
@@ -44,7 +47,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 138);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 139.5);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);

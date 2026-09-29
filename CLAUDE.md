@@ -85,7 +85,7 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **138 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **139,5 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
@@ -102,8 +102,11 @@ src/
    batida de 700-900ms por ação com curva de degradação, legenda "o Warden jogou
    X", pulso de quem age + "+N Æ" voando ao placar, selo da casa no band, banner
    "Seu turno", resumo persistente na faixa do round, toque para acelerar e
-   `aiSpeed` (normal/rápida) em settings com i18n en+pt. Medido 137,92 kB;
-   a onda 3 tem teto próprio: 139,5).
+   `aiSpeed` (normal/rápida) em settings com i18n en+pt. Medido 137,92 kB)
+   → **139,5** (ANIM onda 3, `docs/ANIMATIONS_PLAN.md` §4: impacto — forja com
+   glow no lado de quem forjou + shake, números flutuantes de dano (aria-hidden)
+   com marca de impacto, morte com dissolve do clone e correntes com elo no
+   contador. Medido 138,68 kB).
    Confira com `npm run e2e:bundle`.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
