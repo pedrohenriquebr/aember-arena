@@ -3,7 +3,11 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 136.5 kB — revisado de 135 em 29/09 pela ANIM onda 1
+//      Default 138 kB — revisado de 136.5 em 29/09 pela ANIM onda 2 (plano §3:
+//      palco do turno da IA — batidas por ação, legenda, pulso + "+N Æ", selo da
+//      casa, banner "Seu turno", resumo persistente, toque para acelerar e
+//      aiSpeed em settings); mediu 137.92 kB gz. A revisao anterior (135 -> 136.5)
+//      foi a ANIM onda 1
 //      (docs/ANIMATIONS_PLAN.md): infra de FX (lib/fx.ts puro, diretor FxLayer no
 //      portal, data-iid/data-side, voo da carta, fade de quem sai do board, glow
 //      de seleção) + VAL-04; mediu 136.46 kB gz e a varredura de mortos previa
@@ -40,7 +44,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 136.5);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 138);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const floorPort = Number(argValue("--port") ?? 5211);
