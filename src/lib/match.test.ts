@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { chooseAiHouse, chooseAiMove, shouldMulligan } from "./ai";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
-import { applyMove, chooseHouse, createMatch, createPassAndPlayMatch, endTurn, keepHand, mulligan, revealsHiddenInfo, type DeckInfo, type GameState } from "./game";
+import { applyMove, chooseHouse, createMatch, createPassAndPlayMatch, endTurn, keepHand, mulligan, normalizeSavedState, revealsHiddenInfo, type DeckInfo, type GameState } from "./game";
 import { byTitle, card, setupTest } from "./testkit";
 
 const zoneTotal = (state: GameState, index: 0 | 1) => {
@@ -77,6 +77,40 @@ describe("FEAT-08 seeded RNG (docs/BUGS_AND_FEATURES.md)", () => {
     const first = simulate(DEMO_DECK, DEMO_DECK_2, 9, 24);
     const second = simulate(DEMO_DECK, DEMO_DECK_2, 9, 24);
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+  });
+});
+
+describe("BUG2-08 legacy save normalization (docs/BUGS_ROUND2.md)", () => {
+  it("fills the fields written before FEAT-06/08 instead of NaN/undefined", () => {
+    const fresh = createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 5 });
+    const legacy = {
+      ...fresh,
+      players: fresh.players.map((player) => {
+        const { amberGained, amberStolen, amberCaptured, creaturesDestroyed, cardsPlayed, ...rest } = player;
+        return rest;
+      }),
+    } as unknown as Partial<GameState>;
+    delete legacy.seed;
+    delete legacy.rngCalls;
+    delete legacy.pendingMulligan;
+
+    const state = normalizeSavedState(legacy as GameState);
+    expect(Number.isFinite(state.seed)).toBe(true);
+    expect(state.rngCalls).toBe(0);
+    expect(state.pendingMulligan).toBe(null);
+    for (const player of state.players) {
+      expect(player.amberGained).toBe(0);
+      expect(player.amberStolen).toBe(0);
+      expect(player.cardsPlayed).toBe(0);
+    }
+    // The recovered PRNG shuffles again: a mulligan no longer freezes at 0.
+    state.pendingMulligan = 0;
+    expect(mulligan(state, 0).rngCalls).toBeGreaterThan(0);
+  });
+
+  it("keeps a modern save untouched", () => {
+    const fresh = createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 8 });
+    expect(JSON.stringify(normalizeSavedState(fresh))).toBe(JSON.stringify(fresh));
   });
 });
 

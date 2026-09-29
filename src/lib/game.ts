@@ -960,6 +960,25 @@ export function revealsHiddenInfo(prev: GameState, next: GameState): boolean {
   });
 }
 
+/** BUG2-08: a save written before FEAT-06/08 (or FEAT-10) lacks the per-side
+    tallies, the PRNG state and the mulligan micro-phase. Without the defaults
+    the resumed panel reads NaN, the seed prints "undefined" and
+    seededValue(undefined, NaN) freezes every shuffle to the same order. Pure:
+    returns a normalized clone, the caller keeps the raw save untouched. */
+export function normalizeSavedState(current: GameState): GameState {
+  const state = cloneGame(current);
+  if (!Number.isFinite(state.seed)) state.seed = Math.floor(Math.random() * 4294967296) >>> 0;
+  if (!Number.isFinite(state.rngCalls)) state.rngCalls = 0;
+  if (state.pendingMulligan !== 0 && state.pendingMulligan !== 1) state.pendingMulligan = null;
+  for (const player of state.players) {
+    player.archives ??= [];
+    for (const key of ["amberGained", "amberStolen", "amberCaptured", "creaturesDestroyed", "cardsPlayed"] as const) {
+      if (!Number.isFinite(player[key])) player[key] = 0;
+    }
+  }
+  return state;
+}
+
 export function refreshGameFaces(current: GameState, deck: DeckInfo): GameState {
   const state = cloneGame(current);
   const byId = new Map(deck.cards.map((face) => [face.id, face] as const));

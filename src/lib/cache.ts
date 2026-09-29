@@ -1,4 +1,4 @@
-import type { DeckInfo } from "./game";
+import { normalizeSavedState, type DeckInfo, type GameState } from "./game";
 
 const DATABASE_NAME = "keyforge-arena-cache";
 const DATABASE_VERSION = 3;
@@ -250,7 +250,10 @@ export function loadSavedMatch(): SavedMatch | null {
     const raw = localStorage.getItem(MATCH_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as SavedMatch;
-    return saved?.game && saved.deckId ? saved : null;
+    if (!saved?.game || !saved.deckId) return null;
+    // BUG2-08: normaliza saves antigos (sem seed/rngCalls/contadores) na carga,
+    // não na retomada — o banner e o save já mostram números válidos.
+    return { ...saved, game: normalizeSavedState(saved.game as GameState) };
   } catch {
     return null;
   }
