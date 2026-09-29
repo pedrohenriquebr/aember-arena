@@ -6850,3 +6850,127 @@ html .spin {
 .game-board--3d .attachment-host {
   display: none;
 }
+
+/* ---------- Cartas em pé, levitando (H3D-04, VIEW3D_PLAN §2.2/§2.3/§2.6) ---------- */
+/* A carta fica de frente para a câmera com lean de 12° (10° no tablet): a pose
+   é `rotate: x calc(lean - tilt)` nas propriedades INDIVIDUAIS — o card-arrive
+   (fill both) é dono de `transform` e venceria uma pose estática. O --lift
+   sobe a carta do tapete em Z e o hover/seleção ergue mais (a folha sobe com
+   translateZ e o lean vai a 0). O :hover é ouvido na `.board-piece`, cuja
+   caixa NÃO se move — a carta erguida não "foge" do cursor. */
+@media (min-width: 701px) {
+  .game-board--3d .table-plane .board-piece {
+    --lean: 10deg;
+    --lift: 12px;
+    --raise: 14px;
+    transform-style: preserve-3d;
+    translate: 0 0 var(--lift);
+    rotate: x calc(var(--lean) - var(--tilt));
+    transform-origin: 50% 100%; /* os "pés" da carta ficam no tapete */
+    transition: translate 150ms var(--ease-out), rotate 150ms var(--ease-out);
+    /* O card-arrive da peça sai no 3D: opacity na peça achataria a sombra
+       (H3D-05). A entrada da folha (card-deal) continua no tile. */
+    animation: none;
+  }
+}
+
+@media (min-width: 1041px) {
+  .game-board--3d .table-plane .board-piece {
+    --lean: 12deg;
+    --lift: 16px;
+    --raise: 18px;
+  }
+}
+
+@media (min-width: 701px) {
+  .game-board--3d .table-plane .board-piece > .card-tile {
+    transition: translate 150ms var(--ease-out), rotate 150ms var(--ease-out), scale 150ms var(--ease-out);
+  }
+
+  /* Estado (seleção/acting) ergue SEMPRE — é informação, não enfeite: vale
+     igual no reduce-motion. O transform da onda 1 (translateY/scale) sai para
+     não brigar com a pose. */
+  .game-board--3d .table-plane .board-piece > .card-tile.is-selected,
+  .game-board--3d .table-plane .board-piece > .card-tile[data-fx="acting"] {
+    transform: none;
+    translate: 0 0 var(--raise);
+    rotate: x calc(-1 * var(--lean));
+    scale: 1.08;
+  }
+
+  /* Exausta: 12° de giro no plano da CARTA, sem mexer no slot (§1.5). O giro
+     fica na arte (a `rotate` do tile já é do eixo X e a propriedade aceita uma
+     rotação só); os badges de dano/âmbar seguem em pé, legíveis. */
+  .game-board--3d .table-plane .board-piece--resting > .card-tile > .card-art {
+    rotate: z 12deg;
+  }
+
+  /* Lanes sem scroll do H3D-02: as cartas dividem a largura da lane (--n vem
+     do BoardLane) até o teto por zona. O --fit é a largura útil da fileira; se
+     n*64 não couber, as cartas seguintes sobrepõem o mínimo calculado (a lane
+     "empilha" como o Arena) em vez de estourar a projeção — a lane do jogador
+     é ampliada ~1,14x pela câmera e o recuo de 44px impede o corte na borda
+     do board (medido com 12 criaturas: sem o recuo, ~47px de corte por lado). */
+  .game-board--3d .board-lane {
+    --fit: calc(100cqi - (var(--n, 1) - 1) * 10px);
+    --overlap: min(0px, calc((var(--fit) - var(--n, 1) * 64px) / (var(--n, 1) - 1)));
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .game-board--3d .battle-zone--player .board-lane {
+    padding-inline: 44px;
+  }
+
+  .game-board--3d .board-lane > .board-piece + .board-piece {
+    margin-inline-start: var(--overlap);
+  }
+
+  .game-board--3d .board-lane > .board-piece > .card-tile--board {
+    width: clamp(64px, calc(var(--fit) / var(--n, 1)), var(--card-w-3d, 84px));
+  }
+
+  /* Teto de largura por zona, medido na projeção real (perspective-origin
+     50% 38%): no fundo a câmera dá ~0,985 e no perto ~1,14 — não os 0,886/1,147
+     do plano (que supôs o plano centrado na origem de perspectiva). Com 96px o
+     oponente renderizaria ~95px visuais, IGUAL ao jogador: a diferença de
+     escala é o que vende a profundidade (§1.2). 76px dá ~75 visuais contra ~96
+     (razão ~0,78, dentro de 0,74-0,80) e o texto in-card não muda — o piso em
+     px vence o cqi em qualquer largura desta faixa. */
+  .game-board--3d .battle-zone--opponent { --card-w-3d: 76px; }
+  .game-board--3d .battle-zone--player { --card-w-3d: 84px; }   /* × ~1,14 ≈ 96px visuais */
+
+  .game-board--3d .board-lane .card-tile--board .card-art {
+    width: 100%;
+  }
+
+  /* Anexos seguem a mesma pose, a 0,75x da largura da zona (§2.3). */
+  .game-board--3d .board-piece--attachment > .card-tile--board {
+    width: calc(var(--card-w-3d, 84px) * 0.75);
+    max-width: none;
+  }
+}
+
+/* Hover ergue — movimento decorativo: desligado com reduce-motion/animações
+   off (a seleção continua erguendo). */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .game-board--3d .table-plane .board-piece:hover > .card-tile:not(:disabled) {
+    translate: 0 0 var(--raise);
+    rotate: x calc(-1 * var(--lean));
+    scale: 1.08;
+  }
+}
+
+/* O fundo aparece a ~0,89: o piso do texto in-card ganha o fator de zona
+   (--depth-k) para chegar a 11/10px na tela (§2.6). */
+@media (min-width: 701px) {
+  .game-board--3d .battle-zone--opponent .card-fallback strong,
+  .game-board--3d .battle-zone--opponent .fallback-stats {
+    font-size: max(calc(var(--fs-2xs) * var(--depth-k, 1)), 7cqi);
+  }
+
+  .game-board--3d .battle-zone--opponent .fallback-house,
+  .game-board--3d .battle-zone--opponent .fallback-type {
+    font-size: max(calc(var(--fs-card-floor) * var(--depth-k, 1)), 7cqi);
+  }
+}

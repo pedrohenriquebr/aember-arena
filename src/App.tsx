@@ -1203,7 +1203,13 @@ const BoardLane = memo(function BoardLane({
   }
 
   return (
-    <div className={`board-lane${targetIds?.length ? " board-lane--targeting" : ""}`}>
+    <div
+      className={`board-lane${targetIds?.length ? " board-lane--targeting" : ""}`}
+      /* H3D-04: --n dimensiona as cartas no 3D (clamp da lane sem scroll). O
+         comparador do memo já olha `cards`, então a lane re-renderiza quando a
+         contagem de criaturas muda — nenhuma prop nova desce para o CardTile. */
+      style={{ "--n": Math.max(1, creatures.length) } as CSSProperties}
+    >
       {creatures.length === 0 && (
         <div className="empty-battleline">
           <span className="empty-orbit"><Shield size={17} strokeWidth={1.3} /></span>
