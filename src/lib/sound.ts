@@ -46,14 +46,18 @@ interface Voice {
 
 const MAX_VOICES = 32;
 
+// Brass stab (fanfares): sawtooth through a 2.6 -> 0.9 kHz lowpass plus a
+// half-frequency triangle body, 20 ms attack and 60% sustain as the default.
 const brass = (f: number, at: number, d: number, g: number, s = 0.6): Voice[] => [
   { f, w: "sawtooth", at, a: 0.02, d, g, s, flt: "lowpass", fq: 2600, fto: 900, wet: 1 },
   { f: f / 2, w: "triangle", at, a: 0.02, d, g: g * 0.8, s },
 ];
 
+// Hint sparkle: five rising partials (G6..E7) 45 ms apart, 300 ms tails.
 const sparkle = (at: number, g: number): Voice[] =>
   [1568, 1760, 2093, 2349, 2637].map((f, i) => ({ f, at: at + i * 0.045, d: 0.3, g, wet: 1 }));
 
+// Amber chime: struck-bar bell (900 ms fundamental) plus its 2.76x inharmonic partial.
 const bell = (f: number, at: number, g: number): Voice[] => [
   { f, at, d: 0.9, g, wet: 1 },
   // 2.76x is the first inharmonic partial of a struck bar: reads as crystal, not organ.
@@ -61,30 +65,37 @@ const bell = (f: number, at: number, g: number): Voice[] => [
 ];
 
 const PALETTE: Record<SfxName, () => Voice[]> = {
+  // UI tick: 30 ms band-passed noise flick at 2.4 kHz over a 900 Hz triangle blip.
   click: () => [
     { f: 0, flt: "bandpass", fq: 2400, q: 2, d: 0.03, g: 0.5 },
     { f: 900, w: "triangle", d: 0.03, g: 0.08 },
   ],
+  // Selection tick: 60 ms sine chirp 1560 -> 2080 Hz, 5 kHz noise brush on top.
   select: () => [
     { f: 1560, to: 2080, d: 0.06, g: 0.05 },
     { f: 0, flt: "highpass", fq: 5000, d: 0.02, g: 0.08 },
   ],
+  // House call: 900 -> 3000 Hz band sweep opens, then A4 and E5 triangles answer.
   house: () => [
     { f: 0, flt: "bandpass", fq: 900, fto: 3000, a: 0.08, d: 0.12, g: 0.2 },
     { f: 440, w: "triangle", d: 0.18, g: 0.18, wet: 1 },
     { f: 660, w: "triangle", at: 0.07, d: 0.28, g: 0.16, wet: 1 },
   ],
-  // Whoosh while the card travels, then a felt thump as it lands.
+  // Whoosh while the card travels (500 -> 2600 Hz band sweep, 120 ms attack),
+  // then a felt thump as it lands (160 -> 70 Hz drop plus a lowpassed noise slap).
   play: () => [
     { f: 0, flt: "bandpass", fq: 500, fto: 2600, q: 1.4, a: 0.12, d: 0.08, g: 0.35 },
     { f: 160, to: 70, at: 0.15, d: 0.14, g: 0.45 },
     { f: 0, flt: "lowpass", fq: 1400, at: 0.15, d: 0.05, g: 0.4 },
   ],
+  // Fight: full-band noise slam low-passed 3500 -> 250 Hz, 120 -> 42 Hz body
+  // drop and a short 260 Hz square crack to keep it punchy.
   fight: () => [
     { f: 0, flt: "lowpass", fq: 3500, fto: 250, a: 0.002, d: 0.3, g: 0.6, wet: 1 },
     { f: 120, to: 42, a: 0.002, d: 0.35, g: 0.6 },
     { f: 260, to: 90, w: "square", flt: "lowpass", fq: 1200, d: 0.09, g: 0.15 },
   ],
+  // Reap: crystal chime, bells at E6 then B6 (70 ms apart), each with its 2.76x partial.
   reap: () => [...bell(1319, 0, 0.2), ...bell(1976, 0.07, 0.14)],
   // C5-G5-C6 call over a low hit, the last note held with an air swell.
   forge: () => [
@@ -94,21 +105,26 @@ const PALETTE: Record<SfxName, () => Voice[]> = {
     { f: 131, to: 65, d: 0.5, g: 0.4 },
     { f: 0, flt: "highpass", fq: 4000, at: 0.26, a: 0.05, d: 0.6, g: 0.08, wet: 1 },
   ],
+  // Turn closing: soft two-note fall, D5 then A4 100 ms later.
   endTurn: () => [
     { f: 587, w: "triangle", d: 0.16, g: 0.12, wet: 1 },
     { f: 440, w: "triangle", at: 0.1, d: 0.3, g: 0.12, wet: 1 },
   ],
+  // Turn opening: soft two-note rise, A4 then E5 100 ms later.
   turn: () => [
     { f: 440, w: "triangle", d: 0.16, g: 0.12, wet: 1 },
     { f: 659, w: "triangle", at: 0.1, d: 0.35, g: 0.12, wet: 1 },
   ],
-  // A riffle: short bright noise flicks at uneven spacing.
+  // A riffle: nine bright band-passed noise flicks (2.6-4.4 kHz) 45 ms apart,
+  // each offset a few ms so the spacing never sounds metronomic.
   shuffle: () =>
     Array.from({ length: 9 }, (_, i) => ({
       f: 0, flt: "bandpass" as const, fq: 2600 + Math.random() * 1800, q: 1.2,
       at: i * 0.045 + Math.random() * 0.012, d: 0.035, g: 0.35,
     })),
   sparkle: () => sparkle(0, 0.07),
+  // Win stinger (2.6 s): C-E-G fanfare into a held C major chord an octave up,
+  // low C2 anchor and a sparkle tail.
   win: () => [
     ...brass(523.25, 0, 0.14, 0.12),
     ...brass(659.25, 0.12, 0.14, 0.12),
@@ -117,6 +133,8 @@ const PALETTE: Record<SfxName, () => Voice[]> = {
     ...sparkle(0.4, 0.05),
     { f: 130.81, at: 0.38, d: 1.6, g: 0.3 },
   ],
+  // Lose stinger (2.6 s): descending G-E-C triads settle into a low minor pad
+  // (C3-Eb3-G3 saws, 300 Hz lowpass sweep) with a muffled noise bed under it.
   lose: () => [
     { f: 392, w: "triangle", d: 0.3, g: 0.15, wet: 1 },
     { f: 311.13, w: "triangle", at: 0.2, d: 0.3, g: 0.15, wet: 1 },
@@ -126,6 +144,7 @@ const PALETTE: Record<SfxName, () => Voice[]> = {
     )),
     { f: 0, flt: "lowpass", fq: 300, at: 0.6, a: 0.1, d: 1.2, g: 0.2 },
   ],
+  // Error: two low square blips (180 -> 140 Hz), the second 100 ms later.
   error: () => [
     { f: 180, to: 140, w: "square", flt: "lowpass", fq: 900, d: 0.08, g: 0.12 },
     { f: 170, to: 130, w: "square", flt: "lowpass", fq: 900, at: 0.1, d: 0.1, g: 0.12 },
@@ -231,7 +250,7 @@ class SoundEngine {
     };
   }
 
-  private voice(context: AudioContext, v: Voice, dry: boolean): void {
+  private voice(context: AudioContext, v: Voice): void {
     if (!this.masterGain || !this.noiseBuffer || this.voices >= MAX_VOICES) return;
     const t = context.currentTime + (v.at ?? 0);
     const attack = v.a ?? 0.004;
@@ -270,7 +289,7 @@ class SoundEngine {
     if (sustain) env.gain.setTargetAtTime(0, t + attack + v.d * 0.6, v.d * 0.08);
     tail.connect(env);
     env.connect(this.masterGain);
-    if (v.wet && !dry && this.echo) env.connect(this.echo);
+    if (v.wet && this.echo) env.connect(this.echo);
     this.voices += 1;
     source.onended = () => {
       this.voices -= 1;
@@ -288,12 +307,8 @@ class SoundEngine {
     const now = performance.now();
     if (now - (this.lastPlayed[name] ?? -1e3) < 50) return;
     this.lastPlayed[name] = now;
-    // Reduced motion also means no echo tails: same cues, drier and shorter.
-    const dry =
-      document.documentElement.classList.contains("reduce-motion") ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     try {
-      for (const v of PALETTE[name]()) this.voice(context, v, dry);
+      for (const v of PALETTE[name]()) this.voice(context, v);
     } catch {
       // A failed voice must never break the gesture that triggered it.
     }

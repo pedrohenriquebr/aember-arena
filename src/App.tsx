@@ -2944,7 +2944,7 @@ function App() {
         <TutorialWizard
           t={t}
           houses={selectedDeck.houses}
-          hintsToggle={<Toggle checked={settings.hints} label={t("config.experience.hints")} onChange={(value) => setSettings({ ...settings, hints: value })} />}
+          hintsToggle={<Toggle checked={settings.hints} label={t("config.experience.hints")} onChange={(value) => { if (value) sound.play("sparkle"); setSettings({ ...settings, hints: value }); }} />}
           onOpenVault={() => { markTutorialSeen(); setTutorialOpen(false); setScreen("browse"); }}
           onClose={() => { markTutorialSeen(); setTutorialOpen(false); }}
         />
