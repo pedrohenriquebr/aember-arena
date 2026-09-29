@@ -5,11 +5,12 @@
 //      botão, cancelamento dos FX em voo e ZERO re-render de CardTile.
 //   3. Cadeia sem agrupamento de `.table-plane` até `.board-piece`: overflow,
 //      opacity, filter, isolation, clip-path/mask, contain e transform-style.
-//   4. Projeção viva: forçando --tilt: 40deg a caixa projetada da .card-art
-//      difere da caixa plana (perspectiva real) e um translateZ na peça cresce
-//      a carta — se algum ancestral achatasse, nem a inclinação nem o Z
-//      apareceriam.
-//   5. Smoke do 3D com tilt 0: dois turnos completos e clique no board.
+//   4. Projeção viva: forçando --tilt: 0deg e depois 40deg, a altura do plano
+//      encurta (mesa em perspectiva) e a borda de perto alarga; um translateZ
+//      na peça cresce a carta — se algum ancestral achatasse, nem a inclinação
+//      nem o Z apareceriam.
+//   5. Smoke do 3D (tilt default da faixa): dois turnos completos e clique no
+//      board.
 //   6. Volta ao 2D: o wrapper volta a `display: contents`.
 // Uso: node e2e/probes/_3d-chain.mjs   (derruba o dev server ao sair)
 import { spawn } from "node:child_process";
@@ -282,13 +283,17 @@ try {
   });
   check("cadeia: perspective real no board-content", camera.perspective !== "none" && parseFloat(camera.perspective) > 500, JSON.stringify(camera));
 
-  // ---- 4. Projecao: tilt 40 e translateZ na peca
+  // ---- 4. Projecao: tilt 0 -> 40 e translateZ na peca
+  // H3D-03: o default do 3D ja e 40deg (32 no tablet), entao o probe ZERA o
+  // tilt inline para ter a referencia plana — comparar 40 com 40 nao mede nada.
   const projection = await page.evaluate(async () => {
     const plane = document.querySelector(".table-plane");
     const piece = document.querySelector(".table-plane .board-piece");
     const art = piece?.querySelector(".card-art");
     if (!plane || !piece || !art) return null;
     const settle = () => new Promise((r) => setTimeout(r, 520));
+    plane.style.setProperty("--tilt", "0deg");
+    await settle();
     const flatBox = art.getBoundingClientRect();
     const planeFlat = plane.getBoundingClientRect();
     plane.style.setProperty("--tilt", "40deg");
@@ -302,17 +307,17 @@ try {
     plane.style.removeProperty("--tilt");
     await settle();
     return {
-      flat: { w: flatBox.width, h: flatBox.height, planeW: planeFlat.width },
-      tilted: { w: tilted.width, h: tilted.height, planeW: planeTilted.width },
+      flat: { w: flatBox.width, h: flatBox.height, planeW: planeFlat.width, planeH: planeFlat.height },
+      tilted: { w: tilted.width, h: tilted.height, planeW: planeTilted.width, planeH: planeTilted.height },
       lifted: { w: lifted.width, h: lifted.height },
     };
   });
   check("projecao: cena 3D montada (plano + peca)", projection !== null);
   if (projection) {
-    const shrink = 1 - projection.tilted.h / projection.flat.h;
+    const planeShrink = 1 - projection.tilted.planeH / projection.flat.planeH;
     const widen = projection.tilted.planeW / projection.flat.planeW - 1;
     const zGrow = projection.lifted.w / projection.tilted.w - 1;
-    check("projecao: tilt 40 encolhe a altura da .card-art (caixa != plana)", shrink > 0.08, `altura ${projection.flat.h.toFixed(1)} -> ${projection.tilted.h.toFixed(1)} (${(shrink * 100).toFixed(1)}%)`);
+    check("projecao: tilt 40 encurta a altura do plano (mesa em perspectiva)", planeShrink > 0.2, `altura do plano ${projection.flat.planeH.toFixed(1)} -> ${projection.tilted.planeH.toFixed(1)} (${(planeShrink * 100).toFixed(1)}%)`);
     check("projecao: perspectiva alarga a borda de perto", widen > 0.05, `largura do plano ${projection.flat.planeW.toFixed(0)} -> ${projection.tilted.planeW.toFixed(0)} (+${(widen * 100).toFixed(1)}%)`);
     check("projecao: translateZ da peca cresce a carta (Z vivo)", zGrow > 0.04, `largura ${projection.tilted.w.toFixed(1)} -> ${projection.lifted.w.toFixed(1)} (+${(zGrow * 100).toFixed(1)}%)`);
   }
@@ -328,7 +333,7 @@ try {
   await page.evaluate(() => document.querySelector(".table-plane")?.style.removeProperty("--tilt"));
   await page.waitForTimeout(650);
 
-  // ---- 5. Smoke com tilt 0: dois turnos em 3D
+  // ---- 5. Smoke no 3D (tilt default da faixa: 40 no desktop): dois turnos
   for (let turn = 0; turn < 2; turn += 1) {
     await page.waitForFunction(enabled, null, { timeout: 90000 });
     await page.locator(".end-turn-button").click();
@@ -341,7 +346,7 @@ try {
     pieces: document.querySelectorAll(".table-plane .board-piece").length,
     winner: Boolean(document.querySelector(".winner-shade")),
   }));
-  check("smoke 3D (tilt 0): dois turnos completos", Boolean(smoke.round), JSON.stringify(smoke));
+  check("smoke 3D: dois turnos completos", Boolean(smoke.round), JSON.stringify(smoke));
 
   const clicked = await page.evaluate(() => {
     const tile = document.querySelector(".table-plane .board-piece .card-tile");
@@ -351,7 +356,7 @@ try {
     const target = hit && hit.closest(".card-tile");
     return { same: target === tile, selected: tile.classList.contains("is-selected") };
   });
-  if (clicked) check("hit-test 3D (tilt 0): o centro visual acerta a carta", clicked.same, JSON.stringify(clicked));
+  if (clicked) check("hit-test 3D (tilt 40): o centro visual acerta a carta", clicked.same, JSON.stringify(clicked));
 
   // ---- 6. Volta ao 2D
   await page.evaluate(() => { window.__tileCommits = 0; });
@@ -485,6 +490,10 @@ try {
   const tilt = await page.evaluate(async () => {
     const plane = document.querySelector(".table-plane");
     const read = () => parseFloat(getComputedStyle(plane).getPropertyValue("--tilt")) || 0;
+    // H3D-03: o default do 3D e 40deg — zera primeiro para a interpolacao medir
+    // uma mudanca real em vez de "40 -> 40".
+    plane.style.setProperty("--tilt", "0deg");
+    await new Promise((r) => setTimeout(r, 620));
     const start = performance.now();
     plane.style.setProperty("--tilt", "40deg");
     const samples = [];
@@ -511,6 +520,8 @@ try {
     const plane = document.querySelector(".table-plane");
     const art = document.querySelector(".table-plane .board-piece .card-art");
     if (!art) return null;
+    plane.style.setProperty("--tilt", "0deg");
+    await new Promise((r) => setTimeout(r, 620));
     const flat = art.getBoundingClientRect().height;
     content.style.opacity = "0.65";
     plane.style.setProperty("--tilt", "40deg");
@@ -559,10 +570,15 @@ try {
   const worst = frames.length ? Math.max(...frames) : 0;
   const long = frames.filter((d) => d > 33).length;
   // O primeiro quadro longo e o do clique (layout+raster da mesa inteira) e o
-  // ultimo e o ocio/teardown do evaluate: o corpo da transicao e o que fica
-  // ENTRE eles — e ali que um fade que repintasse a cena por quadro apareceria.
+  // ultimo, quando existe, e o ocio/teardown do evaluate: o corpo da transicao
+  // e o que fica ENTRE eles — e ali que um fade que repintasse a cena por quadro
+  // apareceria. Com um unico quadro longo (so o clique) nao ha corpo a acusar,
+  // entao o recorte segue do clique ate o fim.
   const longFrames = frames.map((d, i) => (d > 150 ? i : -1)).filter((i) => i >= 0);
-  const body = longFrames.length > 1 ? frames.slice(longFrames[0] + 1, longFrames[longFrames.length - 1]) : frames;
+  const body = frames.slice(
+    longFrames.length ? longFrames[0] + 1 : 0,
+    longFrames.length > 1 ? longFrames[longFrames.length - 1] : frames.length,
+  );
   const bodyLong = body.filter((d) => d > 150).length;
   console.log(`INFO H3D-10: frames com CPU 4x — pior=${worst.toFixed(1)}ms, >33ms=${long}/${frames.length}, corpo>150ms=${bodyLong}/${body.length} (headless renderiza em software; a meta de 60fps do plano §2.9 vale com GPU)`);
   check("H3D-10: corpo da transicao sem travamento (CPU 4x)", frames.length > 20 && bodyLong === 0, `pior=${worst.toFixed(1)}ms corpo>150ms=${bodyLong}/${body.length} deltas=${frames.map((d) => d.toFixed(0)).join(",")}`);

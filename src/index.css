@@ -6706,11 +6706,12 @@ html .spin {
 
 .game-board--3d .table-plane {
   display: block;
-  /* O plano inclinado. --tilt: 0deg é o default NEUTRO da fundação (o modo 3D
-     já é jogável antes de a mesa inclinar); o H3D-03 afina por faixa (40°
-     desktop / 32° tablet) e a transição de entrada é do H3D-10. O probe mede a
-     projeção forçando 40°. */
+  /* O plano inclinado: 40° no desktop, 32° no tablet (H3D-03, abaixo). O celular
+     fica em 0° até o H3D-09 abrir o perfil 2.5D. O probe mede a projeção
+     forçando 40°. `position: relative` ancora o playmat (::before) no plano —
+     o transform já faz stacking context, então não muda a ordem de pintura. */
   --tilt: 0deg;
+  position: relative;
   transform: rotateX(var(--tilt));
   transform-origin: 50% 50%;
   transform-style: preserve-3d;
@@ -6769,4 +6770,83 @@ html .spin {
 
 @keyframes view-fade {
   50% { opacity: 0.65; }
+}
+
+/* ---------- Mesa inclinada e playmat (H3D-03, VIEW3D_PLAN §2.1/§2.6) ---------- */
+/* A câmera fica acima e atrás do jogador: 40° no desktop, 32° no tablet (o
+   teto legível do plano é 40°; o máximo absoluto de ajuste é 48°). O celular
+   (< 701px) segue em 0° até o H3D-09 montar o perfil 2.5D. O --tilt é um token
+   só: a pose das cartas (H3D-04) e o billboard do texto leem o mesmo valor. */
+@media (min-width: 701px) {
+  .game-board--3d .table-plane {
+    --tilt: 32deg;
+    /* transform não devolve layout: a projeção encurta a mesa (~cos 32° = 0,85)
+       e deixa uma faixa vazia; as margens negativas recolhem essa faixa para a
+       mão subir no viewport. Afinadas por captura (H3D-03). */
+    margin-block: -32px;
+  }
+}
+
+@media (min-width: 1041px) {
+  .game-board--3d .table-plane {
+    --tilt: 40deg;
+    margin-block: -48px;
+  }
+}
+
+/* A câmera recua um pouco no tablet (planilha §2.1). */
+@media (min-width: 701px) {
+  .game-board--3d .board-content {
+    --persp: 1000px;
+  }
+}
+
+@media (min-width: 1041px) {
+  .game-board--3d .board-content {
+    --persp: 1100px;
+  }
+}
+
+/* Playmat: iluminação de palco — centro mais claro, vinheta nas bordas — em
+   gradientes estáticos (sem filtro, sem imagem; §2.9). Fica coplanar ao plano e
+   não intercepta cliques: o trapézio (borda de perto mais larga) vem da própria
+   perspectiva, não de um transform próprio. */
+.game-board--3d .table-plane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(ellipse 58% 54% at 50% 47%, rgba(110, 152, 124, 0.2), transparent 70%),
+    radial-gradient(ellipse 116% 94% at 50% 50%, transparent 50%, rgba(4, 7, 6, 0.55) 100%),
+    linear-gradient(180deg, rgba(4, 7, 6, 0.36), rgba(4, 7, 6, 0.02) 26%, rgba(4, 7, 6, 0.02) 74%, rgba(4, 7, 6, 0.38));
+  box-shadow: inset 0 0 0 1px rgba(209, 182, 122, 0.08);
+  pointer-events: none;
+}
+
+/* Texto do plano nunca fica deitado: o plano gira, o texto contra-gira
+   (billboard completo, §2.6). O heading do oponente ainda recebe o fator de
+   profundidade — ele está no fundo, onde a escala da câmera é ~0,89. */
+.game-board--3d .table-plane .zone-heading,
+.game-board--3d .table-plane .turn-console,
+.game-board--3d .table-plane .fight-instruction {
+  rotate: x calc(-1 * var(--tilt));
+  transform-origin: 50% 100%;
+}
+
+.game-board--3d .battle-zone--opponent {
+  --depth-k: 1.13;
+}
+
+.game-board--3d .battle-zone--opponent .zone-heading,
+.game-board--3d .battle-zone--opponent .zone-card-count {
+  font-size: calc(var(--fs-2xs) * var(--depth-k));
+}
+
+/* Legendas sob as cartas (caption e host do upgrade) saem no 3D: seriam texto
+   deitado no plano e a informação segue no aria-label, no inspetor e no
+   lightbox (§2.6). */
+.game-board--3d .card-tile--board .card-caption,
+.game-board--3d .attachment-host {
+  display: none;
 }
