@@ -5165,11 +5165,18 @@ button:disabled {
   }
 }
 
-/* O destino do voo espera escondido: quem aparece é o ghost. As animações de
-   entrada ficam desligadas inline no elemento (FxLayer) — nunca replayam quando
-   a marca sai e não afetam o ready-breathe da .card-art. */
+/* O destino do voo espera escondido: quem aparece é o ghost. As entradas
+   (card-arrive do .board-piece e card-deal do tile) ficam suprimidas por um
+   atributo PERSISTENTE — removê-lo no fim do voo reiniciaria a animação. As
+   marcas do diretor vencem: com acting/hit a regra não casa e a animação delas
+   volta (FX-01: sem isso a carta que pousou nunca mais pulsaria nem tremeria). */
 [data-fx="landing"] {
   visibility: hidden;
+}
+
+.board-piece[data-landed]:not([data-fx="acting"]):not([data-fx="hit"]),
+.card-tile[data-landed]:not([data-fx="acting"]):not([data-fx="hit"]) {
+  animation: none;
 }
 
 /* ---------- Palco do turno da IA (onda 2, plano §3) ---------- */

@@ -129,10 +129,11 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         run.mark = destPiece;
         // Sem animação de entrada no destino, por dois motivos: medir o slot sem
         // o translate/scale do quadro 0 e nunca replayar card-arrive/card-deal —
-        // antes o voo já é a entrada. Fica inline (não volta ao remover a marca),
-        // mas não mexe no ready-breathe, que vive na .card-art.
-        destPiece.style.animation = "none";
-        if (destTile && destTile !== destPiece) destTile.style.animation = "none";
+        // antes o voo já é a entrada. A supressão é um atributo PERSISTENTE (o
+        // CSS só mata as entradas e cede às marcas acting/hit): inline venceria
+        // a folha para sempre e a carta pousada nunca mais pulsaria (FX-01).
+        destPiece.setAttribute("data-landed", "");
+        if (destTile && destTile !== destPiece) destTile.setAttribute("data-landed", "");
       }
       const destArt = destTile?.querySelector(".card-art") ?? destTile;
       const to = destArt ? destArt.getBoundingClientRect() : null;
