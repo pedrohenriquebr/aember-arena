@@ -1733,7 +1733,27 @@ button:disabled {
 }
 
 .board-piece--resting .card-tile:not(:disabled) .card-art {
+  border-color: rgba(150, 154, 146, 0.55);
   opacity: 0.62;
+  filter: grayscale(0.55);
+}
+
+/* VA-07: selo de "girada/já usada" no canto da carta exausta. */
+.rest-badge {
+  position: absolute;
+  z-index: 2;
+  top: 3px;
+  right: -4px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid rgba(206, 210, 196, 0.6);
+  border-radius: 50%;
+  color: #dfe2d4;
+  background: #2a2d29;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
 }
 
 /* BUG-08: âmbar capturado no tile (antes só no inspetor). */
@@ -4144,7 +4164,7 @@ button:disabled {
 .home-screen {
   width: min(100%, 1120px);
   margin: 0 auto;
-  padding: 14px 11px 168px;
+  padding: 14px 11px 156px;
 }
 
 @media (min-width: 701px) {
@@ -4809,7 +4829,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 11px;
+  padding: 4px 11px; /* VA-10: dock de 52px (44px de alvo + 2x4) acima da tab bar */
   border-top: 1px solid rgba(226, 218, 196, 0.1);
   background: rgba(18, 20, 17, 0.94);
   backdrop-filter: blur(16px);
@@ -5229,7 +5249,7 @@ button:disabled {
   justify-content: space-between;
   gap: 10px;
   margin: 16px -11px 0;
-  padding: 10px 11px;
+  padding: 4px 11px; /* VA-10: dock de 52px */
   border-top: 1px solid rgba(226, 218, 196, 0.1);
   background: rgba(18, 20, 17, 0.94);
   backdrop-filter: blur(16px);
@@ -5290,6 +5310,8 @@ button:disabled {
 }
 
 .card-zoom-art {
+  /* VA-04: o fallback tipografico (cqi) também vive aqui, sem .card-art em volta. */
+  container-type: inline-size;
   position: relative;
   aspect-ratio: 0.714;
   flex: 0 0 auto;
@@ -5362,6 +5384,7 @@ button:disabled {
 }
 
 .card-lightbox-art {
+  container-type: inline-size;
   position: relative;
   width: min(58%, 218px);
   aspect-ratio: 0.714;
@@ -5522,6 +5545,13 @@ button:disabled {
   z-index: 55;
   inset: 0;
   pointer-events: none;
+  transition: background-color 160ms ease-out;
+}
+
+/* VA-08: durante a apresentação da carta (ghost no portal) a mesa escurece de leve:
+   só a carta em cena fica em primeiro plano, sem disputar com as cartas do plano. */
+.fx-layer:has(.fx-ghost) {
+  background-color: rgba(5, 8, 7, 0.4);
 }
 
 /* Voo: o ghost nasce centrado (50%/46% da viewport) e no tamanho da
@@ -5642,9 +5672,9 @@ button:disabled {
 /* Legenda da apresentação ("o Warden jogou X"): vive dentro do ghost. */
 .fx-caption {
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 50%;
-  margin-top: 7px;
+  margin-bottom: 8px; /* VA-08: a legenda fica centrada ACIMA da carta em cena */
   padding: 3px 9px;
   border-radius: 999px;
   color: var(--paper);
@@ -5733,7 +5763,9 @@ button:disabled {
   position: fixed;
   white-space: nowrap;
   top: 38%;
+  bottom: auto;
   left: 50%;
+  margin-bottom: 0;
   padding: 10px 26px;
   border: 1px solid rgb(var(--sel-core) / 0.45);
   background: rgba(10, 14, 18, 0.9);
@@ -5756,7 +5788,9 @@ button:disabled {
    (900ms) removê-lo. */
 .fx-caption--static {
   position: fixed;
-  top: calc(46% + 112px);
+  top: calc(46% - 112px - 34px);
+  bottom: auto;
+  margin-bottom: 0;
   animation: none;
 }
 
@@ -7246,10 +7280,10 @@ html .spin {
     display: none;
   }
 
-  /* Exausta: o mesmo giro de 12 graus do 3D (o slot nao muda, §1.5) — a
+  /* Exausta: o mesmo giro de 20 graus (VA-07) do 3D (o slot nao muda, §1.5) — a
      dessaturacao continua vindo da regra 2D. */
   :is(.game-board--3d, .game-board--lite) .board-piece--resting > .card-tile > .card-art {
-    rotate: z 12deg;
+    rotate: z 20deg;
   }
 
   /* Sombra estatica no tapete: separa a carta do plano sem lift. */
@@ -7289,10 +7323,12 @@ html .spin {
       inset: 0;
       border-radius: var(--radius-md);
       background:
-        radial-gradient(ellipse 58% 54% at 50% 47%, rgba(110, 152, 124, 0.2), transparent 70%),
-        radial-gradient(ellipse 116% 94% at 50% 50%, transparent 50%, rgba(4, 7, 6, 0.55) 100%),
+        radial-gradient(ellipse 58% 54% at 50% 47%, rgba(128, 176, 142, 0.34), transparent 72%),
+        radial-gradient(ellipse 116% 94% at 50% 50%, transparent 48%, rgba(3, 6, 5, 0.7) 100%),
         linear-gradient(180deg, rgba(4, 7, 6, 0.36), rgba(4, 7, 6, 0.02) 26%, rgba(4, 7, 6, 0.02) 74%, rgba(4, 7, 6, 0.38));
-      box-shadow: inset 0 0 0 1px rgba(209, 182, 122, 0.08);
+      /* VA-05: borda do tapete iluminada (o trapézio da perspectiva precisa de um contorno
+         claro contra o fundo escuro, como no Arena) + brilho interno no aro. */
+      box-shadow: inset 0 0 0 2px rgba(214, 188, 128, 0.3), inset 0 0 28px rgba(150, 196, 160, 0.16);
       translate: calc(var(--cam-x, 0) * 12px);
       pointer-events: none;
     }
@@ -7345,6 +7381,7 @@ html .spin {
        desencosta. */
     .game-board--3d .table-plane .battle-zone--player .zone-heading {
       padding-inline: 44px;
+      top: 11px; /* VA-09: 8px de respiro sob o console */
     }
 
     .game-board--3d .table-plane .battle-zone--opponent .zone-heading {
@@ -7376,7 +7413,7 @@ html .spin {
       --lift: 12px;
       --raise: 14px;
       transform-style: preserve-3d;
-      translate: 0 0 var(--lift);
+      translate: 0 var(--drop, 0px) var(--lift);
       rotate: x calc(var(--lean) - var(--tilt));
       transform-origin: 50% 100%; /* os "pés" da carta ficam no tapete */
       transition: translate 150ms var(--ease-out), rotate 150ms var(--ease-out);
@@ -7415,11 +7452,11 @@ html .spin {
       scale: 1.08;
     }
 
-    /* Exausta: 12° de giro no plano da CARTA, sem mexer no slot (§1.5). O giro
+    /* Exausta: 20° de giro (VA-07; era 12°) no plano da CARTA, sem mexer no slot (§1.5). O giro
        fica na arte (a `rotate` do tile já é do eixo X e a propriedade aceita uma
        rotação só); os badges de dano/âmbar seguem em pé, legíveis. */
     .game-board--3d .table-plane .board-piece--resting > .card-tile > .card-art {
-      rotate: z 12deg;
+      rotate: z 20deg;
     }
 
     /* Lanes sem scroll do H3D-02: as cartas dividem a largura da lane (--n vem
@@ -7459,9 +7496,15 @@ html .spin {
       justify-self: center;
     }
 
-    .game-board--3d .board-lane > .empty-battleline {
-      grid-row: 1;
-      grid-column: 1 / -1;
+    /* VA-09: o "0 ON TABLE" do heading já diz que a fileira está vazia — o texto sai da
+       vista (segue para leitores de tela) em vez de duplicar o console. */
+    .game-board--3d .empty-battleline {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
     }
 
     .game-board--3d .board-piece--attachment {
@@ -7516,6 +7559,12 @@ html .spin {
        px vence o cqi em qualquer largura desta faixa. */
     .game-board--3d .battle-zone--opponent { --card-w-3d: 76px; }
     .game-board--3d .battle-zone--player { --card-w-3d: 84px; }   /* × ~1,14 ≈ 96px visuais */
+
+    /* VA-06: a fileira do jogador desce 14px: a carta de pé avança acima da caixa e
+       entrava na barra do console (o padding da zona tiraria altura do cqh). */
+    .game-board--3d .battle-zone--player .board-lane {
+      --drop: 14px;
+    }
   }
 
   /* Perfil ALTO (>= 760px) e >= 960px: a zona ganha altura e a carta acompanha
@@ -7523,8 +7572,8 @@ html .spin {
      plano, mais o fundo recua (z = metade da mesa × sen θ), então o teto do
      oponente sobe por faixa para manter ~0,77 na tela (medido no _3d-arena). */
   @media (min-width: 701px) and (min-height: 760px) {
-    .game-board--3d .battle-zone--opponent { --card-w-3d: 88px; }
-    .game-board--3d .battle-zone--player { --card-w-3d: 96px; }
+    .game-board--3d .battle-zone--opponent { --card-w-3d: 96px; }
+    .game-board--3d .battle-zone--player { --card-w-3d: 110px; }
   }
 
   @media (min-width: 701px) and (max-width: 1040px) and (min-height: 760px) {

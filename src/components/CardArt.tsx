@@ -113,15 +113,18 @@ function placeZoom(rect: DOMRect): ZoomPlacement {
   const wanted = rect.top + rect.height / 2 - totalHeight / 2;
   const top = Math.max(ZOOM_MARGIN, Math.min(viewport.height - totalHeight - ZOOM_MARGIN, wanted));
   const counters = document.querySelectorAll(ZOOM_COUNTERS).length;
+  const railEl = document.querySelector(".command-rail:not(.command-rail--drawer)");
   const avoid = Array.from(document.querySelectorAll(`${ZOOM_COUNTERS}, ${ZOOM_AVOID}`), (el) => el.getBoundingClientRect());
-  const rail = document.querySelector(".command-rail:not(.command-rail--drawer)")?.getBoundingClientRect();
+  const rail = railEl?.getBoundingClientRect();
+  if (rail && rail.width > 0) avoid.push(rail);
 
-  // Ordem: slot do rail (só notas), direita da carta, esquerda da carta, metade oposta do palco.
+  // Ordem: direita da carta, esquerda da carta, metade oposta do palco e, por último, o
+  // slot do rail (VA-04: o rail guarda inspetor/Undo/log — cobri-lo é o pior caso).
   const cardCenter = rect.left + rect.width / 2;
   const candidates: Array<[number, string]> = [];
-  if (rail && rail.width > 0) candidates.push([viewport.width - width - ZOOM_MARGIN, "100%"]);
   candidates.push([rect.right + ZOOM_GAP, "0%"], [rect.left - width - ZOOM_GAP, "100%"]);
   candidates.push(cardCenter < viewport.width / 2 ? [viewport.width - width - ZOOM_MARGIN, "100%"] : [ZOOM_MARGIN, "0%"]);
+  if (rail && rail.width > 0) candidates.push([viewport.width - width - ZOOM_MARGIN, "100%"]);
 
   // Sem posição livre (drawer, tela estreita): a de menor sobreposição, placar pesando mais.
   let chosen = candidates[0];

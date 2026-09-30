@@ -24,6 +24,7 @@ import {
   Music,
   RefreshCw,
   RotateCcw,
+  RotateCw,
   Settings2,
   Shield,
   Sword,
@@ -1292,6 +1293,12 @@ const BoardLane = memo(function BoardLane({
               damageLabel={card.damage > 0 ? `${card.damage} ${t("game.dmg")}` : undefined}
               onClick={onSelect}
             />
+            {/* VA-07: "já usada" precisa de um sinal forte além do escurecimento. */}
+            {!card.ready && !card.stunned && (
+              <span className="rest-badge" role="img" aria-label={t("game.resting")}>
+                <RotateCw size={12} strokeWidth={2.4} />
+              </span>
+            )}
           </div>
         );
       })}
