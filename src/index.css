@@ -7068,8 +7068,10 @@ html .spin {
    overflow ROLÁVEL e o browser rola o board ao focar/selecionar uma carta da mão
    (a faixa do Warden subia ~40px). `clip` recorta igual e não é rolável; quem não
    suporta mantém o `hidden` da regra base. */
-.game-board--3d {
-  overflow: clip;
+@media (min-width: 701px) {
+  .game-board--3d {
+    overflow: clip;
+  }
 }
 
 .game-board--3d .board-content {
