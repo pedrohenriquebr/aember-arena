@@ -92,7 +92,7 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **143,5 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **145 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
@@ -147,6 +147,12 @@ src/
    dependência: medido **142,57 kB gz** (+1,19 sobre os 141,38) — dentro do teto,
    sem necessidade de nova revisão. Varredura de mortos pós-mudança
    (`_dead-css`): 0 removível (mesmos nomes dinâmicos de antes).
+   → **145** (UX-FIT lote 2, `docs/UX_FIT_PLAN.md` §2.4/§2.6/§4: mão como HUD
+   com título fundido à barra do jogador, rail em drawer abaixo de 1041px
+   (botões Desfazer/Notas no console, useDialogFocus, Esc/backdrop/X) e ritmo da
+   IA configurável `aiDelayMs`. Só CSS/TS, zero dependência; FIT-04 mediu
+   143,20 e FIT-05 143,66 kB gz. Teto ÚNICO deste lote — acima de 145: parar.
+   Varredura de mortos pré-revisão: 0 removível (`.match-chip` já saiu).)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
