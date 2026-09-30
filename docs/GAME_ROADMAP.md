@@ -42,6 +42,32 @@ Prophecy ~22, Archon Power ~28.
 **Gatilhos implementados (7 de ~12):** play, reap, fight, after fight→fight,
 beforeFight, destroyed, action, omni. **Faltam:** Scrap: (59 cartas),
 After you…: (1), interrupt/genérico.
+
+### 2.b Matriz de MECÂNICAS do jogo (auditoria pós-pergunta do dono — código conferido)
+
+**Keywords — motor 10 de ~18 do keyteki (55%):** ✅ Elusive, Taunt, Skirmish,
+Poison, Deploy, Alpha, Omega, Assault X, Hazardous X, Splash-Attack X.
+❌ Faltam 8: **Treachery, Versatile, Graft, Entrenched, Exalt, Haunted,
+Invulnerable, Overwhelmed** (sets WC+).
+
+**Mecânicas de jogo — cobertas ✅:** escolha de casa, forja/custo de chave
+(+keyCost), chains (penalidade de compra), armadura 1×/turno, flancos/vizinhos,
+archives, capture, maverick, Gigantic (**parcial**: metade under entra mas
+poder/texto não mesclam — fidelidade declarada), 1ª jogada do turno 1,
+mulligan, pass-and-play, undo/replay/seed.
+
+**Mecânicas — AUSENTES ❌ (grep zero no motor):**
+| Mecânica | Set/era | Impacto |
+|---|---|---|
+| **Tide (maré alta/baixa)** | Dark Tidings (DT) | mecânica CENTRAL do set — cartas inteiras giram nela |
+| **Scrap:** | Grim Reminders (GR) | 59 cartas com gatilho |
+| **Purge** (remover do jogo) | transversal | 45+ cartas usam o verbo |
+| **Take control** (transferir controle) | transversal | upgrades inimigos anexam, mas troca de controle não existe |
+| **"You may"** (efeitos opcionais) | transversal | 132 cartas começam com "you" |
+| **Enhanced — ícones de bônus além do âmbar** (capture/damage/draw) | MM+ | motor só soma o ícone de âmbar |
+| **Prophecy** (mecânica completa) | PV/ToC | tipo filtrado, mecânica inexistente |
+| **Interrupt / After you…** | transversal | 1+ carta; janela reativa |
+| **Efeitos persistentes** ("Each friendly…") | transversal | 1.000 cartas (já mapeado) |
 **Ações implementadas (21):** destroy, damage, steal, capture, stun, draw,
 discardRandom, gainAmber, fromDiscard, returnToHand, archiveTop, exhaust,
 loseAmber, gainChains, heal, archive, ready, keyCost, use, returnToDeck, unstun.
@@ -140,11 +166,11 @@ missão deepseek ≈ 2-6 histórias M/1-7h (flat) · validação Opus ≈ $1-3.
 
 | Frente | Coberto | Nota |
 |---|---:|---|
-| Motor de regras (core) | 85% | falta efeitos persistentes + condições ricas |
+| Motor de regras (core) | 78% | efeitos persistentes, tide, scrap, purge, take-control, "you may", ícones enhanced, keywords −8, condições ricas |
 | Cobertura do catálogo (texto→efeito) | **6%** | pula para ~65-70% com o pipeline LLM |
 | UX palco/mobile | 95% | FIT-06b + validação |
 | Animações/efeitos | 80% | ondas 1-3 feitas; reticle/investida pendentes |
 | Modo 3D | 85% | 12/12 base + punch; layout Arena (10 histórias) pendente |
 | Áudio | 95% | menores VAL-07..11 |
 | Tutorial/onboarding | 100% | — |
-| **Produto global (ponderado)** | **~82%** | com as 3 frentes pendentes: modo 3D Arena, pipeline de catálogo, efeitos persistentes |
+| **Produto global (ponderado)** | **~80%** | frentes pendentes: layout Arena 3D, pipeline LLM de catálogo, efeitos persistentes + mecânicas ausentes (tide/scrap/purge/control) |
