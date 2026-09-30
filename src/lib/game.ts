@@ -1251,7 +1251,10 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   if (move.type === "discard") return false;
   const source = moveSource(state, side, move);
   if (!source) return false;
-  if (move.type === "play" && (source.face.type !== "Action" || printedAmber(source.face) > 0)) return true;
+  const icons = source.face.bonusIcons;
+  // A card that enters play, carries printed amber or resolves extra bonus
+  // icons always does something when played (Onda 4).
+  if (move.type === "play" && (source.face.type !== "Action" || printedAmber(source.face) > 0 || icons?.capture || icons?.damage || icons?.draw)) return true;
   const triggers = triggersFor(move);
   const declined = declines(move);
   return abilitiesOf(state, source).some(

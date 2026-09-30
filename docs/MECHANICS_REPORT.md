@@ -21,7 +21,7 @@ citados abaixo).
 | Keywords resolvidas pelo motor | **12** (Elusive, Taunt, Skirmish, Poison, Deploy, Alpha, Omega, Assault X, Hazardous X, Splash-attack X, Exalt, Ward) |
 | Pool medido | **2.603** cartas jogáveis únicas (15 sets, keyteki-json-data) — última medição na onda 3 (`KF_DATA` ausente nesta máquina) |
 | Efeito completo / parcial / vanilla | **134 (5,1%) / 33 (1,3%) / 2.420 (93,0%)** + **16 (0,6%) que derrubam o parser** (BUG-01) — idem, medido na onda 3 |
-| Specs vitest | **209** (12 arquivos), todas verdes |
+| Specs vitest | **210** (12 arquivos), todas verdes |
 
 Leitura honesta: o motor novo é **correto no que afirma cobrir** (all-or-nothing por
 ability, selo de cobertura visível), mas cobre uma fatia pequena do pool real. Os dois
@@ -429,13 +429,13 @@ i18n.
 
 ---
 
-## 5. Testes (209 specs)
+## 5. Testes (210 specs)
 
 | Arquivo | Specs | Conteúdo |
 |---|---:|---|
 | `rules.test.ts` | 48 | keywords de luta (Elusive 1×/turno e reset, Taunt, Assault, Hazardous, Skirmish, Poison vs armadura, Splash-attack, array do vault), armadura por turno, Alpha/Omega/Deploy, turno (7 cartas e 1 jogada no turno 1, ready/stun, compra com chains, forja no custo atual, Lash, vitória na 3ª chave, arquivos opcionais, mavericks, jogada ilegal), abilities e alvos (captura, alvo escolhido, expansão por alvo, Dominator Bauble, Research Smoko, upgrade no hospedeiro, condição como poda da IA), mulligan/log/tallies/FEAT-12 |
 | `cardText.test.ts` | 38 | prefixos de gatilho, normalização (glifos A/Æ/D, nome próprio → `this card`), condições antes/depois do efeito, all-or-nothing, gramática persistente (stats, grants, proibições, duração, ability citada) e das ondas 3 (purge/sacrifice/exalt como verbos separados, tokens make/create) e 4 (`if you do`, ward/enrage/take control), cobertura dos decks demo |
-| `setstate.test.ts` | 24 | onda 4: ward (dano cancelado inteiro, destroy em wipe, vizinhos do Old Egad, JSON-safe, keyword), enrage (luta forçada e token removido, "hits the other side", "if able"), enhanced (capture/damage/draw no play, `enhancements` do payload), take control (muda de battleline, ninguém luta contra o que controla, volta pro dono, dono retoma), forja/desforja fora de fase (Key Charge com "may", no cost + vitória, +N, unforge, `forgeKey()` puro) e "instead" (Shadow Self, Annihilation Ritual, destroy → archive) |
+| `setstate.test.ts` | 25 | onda 4: ward (dano cancelado inteiro, destroy em wipe, vizinhos do Old Egad, JSON-safe, keyword), enrage (luta forçada e token removido, "hits the other side", "if able"), enhanced (capture/damage/draw no play, `enhancements` do payload, poda da IA), take control (muda de battleline, ninguém luta contra o que controla, volta pro dono, dono retoma), forja/desforja fora de fase (Key Charge com "may", no cost + vitória, +N, unforge, `forgeKey()` puro) e "instead" (Shadow Self, Annihilation Ritual, destroy → archive) |
 | `persistent.test.ts` | 16 | Bulwark, Grey Monk, Staunch Knight, Ember Imp e Scrambler Storm portados do keyteki 01-Core + poder/armadura efetivos na luta e na morte, Taunt concedida, duração, gainAbility, update no host, JSON-safe, arquivos opcionais |
 | `zones.test.ts` | 11 | onda 3: purge (sai do jogo, não volta no reembaralhamento, `Destroyed:` silencioso), sacrifice (descarte do dono sem `Destroyed:`, âmbar capturado volta), tokens (nasce na mesa com a casa da fonte, morre fora das zonas, JSON-safe) e exalt (reserva comum, "twice", âmbar ao oponente na saída, não bloqueia uso, keyword reconhecida) |
 | `reactions.test.ts` | 11 | onda 2: "You may" opcional com variante decline, reações `After X:`/`Each time X:` e gatilhos de fase |

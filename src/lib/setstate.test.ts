@@ -11,7 +11,7 @@
 // AGPL-3.0 — adapted to this engine's API.
 import { describe, expect, it } from "vitest";
 import { rulesOf } from "./abilities";
-import { applyMove, chooseHouse, endTurn, forgeKey, getLegalMoves, type CardFace, type GameState } from "./game";
+import { applyMove, chooseHouse, endTurn, forgeKey, getLegalMoves, moveHasEffect, type CardFace, type GameState } from "./game";
 import { readBonusIcons } from "./keyforgeApi";
 import { byTitle, card, setupTest, titles } from "./testkit";
 
@@ -159,6 +159,13 @@ describe("enhanced bonus icons (keyteki Card.bonusIcons)", () => {
     const plain = cardOf("Plain", "", { amber: 2 });
     const state = play(setupTest({ hand: [plain] }), 0, "Plain");
     expect(state.players[0].amber).toBe(2);
+  });
+
+  it("counts as an effect for the AI's pruning when only the icons remain", () => {
+    const blast = cardOf("Blast", "", { bonusIcons: { amber: 0, damage: 1 } });
+    const state = setupTest({ hand: [blast] }, { inPlay: [creature("Foe", 3)] });
+    const move = { type: "play", instanceId: byTitle(state.players[0].hand, "Blast")!.instanceId } as const;
+    expect(moveHasEffect(state, 0, move)).toBe(true);
   });
 });
 
