@@ -15,13 +15,13 @@ citados abaixo).
 | Item | Valor |
 |---|---|
 | Gatilhos de engine | **7** (`play`, `reap`, `fight`, `beforeFight`, `destroyed`, `action`, `omni`) a partir de **9** grafias impressas |
-| Tipos de ação (`Act.k`) | **25** (onda 3: +purge, sacrifice, exalt, makeToken) |
-| Padrões de frase reconhecidos | **33** (13 `SIMPLE` + 17 `VERBS` + 3 formas especiais) + 2 formas de condicional |
+| Tipos de ação (`Act.k`) | **32** (onda 4: +ward, removeWard, enrage, removeEnrage, takeControl, forgeKey, unforgeKey) |
+| Padrões de frase reconhecidos | **42** (16 `SIMPLE` + 21 `VERBS` + 3 formas especiais) + 2 formas de condicional |
 | Condições (`Condition.k`) | **4** (`amber`, `moreCreatures`, `fewerCreatures`, `not`) — o parser produz 3 |
-| Keywords resolvidas pelo motor | **11** (Elusive, Taunt, Skirmish, Poison, Deploy, Alpha, Omega, Assault X, Hazardous X, Splash-attack X, Exalt) |
-| Pool medido | **2.603** cartas jogáveis únicas (15 sets, keyteki-json-data) |
-| Efeito completo / parcial / vanilla | **134 (5,1%) / 33 (1,3%) / 2.420 (93,0%)** + **16 (0,6%) que derrubam o parser** (BUG-01) |
-| Specs vitest | **185** (11 arquivos), todas verdes |
+| Keywords resolvidas pelo motor | **12** (Elusive, Taunt, Skirmish, Poison, Deploy, Alpha, Omega, Assault X, Hazardous X, Splash-attack X, Exalt, Ward) |
+| Pool medido | **2.603** cartas jogáveis únicas (15 sets, keyteki-json-data) — última medição na onda 3 (`KF_DATA` ausente nesta máquina) |
+| Efeito completo / parcial / vanilla | **134 (5,1%) / 33 (1,3%) / 2.420 (93,0%)** + **16 (0,6%) que derrubam o parser** (BUG-01) — idem, medido na onda 3 |
+| Specs vitest | **209** (12 arquivos), todas verdes |
 
 Leitura honesta: o motor novo é **correto no que afirma cobrir** (all-or-nothing por
 ability, selo de cobertura visível), mas cobre uma fatia pequena do pool real. Os dois
@@ -81,7 +81,7 @@ keyteki, mas sem classes: o mesmo objeto alimenta motor, IA e selo de cobertura.
 
 ### 2.2 `keywords.ts`
 
-- `ENGINE_KEYWORDS`: as 10 keywords que `game.ts` resolve sozinho.
+- `ENGINE_KEYWORDS`: as 12 keywords que `game.ts` resolve sozinho.
 - `readKeyword("assault:2" | "Assault 2" | "Elusive")` → `[nome, valor]` (valor 1 por
   padrão; hífens/travessões normalizados para `splash-attack`).
 - `printedKeywords(face, header)`: usa o array `keywords` do vault quando existe e
@@ -104,15 +104,19 @@ Sem NLP: gramática fixa.
    reconhecidos só para **não vazarem** para a ability anterior — contam como não
    entendidos.
 4. **Frases** (`body.split(/\.\s*/)`), cada uma precisa casar com:
-   - `SIMPLE` (11): gain/lose/steal N amber, opponent loses N, gain N chains, draw N,
+   - `SIMPLE` (16): gain/lose/steal N amber, opponent loses N, gain N chains, draw N,
      opponent discards N random, keys cost +N during opponent's next turn, archive top
-     card, return a card / a creature from discard to hand;
-   - `VERBS` (14) + objeto: destroy, sacrifice, deal N (damage) to, stun, exhaust,
-     ready, unstun, heal N damage from, fully heal, return … to owner's hand, put … on
-     top of your deck, archive, use, *X* captures N;
+     card, make/create (a|N) token creature(s), return a card / a creature from discard
+     to hand, `forge (a|another) key at current|no cost|+N cost`, `unforge an
+     opponent's key`;
+   - `VERBS` (21) + objeto: destroy, sacrifice, purge, exalt (… twice), deal N (damage)
+     to, stun, exhaust, ready, unstun, heal N damage from, fully heal, return … to
+     owner's hand, put … on top of your deck, archive, use, *X* captures N, ward X,
+     remove ward from X, enrage X, remove enrage from X, take/gain control of X;
    - especiais (3): `capture N amber` (criatura/upgrade), `choose a friendly creature to
      capture N`, `stun and exhaust X`;
-   - condicional: `If <cond>, <frase>` e `<frase> if you control more creatures…`.
+   - condicional: `If <cond>, <frase>`, `<frase> if you control more creatures…` e
+     `If you do, <frase>` (o `then` do keyteki; ver §2.7).
 5. **`parseObject`**: `this card/this creature/itself/it` (→ `host` em upgrade), `a
    creature and each of its neighbors`, `each neighbor of the creature this card
    fights`, `the N most powerful creatures`, e
@@ -207,7 +211,73 @@ Fecha o grupo "verbos de zona": quatro tipos de ação novos, todos dados puros
   impressa é reconhecida para cobertura, mas o motor só resolve o verbo
   ("Exalt <carta> [twice]") — não há cláusula de "não pode ser usada".
 
-### 2.7 `ai.ts`
+### 2.7 Estado de set (onda 4, `docs/ROADMAP_REVIEW.md` §3)
+
+Tokens e mecânicas que dependem do conjunto (WoE+), todas em dados primitivos da
+instância (JSON-safe) e sem UI própria.
+
+- **Ward** (39 cartas): keyword nova no `ENGINE_KEYWORDS` (reconhecida para cobertura,
+  como `exalt`) + `CardInstance.warded`. O token **não empilha** (`Card.ward()` do
+  keyteki é no-op se já houver ward). O primeiro `destroy`/`sacrifice` consome o token
+  e a destruição é cancelada — sem `Destroyed:`, sem crédito de abate — e o primeiro
+  **dano** consome o token e é cancelado **inteiro** (não só o letal), antes da
+  armadura e do veneno (`DealDamageAction.unwardAndCancel`, que cancela o evento de
+  dano). Uma criatura warded com dano letal **já existente** morre no `sweep`
+  seguinte: o keyteki reavalia o game state depois de cancelar a destruição. Ações
+  `ward`/`removeWard` na gramática. **Fora do escopo:** o interrupt do keyteki também
+  cancela `onCardPurged`/`onCardLeavesPlay` (purge, volta para a mão…), que a onda
+  não cobre.
+- **Enrage** (32 cartas): `CardInstance.enraged` + ações `enrage`/`removeEnrage`. Uma
+  criatura enraivecida que **pode** lutar só luta (`effects.mustFightIfAble` em
+  `Card.getLegalActions`: reap e Action/Omni ficam fechados; o unstun continua, como
+  no keyteki, porque uma criatura atordoada não pode lutar). Sem alvo legal de luta,
+  ela é usada normalmente ("if able"). O token sai quando ela luta
+  (`ResolveFightAction` → `unenrage`).
+- **Enhanced / ícones de bônus** (86 cartas): `CardFace.bonusIcons`
+  `{ amber, capture?, damage?, draw? }` — o `amber` é o total impresso (o array
+  `enhancements` do Master Vault pode somar ícones de âmbar) e substitui `amber`
+  quando existe. `normaliseCard` lê `enhancements` (o array do keyteki: `amber`,
+  `capture`, `damage`, `draw`, `discard`, `power` ou casa). No play o motor aplica os
+  ícones extras (`ResolveBonusIconsAction`): capture 1 âmbar num aliado escolhido
+  automaticamente, 1 dano num alvo automático e 1 compra por ícone. **Fora do
+  escopo:** `discard`, `power` e enhancements de casa (a cura "any icon" de cartas
+  como Amphora Captura também).
+- **Take control** (48 cartas): `CardInstance.controlledBy`. Fiel ao keyteki, a carta
+  **muda de battleline** (`game.takeControl`/`finalizeTakeControl` tira a carta de
+  `cardsInPlay` do controlador e a insere na do novo controlador), no **flanco
+  esquerdo** — o keyteki pergunta o flanco; aqui vale o default do prompt automático.
+  Ao sair de jogo ela vai para a **pilha do dono**, não a do controlador
+  (`player.moveCard`: `card.owner.moveCard(...)`), e o marcador é limpo quando o dono
+  retoma o controle. Âmbar capturado continua voltando ao oponente de quem controla.
+  A IA respeita a troca de graça: a legalidade (`fightTargets`) só enxerga a
+  battleline do oponente, então ninguém luta contra a própria criatura. **Fora do
+  escopo:** "While under your control it belongs to house X" e efeitos que fixam o
+  flanco/posição (`takeControlOn…`).
+- **Forjar/desforjar fora do passo de chave** (64 cartas): `forge()` é o núcleo único
+  do passo de chave e das ações `forgeKey` (`at current cost`, `at no cost`, `at +N
+  cost`) e `unforgeKey` (sempre a chave do oponente, como todo texto impresso);
+  `forgeKey()` puro é exportado para efeitos. Forjar fora de fase paga do pool e pode
+  vencer (3ª chave), como em `player.forgeKey`.
+- **"Instead"** (~95 cartas, subconjunto suportado): `PersistentEffect.replace`,
+  consultado por `destroy`/`sacrifice`/`dealDamage` antes do comportamento padrão.
+  Formas suportadas:
+  `If this creature would be destroyed, archive/hand/deck/purge it instead.`
+  (destroy → outra zona, sem `Destroyed:`);
+  `When a creature would enter a discard pile from play, it is purged instead.`
+  (Annihilation Ritual, efeito de board que vale para qualquer criatura);
+  `Damage dealt to [non-<trait>] neighbors is dealt to this creature instead.`
+  (Shadow Self: o dano vai para a fonte do efeito, com armor/ward dela; o alvo
+  original não gasta ward). **Fora do escopo:** os "instead" condicionais ("If the
+  tide is high, X instead"), a exceção de trait do redirect (o filtro não tem trait) e
+  substituições de âmbar/compra.
+- **Gramática nova:** `if you do, X` (o `then` do keyteki; como o motor resolve os
+  atos de uma ability em ordem e sem resultado por ato, a continuação resolve sempre —
+  uma primeira cláusula que não fez nada ainda deixa a segunda acontecer),
+  `each of this card's neighbors`, `take/gain control of X`, `ward/enrage X` e
+  `remove ward|enrage from X`. **Fora do escopo:** alvo contado ("Ward 2 friendly
+  creatures") precisa de escolha múltipla no move, que não existe.
+
+### 2.8 `ai.ts`
 
 Busca em profundidade limitada (1–6 plies por dificuldade + `thinkingDepth`), orçamento
 de nós (`700 + 250·depth`), ordenação por avaliação, `branchLimit` por perfil, camada
@@ -344,6 +414,12 @@ Comparação do motor anterior (`24917d9^:src/lib/game.ts`, 502 linhas, efeitos 
 | Sacrifice (onda 3) | alias de `destroy` (disparava `Destroyed:`) | verbo próprio: descarte do dono **sem** `Destroyed:` e sem crédito de abate (keyteki `DestroyAction` com `isSacrifice`) |
 | Tokens (onda 3) | não existiam | "Make a token creature" cria a instância direto na battleline (face sintética, `isToken`); morre sem entrar em zona nenhuma (keyteki `MakeTokenCreatureAction`) |
 | Exalt (onda 3) | não existia | âmbar da reserva comum colocado no alvo; comporta-se como capturado ao sair de jogo (keyteki `ExaltAction`, `docs/keywords.md` §Exalt) |
+| Ward (onda 4) | não existia | token que não empilha: o primeiro destroy/dano consome e é prevenido (keyteki `WardAction`, `DealDamageAction.unwardAndCancel`) |
+| Enrage (onda 4) | não existia | token que força a luta no uso enquanto houver alvo legal; sai quando a criatura luta (keyteki `effects.mustFightIfAble`, `ResolveFightAction`) |
+| Ícones de bônus (onda 4) | só `amber` impresso | `bonusIcons` lidos de `enhancements` do Master Vault e resolvidos no play (capture/damage/draw além do âmbar; keyteki `ResolveBonusIconsAction`) |
+| Take control (onda 4) | não existia | a carta muda de battleline (flanco esquerdo) e volta à pilha do **dono** ao sair de jogo (keyteki `game.takeControl`/`player.moveCard`) |
+| Forja fora de fase (onda 4) | só o passo de chave | `forgeKey`/`unforgeKey` pagam/tiram a chave fora do passo, inclusive "at no cost"/"+N cost" (keyteki `ForgeAction`/`UnforgeAction`) |
+| "Instead" (onda 4) | não existia | destroy → archive/hand/deck/purge e dano redirecionado (keyteki `DestroyAction`/`DealDamageAction` replacements; ver §2.7) |
 | Escolha de alvo | sempre automática | jogador escolhe quando há >1 alvo legal (`targetChoices`); IA busca cada alvo (`getLegalMoves` expandido) |
 | IA | heurística de uma camada | busca com orçamento + camada de resposta do oponente (Hard+), poda pela especificação do motor, pode parar |
 
@@ -353,12 +429,13 @@ i18n.
 
 ---
 
-## 5. Testes (185 specs)
+## 5. Testes (209 specs)
 
 | Arquivo | Specs | Conteúdo |
 |---|---:|---|
 | `rules.test.ts` | 48 | keywords de luta (Elusive 1×/turno e reset, Taunt, Assault, Hazardous, Skirmish, Poison vs armadura, Splash-attack, array do vault), armadura por turno, Alpha/Omega/Deploy, turno (7 cartas e 1 jogada no turno 1, ready/stun, compra com chains, forja no custo atual, Lash, vitória na 3ª chave, arquivos opcionais, mavericks, jogada ilegal), abilities e alvos (captura, alvo escolhido, expansão por alvo, Dominator Bauble, Research Smoko, upgrade no hospedeiro, condição como poda da IA), mulligan/log/tallies/FEAT-12 |
-| `cardText.test.ts` | 38 | prefixos de gatilho, normalização (glifos A/Æ/D, nome próprio → `this card`), condições antes/depois do efeito, all-or-nothing, gramática persistente (stats, grants, proibições, duração, ability citada) e da onda 3 (purge/sacrifice/exalt como verbos separados, tokens make/create), cobertura dos decks demo |
+| `cardText.test.ts` | 38 | prefixos de gatilho, normalização (glifos A/Æ/D, nome próprio → `this card`), condições antes/depois do efeito, all-or-nothing, gramática persistente (stats, grants, proibições, duração, ability citada) e das ondas 3 (purge/sacrifice/exalt como verbos separados, tokens make/create) e 4 (`if you do`, ward/enrage/take control), cobertura dos decks demo |
+| `setstate.test.ts` | 24 | onda 4: ward (dano cancelado inteiro, destroy em wipe, vizinhos do Old Egad, JSON-safe, keyword), enrage (luta forçada e token removido, "hits the other side", "if able"), enhanced (capture/damage/draw no play, `enhancements` do payload), take control (muda de battleline, ninguém luta contra o que controla, volta pro dono, dono retoma), forja/desforja fora de fase (Key Charge com "may", no cost + vitória, +N, unforge, `forgeKey()` puro) e "instead" (Shadow Self, Annihilation Ritual, destroy → archive) |
 | `persistent.test.ts` | 16 | Bulwark, Grey Monk, Staunch Knight, Ember Imp e Scrambler Storm portados do keyteki 01-Core + poder/armadura efetivos na luta e na morte, Taunt concedida, duração, gainAbility, update no host, JSON-safe, arquivos opcionais |
 | `zones.test.ts` | 11 | onda 3: purge (sai do jogo, não volta no reembaralhamento, `Destroyed:` silencioso), sacrifice (descarte do dono sem `Destroyed:`, âmbar capturado volta), tokens (nasce na mesa com a casa da fonte, morre fora das zonas, JSON-safe) e exalt (reserva comum, "twice", âmbar ao oponente na saída, não bloqueia uso, keyword reconhecida) |
 | `reactions.test.ts` | 11 | onda 2: "You may" opcional com variante decline, reações `After X:`/`Each time X:` e gatilhos de fase |
@@ -388,8 +465,12 @@ Probes da auditoria (fora do `npm test`): `e2e/probes/` — ver `BUGS_AND_FEATUR
    genérico, `put`/`move` de zonas, **seleção da zona de origem**
    (`purge`/`discard`/`search` de descarte/mão/deck — a onda 3 fechou só o alvo de
    mesa: o destino `purged` existe, mas 116 dos 117 arquivos proxy de purge miram
-   outra zona) e counters (`ward`, `enrage`, `+1 power counter`). Tokens
-   (`make a token creature`) e `exalt` **saíram da lista na onda 3**.
+   outra zona) e **alvo contado** ("Ward 2 friendly creatures", "Destroy 2
+   creatures" — precisa de escolha múltipla no move, que não existe). Counters
+   `ward`/`enrage` e tokens (`make a token creature`) e `exalt` **saíram da lista
+   nas ondas 3/4**; `+1 power counter` continua fora. A onda 4 também fechou
+   `if you do, …` (o `then` do keyteki), `take/gain control of X`, `ward/enrage X`
+   e `remove ward|enrage from X`.
 5. **Fidelidade de regras já identificada** (detalhes em BUGS_AND_FEATURES):
    escolha da casa não é pré-requisito para jogar (BUG-02); alvo de `Fight:`/`Before
    Fight:` sempre automático (BUG-06); `Use a creature` só colhe (BUG-11); criaturas
@@ -397,8 +478,29 @@ Probes da auditoria (fora do `npm test`): `e2e/probes/` — ver `BUGS_AND_FEATUR
    inimiga vai para os arquivos do dono (deveria ir para os do jogador que arquiva e
    voltar à mão do dono); `fromDiscard` sempre pega a última carta (sem escolha);
    recolher os arquivos é obrigatório (é opcional no jogo real); sem mulligan
-   (FEAT-10); ícones de bônus de cartas *enhanced* do Master Vault ignorados.
+   (FEAT-10). **Ícones de bônus de cartas *enhanced* fecharam na onda 4** (só
+   `discard`/`power`/enhancements de casa ficam fora; a seleção manual do alvo do
+   ícone é automática, como todo auto-target do motor).
 6. **Condição `not`** é suportada mas nunca produzida; o parser poderia gerar `not`
    para "if … does not …" sem custo no motor.
 7. **Medição contínua**: transformar `coverage.probe.ts` em relatório gerado (ex.:
    `npm run coverage:cards`) para acompanhar cada extensão da gramática.
+
+### 6.1 Fechado na onda 4 (estado de set, §2.7)
+
+- **Ward** (39 cartas) e **Enrage** (32): tokens na instância, destruição/dano
+  prevenidos e luta forçada na legalidade (§2.7). Fica fora o interrupt de
+  `onCardPurged`/`onCardLeavesPlay` do keyteki (ward contra purge/volta para a mão).
+- **Enhanced/ícones impressos** (86): `bonusIcons` + `enhancements` do Master Vault,
+  resolvidos no play.
+- **Take control** (48): `controlledBy` com a carta mudando de battleline e voltando
+  à pilha do dono; fora do escopo as cláusulas de casa ("belongs to house X") e a
+  escolha de flanco/posição.
+- **Forjar/desforjar fora do passo de chave** (64): `forge()` compartilhado +
+  `forgeKey()` exportado; `forgeKey`/`unforgeKey` na gramática.
+- **"Instead"** (~95, subconjunto): destroy → archive/hand/deck/purge, discard →
+  purge (Annihilation Ritual) e dano redirecionado (Shadow Self). Os "instead"
+  condicionais ("If the tide is high, X instead") **não** são substituições e seguem
+  de fora, assim como âmbar/compra substituídos.
+- **Não coberto da onda 4**: Tide (83), Haunted (85), contadores de poder (+1 power
+  counter) e seleção de zona de origem.
