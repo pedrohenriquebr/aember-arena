@@ -6734,6 +6734,13 @@ html .spin {
   initial-value: 0deg;
 }
 
+/* O lite não herda o 3D, mas o playmat (::before) precisa de um plano com caixa
+   e ancoragem: com `display: contents` ele vazaria sobre os HUDs. */
+.game-board--lite .table-plane {
+  display: block;
+  position: relative;
+}
+
 .game-board--3d .table-plane {
   display: block;
   /* O plano inclinado: 40° no desktop, 32° no tablet (H3D-03, abaixo). O celular

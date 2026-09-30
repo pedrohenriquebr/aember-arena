@@ -789,6 +789,35 @@ try {
   // corpo nao ter travamento; 8 amostras ja cobrem a transicao.
   check("H3D-10: corpo da transicao sem travamento (CPU 4x)", frames.length > 8 && bodyLong === 0, `pior=${worst.toFixed(1)}ms corpo>150ms=${bodyLong}/${body.length} deltas=${frames.map((d) => d.toFixed(0)).join(",")}`);
 
+  // ---- H3D-09: perfil lite (hardwareConcurrency = 2) — o plano precisa de caixa
+  // e ancoragem, senao o playmat (::before) vaza sobre os HUDs.
+  const liteCtx = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "no-preference" });
+  await liteCtx.addInitScript("Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 2 })");
+  const lite = await liteCtx.newPage();
+  await lite.goto(server.url, { waitUntil: "domcontentloaded" });
+  await lite.evaluate(SEED);
+  await lite.reload({ waitUntil: "domcontentloaded" });
+  await lite.waitForSelector(".home-screen", { timeout: 30000 });
+  await lite.locator(".header-nav .nav-link").nth(2).click();
+  await lite.waitForSelector(".config-screen", { timeout: 15000 });
+  const litePills = lite.locator(".config-screen .config-step-pill");
+  await litePills.nth((await litePills.count()) - 1).click();
+  await lite.locator(".config-nav .cta-button").click();
+  await lite.waitForSelector(".game-screen", { timeout: 20000 });
+  const liteKeep = lite.locator(".mulligan-keep");
+  if (await liteKeep.count()) await liteKeep.click();
+  await lite.waitForSelector(".game-board", { timeout: 20000 });
+  await lite.locator(".view-toggle").click();
+  await lite.waitForSelector(".game-board--lite", { timeout: 5000 }).catch(() => {});
+  const liteInfo = await lite.evaluate(() => {
+    const board = document.querySelector(".game-board");
+    const plane = document.querySelector(".table-plane");
+    const cs = getComputedStyle(plane);
+    return { cls: board.className, cores: navigator.hardwareConcurrency, display: cs.display, position: cs.position, before: getComputedStyle(plane, "::before").position };
+  });
+  check("H3D-09: lite ativo com plano display:block/position:relative e playmat ancorado", liteInfo.cls.includes("game-board--lite") && !liteInfo.cls.includes("game-board--3d") && liteInfo.display === "block" && liteInfo.position === "relative" && liteInfo.before === "absolute", JSON.stringify(liteInfo));
+  await liteCtx.close();
+
   console.log(PROBLEMS.length ? `\nFALHAS: ${PROBLEMS.join("; ")}` : "\nOK: cadeia 3D confere (2D intacto, projecao viva, toggle limpo)");
 } finally {
   if (browser) await browser.close().catch(() => {});
