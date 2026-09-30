@@ -38,7 +38,7 @@ import {
   Zap,
   ZoomIn,
 } from "lucide-react";
-import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, type Difficulty } from "./lib/ai";
+import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
 import { cacheDeck, clearSavedMatch, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
@@ -141,7 +141,7 @@ const UNDO_LIMIT = 40;
 // pelo UX review (#1) somando PRE + FX (voo/animação) + GAP.
 /** Abertura: a dificuldade define quanto o Warden "pensa" antes de agir. */
 const aiThinkMs = (difficulty: Difficulty) => 250 + DIFFICULTIES.indexOf(difficulty) * 100;
-const AI_PRE: Record<GameMove["type"], number> = { play: 120, fight: 260, reap: 200, use: 200, unstun: 160, discard: 80 };
+const AI_PRE: Record<GameMove["type"], number> = { play: 120, fight: 260, reap: 200, use: 200, unstun: 160, discard: 80, takeArchives: 120 };
 const AI_HOUSE_MS = 450;
 /** FIT-08: 400ms ≈ PRE médio (180) + GAP (220) de antes; k escala só as pausas. */
 const delayK = (delayMs: number) => delayMs / 400;
@@ -1356,6 +1356,7 @@ function GameBoard({
   onPassConfirm = NOOP,
   viewSwitching = false,
   consoleExtra,
+  archivesAction,
 }: {
   game: GameState;
   selected: Selection | null;
@@ -1382,6 +1383,9 @@ function GameBoard({
   viewSwitching?: boolean;
   /** FIT-02: controle extra no fim do turn-console (o atalho 3D no perfil compacto). */
   consoleExtra?: ReactNode;
+  /** Archives: pegar as cartas arquivadas e opcional ("may") — a acao so entra
+      no console enquanto o move e legal (docs/ROADMAP_REVIEW.md §1.2). */
+  archivesAction?: ReactNode;
   onHouse: (house: string) => void;
   onSelectHand: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
@@ -1404,7 +1408,9 @@ function GameBoard({
   const hintIds = useMemo(() => {
     if (readOnly || !settings.hints || game.activePlayer !== humanSide || !game.activeHouse || game.winner !== null || handHidden) return null;
     return new Set(
-      getLegalMoves(game, humanSide, game.activeHouse).map((move) => (move.type === "fight" ? move.attackerId : move.instanceId)),
+      getLegalMoves(game, humanSide, game.activeHouse)
+        .filter((move) => move.type !== "takeArchives")
+        .map((move) => (move.type === "fight" ? move.attackerId : move.instanceId)),
     );
   }, [game, settings.hints, readOnly, humanSide, handHidden]);
   // T7d: closures estáveis por lane — sem identidade estável o memo de
@@ -1510,6 +1516,7 @@ function GameBoard({
               <span>{t("game.endTurn")}</span>
               <ArrowRight size={15} />
             </button>
+            {archivesAction}
             {consoleExtra}
           </div>
 
@@ -2507,6 +2514,12 @@ function App() {
       setAiPhase("acting");
       commitWithFx(next, opening, { kind: "house", side: 1, house }, undefined, 1);
       next = opening;
+      // Archives sao opcionais: a heuristica decide depois da escolha da casa.
+      if (shouldTakeArchives(next, 1) && isLegalMove(next, 1, { type: "takeArchives" })) {
+        const taken = applyMove(next, 1, { type: "takeArchives" });
+        commitGame(next, taken, { kind: "move", side: 1, move: { type: "takeArchives" } });
+        next = taken;
+      }
       const amberStart = next.players[1].amber;
       let plays = 0;
       await beat(AI_HOUSE_MS);
@@ -2799,6 +2812,16 @@ function App() {
     // FEAT-12a: the state right after the house choice is the undo anchor — the
     // start of the turn, before any of the player's moves.
     commitGame(prev, chooseHouse(prev, side, house), { kind: "house", side, house });
+  }, [commitGame]);
+
+  // Archives: pegar e opcional ("may") — o botao do console so aparece quando o
+  // move e legal, e o mesmo move entra no replay.
+  const takeArchivesNow = useCallback(() => {
+    const prev = gameRef.current;
+    if (!prev) return;
+    const side = humanSideOf(prev, matchModeRef.current);
+    sound.play("click");
+    commitGame(prev, applyMove(prev, side, { type: "takeArchives" }), { kind: "move", side, move: { type: "takeArchives" } });
   }, [commitGame]);
 
   const selectHandCard = useCallback((card: CardInstance) => {
@@ -3238,6 +3261,18 @@ function App() {
                   passPending={passPending}
                   onPassConfirm={() => { sound.play("click"); setPassPending(null); }}
                   viewSwitching={viewSwitching}
+                  archivesAction={isLegalMove(game, humanSide, { type: "takeArchives" }) ? (
+                    <button
+                      type="button"
+                      className="view-toggle archives-action"
+                      onClick={takeArchivesNow}
+                      aria-label={t("game.takeArchives", { count: game.players[humanSide].archives.length })}
+                      title={t("game.takeArchives", { count: game.players[humanSide].archives.length })}
+                    >
+                      <BookOpen size={16} />
+                      <span className="archives-count">{game.players[humanSide].archives.length}</span>
+                    </button>
+                  ) : undefined}
                   consoleExtra={compactStage || drawerMode ? (
                     <>
                       {compactStage && viewToggle}

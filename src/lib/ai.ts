@@ -86,9 +86,10 @@ export function evaluatePosition(state: GameState, aiIndex: 0 | 1, abilityAware 
 
 /** Legal moves worth searching: Medium+ never discards and never plays/uses
     whose abilities cannot resolve (the engine's own conditions) unless nothing
-    else is left; Easy happily plays dead cards (FEAT-03). */
+    else is left; Easy happily plays dead cards (FEAT-03). The optional archives
+    pickup is a separate decision (shouldTakeArchives), not a search branch. */
 function candidateMoves(state: GameState, actor: 0 | 1, effectAware = true): GameMove[] {
-  const legal = getLegalMoves(state, actor, state.activeHouse).filter((move) => move.type !== "discard");
+  const legal = getLegalMoves(state, actor, state.activeHouse).filter((move) => move.type !== "discard" && move.type !== "takeArchives");
   if (!effectAware) return legal;
   const useful = legal.filter((move) => moveHasEffect(state, actor, move));
   return useful.length ? useful : legal.filter((move) => move.type === "play");
@@ -154,6 +155,14 @@ export function shouldMulligan(state: GameState, side: 0 | 1): boolean {
   return !hand.some((card) => card.face.house === house && card.face.type === "Creature");
 }
 
+/** The archives are picked up by choice: the AI takes them when one is playable
+    in the active house now, or when the hand still has room for more cards. */
+export function shouldTakeArchives(state: GameState, side: 0 | 1): boolean {
+  const player = state.players[side];
+  if (!player.archives.length) return false;
+  return player.archives.some((card) => card.face.house === state.activeHouse) || player.hand.length < 6;
+}
+
 export function chooseAiHouse(state: GameState, aiIndex: 0 | 1): string {
   const player = state.players[aiIndex];
   const houses = player.houses.length ? player.houses : [...new Set(player.hand.map((card) => card.face.house))];
@@ -175,6 +184,7 @@ export function chooseAiHouse(state: GameState, aiIndex: 0 | 1): string {
 }
 
 function moveSource(state: GameState, side: 0 | 1, move: GameMove): CardInstance | undefined {
+  if (move.type === "takeArchives") return undefined;
   const player = state.players[side];
   const id = move.type === "fight" ? move.attackerId : move.instanceId;
   return [...player.hand, ...player.board].find((card) => card.instanceId === id) ?? player.hand[0];

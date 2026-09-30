@@ -764,6 +764,19 @@ button:disabled {
 }
 }
 
+/* Archives opcionais ("may"): o botão só entra no console enquanto o move é
+   legal; o contador fica dentro do alvo de 44px. */
+.archives-action {
+  grid-template-rows: auto auto;
+  gap: 0;
+}
+
+.archives-count {
+  font-size: var(--fs-2xs);
+  line-height: 1;
+  color: var(--faint);
+}
+
 .game-board {
   position: relative;
   isolation: isolate;

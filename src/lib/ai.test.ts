@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chooseAiMove, shouldMulligan, type Difficulty } from "./ai";
+import { chooseAiMove, shouldMulligan, shouldTakeArchives, type Difficulty } from "./ai";
 import { getLegalMoves, isLegalMove, type GameMove } from "./game";
 import { card, setupTest } from "./testkit";
 
@@ -94,6 +94,21 @@ describe("persistent effects (docs/ROADMAP_REVIEW.md §3)", () => {
     if (move?.type === "fight") {
       expect(allowed).toContain(state.players[0].board.find((item) => item.instanceId === move.targetId)!.face.title);
     }
+  });
+});
+
+describe("optional archives (review §1.2)", () => {
+  it("takes them when one is playable in the active house, keeps them otherwise", () => {
+    const state = setupTest({}, {}, "Brobnar");
+    state.players[1].archives = [card("Stored", { type: "Creature", house: "Dis", power: 2 })];
+    // Off-house archive with room in hand: still worth taking (hand < 6).
+    expect(shouldTakeArchives(state, 1)).toBe(true);
+    state.players[1].hand = Array.from({ length: 6 }, (_, i) => card(`Filler ${i}`));
+    expect(shouldTakeArchives(state, 1)).toBe(false);
+    state.players[1].archives = [card("Stored", { type: "Creature", house: "Brobnar", power: 2 })];
+    expect(shouldTakeArchives(state, 1)).toBe(true);
+    state.players[1].archives = [];
+    expect(shouldTakeArchives(state, 1)).toBe(false);
   });
 });
 

@@ -212,6 +212,19 @@ describe("gainAbility", () => {
   });
 });
 
+describe("optional archives (review §1.2)", () => {
+  it("offers the pickup as a move after the house choice", () => {
+    const state = setupTest({}, {}, null);
+    state.players[0].archives = [creature("Filed", 2)];
+    expect(isLegalMove(state, 0, { type: "takeArchives" })).toBe(false); // no house yet
+    const chosen = chooseHouse(state, 0, "Brobnar");
+    expect(isLegalMove(chosen, 0, { type: "takeArchives" })).toBe(true);
+    const taken = applyMove(chosen, 0, { type: "takeArchives" });
+    expect(titles(taken.players[0].hand)).toEqual(["Filed"]);
+    expect(taken.players[0].archives).toHaveLength(0);
+  });
+});
+
 describe("upgrade text", () => {
   it("a constant upgrade applies to its host and dies with it", () => {
     const upgrade = card("Might", { type: "Upgrade", house: "Brobnar", text: "This creature gets +2 power." });

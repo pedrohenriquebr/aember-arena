@@ -184,12 +184,19 @@ describe("turn structure", () => {
     expect(next.winner).toBe(1);
   });
 
-  it("archives are picked up when choosing a house", () => {
+  // Fix de regra da revisão (docs/ROADMAP_REVIEW.md §1.2): pegar os arquivos é
+  // opcional ("may") — a escolha da casa não entrega as cartas de graça.
+  it("archives are picked up on demand, not for free with the house choice", () => {
     const state = setupTest({}, {}, null);
     state.players[0].archives = [card("Smith")];
-    const next = chooseHouse(state, 0, "Brobnar");
-    expect(titles(next.players[0].hand)).toEqual(["Smith"]);
-    expect(next.players[0].archives).toHaveLength(0);
+    const chosen = chooseHouse(state, 0, "Brobnar");
+    expect(titles(chosen.players[0].hand)).toEqual([]);
+    expect(titles(chosen.players[0].archives)).toEqual(["Smith"]);
+    const taken = applyMove(chosen, 0, { type: "takeArchives" });
+    expect(titles(taken.players[0].hand)).toEqual(["Smith"]);
+    expect(taken.players[0].archives).toHaveLength(0);
+    // Once the pile is empty the move is gone.
+    expect(isLegalMove(taken, 0, { type: "takeArchives" })).toBe(false);
   });
 
   it("maverick cards belong only to their printed house", () => {

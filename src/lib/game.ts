@@ -128,7 +128,9 @@ export type GameMove =
   | { type: "fight"; attackerId: string; targetId: string; target?: string }
   | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action" }
   | { type: "unstun"; instanceId: string }
-  | { type: "discard"; instanceId: string };
+  | { type: "discard"; instanceId: string }
+  /** Picking the archives up is optional ("may"), so it is a move of its own. */
+  | { type: "takeArchives" };
 
 export const BASE_KEY_COST = 6;
 const HAND_SIZE = 6;
@@ -827,6 +829,7 @@ function triggersFor(move: GameMove): Trigger[] {
 }
 
 function moveSource(state: GameState, side: Side, move: GameMove): CardInstance | undefined {
+  if (move.type === "takeArchives") return undefined;
   const player = state.players[side];
   const id = move.type === "fight" ? move.attackerId : move.instanceId;
   return (move.type === "play" || move.type === "discard" ? player.hand : player.board).find((card) => card.instanceId === id);
@@ -873,6 +876,10 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
   const player = state.players[side];
   const moves: GameMove[] = [];
 
+  // The house choice happens first; picking up the archives is offered from
+  // then on (the rule is "may" — see chooseHouse).
+  if (side === state.activePlayer && state.activeHouse !== null && player.archives.length) moves.push({ type: "takeArchives" });
+
   if (mayPlay(state, side)) {
     const limit = playLimit(state, side);
     for (const card of player.hand) {
@@ -911,7 +918,7 @@ export function getLegalMoves(state: GameState, playerIndex: Side, house: string
 /** Does the move's triggered text have any effect now? Used by the AI to prune
     moves (the Specification pattern: the same conditions the engine checks). */
 export function moveHasEffect(state: GameState, side: Side, move: GameMove): boolean {
-  if (move.type === "reap" || move.type === "fight" || move.type === "unstun") return true;
+  if (move.type === "reap" || move.type === "fight" || move.type === "unstun" || move.type === "takeArchives") return true;
   if (move.type === "discard") return false;
   const source = moveSource(state, side, move);
   if (!source) return false;
@@ -922,7 +929,8 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   );
 }
 
-const moveKey = (move: GameMove) => (move.type === "fight" ? `${move.attackerId}>${move.targetId}` : move.instanceId);
+const moveKey = (move: GameMove) =>
+  move.type === "fight" ? `${move.attackerId}>${move.targetId}` : move.type === "takeArchives" ? "takeArchives" : move.instanceId;
 
 export function isLegalMove(state: GameState, side: Side, move: GameMove): boolean {
   const house = side === state.activePlayer ? state.activeHouse : null;
@@ -948,8 +956,14 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   const state = cloneGame(current);
   if (!isLegalMove(state, playerIndex, move)) return state;
   const player = state.players[playerIndex];
-  const enemyIndex = other(playerIndex);
   const silent = options.silent === true;
+  if (move.type === "takeArchives") {
+    player.hand.push(...player.archives);
+    player.archives = [];
+    record(state, "log.archives", { name: player.name }, silent);
+    return state;
+  }
+  const enemyIndex = other(playerIndex);
   const deterministic = options.deterministic === true;
   const choice: Choice = { id: "target" in move ? move.target : undefined };
   const source = moveSource(state, playerIndex, move)!;
@@ -1027,9 +1041,9 @@ export function chooseHouse(state: GameState, playerIndex: Side, house: string):
   const player = next.players[playerIndex];
   if (playerIndex !== next.activePlayer || next.activeHouse !== null || mulliganPending(next) || !player.houses.includes(house)) return next;
   next.activeHouse = house;
-  // Archived cards are picked up when the house is chosen (always taken here).
-  player.hand.push(...player.archives);
-  player.archives = [];
+  // Picking the archives up is optional ("may", docs/ROADMAP_REVIEW.md §1.2):
+  // the takeArchives move is offered from the house choice on instead of
+  // handing the cards over for free here.
   record(next, "log.house", { name: player.name, house });
   return next;
 }
