@@ -7220,6 +7220,9 @@ html .spin {
          overflow: hidden corta os cantos. Com o recuo, o flex encolhe as cartas
          o necessário para o leque inteiro caber. */
       padding-inline: 34px;
+      /* As pontas descem d² × 2,2px e o canto girado sai da caixa: sem este
+         respiro a legenda das pontas passa da borda do board e é cortada. */
+      padding-bottom: 32px;
     }
 
     .game-board--3d .hand-track > .card-tile--hand {

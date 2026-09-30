@@ -391,6 +391,42 @@ try {
   }
   check("H3D-06: hover puxa a carta do leque (0deg / -30px / 1,14) inteira visivel", Boolean(fanHover) && fanHover.rotate === "0deg" && fanHover.translate === "0px -30px" && fanHover.scale === "1.14" && fanHover.visible, JSON.stringify(fanHover));
 
+  // Legendas das pontas do leque com 7 e 8 cartas (clones temporarios, sem
+  // transicao) a 1280 e 768: nenhum pixel de legenda alem do .game-board.
+  const fanCaption = async (width, height) => {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(300);
+    return page.evaluate(() => {
+      const track = document.querySelector(".hand-track");
+      const board = document.querySelector(".game-board").getBoundingClientRect();
+      const saved = track.style.getPropertyValue("--n");
+      const kids = [...track.children];
+      const clones = [];
+      const style = document.createElement("style");
+      style.textContent = ".hand-track > * { transition: none !important; }";
+      document.head.append(style);
+      const out = {};
+      for (const n of [7, 8]) {
+        while (track.children.length < n) { const c = kids[0].cloneNode(true); clones.push(c); track.append(c); }
+        while (track.children.length > n && clones.length) clones.pop().remove();
+        track.style.setProperty("--n", String(n));
+        let over = 0;
+        for (const el of track.querySelectorAll(".card-tile--hand *")) over = Math.max(over, el.getBoundingClientRect().bottom - board.bottom);
+        out[n] = Math.round(over * 10) / 10;
+      }
+      clones.forEach((c) => c.remove());
+      style.remove();
+      if (saved) track.style.setProperty("--n", saved); else track.style.removeProperty("--n");
+      return out;
+    });
+  };
+  for (const [w, h] of [[1280, 800], [768, 1024]]) {
+    const over = await fanCaption(w, h);
+    check(`H3D-06: legendas do leque dentro do board a ${w} (7 e 8 cartas)`, over[7] <= 0 && over[8] <= 0, JSON.stringify(over));
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(300);
+
   // ---- 4. Projecao: tilt 0 -> 40 e translateZ na peca
   // H3D-03: o default do 3D ja e 40deg (32 no tablet), entao o probe ZERA o
   // tilt inline para ter a referencia plana — comparar 40 com 40 nao mede nada.
