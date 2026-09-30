@@ -790,14 +790,15 @@ function dealDamage(state: GameState, card: CardInstance, amount: number, poison
   if (poison) card.poisoned = true;
 }
 
-/** Destroys every creature whose damage reached its power (or took poison damage).
+/** Destroys every creature whose damage reached its power, whose effective power
+    fell to 0 (keyteki: power <= 0) or that took poison damage.
     A ward spares the first pass and is consumed, so the next pass destroys the
     creature — keyteki re-checks the game state after the cancelled destruction. */
 function sweep(state: GameState, deterministic: boolean): void {
   for (;;) {
     const doomed = state.players
       .flatMap((player) => battleline(player))
-      .find((card) => !dying.has(card) && (card.poisoned || (card.damage > 0 && card.damage >= effectivePower(state, card))));
+      .find((card) => !dying.has(card) && (card.poisoned || effectivePower(state, card) <= 0 || (card.damage > 0 && card.damage >= effectivePower(state, card))));
     if (!doomed) return;
     destroy(state, doomed, deterministic);
   }

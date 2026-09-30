@@ -85,6 +85,16 @@ describe("Staunch Knight (keyteki 01-Core)", () => {
   });
 });
 
+describe("power drained to 0 (keyteki: power <= 0 destroys)", () => {
+  it("a creature whose effective power reaches 0 dies without taking damage", () => {
+    const blight = card("Blight", { type: "Action", house: "Brobnar", text: "Play: Each enemy creature gets -2 power for the remainder of the turn." });
+    const state = setupTest({ hand: [blight] }, { inPlay: [creature("Weak", 2), creature("Sturdy", 3)] });
+    const next = applyMove(state, 0, { type: "play", instanceId: blight.instanceId });
+    expect(titles(next.players[1].board)).toEqual(["Sturdy"]);
+    expect(titles(next.players[1].discard)).toEqual(["Weak"]);
+  });
+});
+
 describe("effective power and armor in combat", () => {
   const banner = () => creature("Banner", 1, "Each friendly creature gets +1 power.");
 
