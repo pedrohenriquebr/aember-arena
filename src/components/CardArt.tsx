@@ -12,9 +12,15 @@ import { useDialogFocus } from "./useDialogFocus";
 
 type Size = "hand" | "board" | "preview";
 
-// Balanced reference preview: readable card art and rules text without covering the board.
-const ZOOM_WIDTH = 204;
-const ZOOM_TEXT_HEIGHT = 76;
+// Preview de leitura: largura proporcional ao viewport (UX_FIT_PLAN §3.2), com folga de
+// texto estimada para a altura (o line-clamp de 6 linhas do CSS garante o teto).
+const ZOOM_MIN_WIDTH = 260;
+const ZOOM_MAX_WIDTH = 340;
+const ZOOM_TEXT_HEIGHT = 140;
+// Áreas que o preview nunca cobre: placares, console do turno e o drawer aberto.
+// Do console conta só o conteúdo (texto e botões), não o fundo de largura total.
+const ZOOM_COUNTERS = ".amber-counter, .key-counter";
+const ZOOM_AVOID = ".turn-console > *, .command-rail--drawer.is-open";
 const ZOOM_GAP = 12;
 const ZOOM_MARGIN = 12;
 const ZOOM_DELAY = 120;
@@ -62,6 +68,7 @@ function CardImage({ face, size }: { face: CardFace; size: Size }) {
 }
 
 interface ZoomPlacement {
+  width: number;
   top: number;
   left: number;
   originX: string;
@@ -74,34 +81,47 @@ function hasHoverMedia() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: hover)").matches;
 }
 
+function zoomWidth() {
+  const fit = (window.innerHeight - 2 * ZOOM_MARGIN - ZOOM_TEXT_HEIGHT) * 0.714;
+  return Math.round(Math.max(ZOOM_MIN_WIDTH, Math.min(0.26 * window.innerWidth, fit, ZOOM_MAX_WIDTH)));
+}
+
+function hits(a: { left: number; top: number; right: number; bottom: number }, b: DOMRect) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
 function placeZoom(rect: DOMRect): ZoomPlacement {
-  const artHeight = ZOOM_WIDTH / 0.714;
-  const totalHeight = artHeight + ZOOM_TEXT_HEIGHT;
-  const viewport = {
-    width: window.innerWidth,
-    height: window.innerHeight,
-  };
-
-  // Prefer the wider side of the card; fall back to centred above it.
-  const rightSpace = viewport.width - rect.right;
-  const leftSpace = rect.left;
-  let left: number;
-  let originX = "50%";
-  if (rightSpace >= ZOOM_WIDTH + ZOOM_GAP + ZOOM_MARGIN) {
-    left = rect.right + ZOOM_GAP;
-    originX = "0%";
-  } else if (leftSpace >= ZOOM_WIDTH + ZOOM_GAP + ZOOM_MARGIN) {
-    left = rect.left - ZOOM_WIDTH - ZOOM_GAP;
-    originX = "100%";
-  } else {
-    left = Math.max(ZOOM_MARGIN, rect.left + rect.width / 2 - ZOOM_WIDTH / 2);
-  }
-
+  const width = zoomWidth();
+  const totalHeight = width / 0.714 + ZOOM_TEXT_HEIGHT;
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
   const wanted = rect.top + rect.height / 2 - totalHeight / 2;
   const top = Math.max(ZOOM_MARGIN, Math.min(viewport.height - totalHeight - ZOOM_MARGIN, wanted));
-  const originY = `${Math.max(0, Math.min(100, ((rect.top + rect.height / 2 - top) / totalHeight) * 100))}%`;
+  const counters = document.querySelectorAll(ZOOM_COUNTERS).length;
+  const avoid = Array.from(document.querySelectorAll(`${ZOOM_COUNTERS}, ${ZOOM_AVOID}`), (el) => el.getBoundingClientRect());
+  const rail = document.querySelector(".command-rail:not(.command-rail--drawer)")?.getBoundingClientRect();
 
-  return { top, left, originX, originY };
+  // Ordem: slot do rail (só notas), direita da carta, esquerda da carta, metade oposta do palco.
+  const cardCenter = rect.left + rect.width / 2;
+  const candidates: Array<[number, string]> = [];
+  if (rail && rail.width > 0) candidates.push([viewport.width - width - ZOOM_MARGIN, "100%"]);
+  candidates.push([rect.right + ZOOM_GAP, "0%"], [rect.left - width - ZOOM_GAP, "100%"]);
+  candidates.push(cardCenter < viewport.width / 2 ? [viewport.width - width - ZOOM_MARGIN, "100%"] : [ZOOM_MARGIN, "0%"]);
+
+  // Sem posição livre (drawer, tela estreita): a de menor sobreposição, placar pesando mais.
+  let chosen = candidates[0];
+  let best = Infinity;
+  for (const c of candidates) {
+    const box = { left: c[0], right: c[0] + width, top, bottom: top + totalHeight };
+    if (box.left < ZOOM_MARGIN || box.right > viewport.width - ZOOM_MARGIN) continue;
+    const score = (hits(box, rect) ? 100 : 0) + avoid.reduce((n, r, i) => n + (hits(box, r) ? (i < counters ? 10 : 1) : 0), 0);
+    if (score < best) {
+      best = score;
+      chosen = c;
+    }
+    if (!score) break;
+  }
+  const originY = `${Math.max(0, Math.min(100, ((rect.top + rect.height / 2 - top) / totalHeight) * 100))}%`;
+  return { top, left: chosen[0], width, originX: chosen[1], originY };
 }
 
 export function CardArt({
@@ -212,7 +232,7 @@ export function CardArt({
                 {
                   top: placement.top,
                   left: placement.left,
-                  width: ZOOM_WIDTH,
+                  width: placement.width,
                   "--zoom-origin": `${placement.originX} ${placement.originY}`,
                   "--house-color": houseColor(face.house),
                 } as CSSProperties

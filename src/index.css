@@ -5235,7 +5235,7 @@ button:disabled {
 .card-zoom-text {
   display: grid;
   gap: 2px;
-  padding: 6px 8px 7px;
+  padding: 8px 12px 10px;
   border-top: 1px solid rgba(228, 218, 195, 0.14);
   background: #1a1c16;
 }
@@ -5244,7 +5244,7 @@ button:disabled {
   overflow: hidden;
   color: #efe9da;
   font-family: Georgia, serif;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-base);
   font-weight: 500;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -5256,9 +5256,9 @@ button:disabled {
   overflow: hidden;
   margin: 0;
   color: #a9a89c;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   line-height: 1.35;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
 }
 

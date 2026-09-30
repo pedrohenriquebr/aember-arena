@@ -340,7 +340,7 @@ const CardTile = memo(function CardTile({
         <CardArt
           face={face}
           size={size}
-          hoverZoom={hoverZoom}
+          hoverZoom={hoverZoom && !selected}
           onLongPress={() => {
             longPressAt.current = Date.now();
             setLightboxOpen(true);
