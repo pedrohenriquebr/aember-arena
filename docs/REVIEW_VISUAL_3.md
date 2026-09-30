@@ -67,3 +67,13 @@ Os itens que você perguntou:
 **Mobile: PRONTO COM PENDÊNCIAS.** O bloqueador anterior (VA-01) foi resolvido. Partida, seleção, sheet do inspetor, drawer e docks funcionam em 360/390, sem rolagem lateral. O que impede o "PRONTO" puro é não ter sido observado o turno da IA no celular e o acabamento do drawer (R-02).
 
 Nenhum dos itens acima impede jogar. Recomendo fechar R-01 (subir a tarja ou mover o custo para fora dela) e gravar um clipe mobile antes de declarar o visual encerrado.
+
+## Rodada de acabamento
+
+| Item | Resultado | Evidência |
+|---|---|---|
+| R-01 | **RESOLVIDO** — `padding-bottom: 28px` no `.card-fallback` do leque 3D (`src/index.css`, bloco "R-01"): o rodapé da face sobe acima da tarja. Com arte, o custo fica no canto superior esquerdo, livre. Nome e custo legíveis juntos. | `frames-1279x800-3d/08-board-start`, `frames-768x1024-3d/08-board-start` |
+| R-05 | **RESOLVIDO** — o `empty-battleline` do oponente volta em billboard com opacity .55 ("Battleline is clear"); o do jogador segue oculto. Sem nada entre `.table-plane` e as peças que achate o 3D (`_3d-chain` OK). | mesmos frames |
+| Gravação mobile | **FEITA** — `record-session --viewport 360x844` (touch, sem rail/log/Vault). O WIP não aplicava o argumento no `main` e chamava `finishRecording` inexistente; corrigidos. Cobre partida, carta selecionada + sheet do inspetor e turno da IA (legenda "The Ember Warden played …"). | `e2e/clips/session-360x844.webm`, `frames-360x844/10`, `13` |
+
+Limites: o leque foi conferido a 1279x800 e 768x1024 (não 1280x800, para não sobrescrever `session-1280x800-3d`); a 768 o harness falha no painel de log (rail vira drawer), depois dos frames do board. Bundle: 149,55 kB gz.
