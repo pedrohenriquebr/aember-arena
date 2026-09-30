@@ -156,14 +156,13 @@ button,
 
   /* Palco de viewport (UX_FIT_PLAN §2.1/§2.3): alturas das faixas da partida por
      perfil de altura — o default é o celular; ALTO e BAIXO (desktop) entram em
-     @media logo abaixo. --hand-h já inclui a linha de título da mão (18px): a
-     fusão com a barra do jogador é o FIT-04. */
+     @media logo abaixo. A linha de título da mão foi fundida à barra do jogador (FIT-04). */
   --header-h: 58px;
   --title-h: 0px;
   --band-h: 48px;
   --console-h: auto;
   --hand-bar-h: 48px;
-  --hand-h: 160px;
+  --hand-h: 153px;
   --hand-card-w: 82px;
   --board-min: 56px;
   --board-max: 76px;
@@ -186,14 +185,14 @@ button,
     --band-h: 52px;
     --console-h: 60px;
     --hand-bar-h: 44px;
-    --hand-h: 180px;
+    --hand-h: 173px;
     --hand-card-w: 96px;
   }
 }
 
 @media (min-width: 701px) and (min-height: 960px) {
   :root {
-    --hand-h: 211px;
+    --hand-h: 204px;
     --hand-card-w: 118px;
     --board-max: 128px;
   }
@@ -206,7 +205,7 @@ button,
     --band-h: 44px;
     --console-h: 52px;
     --hand-bar-h: 42px;
-    --hand-h: 170px;
+    --hand-h: 163px;
     --hand-card-w: 88px;
   }
 }
@@ -936,24 +935,27 @@ button:disabled {
   padding-block: 2px;
 }
 
-.game-board--stage .hand-heading {
-  min-height: 18px;
-  margin-bottom: 0;
+/* FIT-04: o título da mão mora na barra do jogador (.hand-bar-info); a dica de casa
+   troca o "n no baralho" enquanto vale. */
+.game-board--stage .hand-prompt {
+  padding: 0;
 }
 
-/* A dica de casa não ocupa linha: fica ao centro da linha do título da mão. */
-.game-board--stage .hand-prompt {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  padding: 0;
-  transform: translateX(-50%);
+/* A mão é HUD: fica acima da barra e da zona do jogador (a carta erguida invade os
+   dois sem empurrar nada) e o track reserva a folga da elevação no topo. */
+.game-board--stage .hand-zone {
+  z-index: 2;
+}
+
+.game-board--stage .hand-track {
+  padding-top: 14px;
 }
 
 .game-board--stage .hand-track {
   min-height: 0;
   flex: 1 1 auto;
-  padding: 3px 3px 1px;
+  padding-inline: 3px;
+  padding-bottom: 1px;
 }
 
 .game-board--stage .card-tile--hand {
@@ -2071,19 +2073,20 @@ button:disabled {
   }
 }
 
-.hand-heading,
-.hand-heading > div {
+.hand-bar-info {
   display: flex;
+  min-width: 0;
   align-items: center;
-}
-
-.hand-heading {
-  justify-content: space-between;
-  margin-bottom: 5px;
-}
-
-.hand-heading > div {
   gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(231, 221, 198, 0.15);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .hand-bar-info .hand-title {
+    display: none;
+  }
 }
 
 .hand-title {

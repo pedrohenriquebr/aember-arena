@@ -1072,6 +1072,10 @@ type PlayerBandProps = {
   side: 0 | 1;
   /** FEAT-13: pass-and-play avatars show the player number instead of "You". */
   avatarLabel?: string;
+  /** FIT-04: a barra do jogador absorve o título da mão (contagens + dica). */
+  handCount?: number;
+  deckCount?: number;
+  hint?: boolean;
   t: Translator;
 };
 
@@ -1086,6 +1090,9 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     (a.thinking ?? false) === (b.thinking ?? false) &&
     (a.house ?? "") === (b.house ?? "") &&
     (a.avatarLabel ?? "") === (b.avatarLabel ?? "") &&
+    a.handCount === b.handCount &&
+    a.deckCount === b.deckCount &&
+    (a.hint ?? false) === (b.hint ?? false) &&
     a.t === b.t &&
     a.player.name === b.player.name &&
     a.player.deckName === b.player.deckName &&
@@ -1108,6 +1115,9 @@ const PlayerBand = memo(function PlayerBand({
   chains,
   side,
   avatarLabel,
+  handCount,
+  deckCount,
+  hint = false,
   t,
 }: PlayerBandProps) {
   return (
@@ -1153,6 +1163,17 @@ const PlayerBand = memo(function PlayerBand({
           </span>
         )}
       </div>
+      {handCount !== undefined && (
+        <div className="hand-bar-info">
+          <span className="hand-title">{t("game.yourHand")}</span>
+          <span className="hand-count">{handCount} {t("common.cards").toUpperCase()}</span>
+          {hint ? (
+            <span className="hand-prompt"><Zap size={13} /> {t("game.unlockHint")}</span>
+          ) : (
+            <span className="deck-count">{deckCount} {t("game.inDeck")}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }, arePlayerBandPropsEqual);
@@ -1504,20 +1525,13 @@ function GameBoard({
           chains={player.chains}
           side={humanSide}
           avatarLabel={passAndPlay ? String(humanSide + 1) : undefined}
+          handCount={player.hand.length}
+          deckCount={player.deck.length}
+          hint={game.activePlayer === humanSide && !game.activeHouse && game.winner === null && !inMulligan(game) && !handHidden}
           t={t}
         />
 
         <section className="hand-zone" aria-label={t("game.yourHand")}>
-          <div className="hand-heading">
-            <div>
-              <span className="hand-title">{t("game.yourHand")}</span>
-              <span className="hand-count">{player.hand.length} {t("common.cards").toUpperCase()}</span>
-            </div>
-            <span className="deck-count">{player.deck.length} {t("game.inDeck")}</span>
-          </div>
-          {game.activePlayer === humanSide && !game.activeHouse && game.winner === null && !inMulligan(game) && !handHidden && (
-            <div className="hand-prompt"><Zap size={13} /> {t("game.unlockHint")}</div>
-          )}
           <div
             className="hand-track"
             /* H3D-06: --n abre o leque no 3D (rotação/arco por carta); no 2D é
