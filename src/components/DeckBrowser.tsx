@@ -211,11 +211,14 @@ export function DeckBrowser({
         </>
       )}
 
-      <div className="browse-houses" aria-hidden="true">
-        {["Brobnar", "Dis", "Logos", "Sanctum", "Shadows", "Untamed", "Mars"].map((house) => (
-          <HouseMark key={house} house={house} small />
-        ))}
-      </div>
+      {/* VA-12: no erro as casas soltas pareciam um loader quebrado — só enfeitam a lista. */}
+      {!error && (
+        <div className="browse-houses" aria-hidden="true">
+          {["Brobnar", "Dis", "Logos", "Sanctum", "Shadows", "Untamed", "Mars"].map((house) => (
+            <HouseMark key={house} house={house} small />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

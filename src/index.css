@@ -2345,6 +2345,32 @@ button:disabled {
     overflow: auto;
     margin-top: 0;
   }
+
+  /* VA-13: sombra de fade no rodapé do rail enquanto ainda há o que rolar — a linha do
+     tempo de scroll() a apaga no fim (e sem rolagem possível ela nem aparece). */
+  .command-rail::after {
+    content: "";
+    position: sticky;
+    bottom: 0;
+    flex: 0 0 auto;
+    height: 32px;
+    margin-top: -32px;
+    background: linear-gradient(transparent, rgba(23, 25, 21, 0.98));
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .command-rail::after {
+      animation: rail-fade linear both;
+      animation-timeline: scroll(self block);
+    }
+  }
+
+  @keyframes rail-fade {
+    0%, 90% { opacity: 1; }
+    100% { opacity: 0; }
+  }
 }
 
 /* T6 — default = mobile (visível, compacto); 701-1040 esconde; >1040 restaura. */
@@ -5147,6 +5173,7 @@ button:disabled {
 .review-grid {
   display: grid;
   grid-template-columns: 1fr;
+  align-items: start; /* VA-11: cada card com a altura do próprio conteúdo */
   gap: 10px;
 }
 
@@ -6399,17 +6426,33 @@ button:disabled {
   }
 }
 
+/* VA-14 (celular, 3 colunas): rótulo no topo e valor na base alinham a linha mesmo
+   quando um rótulo quebra em 2 linhas; a última célula ocupa o resto da linha em
+   vez de deixar um buraco. */
 .stat-cell {
   display: grid;
-  align-content: center;
+  align-content: space-between;
   gap: 4px;
   padding: 9px 10px;
   background: #1b1d18;
 }
 
+.stat-cell:last-child:nth-child(3n + 2) {
+  grid-column: span 3;
+}
+
+.stat-cell:last-child:nth-child(3n + 3) {
+  grid-column: span 2;
+}
+
 @media (min-width: 701px) {
   .stat-cell {
+    align-content: center;
     padding: 11px 13px;
+  }
+  .stat-cell:last-child:nth-child(3n + 2),
+  .stat-cell:last-child:nth-child(3n + 3) {
+    grid-column: auto;
   }
 }
 
