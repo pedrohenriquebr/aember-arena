@@ -121,16 +121,19 @@ export interface GameState {
 
 /** `target` optionally names the card chosen for the triggered ability (or the
     creature an upgrade attaches to); without it the engine picks like keyteki's
-    auto-target would for the controller. `slot` places a Deploy creature. */
+    auto-target would for the controller. `slot` places a Deploy creature.
+    `decline` resolves the move but skips its "You may" clauses (wave 2). */
 export type GameMove =
-  | { type: "play"; instanceId: string; target?: string; slot?: number; flank?: "left" | "right" }
-  | { type: "reap"; instanceId: string; target?: string }
-  | { type: "fight"; attackerId: string; targetId: string; target?: string }
-  | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action" }
+  | { type: "play"; instanceId: string; target?: string; slot?: number; flank?: "left" | "right"; decline?: boolean }
+  | { type: "reap"; instanceId: string; target?: string; decline?: boolean }
+  | { type: "fight"; attackerId: string; targetId: string; target?: string; decline?: boolean }
+  | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action"; decline?: boolean }
   | { type: "unstun"; instanceId: string }
   | { type: "discard"; instanceId: string }
   /** Picking the archives up is optional ("may"), so it is a move of its own. */
   | { type: "takeArchives" };
+
+const declines = (move: GameMove) => "decline" in move && move.decline === true;
 
 export const BASE_KEY_COST = 6;
 const HAND_SIZE = 6;
@@ -518,6 +521,8 @@ interface Context {
   deterministic: boolean;
   /** How a "use a creature" action resolves the creature (BUG-11). */
   useVia?: "reap" | "action";
+  /** The actor declined the "You may" clauses of this move (wave 2). */
+  decline?: boolean;
 }
 
 /** Mutable holder: the move's chosen target is consumed by the first targeted ability. */
@@ -612,6 +617,7 @@ function discardRandom(player: GamePlayer, deterministic: boolean, rng: Rng): vo
 }
 
 function run(context: Context, act: Act): void {
+  if (act.optional && context.decline) return;
   const { state, me, deterministic } = context;
   const player = state.players["opp" in act && act.opp ? other(me) : me];
   const cards = "s" in act ? select(context, act.s) : [];
@@ -690,8 +696,8 @@ function run(context: Context, act: Act): void {
         // until the UI prompts for it the engine resolves the printed Action
         // when there is one, reap otherwise (BUG-11).
         const via = context.useVia ?? (hasAbility(state, card, "action") ? "action" : "reap");
-        if (via === "action") fire(state, side, card, "action", { choice: {}, deterministic });
-        else reap(state, side, card, {}, deterministic);
+        if (via === "action") fire(state, side, card, "action", { choice: {}, deterministic, decline: context.decline });
+        else reap(state, side, card, {}, deterministic, context.decline);
       }
       break;
     case "fromDiscard": {
@@ -722,11 +728,13 @@ function fire(
   me: Side,
   source: CardInstance,
   trigger: Trigger,
-  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action" },
+  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean },
 ): void {
   for (const ability of abilitiesOf(state, source)) {
     if (!ability.on.includes(trigger) || (ability.if && !holds(ability.if, state, me))) continue;
-    const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic, useVia: options.via };
+    // A declined "You may" ability is skipped whole: no target has to be chosen.
+    if (options.decline && ability.optional) continue;
+    const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic, useVia: options.via, decline: options.decline };
     if (ability.target) {
       const legal = everyMatch(state, me, source, ability.target);
       const chosen = legal.find((card) => card.instanceId === options.choice?.id);
@@ -738,18 +746,18 @@ function fire(
   }
 }
 
-function reap(state: GameState, me: Side, creature: CardInstance, choice: Choice, deterministic: boolean): void {
+function reap(state: GameState, me: Side, creature: CardInstance, choice: Choice, deterministic: boolean, decline?: boolean): void {
   creature.ready = false;
   state.players[me].amber += 1;
   tally(state.players[me], "amberGained");
-  fire(state, me, creature, "reap", { choice, deterministic });
+  fire(state, me, creature, "reap", { choice, deterministic, decline });
 }
 
 /** keyteki ResolveFightAction: before-fight abilities, Assault/Hazardous, Elusive,
     Skirmish, Poison and Splash-attack, then "Fight:" if the attacker survived. */
-function fight(state: GameState, me: Side, attacker: CardInstance, defender: CardInstance, choice: Choice, deterministic: boolean): void {
+function fight(state: GameState, me: Side, attacker: CardInstance, defender: CardInstance, choice: Choice, deterministic: boolean, decline?: boolean): void {
   attacker.ready = false;
-  fire(state, me, attacker, "beforeFight", { fought: defender, choice, deterministic });
+  fire(state, me, attacker, "beforeFight", { fought: defender, choice, deterministic, decline });
   const alive = () => controllerOf(state, attacker) === me && controllerOf(state, defender) === other(me);
   // FEAT-06: a creature that ended in the discard pile during the exchange is a
   // kill for the other side (assault/hazardous/poison and "Fight:" included).
@@ -772,7 +780,7 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
   const splash = keyword(state, attacker, "splash-attack");
   if (splash) for (const neighbor of neighbors(state, defender)) dealDamage(state, neighbor, splash);
   sweep(state, deterministic);
-  if (controllerOf(state, attacker) === me) fire(state, me, attacker, "fight", { fought: defender, choice, deterministic });
+  if (controllerOf(state, attacker) === me) fire(state, me, attacker, "fight", { fought: defender, choice, deterministic, decline });
   credit();
 }
 
@@ -864,7 +872,12 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
   const card = source;
   const triggers = triggersFor(move);
   const ability = abilitiesOf(view, card).find(
-    (item) => item.target && item.on.some((trigger) => triggers.includes(trigger)) && (!item.if || holds(item.if, view, side)),
+    (item) =>
+      item.target &&
+      item.on.some((trigger) => triggers.includes(trigger)) &&
+      (!item.if || holds(item.if, view, side)) &&
+      // A declined "You may" is waived: no target prompt for it.
+      !(declines(move) && item.optional),
   );
   return ability?.target ? everyMatch(view, side, card, ability.target).map((item) => item.instanceId) : [];
 }
@@ -887,7 +900,11 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
     const limit = playLimit(state, side);
     for (const card of player.hand) {
       if (!houseAllows(card, house)) continue;
-      if (state.plays < limit && canPlay(state, side, card)) moves.push({ type: "play", instanceId: card.instanceId });
+      if (state.plays < limit && canPlay(state, side, card)) {
+        moves.push({ type: "play", instanceId: card.instanceId });
+        // "You may" clauses get a declined variant of the same move.
+        if (hasOptionalTrigger(state, side, card, ["play"])) moves.push({ type: "play", instanceId: card.instanceId, decline: true });
+      }
       moves.push({ type: "discard", instanceId: card.instanceId });
     }
   }
@@ -899,13 +916,31 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
         continue;
       }
       moves.push({ type: "reap", instanceId: card.instanceId });
+      if (hasOptionalTrigger(state, side, card, ["reap"])) moves.push({ type: "reap", instanceId: card.instanceId, decline: true });
+      const optionalFight = hasOptionalTrigger(state, side, card, ["beforeFight", "fight"]);
       for (const target of fightTargets(state, side, card)) {
         moves.push({ type: "fight", attackerId: card.instanceId, targetId: target.instanceId });
+        if (optionalFight) moves.push({ type: "fight", attackerId: card.instanceId, targetId: target.instanceId, decline: true });
       }
     }
-    if (card.face.type !== "Upgrade" && canUseCard(state, side, card, house)) moves.push({ type: "use", instanceId: card.instanceId });
+    if (card.face.type !== "Upgrade" && canUseCard(state, side, card, house)) {
+      moves.push({ type: "use", instanceId: card.instanceId });
+      if (hasOptionalTrigger(state, side, card, ["action", "omni"])) moves.push({ type: "use", instanceId: card.instanceId, decline: true });
+    }
   }
   return moves;
+}
+
+/** Does one of the card's triggered abilities carry a "You may" clause for this
+    move? Only then the move gets a declined variant, so a plain card keeps a
+    single legal move and the UI/AI only see the choice where the text has one. */
+function hasOptionalTrigger(state: GameState, side: Side, source: CardInstance, triggers: Trigger[]): boolean {
+  return abilitiesOf(state, source).some(
+    (ability) =>
+      ability.on.some((trigger) => triggers.includes(trigger)) &&
+      ability.acts.some((act) => act.optional) &&
+      (!ability.if || holds(ability.if, state, side)),
+  );
 }
 
 /** Legal moves, one per choosable target so the AI can search the choice.
@@ -919,7 +954,9 @@ export function getLegalMoves(state: GameState, playerIndex: Side, house: string
 }
 
 /** Does the move's triggered text have any effect now? Used by the AI to prune
-    moves (the Specification pattern: the same conditions the engine checks). */
+    moves (the Specification pattern: the same conditions the engine checks).
+    A declined move waives its "You may" abilities entirely, so a vacuous one
+    prunes instead of sending the AI into a no-op. */
 export function moveHasEffect(state: GameState, side: Side, move: GameMove): boolean {
   if (move.type === "reap" || move.type === "fight" || move.type === "unstun" || move.type === "takeArchives") return true;
   if (move.type === "discard") return false;
@@ -927,13 +964,17 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   if (!source) return false;
   if (move.type === "play" && (source.face.type !== "Action" || source.face.amber > 0)) return true;
   const triggers = triggersFor(move);
+  const declined = declines(move);
   return abilitiesOf(state, source).some(
-    (ability) => ability.on.some((trigger) => triggers.includes(trigger)) && canResolve(state, side, source, ability),
+    (ability) =>
+      ability.on.some((trigger) => triggers.includes(trigger)) &&
+      (!declined || !ability.optional) &&
+      canResolve(state, side, source, ability),
   );
 }
 
 const moveKey = (move: GameMove) =>
-  move.type === "fight" ? `${move.attackerId}>${move.targetId}` : move.type === "takeArchives" ? "takeArchives" : move.instanceId;
+  `${move.type === "fight" ? `${move.attackerId}>${move.targetId}` : move.type === "takeArchives" ? "takeArchives" : move.instanceId}${declines(move) ? "!" : ""}`;
 
 export function isLegalMove(state: GameState, side: Side, move: GameMove): boolean {
   const house = side === state.activePlayer ? state.activeHouse : null;
@@ -968,6 +1009,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   }
   const enemyIndex = other(playerIndex);
   const deterministic = options.deterministic === true;
+  const decline = declines(move);
   const choice: Choice = { id: "target" in move ? move.target : undefined };
   const source = moveSource(state, playerIndex, move)!;
   const params = { name: player.name, card: source.face.title };
@@ -1011,7 +1053,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     } else if (source.face.type === "Artifact") {
       player.board.push(source);
     }
-    fire(state, playerIndex, source, "play", { choice, deterministic });
+    fire(state, playerIndex, source, "play", { choice, deterministic, decline });
     if (source.face.type !== "Creature" && source.face.type !== "Artifact" && source.face.type !== "Upgrade") player.discard.push(source);
     if (keyword(state, source, "omega") && playerIndex === state.activePlayer) state.omega = true;
   } else if (move.type === "unstun") {
@@ -1019,19 +1061,19 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     Object.assign(source, { ready: false, stunned: false });
     record(state, "log.unstun", params, silent);
   } else if (move.type === "reap") {
-    reap(state, playerIndex, source, choice, deterministic);
+    reap(state, playerIndex, source, choice, deterministic, decline);
     record(state, "log.reap", params, silent);
   } else if (move.type === "fight") {
     const target = findOnBoard(state, enemyIndex, move.targetId)!;
     record(state, "log.fight", { ...params, target: target.face.title }, silent);
-    fight(state, playerIndex, source, target, choice, deterministic);
+    fight(state, playerIndex, source, target, choice, deterministic, decline);
   } else {
     source.ready = false;
     const house = playerIndex === state.activePlayer ? state.activeHouse : null;
     if (houseAllows(source, house) && hasAbility(state, source, "action")) {
-      fire(state, playerIndex, source, "action", { choice, deterministic, via: move.via });
+      fire(state, playerIndex, source, "action", { choice, deterministic, via: move.via, decline });
     }
-    fire(state, playerIndex, source, "omni", { choice, deterministic, via: move.via });
+    fire(state, playerIndex, source, "omni", { choice, deterministic, via: move.via, decline });
     record(state, "log.use", params, silent);
   }
 
@@ -1066,6 +1108,8 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
     card.armorUsed = 0;
     card.elusiveUsed = false;
   }
+  // "At the end of your turn:" (keyteki onTurnEnd, raised after the draw step).
+  for (const card of [...endingPlayer.board]) fire(state, playerIndex, card, "endOfTurn", { deterministic: false });
   record(state, "log.endTurn", { name: endingPlayer.name });
 
   const nextIndex = other(playerIndex);
@@ -1075,6 +1119,10 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   // Lasting effects whose duration ran out with this turn stop applying.
   const stamp = turnStamp(state);
   state.lasting = (state.lasting ?? []).filter((effect) => (effect.until ?? 0) > stamp);
+
+  // "At the start of your turn:" (keyteki onTurnStart, before the forge step):
+  // amber from these effects counts toward this turn's key.
+  for (const card of [...nextPlayer.board]) fire(state, nextIndex, card, "startOfTurn", { deterministic: false });
 
   // Key step: forging is mandatory when affordable.
   const cost = keyCost(state, nextIndex);

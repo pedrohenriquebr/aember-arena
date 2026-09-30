@@ -31,13 +31,26 @@ describe("trigger prefixes", () => {
     ["Omni: Gain 1A.", ["omni"]],
     ["Play/Reap: Gain 1A.", ["play", "reap"]],
     ["Play/Fight/Reap: Gain 1A.", ["play", "fight", "reap"]],
+    // Onda 2: reações ("After …"), gatilhos repetíveis ("Each time …") e de fase.
+    ["After Play: Gain 1A.", ["play"]],
+    ["After Fight/After Reap: Gain 1A.", ["fight", "reap"]],
+    ["Each time Reap: Gain 1A.", ["reap"]],
+    ["At the start of your turn: Gain 1A.", ["startOfTurn"]],
+    ["At the end of your turn: Gain 1A.", ["endOfTurn"]],
   ])("%s", (text, triggers) => {
     const rules = parseCardText(face(text));
     expect(rules.coverage).toBe("full");
     expect(rules.abilities[0].on).toEqual(triggers);
   });
 
-  it.each(["After an enemy creature is destroyed fighting this card: Gain 1A.", "Interrupt: Gain 1A.", "Scrap: Gain 1A."])(
+  it.each([
+    "After an enemy creature is destroyed fighting this card: Gain 1A.",
+    "Interrupt: Gain 1A.",
+    "Scrap: Gain 1A.",
+    // Watchers globais ("each time you …") não são gatilhos da fonte: ficam
+    // de fora em vez de virarem um gatilho errado da própria carta.
+    "Each time you reap, gain 1A.",
+  ])(
     "recognises %s but reports it as unsupported",
     (text) => {
       const rules = parseCardText(face(`Elusive. ${text}`));
@@ -79,6 +92,27 @@ describe("text normalisation", () => {
     expect(rules.coverage).toBe("full");
     expect(rules.effects[0]).toMatchObject({ target: { type: "Creature", side: "friendly" }, armor: 1 });
     expect(rules.abilities).toHaveLength(1);
+  });
+});
+
+describe("optional 'You may' clauses (Onda 2)", () => {
+  it("marks a whole 'You may' sentence as optional and keeps the card full", () => {
+    const rules = parseCardText(face("Play: You may draw a card."));
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities[0]).toMatchObject({ on: ["play"], optional: true });
+    expect(rules.abilities[0].acts).toEqual([{ k: "draw", n: 1, optional: true }]);
+  });
+
+  it("reads the 'You may:' colon form printed on some cards", () => {
+    const rules = parseCardText(face("Reap: You may: Gain 2 amber."));
+    expect(rules.abilities[0].acts).toEqual([{ k: "gainAmber", n: 2, optional: true }]);
+  });
+
+  it("keeps a mixed ability mandatory and marks only the 'may' sentence", () => {
+    const rules = parseCardText(face("Play: Draw a card. You may gain 2 amber."));
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities[0].optional).toBeUndefined();
+    expect(rules.abilities[0].acts).toEqual([{ k: "draw", n: 1 }, { k: "gainAmber", n: 2, optional: true }]);
   });
 });
 

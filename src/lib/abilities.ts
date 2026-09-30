@@ -10,7 +10,12 @@ import { parseCardText } from "./cardText";
 import type { Keywords } from "./keywords";
 import type { CardFace } from "./game";
 
-export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni";
+/** Event an ability is bound to. "after X" is the post-event window (keyteki
+    reaction) and "each time X" fires again on every occurrence of X — the
+    engine calls fire() once per occurrence, so no per-turn counter is needed.
+    Global watchers ("Each time you play another creature") stay out: they
+    would need an event bus across sources, not a card-bound trigger. */
+export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni" | "startOfTurn" | "endOfTurn";
 
 /** Card filter. `side` is relative to the ability's controller. */
 export interface Filter {
@@ -33,7 +38,7 @@ export interface Filter {
 /** Which cards an action affects. */
 export type Selection = "self" | "host" | "target" | "targetAndNeighbors" | "neighborsOfFought" | { each: Filter };
 
-export type Act =
+export type Act = (
   | { k: "gainAmber" | "loseAmber" | "steal" | "gainChains" | "draw" | "discardRandom" | "keyCost"; n: number; opp?: boolean }
   | { k: "capture"; n: number; s: Selection }
   | { k: "damage" | "heal"; n: number; s: Selection }
@@ -41,7 +46,11 @@ export type Act =
   | { k: "fromDiscard"; type?: "Creature" }
   | { k: "archiveTop" }
   /** A triggered effect with a duration ("Play: … on their next turn"). */
-  | { k: "lasting"; e: PersistentEffect };
+  | { k: "lasting"; e: PersistentEffect }
+) & {
+  /** "You may <efeito>": the actor decides whether this part resolves. */
+  optional?: boolean;
+};
 
 /** Specification: "may this ability resolve now?" — evaluated by the engine and
     by the AI (ai.ts) to prune moves whose effect can never happen. */
@@ -56,6 +65,8 @@ export interface Ability {
   if?: Condition;
   target?: Filter;
   acts: Act[];
+  /** Every act is a "You may" clause: the whole ability can be declined. */
+  optional?: boolean;
 }
 
 export type Coverage = "full" | "partial" | "vanilla";

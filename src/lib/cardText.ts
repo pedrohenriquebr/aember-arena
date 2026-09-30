@@ -10,9 +10,10 @@ import { printedKeywords, readKeyword } from "./keywords";
 import type { CardFace } from "./game";
 
 /** Every trigger prefix printed on cards. The ones without an engine trigger
-    (After X:, Interrupt:, Scrap: …) are recognised only to be reported as
-    unsupported instead of leaking into the previous ability. */
-const PREFIX = /\b((?:play|reap|fight|destroyed|omni|action|scrap|interrupt|after [^:.]{1,90}?|before [^:.]{1,90}?)(?:\/(?:play|reap|fight|destroyed))*)\s*:/gi;
+    (Interrupt:, Scrap: …) are recognised only to be reported as unsupported
+    instead of leaking into the previous ability. "After <event>:" is the
+    post-event window and "Each time <event>:" fires on every occurrence. */
+const PREFIX = /\b((?:play|reap|fight|destroyed|omni|action|scrap|interrupt|each time [^:.]{1,90}?|at the (?:start|end) of [^:.]{1,90}?|after [^:.]{1,90}?|before [^:.]{1,90}?)(?:\/(?:play|reap|fight|destroyed))*)\s*:/gi;
 
 const TRIGGERS: Record<string, Trigger> = {
   play: "play",
@@ -24,7 +25,19 @@ const TRIGGERS: Record<string, Trigger> = {
   destroyed: "destroyed",
   action: "action",
   omni: "omni",
+  "at the start of your turn": "startOfTurn",
+  "at the end of your turn": "endOfTurn",
 };
+
+/** Events a reaction can name after "After"/"Each time": both are post-event in
+    this engine, and a repeatable trigger is just its event firing again. */
+const EVENTS: Record<string, Trigger> = { play: "play", reap: "reap", fight: "fight", action: "action", omni: "omni" };
+
+/** Trigger of a printed prefix ("After Fight", "Each time Reap", …), if any. */
+function triggerFor(raw: string): Trigger | undefined {
+  const part = raw.trim();
+  return TRIGGERS[part] ?? EVENTS[part.replace(/^(after|each time) /, "")];
+}
 
 const num = (word: string) => (word === "a" || word === "an" ? 1 : Number(word));
 
@@ -75,6 +88,7 @@ interface Sentence {
   acts: Act[];
   target?: Filter;
   cond?: Condition;
+  optional?: boolean;
 }
 
 const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
@@ -110,7 +124,19 @@ const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number; obj: n
   [/^(.+?) captures? (\d+) amber$/, (m) => ({ k: "capture", n: +m[2], obj: 1 })],
 ];
 
+/** A printed sentence. A leading "You may" makes every act of the sentence
+    optional — the actor chooses whether it resolves (keyteki optional). */
 function parseSentence(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): Sentence | null {
+  const may = sentence.match(/^you may:? (.+)$/);
+  const parsed = parseSentenceBody(may ? may[1] : sentence, upgrade, creature, quoted);
+  if (parsed && may) {
+    parsed.optional = true;
+    for (const act of parsed.acts) act.optional = true;
+  }
+  return parsed;
+}
+
+function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): Sentence | null {
   const conditional = sentence.match(/^if ([^,]+), (.+)$/) ?? sentence.match(/^(.+?) if (you control more creatures than your opponent)$/);
   if (conditional) {
     const [condText, rest] = sentence.startsWith("if ") ? [conditional[1], conditional[2]] : [conditional[2], conditional[1]];
@@ -171,6 +197,8 @@ function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creat
     ability.acts.push(...parsed.acts);
   }
   if (!ability.acts.length) return null;
+  // Every act optional and the whole ability is a single "You may" clause.
+  if (ability.acts.every((act) => act.optional)) ability.optional = true;
   // "Sacrifice X. Destroy an artifact." — the sacrifice consumed the source, so
   // the printed target cannot be the source itself (BUG-10).
   if (ability.target && ability.acts.some((act) => act.k === "destroy" && "s" in act && act.s === "self")) {
@@ -246,8 +274,10 @@ function parseQuoted(inner: string, upgrade: boolean, creature: boolean, quoted:
     /^((?:play|reap|fight|destroyed|omni|action|scrap|before [^:.]{1,90}|after [^:.]{1,90})(?:\/(?:play|reap|fight|destroyed))*)\s*:\s*(.+)$/i,
   );
   if (!match) return null;
-  const triggers = match[1].split("/").map((part) => TRIGGERS[part.trim()]);
-  return triggers.every(Boolean) ? parseAbility(triggers, match[2], upgrade, creature, quoted) : null;
+  const triggers = match[1].split("/").map((part) => triggerFor(part));
+  return triggers.every((trigger): trigger is Trigger => trigger !== undefined)
+    ? parseAbility(triggers, match[2], upgrade, creature, quoted)
+    : null;
 }
 
 const RESTRICT_TYPES: Record<string, string> = { action: "Action", creature: "Creature", artifact: "Artifact", upgrade: "Upgrade" };
@@ -347,8 +377,8 @@ function parseCardBody(face: CardFace): CardRules {
   }
 
   for (const { prefix: raw, body } of segments.slice(1)) {
-    const triggers = raw!.split("/").map((part) => TRIGGERS[part.trim()]);
-    const ability = triggers.every(Boolean)
+    const triggers = raw!.split("/").map((part) => triggerFor(part));
+    const ability = triggers.every((trigger): trigger is Trigger => trigger !== undefined)
       ? parseAbility(triggers, body.replace(self, "this card"), upgrade, creature, quoted)
       : null;
     if (ability) {
