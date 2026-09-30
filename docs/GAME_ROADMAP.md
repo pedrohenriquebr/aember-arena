@@ -68,6 +68,22 @@ mulligan, pass-and-play, undo/replay/seed.
 | **Prophecy** (mecânica completa) | PV/ToC | tipo filtrado, mecânica inexistente |
 | **Interrupt / After you…** | transversal | 1+ carta; janela reativa |
 | **Efeitos persistentes** ("Each friendly…") | transversal | 1.000 cartas (já mapeado) |
+
+### 2.c REVISÃO INDEPENDENTE (docs/ROADMAP_REVIEW.md — Opus effort low, 30/09) — AUTORIDADE SOBRE ESTA SEÇÃO
+
+A auditoria acima subcontava e tinha erros; a revisão corrigiu com proxy das classes
+keyteki (2.607 arquivos): **Purge 119** (não 45), "You may" 145, reações 239+74,
+**+14 mecânicas ausentes não mapeadas** (tokens 124, gainAbility 174, duração 117,
+contadores/ward/enrage ~137, proibições 131, "instead" ~95, sacrifice 36, search/mill
+26, forja fora de fase 64, **archive opcional é erro de regra no nosso motor** —
+`game.ts:907-909` pega sempre), keywords concedidas por efeito (0 no motor).
+Falso backlog evitado: Haste, limite de 6 criaturas, "sem compra no turno 1",
+armadura negativa e "keys custam capturado" NÃO são regras do KeyForge.
+**Core real: ~65% · Global: ~72% · Ordem de ondas corrigida (ROADMAP_REVIEW §3):
+1) camada de efeitos (persistente+modificadores+keyword concedida+duração+proibições,
+~1.000 cartas) → 2) opcionalidade e reações → 3) verbos de zona e tokens →
+4) estado de set (tide/haunted/enhanced/control/ward) → 5) cauda.
+O pipeline LLM só rende DEPOIS da onda 1.**
 **Ações implementadas (21):** destroy, damage, steal, capture, stun, draw,
 discardRandom, gainAmber, fromDiscard, returnToHand, archiveTop, exhaust,
 loseAmber, gainChains, heal, archive, ready, keyCost, use, returnToDeck, unstun.
@@ -166,7 +182,7 @@ missão deepseek ≈ 2-6 histórias M/1-7h (flat) · validação Opus ≈ $1-3.
 
 | Frente | Coberto | Nota |
 |---|---:|---|
-| Motor de regras (core) | 78% | efeitos persistentes, tide, scrap, purge, take-control, "you may", ícones enhanced, keywords −8, condições ricas |
+| Motor de regras (core) | **~65%** | revisão Opus: a lista de ausências era ~2× maior — +tokens (124), gainAbility (174), duração (117), contadores/ward/enrage (137+), proibições (131), "instead" (~95), forja fora de fase (64), sacrifice (36), search/mill (26), archive opcional (bug de regra) |
 | Cobertura do catálogo (texto→efeito) | **6%** | pula para ~65-70% com o pipeline LLM |
 | UX palco/mobile | 95% | FIT-06b + validação |
 | Animações/efeitos | 80% | ondas 1-3 feitas; reticle/investida pendentes |
