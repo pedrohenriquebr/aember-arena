@@ -15,13 +15,13 @@ citados abaixo).
 | Item | Valor |
 |---|---|
 | Gatilhos de engine | **7** (`play`, `reap`, `fight`, `beforeFight`, `destroyed`, `action`, `omni`) a partir de **9** grafias impressas |
-| Tipos de ação (`Act.k`) | **21** |
-| Padrões de frase reconhecidos | **28** (11 `SIMPLE` + 14 `VERBS` + 3 formas especiais) + 2 formas de condicional |
+| Tipos de ação (`Act.k`) | **25** (onda 3: +purge, sacrifice, exalt, makeToken) |
+| Padrões de frase reconhecidos | **33** (13 `SIMPLE` + 17 `VERBS` + 3 formas especiais) + 2 formas de condicional |
 | Condições (`Condition.k`) | **4** (`amber`, `moreCreatures`, `fewerCreatures`, `not`) — o parser produz 3 |
-| Keywords resolvidas pelo motor | **10** (Elusive, Taunt, Skirmish, Poison, Deploy, Alpha, Omega, Assault X, Hazardous X, Splash-attack X) |
+| Keywords resolvidas pelo motor | **11** (Elusive, Taunt, Skirmish, Poison, Deploy, Alpha, Omega, Assault X, Hazardous X, Splash-attack X, Exalt) |
 | Pool medido | **2.603** cartas jogáveis únicas (15 sets, keyteki-json-data) |
 | Efeito completo / parcial / vanilla | **134 (5,1%) / 33 (1,3%) / 2.420 (93,0%)** + **16 (0,6%) que derrubam o parser** (BUG-01) |
-| Specs vitest | **77** (5 arquivos), todas verdes |
+| Specs vitest | **185** (11 arquivos), todas verdes |
 
 Leitura honesta: o motor novo é **correto no que afirma cobrir** (all-or-nothing por
 ability, selo de cobertura visível), mas cobre uma fatia pequena do pool real. Os dois
@@ -62,12 +62,15 @@ keyteki, mas sem classes: o mesmo objeto alimenta motor, IA e selo de cobertura.
   controlador), `damaged`, `flank`, `other`, `ready`, `top` (N mais fortes).
 - `Selection` — quem a ação afeta: `self`, `host` (criatura do upgrade), `target`,
   `targetAndNeighbors`, `neighborsOfFought`, `{ each: Filter }`.
-- `Act` (21 tipos):
+- `Act` (25 tipos):
   - numéricos no jogador: `gainAmber`, `loseAmber`, `steal`, `gainChains`, `draw`,
     `discardRandom`, `keyCost` (com `opp` para o oponente);
-  - em cartas: `capture`, `damage`, `heal`, `destroy`, `stun`, `exhaust`, `ready`,
-    `unstun`, `returnToHand`, `returnToDeck`, `archive`, `use`;
-  - zonas: `fromDiscard` (opcionalmente só criatura), `archiveTop`.
+  - em cartas: `capture`, `damage`, `heal`, `exalt` (Onda 3: âmbar da reserva
+    comum no alvo), `destroy`, `purge` (Onda 3: sai de jogo para `purged`),
+    `sacrifice` (Onda 3: descarte do dono, sem `Destroyed:`), `stun`, `exhaust`,
+    `ready`, `unstun`, `returnToHand`, `returnToDeck`, `archive`, `use`;
+  - zonas: `fromDiscard` (opcionalmente só criatura), `archiveTop`;
+  - tokens: `makeToken` (Onda 3: face sintética na battleline, nunca no deck).
 - `Condition` — `amber` (eu/oponente, `eq`/`gte`), `moreCreatures`, `fewerCreatures`,
   `not` (suportado pelo motor, nunca gerado pelo parser).
 - `Ability` — `{ on: Trigger[], if?, target?, acts[] }`: **um** alvo escolhido por
@@ -175,9 +178,36 @@ próprio. `GameState.lasting` guarda só as cópias disparadas com duração (da
   turno, "next turn" vale só no turno seguinte do oponente (keyteki
   `untilPlayerTurnEnd` / `duringOpponentNextTurn`).
 - **Fora da onda** (documentado no `GAME_ROADMAP`): `bonusFightDamage` (Valdr),
-  contadores de poder, "instead", tokens, ward/enrage.
+  contadores de poder, "instead", wards/enrage. Tokens saíram da lista na onda 3.
 
-### 2.6 `ai.ts`
+### 2.6 Verbos de zona e tokens (onda 3, `docs/ROADMAP_REVIEW.md` §3)
+
+Fecha o grupo "verbos de zona": quatro tipos de ação novos, todos dados puros
+(JSON-safe) e sem UI própria.
+
+- **Purge** (`purged`): novo destino de `leavePlay` — a carta sai de jogo para
+  `GamePlayer.purged` e **não** entra em descarte/mão/deck/arquivos; como só o
+  descarte é reembaralhado (`draw`), o purgado nunca volta. Não é destruição:
+  não dispara `Destroyed:` nem credita abate (keyteki `PurgeAction`, zona própria).
+  Âmbar capturado na criatura volta ao oponente, como em qualquer saída de jogo.
+- **Sacrifice**: verbo próprio (`Act.k = "sacrifice"`) separado de `destroy`.
+  Vai direto ao descarte do dono **sem** a janela de `Destroyed:` (keyteki usa o
+  mesmo `DestroyAction` com `isSacrifice`; aqui a semântica de regra exposta é
+  "sacrificada ≠ destruída"). O BUG-10 ("Sacrifice X. Destroy um artefato.") foi
+  reancorado no novo verbo.
+- **Tokens** (`makeToken`): "Make/Create (a|N) token creature(s)" cria a
+  instância direto na battleline, exausta, com face sintética (título
+  `Token Creature`, casa da carta de origem, poder 1, traits `Token`) e
+  `isToken: true` na instância. Token não é carta de deck: sai de jogo sem
+  entrar em nenhuma zona (não pode ser comprado nem reembaralhado) e o abate em
+  luta continua contando (FEAT-06). `GameState.tokenSerial` dá ids determinísticos.
+- **Exalt** (`exalt`): contador de âmbar colocado na criatura **vindo da reserva
+  comum** (keyteki `ExaltAction`; `docs/keywords.md` §Exalt). Comporta-se como
+  âmbar capturado: volta ao oponente quando a criatura sai de jogo. A keyword
+  impressa é reconhecida para cobertura, mas o motor só resolve o verbo
+  ("Exalt <carta> [twice]") — não há cláusula de "não pode ser usada".
+
+### 2.7 `ai.ts`
 
 Busca em profundidade limitada (1–6 plies por dificuldade + `thinkingDepth`), orçamento
 de nós (`700 + 250·depth`), ordenação por avaliação, `branchLimit` por perfil, camada
@@ -218,6 +248,11 @@ abilities.
 > medição, mas o pool **não foi re-medido** (`KF_DATA` ausente nesta máquina). Nos
 > decks demo, Bulwark, Grey Monk, Staunch Knight, Ember Imp e Scrambler Storm saíram
 > de `partial`/`vanilla` para `full` (58 cartas distintas: 35/2/21 → **40/1/17**).
+>
+> Nota (2026-09-30, onda 3): purge/sacrifice/tokens/exalt (§2.6) também rodam por
+> cima da tabela; a estimativa no proxy keyteki está no §3.5. O snapshot dos decks
+> demo segue **40 full / 1 partial / 17 vanilla** (nenhuma carta demo usa os verbos
+> novos).
 
 ### 3.3 Por tipo
 
@@ -258,6 +293,29 @@ Das 2.453 cartas não-`full`:
   `capture` 54, `ready` 49, `return` 47, `purge` 45, `archive` 41, `exalt` 39.
 - **60** usam gatilho sem suporte: `Scrap:` 59, `After you …:` 1.
 
+**Onda 3 (30/09):** `make`/`purge`/`exalt` saíram dos primeiros tokens rejeitados
+(`sacrifice` deixou de ser alias de `destroy`), mas o pool não foi re-medido
+(`KF_DATA` ausente). Medição proxy equivalente — as 2.607 classes keyteki do
+parágrafo anterior, com os comentários impressos de cada arquivo passados pelo
+**parser real**, arquivo a arquivo:
+
+| Mecânica | Classes que usam (proxy) | Com frase que o parser agora entende |
+|---|---:|---:|
+| `make`/`create … token creature` | 112 (o pool fala 124 cartas) | **34** (30%) |
+| `exalt <objeto> [twice]` | 106 | **17** (16%) |
+| `sacrifice <objeto>` | 27 (o pool fala 36) | **9** (33%) |
+| `purge <objeto de mesa>` | 117 (o pool fala 119) | **1** (<1%) |
+
+O purge é o caso extremo: o destino `purged` está fechado no motor, mas o alvo
+real quase sempre vem de **outra zona** ("purge a card from your discard pile",
+"purge a card from your hand", 16+ ocorrências) ou com condição de poder/trait
+("a creature with power 3 or lower", "each friendly Shadows creature"). A
+cobertura de purge no pool só cresce quando o parser aprender a escolher a zona
+de origem e traits (§6.4). Os números de `make`/`exalt`/`sacrifice` são menores
+que os tokens brutos acima porque o parser é all-or-nothing por ability: a frase
+principal entende, mas a segunda frase (condição/"for each") derruba a ability
+inteira.
+
 ---
 
 ## 4. Mudanças de regras para fidelidade ao KeyForge
@@ -282,6 +340,10 @@ Comparação do motor anterior (`24917d9^:src/lib/game.ts`, 502 linhas, efeitos 
 | Arquivos | não existiam | `archives` por jogador, recolhidos por opção (`takeArchives`, regra do "may") |
 | Upgrades | iam para o board soltos | anexados a um hospedeiro, descartados quando ele sai (ver BUG-04 para o caso do hospedeiro inimigo) |
 | Descarte | não existia | jogada `discard` da mão (casa ativa) |
+| Purge (onda 3) | não existia | destino `purged` próprio: a carta sai do jogo e não volta no reembaralhamento (keyteki `PurgeAction`) |
+| Sacrifice (onda 3) | alias de `destroy` (disparava `Destroyed:`) | verbo próprio: descarte do dono **sem** `Destroyed:` e sem crédito de abate (keyteki `DestroyAction` com `isSacrifice`) |
+| Tokens (onda 3) | não existiam | "Make a token creature" cria a instância direto na battleline (face sintética, `isToken`); morre sem entrar em zona nenhuma (keyteki `MakeTokenCreatureAction`) |
+| Exalt (onda 3) | não existia | âmbar da reserva comum colocado no alvo; comporta-se como capturado ao sair de jogo (keyteki `ExaltAction`, `docs/keywords.md` §Exalt) |
 | Escolha de alvo | sempre automática | jogador escolhe quando há >1 alvo legal (`targetChoices`); IA busca cada alvo (`getLegalMoves` expandido) |
 | IA | heurística de uma camada | busca com orçamento + camada de resposta do oponente (Hard+), poda pela especificação do motor, pode parar |
 
@@ -291,13 +353,15 @@ i18n.
 
 ---
 
-## 5. Testes (151 specs)
+## 5. Testes (185 specs)
 
 | Arquivo | Specs | Conteúdo |
 |---|---:|---|
 | `rules.test.ts` | 48 | keywords de luta (Elusive 1×/turno e reset, Taunt, Assault, Hazardous, Skirmish, Poison vs armadura, Splash-attack, array do vault), armadura por turno, Alpha/Omega/Deploy, turno (7 cartas e 1 jogada no turno 1, ready/stun, compra com chains, forja no custo atual, Lash, vitória na 3ª chave, arquivos opcionais, mavericks, jogada ilegal), abilities e alvos (captura, alvo escolhido, expansão por alvo, Dominator Bauble, Research Smoko, upgrade no hospedeiro, condição como poda da IA), mulligan/log/tallies/FEAT-12 |
-| `cardText.test.ts` | 26 | prefixos de gatilho, normalização (glifos A/Æ/D, nome próprio → `this card`), condições antes/depois do efeito, all-or-nothing, gramática persistente (stats, grants, proibições, duração, ability citada), cobertura dos decks demo |
+| `cardText.test.ts` | 38 | prefixos de gatilho, normalização (glifos A/Æ/D, nome próprio → `this card`), condições antes/depois do efeito, all-or-nothing, gramática persistente (stats, grants, proibições, duração, ability citada) e da onda 3 (purge/sacrifice/exalt como verbos separados, tokens make/create), cobertura dos decks demo |
 | `persistent.test.ts` | 16 | Bulwark, Grey Monk, Staunch Knight, Ember Imp e Scrambler Storm portados do keyteki 01-Core + poder/armadura efetivos na luta e na morte, Taunt concedida, duração, gainAbility, update no host, JSON-safe, arquivos opcionais |
+| `zones.test.ts` | 11 | onda 3: purge (sai do jogo, não volta no reembaralhamento, `Destroyed:` silencioso), sacrifice (descarte do dono sem `Destroyed:`, âmbar capturado volta), tokens (nasce na mesa com a casa da fonte, morre fora das zonas, JSON-safe) e exalt (reserva comum, "twice", âmbar ao oponente na saída, não bloqueia uso, keyword reconhecida) |
+| `reactions.test.ts` | 11 | onda 2: "You may" opcional com variante decline, reações `After X:`/`Each time X:` e gatilhos de fase |
 | `cards.test.ts` | 19 | cartas antes codificadas no `if/else` (specs portados do keyteki 01-Core) |
 | `match.test.ts` | 16 | partidas IA × IA com os 2 decks demo, mãos iniciais e conservação de cartas por zona, seeds, save antigo, pass-and-play |
 | `ai.test.ts` | 11 | não limpa o próprio board à toa, prefere ability que resolve, só propõe jogadas legais (Taunt impressa e concedida), mulligan, arquivos opcionais |
@@ -311,17 +375,21 @@ Probes da auditoria (fora do `npm test`): `e2e/probes/` — ver `BUGS_AND_FEATUR
 
 1. **BUG-01 — "Fully heal" derruba o parser** (16 cartas; tela branca ao importar um
    deck que tenha qualquer uma delas). Primeira coisa a corrigir.
-2. **Efeitos constantes/persistentes** (1.000 cartas com texto estático; 493 só com
-   isso): modificadores de poder/armadura, "gains …", "cannot …", duração "for the
-   remainder of the turn". Exige uma camada de efeitos contínuos (keyteki
-   `persistentEffect`/`lastingEffect`) recalculada em `keyword()`/poder efetivo.
-3. **Gatilhos reativos**: `Scrap:` (59), `Interrupt:`, "After a creature is destroyed…",
-   "each time…", "at the start/end of your turn" — hoje não há fila de eventos, só
-   `fire` no próprio card.
-4. **Gramática**: `if` além das 3 formas (170), `you may` (opcional), `for each`,
-   traits ("a Mars creature"), referências anafóricas ("that creature", "it" apontando
-   para o alvo), `choose` genérico, `put`/`move`/`purge`/`discard` de zonas, tokens
-   (`make a token creature`), counters (`exalt`, `ward`, `enrage`, `+1 power counter`).
+2. **Efeitos constantes/persistentes** — **feito na onda 1** (§2.5): stats, grants,
+   proibições e duração. Continua fora a cauda de efeitos: `bonusFightDamage`
+   (Valdr) e contadores de poder.
+3. **Gatilhos reativos**: `After …`/`Each time …`/início e fim de turno **fechados na
+   onda 2**; seguem sem suporte `Scrap:` (59 — precisa de descarte como custo),
+   `Interrupt:` e watchers globais ("each time you …"), que pedem um barramento de
+   eventos em vez do `fire` preso à fonte.
+4. **Gramática**: `if` além das 3 formas (170), `for each`, traits ("a Mars
+   creature" — hoje também limita purge/sacrifice/exalt a objetos sem trait),
+   referências anafóricas ("that creature", "it" apontando para o alvo), `choose`
+   genérico, `put`/`move` de zonas, **seleção da zona de origem**
+   (`purge`/`discard`/`search` de descarte/mão/deck — a onda 3 fechou só o alvo de
+   mesa: o destino `purged` existe, mas 116 dos 117 arquivos proxy de purge miram
+   outra zona) e counters (`ward`, `enrage`, `+1 power counter`). Tokens
+   (`make a token creature`) e `exalt` **saíram da lista na onda 3**.
 5. **Fidelidade de regras já identificada** (detalhes em BUGS_AND_FEATURES):
    escolha da casa não é pré-requisito para jogar (BUG-02); alvo de `Fight:`/`Before
    Fight:` sempre automático (BUG-06); `Use a creature` só colhe (BUG-11); criaturas
