@@ -51,6 +51,16 @@ describe("'You may' clauses (optional Act)", () => {
     expect(declined.players[0].hand).toHaveLength(0);
   });
 
+  it("declining 'You may X. If you do, Y' skips Y too", () => {
+    const state = setupTest({ hand: [creature("Ghoul", 3, "Play: You may destroy a creature. If you do, gain 2A.")] }, { inPlay: [creature("Victim", 2)] });
+    const kept = play(state, 0, "Ghoul");
+    expect(kept.players[0].amber).toBe(2);
+    expect(kept.players[1].board).toHaveLength(0);
+    const declined = play(state, 0, "Ghoul", { decline: true });
+    expect(declined.players[0].amber).toBe(0);
+    expect(declined.players[1].board).toHaveLength(1);
+  });
+
   it("only offers the declined variant when the card prints the clause", () => {
     const plain = creature("Plain", 2);
     const state = setupTest({ hand: [plain] });

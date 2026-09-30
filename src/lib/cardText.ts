@@ -213,6 +213,11 @@ function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creat
   for (const sentence of body.split(/\.\s*/).map((part) => part.trim()).filter(Boolean)) {
     const parsed = parseSentence(sentence, upgrade, creature, quoted);
     if (!parsed) return null;
+    // "You may X. If you do, Y.": declining X declines Y too, so the dependent
+    // clause inherits the optional flag of the clause before it.
+    if (/^if you do,? /.test(sentence) && ability.acts.length && ability.acts.every((act) => act.optional)) {
+      for (const act of parsed.acts) act.optional = true;
+    }
     if (parsed.target) {
       if (ability.target) return null;
       ability.target = parsed.target;
