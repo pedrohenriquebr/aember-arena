@@ -43,6 +43,9 @@ node e2e/probes/_3d-chain.mjs   # cadeia preserve-3d, toggle, sombras, leque, c�
 node e2e/probes/_3d-hit.mjs     # hit-test/click/alvo de luta com 1/6/12 cartas
 node e2e/probes/_3d-fx.mjs      # voo do leque ao slot 3D (quadro 0, pouso, hold)
 npm run e2e:record:3d  # clipe + frames da mesa 3D (e2e/clips/frames-3d)
+npm run e2e:fit:3d     # o encaixe do palco (e2e:fit) com a mesa 3D; mão overlay >= 70%
+npm run e2e:arena      # layout Arena (H3D-13..15): palco, fileiras, notch, escala, a11y;
+                       # `--break` (lane em flex) TEM de falhar; `--shots` salva PNGs
 ```
 
 ## Layout
@@ -194,7 +197,20 @@ src/
     - Texto do plano é billboard (contra-rotacionado) ou HUD; no 3D o gate é
       `e2e:floor:3d` (piso VISUAL = fontSize × projeção), não o `e2e:floor` 2D.
     - Mudou board/hand? Rode capture 2D **e** 3D, `e2e:floor` **e** `e2e:floor:3d`
-      e os três probes (`_3d-chain`, `_3d-hit`, `_3d-fx`).
+      e os três probes (`_3d-chain`, `_3d-hit`, `_3d-fx`) **e** `e2e:arena`/`e2e:fit:3d`.
+    - **Palco (H3D-14):** o 3D/lite também recebem `game-board--stage`; o `.table-plane`
+      é item do grid (linhas 2-4, colunas `minmax(0,1fr)`) com grid próprio (zona,
+      console, zona) e SEM margem negativa. A mão é overlay (`--hand-row` = 70% do
+      `--hand-h`, carta a 0,9×, cada carta >= 70% visível). A razão visual
+      oponente/jogador (0,74-0,80) NÃO é fixa: os tetos `--card-w-3d` sobem por faixa
+      de altura/largura (o fundo recua mais com o plano alto) — retunar com o
+      `_3d-arena` ao mexer em alturas.
+    - **Fileiras (H3D-15, >= 701px):** a `.board-lane` é grid (goteira 1fr + n
+      colunas `--col` + goteira 1fr; linhas: criaturas | externa). `.board-attachments`
+      é `display: contents` (a lista "anexos" segue na árvore a11y do Chromium).
+      Artefatos/upgrades vão para a fileira externa (abaixo no jogador, acima no
+      oponente), a 0,6× da criatura, lean 24°, parando antes do notch central de
+      200px. Sem anexo a fileira mede 0. Upgrade embaixo do hospedeiro é a H3D-17.
 
 ## Verification gates (rode antes de commitar mudança relevante)
 

@@ -51,8 +51,14 @@
 //      360/768/1280/1440, com teste do teste (tilt 60 tem de acusar). Pula com
 //      --skip-floor3d.
 //
+//   5. Layout Arena (H3D-13..15) -> "node e2e/probes/_3d-arena.mjs": palco, mao em
+//      overlay, escala oponente/jogador, fileiras por zona, notch central e a11y.
+//   6. Cadeia 3D (VIEW3D H3D-02) -> "node e2e/probes/_3d-chain.mjs": sem agrupamento
+//      do .table-plane ate a .board-piece, projecao viva e o leque. Os dois pulam
+//      com --skip-probes.
+//
 // Sai != 0 listando TODAS as violacoes.
-// Uso: node e2e/acceptance.mjs [--max-gzip-kb N] [--block-max-lines N] [--skip-floor] [--skip-floor3d] [--port N]
+// Uso: node e2e/acceptance.mjs [--max-gzip-kb N] [--block-max-lines N] [--skip-floor] [--skip-floor3d] [--skip-probes] [--port N]
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -77,6 +83,7 @@ const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 151);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const skipFloor3d = hasFlag("--skip-floor3d");
+const skipProbes = hasFlag("--skip-probes");
 const floorPort = Number(argValue("--port") ?? 5211);
 
 function measureGzipKb() {
@@ -111,9 +118,9 @@ console.log("== ACCEPTANCE (T1) ==");
 
 // 1) Piso tipografico
 if (skipFloor) {
-  console.log("\n[1/4] piso tipografico: PULADO (--skip-floor)");
+  console.log("\n[1/6] piso tipografico: PULADO (--skip-floor)");
 } else {
-  console.log(`\n[1/4] piso tipografico (node e2e/capture.mjs --floor-only @360x800, 5 telas):`);
+  console.log(`\n[1/6] piso tipografico (node e2e/capture.mjs --floor-only @360x800, 5 telas):`);
   const res = spawnSync(process.execPath, [join(ROOT, "e2e", "capture.mjs"), "--floor-only", "--port", String(floorPort)], {
     cwd: ROOT,
     encoding: "utf8",
@@ -129,7 +136,7 @@ if (skipFloor) {
 }
 
 // 2) Orcamento de bundle
-console.log(`\n[2/4] orcamento de bundle (dist/index.html, zlib level 9, max ${maxGzipKb} kB):`);
+console.log(`\n[2/6] orcamento de bundle (dist/index.html, zlib level 9, max ${maxGzipKb} kB):`);
 const gzipKb = measureGzipKb();
 if (gzipKb === null) {
   violations.push('bundle: dist/index.html nao encontrado - rode "npm run build" antes do acceptance');
@@ -140,7 +147,7 @@ if (gzipKb === null) {
 }
 
 // 3) Bloco @media (max-width: 700px)
-console.log(`\n[3/4] bloco "${MEDIA_QUERY}" em src/index.css (max ${blockMaxLines} linhas):`);
+console.log(`\n[3/6] bloco "${MEDIA_QUERY}" em src/index.css (max ${blockMaxLines} linhas):`);
 const block = measureMediaBlock(CSS_PATH, MEDIA_QUERY);
 if (!block) {
   violations.push("css: bloco @media (max-width: 700px) nao encontrado em src/index.css");
@@ -156,9 +163,9 @@ if (!block) {
 
 // 4) Piso visual do 3D (H3D-11)
 if (skipFloor3d) {
-  console.log("\n[4/4] piso visual 3D: PULADO (--skip-floor3d)");
+  console.log("\n[4/6] piso visual 3D: PULADO (--skip-floor3d)");
 } else {
-  console.log(`\n[4/4] piso visual 3D (node e2e/capture.mjs --floor-only --view 3d @360/768/1280/1440):`);
+  console.log(`\n[4/6] piso visual 3D (node e2e/capture.mjs --floor-only --view 3d @360/768/1280/1440):`);
   const res = spawnSync(process.execPath, [join(ROOT, "e2e", "capture.mjs"), "--floor-only", "--view", "3d", "--port", String(floorPort + 1)], {
     cwd: ROOT,
     encoding: "utf8",
