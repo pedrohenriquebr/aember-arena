@@ -160,9 +160,9 @@ button,
   --header-h: 58px;
   --title-h: 0px;
   --band-h: 48px;
-  --console-h: auto;
-  --hand-bar-h: 48px;
-  --hand-h: 153px;
+  --console-h: 56px;
+  --hand-bar-h: 44px;
+  --hand-h: 152px;
   --hand-card-w: 82px;
   --board-min: 56px;
   --board-max: 76px;
@@ -1773,12 +1773,11 @@ button:disabled {
    701-1220 (rail de 285px) e >1220 restaurando os valores progressivos. */
 .turn-console {
   position: relative;
-  display: grid;
+  display: flex;
   min-height: 0;
-  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 9px 8px;
-  padding: 9px 10px;
+  gap: 6px;
+  padding: 3px 8px;
   border-top: 1px solid rgba(216, 204, 175, 0.15);
   border-bottom: 1px solid rgba(216, 204, 175, 0.15);
   background: linear-gradient(90deg, rgba(17, 22, 18, 0.78), rgba(26, 31, 25, 0.7), rgba(17, 22, 18, 0.74));
@@ -1786,9 +1785,7 @@ button:disabled {
 
 @media (min-width: 701px) {
   .turn-console {
-    display: flex;
     min-height: 70px;
-    grid-template-columns: none;
     gap: 9px;
     padding: 8px 13px 8px 14px;
   }
@@ -1808,17 +1805,15 @@ button:disabled {
 .turn-console-copy {
   display: flex;
   min-width: 0;
+  flex: 1 1 0;
   flex-direction: column;
-  grid-column: 1;
-  grid-row: 1;
-  gap: 3px;
+  gap: 1px;
 }
 
 @media (min-width: 701px) {
   .turn-console-copy {
     min-width: 112px;
-    grid-column: auto;
-    grid-row: auto;
+    flex: 0 1 auto;
     gap: 4px;
   }
 }
@@ -1860,8 +1855,19 @@ button:disabled {
 }
 
 .turn-console-copy > span:last-child {
+  overflow: hidden;
   color: #888c81;
   font-size: var(--fs-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 701px) {
+  .turn-console-copy > span:last-child {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
 }
 
 /* FX-04: narração viva do turno da IA — invisível, mas anunciada; o resumo
@@ -1879,36 +1885,28 @@ button:disabled {
 .house-picker {
   display: flex;
   min-width: 0;
-  flex: 1;
+  flex: 0 0 auto;
   align-items: center;
-  justify-content: flex-start;
-  grid-column: 1 / -1;
-  grid-row: 2;
-  gap: 5px;
-  overflow-x: auto;
-  padding-bottom: 1px;
+  justify-content: center;
+  gap: 4px;
 }
 
 @media (min-width: 701px) {
   .house-picker {
-    justify-content: center;
-    grid-column: auto;
-    grid-row: auto;
+    flex: 1;
     gap: 6px;
-    overflow-x: visible;
-    padding-bottom: 0;
   }
 }
 
 .house-choice {
   position: relative;
   display: inline-flex;
-  min-width: 85px;
+  min-width: 44px;
   min-height: 44px;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 6px;
-  padding: 8px 7px;
+  padding: 4px;
   border: 1px solid rgba(222, 214, 194, 0.1);
   border-radius: var(--radius-sm);
   color: #a4a69a;
@@ -1919,9 +1917,25 @@ button:disabled {
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
 }
 
+/* Celular (§2.7): só o ícone; o nome vive no aria-label/title. */
+.house-choice > span,
+.house-choice .house-check {
+  display: none;
+}
+
+@media (min-width: 701px) {
+  .house-choice > span {
+    display: inline;
+  }
+  .house-choice .house-check {
+    display: block;
+  }
+}
+
 @media (min-width: 701px) {
   .house-choice {
     min-width: 80px;
+    justify-content: flex-start;
     gap: 5px;
     padding: 10px 7px;
   }
@@ -2000,11 +2014,10 @@ button:disabled {
 .end-turn-button {
   display: inline-flex;
   min-height: 44px;
+  min-width: 44px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  grid-column: 2;
-  grid-row: 1;
   gap: 5px;
   padding: 8px;
   border: 1px solid rgba(211, 173, 93, 0.47);
@@ -2018,16 +2031,21 @@ button:disabled {
 }
 
 .end-turn-button svg {
-  width: 13px;
+  width: 18px;
+}
+
+.end-turn-button > span {
+  display: none;
 }
 
 @media (min-width: 701px) {
   .end-turn-button {
-    grid-column: auto;
-    grid-row: auto;
     gap: 9px;
     padding: 10px 12px;
     font-size: var(--fs-xs);
+  }
+  .end-turn-button > span {
+    display: inline;
   }
   .end-turn-button svg {
     width: auto;

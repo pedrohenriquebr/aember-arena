@@ -1496,6 +1496,8 @@ function GameBoard({
                     onClick={() => onHouse(house)}
                     disabled={!isHumanTurn || Boolean(game.activeHouse)}
                     aria-pressed={chosen}
+                    aria-label={houseLabel(house, t)}
+                    title={houseLabel(house, t)}
                   >
                     <HouseMark house={house} small />
                     <span>{houseLabel(house, t)}</span>
@@ -1504,7 +1506,7 @@ function GameBoard({
                 );
               })}
             </div>
-            <button className="end-turn-button" type="button" onClick={onEndTurn} disabled={!isHumanTurn}>
+            <button className="end-turn-button" type="button" onClick={onEndTurn} disabled={!isHumanTurn} aria-label={t("game.endTurn")} title={t("game.endTurn")}>
               <span>{t("game.endTurn")}</span>
               <ArrowRight size={15} />
             </button>
