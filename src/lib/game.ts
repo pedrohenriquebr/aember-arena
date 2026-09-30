@@ -684,6 +684,17 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   else owner[destination].push(card);
 }
 
+/** Purge / return / archive by an effect: a ward intercepts these leave-play
+    events too (keyteki Card.js onCardPurged/onCardLeavesPlay) — the token is
+    spent and the creature stays. Only creatures carry ward. */
+function leaveByEffect(state: GameState, card: CardInstance, destination: "hand" | "deck" | "archives" | "purged"): void {
+  if (isCreature(card) && card.warded) {
+    card.warded = 0;
+    return;
+  }
+  leavePlay(state, card, destination);
+}
+
 // Cards whose "Destroyed:" abilities are resolving: still in play, but already
 // on their way out, so sweep() must not destroy them a second time.
 const dying = new WeakSet<CardInstance>();
@@ -883,7 +894,7 @@ function run(context: Context, act: Act): void {
     case "purge":
       // A leave-play destination of its own (keyteki PurgeAction): the card is
       // out of the game and cannot come back through a reshuffle.
-      for (const card of cards) leavePlay(state, card, "purged");
+      for (const card of cards) leaveByEffect(state, card, "purged");
       break;
     case "sacrifice":
       for (const card of cards) sacrifice(state, card);
@@ -955,13 +966,13 @@ function run(context: Context, act: Act): void {
       for (const card of cards) card.stunned = false;
       break;
     case "returnToHand":
-      for (const card of cards) leavePlay(state, card, "hand");
+      for (const card of cards) leaveByEffect(state, card, "hand");
       break;
     case "returnToDeck":
-      for (const card of cards) leavePlay(state, card, "deck");
+      for (const card of cards) leaveByEffect(state, card, "deck");
       break;
     case "archive":
-      for (const card of cards) leavePlay(state, card, "archives");
+      for (const card of cards) leaveByEffect(state, card, "archives");
       break;
     case "use":
       for (const card of cards) {

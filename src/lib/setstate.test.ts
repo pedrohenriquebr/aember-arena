@@ -75,6 +75,21 @@ describe("ward (keyteki WardAction/Card.warded)", () => {
     expect(titles(state.players[1].board)).toEqual([]);
   });
 
+  it.each([
+    ["Purge an enemy creature.", "purged"],
+    ["Return an enemy creature to its owner's hand.", "hand"],
+    ["Archive an enemy creature.", "archives"],
+  ] as const)("a ward cancels the leave-play effect '%s' and is spent", (text, pile) => {
+    const state = setupTest({ hand: [cardOf("Mover", `Play: ${text}`)] }, { inPlay: [creature("Victim", 3)] });
+    state.players[1].board[0].warded = 1;
+    const next = play(state, 0, "Mover");
+    expect(board(next, 1, "Victim").warded).toBe(0);
+    expect(next.players[1][pile]).toHaveLength(0);
+    // With the ward gone the same effect works.
+    const again = setupTest({ hand: [cardOf("Mover", `Play: ${text}`)] }, { inPlay: [creature("Victim", 3)] });
+    expect(titles(play(again, 0, "Mover").players[1][pile])).toEqual(["Victim"]);
+  });
+
   it("wards the source's neighbors from a 'Destroyed:' ability (Old Egad)", () => {
     const egad = creature("Old Egad", 2, "Destroyed: Ward each of Old Egad's neighbors.", { house: "Dis" });
     const state = setupTest({ hand: [cardOf("Decimation", "Play: Destroy a creature.")], inPlay: [creature("Left", 2), egad, creature("Right", 2)] });
