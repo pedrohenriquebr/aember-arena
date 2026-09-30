@@ -433,6 +433,9 @@ function restricted(state: GameState, side: Side, action: Restrict["action"], ca
     const restrict = owner.effect.restrict;
     if (!restrict || restrict.action !== action) continue;
     if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
+    // "cannot play more than N cards each turn" is a budget, not a ban: it is
+    // enforced by playLimit, not here (keyteki Ember Imp).
+    if (restrict.limit) continue;
     if (restrict.type && (!card || card.face.type !== restrict.type)) continue;
     return true;
   }

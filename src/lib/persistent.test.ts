@@ -142,7 +142,9 @@ describe("prohibitions", () => {
       { inPlay: [card("Ember Imp")] },
     );
     state = play(state, 0, "Umbra");
+    expect(titles(state.players[0].board)).toContain("Umbra");
     state = play(state, 0, "Urchin");
+    expect(state.plays).toBe(2);
     const dodger = byTitle(state.players[0].hand, "Dodger")!;
     expect(isLegalMove(state, 0, { type: "play", instanceId: dodger.instanceId })).toBe(false);
     expect(isLegalMove(state, 0, { type: "discard", instanceId: dodger.instanceId })).toBe(true);
@@ -151,6 +153,7 @@ describe("prohibitions", () => {
     expect(state.players[1].board).toHaveLength(0);
     state = play(state, 0, "Dodger");
     expect(titles(state.players[0].board)).toContain("Dodger");
+    expect(state.plays).toBe(3);
   });
 
   it("Scrambler Storm stops action cards on the opponent's next turn only", () => {
