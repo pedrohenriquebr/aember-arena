@@ -727,19 +727,11 @@ function destroy(state: GameState, card: CardInstance, deterministic: boolean, b
   return true;
 }
 
-/** Sacrifice (keyteki GameActions.sacrifice → DestroyAction with isSacrifice):
-    the owner puts the card into their discard pile straight away. It is NOT a
-    destruction, so "Destroyed:" abilities stay silent and the kill is not
-    credited to anyone. A "would be destroyed" replacement still applies, as
-    sacrifice is a destruction event in keyteki (Onda 4). */
-function sacrifice(state: GameState, card: CardInstance): void {
-  if (controllerOf(state, card) === undefined) return;
-  if (card.warded) {
-    card.warded = 0;
-    return;
-  }
-  const replacement = replacementFor(state, card, "destroy")?.effect.replace;
-  leavePlay(state, card, replacement?.to ?? "discard");
+/** Sacrifice (keyteki DestroyAction with isSacrifice): it is a destruction —
+    ward, "instead" replacements and "Destroyed:" all apply. The kill credit
+    follows destroy(): only when the acting side does not control the card. */
+function sacrifice(state: GameState, card: CardInstance, deterministic: boolean, by: Side): void {
+  destroy(state, card, deterministic, by);
 }
 
 /** "Make a token creature" (keyteki MakeTokenCreatureAction): the token enters
@@ -897,7 +889,7 @@ function run(context: Context, act: Act): void {
       for (const card of cards) leaveByEffect(state, card, "purged");
       break;
     case "sacrifice":
-      for (const card of cards) sacrifice(state, card);
+      for (const card of cards) sacrifice(state, card, deterministic, me);
       break;
     case "exalt":
       // keyteki ExaltAction: place N amber from the common supply on the

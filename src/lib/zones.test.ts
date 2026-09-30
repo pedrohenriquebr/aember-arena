@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Onda 3 specs (docs/ROADMAP_REVIEW.md §3): purge as a leave-play destination of
-// its own (keyteki PurgeAction.js), sacrifice as a non-destruction (DestroyAction
+// its own (keyteki PurgeAction.js), sacrifice as a destruction (DestroyAction
 // with isSacrifice), token creatures (MakeTokenCreatureAction.js) and the exalt
 // action (ExaltAction.js / docs/keywords.md#exalt) — Copyright (C) keyteki
 // contributors, AGPL-3.0, adapted to this engine's API.
@@ -72,13 +72,13 @@ describe("purge (keyteki PurgeAction)", () => {
 });
 
 describe("sacrifice (keyteki destroy with isSacrifice)", () => {
-  it("sends the card to the owner's discard without firing 'Destroyed:' (destroy still does)", () => {
+  it("sends the card to the owner's discard and fires 'Destroyed:' like any destroy", () => {
     const bomb = creature("Bomb", 2, "Action: Sacrifice Bomb. Destroyed: Gain 3 amber.");
     const sacrificed = applyMove(setupTest({ inPlay: [bomb] }), 0, { type: "use", instanceId: bomb.instanceId });
     expect(titles(sacrificed.players[0].board)).toEqual([]);
     expect(titles(sacrificed.players[0].discard)).toEqual(["Bomb"]);
-    expect(sacrificed.players[0].amber).toBe(0);
-    expect(sacrificed.players[0].creaturesDestroyed).toBe(0);
+    expect(sacrificed.players[0].amber).toBe(3);
+    expect(sacrificed.players[0].creaturesDestroyed).toBe(0); // sacrificing your own is not a kill
 
     // The same text destroyed in a fight does fire the ability.
     const destroyed = fight(
@@ -88,6 +88,14 @@ describe("sacrifice (keyteki destroy with isSacrifice)", () => {
       "Soulkeeper",
     );
     expect(destroyed.players[1].amber).toBe(3);
+  });
+
+  it("credits a kill only when the sacrificed creature is the enemy's", () => {
+    const state = setupTest(
+      { hand: [card("Edict", { type: "Action", house: "Brobnar", text: "Play: Sacrifice an enemy creature." })] },
+      { inPlay: [creature("Victim", 3)] },
+    );
+    expect(play(state, 0, "Edict").players[0].creaturesDestroyed).toBe(1);
   });
 
   it("returns its captured amber to the opponent", () => {
