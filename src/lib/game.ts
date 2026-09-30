@@ -351,7 +351,7 @@ export function cloneGame(state: GameState): GameState {
     ...state,
     players: [copyPlayer(state.players[0]), copyPlayer(state.players[1])],
     log: [...state.log],
-    lasting: state.lasting ? [...state.lasting] : [],
+    lasting: state.lasting ? state.lasting.map((effect) => structuredClone(effect)) : [],
   };
 }
 

@@ -9,12 +9,14 @@ import {
   abilitiesOf,
   applyMove,
   chooseHouse,
+  cloneGame,
   effectiveArmor,
   effectivePower,
   endTurn,
   getLegalMoves,
   isLegalMove,
   keyword,
+  normalizeSavedState,
   type GameMove,
   type GameState,
 } from "./game";
@@ -249,5 +251,44 @@ describe("upgrade text", () => {
     const after = fight(played, 1, "Brute", "Host"); // the host dies, the upgrade is discarded
     expect(byTitle(after.players[0].board, "Might")).toBeUndefined();
     expect(titles(after.players[0].discard)).toContain("Might");
+  });
+});
+
+describe("undo, replay and old saves across the derived layer (MX-10)", () => {
+  const scrambler = () => card("Scrambler Storm");
+
+  it("a cloned snapshot is independent of later lasting effects (undo stack)", () => {
+    const state = setupTest({ hand: [scrambler()] });
+    const snapshot = cloneGame(state);
+    const played = applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId });
+    expect(played.lasting).toHaveLength(1);
+    expect(snapshot.lasting).toHaveLength(0);
+    // Deep copy: mutating the clone's effect never reaches the original.
+    const copy = cloneGame(played);
+    copy.lasting![0].until = 99;
+    expect(played.lasting![0].until).not.toBe(99);
+  });
+
+  it("replaying the same move from a restored snapshot reproduces the state", () => {
+    const state = setupTest({ hand: [scrambler()] });
+    const move: GameMove = { type: "play", instanceId: state.players[0].hand[0].instanceId };
+    const first = applyMove(state, 0, move);
+    const again = applyMove(cloneGame(state), 0, move);
+    expect(JSON.stringify(again)).toBe(JSON.stringify(first));
+    // Undo then redo through the turn boundary keeps the lasting effect live.
+    const afterTurn = endTurn(first, 0);
+    expect(JSON.stringify(endTurn(cloneGame(first), 0))).toBe(JSON.stringify(afterTurn));
+  });
+
+  it("an old save without plays/lasting/purged is normalized", () => {
+    const old = JSON.parse(JSON.stringify(setupTest({ hand: [scrambler()] })));
+    delete old.plays;
+    delete old.lasting;
+    for (const player of old.players) delete player.purged;
+    const state = normalizeSavedState(old);
+    expect(state.plays).toBe(0);
+    expect(state.lasting).toEqual([]);
+    expect(state.players.map((player) => player.purged)).toEqual([[], []]);
+    expect(() => applyMove(state, 0, { type: "play", instanceId: state.players[0].hand[0].instanceId })).not.toThrow();
   });
 });

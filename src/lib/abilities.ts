@@ -123,7 +123,9 @@ export interface PersistentEffect {
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
   when?: "flank";
   /** Printed duration of a triggered effect: end of this turn, or of the
-      opponent's next turn (keyteki duringOpponentNextTurn). */
+      opponent's next turn (keyteki duringOpponentNextTurn). Trap: "next" is
+      stamp + 2, correct ONLY for "the opponent's next turn"; a "your next
+      turn" text would be pruned as that turn starts. Branch on `side` first. */
   duration?: "turn" | "next";
   /** Lasting effects: the turn stamp (game.turnStamp) at which they expire. */
   until?: number;
