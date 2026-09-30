@@ -120,7 +120,9 @@ Sem NLP: gramática fixa.
    card` antes do parse.
 7. **Cobertura**: `full` se nada ficou sem entender (inclui cartas só com keywords),
    `vanilla` se nenhuma ability entrou, `partial` caso contrário. O motor **nunca**
-   meio-resolve uma ability.
+   meio-resolve uma ability. O header também aceita a gramática persistente (§2.5):
+   uma frase constante entendida conta como entendida e vira `effects[]` no
+   `CardRules`, sem passar pelo `Trigger`.
 
 ### 2.4 `game.ts` — intérprete
 
@@ -141,7 +143,41 @@ helpers só mutam o clone privado.
 - **`moveHasEffect` / `canResolve`**: a IA poda jogadas cujo texto não pode resolver
   (condição falsa, nenhum alvo), com fallback para `play` se nada sobrar.
 
-### 2.5 `ai.ts`
+### 2.5 Efeitos persistentes (onda 1, `docs/ROADMAP_REVIEW.md` §3)
+
+Camada que destrava as ~1.000 cartas de texto constante. Efeitos de texto constante
+**não são armazenados**: `activeEffects(state, side)` deriva a lista do board a cada
+consulta (o motor clona o estado a cada move), lendo `rulesOf(face).effects` de cada
+carta em jogo — o selo de cobertura e o inspetor acompanham via `rulesOf`, sem código
+próprio. `GameState.lasting` guarda só as cópias disparadas com duração (dado JSON-safe).
+
+- **Gramática persistente** (`cardText.ts`, header e corpos de efeito):
+  - `<sujeito> gets ±N power|armor [and ±N …] [while it is on a flank]` — sujeitos:
+    `this creature`/`this card` (self, `host` em upgrade), `each [other] friendly|enemy
+    [flank] creature(s)` / `artifact(s)`, `each of <carta>'s neighbors`;
+  - `<sujeito> gains <keyword>` (as 10 do motor) e `gains '<ability citada>'`: o texto
+    entre aspas é mascarado antes do scan de prefixos (um `Reap:` interno não parte a
+    frase) e re-parseado pelo MESMO parser; a ability concedida dispara pelo mesmo `fire`;
+  - `(you|your opponent) cannot play|use|fight …` — `more than N cards each turn`
+    (orçamento), `action|creature|artifact|upgrade cards`, `any cards`,
+    `creatures to fight`;
+  - duração no fim (ou início) da frase: `for the remainder of the turn`, `on their
+    next turn`/`during their next turn`; `each turn` é constante.
+- **Leitura efetiva** (`game.ts`): `effectivePower`, `effectiveArmor`,
+  `keyword(state, card, name)` e `abilitiesOf` somam/agregam os modificadores ativos;
+  luta, dano, armadura, morte por poder, `autoPick`, o filtro `top` e a avaliação da IA
+  usam esses valores em vez de `face.power`/`face.armor` impressos.
+- **Proibições**: `canPlay`, `canUseCard`, `fightTargets` e `baseMoves` consultam o
+  `Restrict` ativo; o teto de jogadas usa `GameState.plays` (só cartas jogadas —
+  descarte não conta, como no keyteki).
+- **Duração**: cada efeito disparado vira dado puro em `GameState.lasting` com o stamp
+  `turn × 2 + activePlayer` em que expira (`endTurn` poda); "remainder" morre no fim do
+  turno, "next turn" vale só no turno seguinte do oponente (keyteki
+  `untilPlayerTurnEnd` / `duringOpponentNextTurn`).
+- **Fora da onda** (documentado no `GAME_ROADMAP`): `bonusFightDamage` (Valdr),
+  contadores de poder, "instead", tokens, ward/enrage.
+
+### 2.6 `ai.ts`
 
 Busca em profundidade limitada (1–6 plies por dificuldade + `thinkingDepth`), orçamento
 de nós (`700 + 250·depth`), ordenação por avaliação, `branchLimit` por perfil, camada
@@ -177,6 +213,11 @@ do motor (ver FEAT-03).
 
 Cartas com ≥1 ability simulada: **140** (107 full + 33 partial), somando **143**
 abilities.
+
+> Nota (2026-09-30): a onda 1 de efeitos persistentes (§2.5) roda por cima desta
+> medição, mas o pool **não foi re-medido** (`KF_DATA` ausente nesta máquina). Nos
+> decks demo, Bulwark, Grey Monk, Staunch Knight, Ember Imp e Scrambler Storm saíram
+> de `partial`/`vanilla` para `full` (58 cartas distintas: 35/2/21 → **40/1/17**).
 
 ### 3.3 Por tipo
 
@@ -238,7 +279,7 @@ Comparação do motor anterior (`24917d9^:src/lib/game.ts`, 502 linhas, efeitos 
 | Keywords | nenhuma | 10 keywords resolvidas (§2.2), inclusive Assault/Hazardous antes do dano, Elusive 1×/turno, Skirmish, Poison, Splash-attack, Deploy em slot, Alpha/Omega |
 | Mavericks | jogáveis com **qualquer** casa ativa | só com a casa impressa no maverick (a casa em `face.house`) |
 | Capturas | não existiam | âmbar fica na criatura e volta ao oponente quando ela sai de jogo |
-| Arquivos | não existiam | `archives` por jogador, recolhidos ao escolher a casa |
+| Arquivos | não existiam | `archives` por jogador, recolhidos por opção (`takeArchives`, regra do "may") |
 | Upgrades | iam para o board soltos | anexados a um hospedeiro, descartados quando ele sai (ver BUG-04 para o caso do hospedeiro inimigo) |
 | Descarte | não existia | jogada `discard` da mão (casa ativa) |
 | Escolha de alvo | sempre automática | jogador escolhe quando há >1 alvo legal (`targetChoices`); IA busca cada alvo (`getLegalMoves` expandido) |
@@ -250,15 +291,17 @@ i18n.
 
 ---
 
-## 5. Testes (77 specs)
+## 5. Testes (151 specs)
 
 | Arquivo | Specs | Conteúdo |
 |---|---:|---|
-| `rules.test.ts` | 29 | keywords de luta (Elusive 1×/turno e reset, Taunt, Assault, Hazardous, Skirmish, Poison vs armadura, Splash-attack, array do vault), armadura por turno, Alpha/Omega/Deploy, turno (7 cartas e 1 jogada no turno 1, ready/stun, compra com chains, forja no custo atual, Lash, vitória na 3ª chave, arquivos, mavericks, jogada ilegal), abilities e alvos (captura, alvo escolhido, expansão por alvo, Dominator Bauble, Research Smoko, upgrade no hospedeiro, condição como poda da IA) |
-| `cardText.test.ts` | 20 | prefixos de gatilho, normalização (glifos A/Æ/D, nome próprio → `this card`), condições antes/depois do efeito, all-or-nothing, parcial com texto persistente, cobertura dos decks demo |
+| `rules.test.ts` | 48 | keywords de luta (Elusive 1×/turno e reset, Taunt, Assault, Hazardous, Skirmish, Poison vs armadura, Splash-attack, array do vault), armadura por turno, Alpha/Omega/Deploy, turno (7 cartas e 1 jogada no turno 1, ready/stun, compra com chains, forja no custo atual, Lash, vitória na 3ª chave, arquivos opcionais, mavericks, jogada ilegal), abilities e alvos (captura, alvo escolhido, expansão por alvo, Dominator Bauble, Research Smoko, upgrade no hospedeiro, condição como poda da IA), mulligan/log/tallies/FEAT-12 |
+| `cardText.test.ts` | 26 | prefixos de gatilho, normalização (glifos A/Æ/D, nome próprio → `this card`), condições antes/depois do efeito, all-or-nothing, gramática persistente (stats, grants, proibições, duração, ability citada), cobertura dos decks demo |
+| `persistent.test.ts` | 16 | Bulwark, Grey Monk, Staunch Knight, Ember Imp e Scrambler Storm portados do keyteki 01-Core + poder/armadura efetivos na luta e na morte, Taunt concedida, duração, gainAbility, update no host, JSON-safe, arquivos opcionais |
 | `cards.test.ts` | 19 | cartas antes codificadas no `if/else` (specs portados do keyteki 01-Core) |
-| `match.test.ts` | 6 | partidas IA × IA com os 2 decks demo, mãos iniciais e conservação de cartas por zona |
-| `ai.test.ts` | 3 | não limpa o próprio board à toa, prefere ability que resolve, só propõe jogadas legais (Taunt) |
+| `match.test.ts` | 16 | partidas IA × IA com os 2 decks demo, mãos iniciais e conservação de cartas por zona, seeds, save antigo, pass-and-play |
+| `ai.test.ts` | 11 | não limpa o próprio board à toa, prefere ability que resolve, só propõe jogadas legais (Taunt impressa e concedida), mulligan, arquivos opcionais |
+| `fx.test.ts` / `settings.test.ts` / `houses.test.ts` | 12 / 2 / 1 | diff de FX e diretor, settings, cores/casas |
 
 Probes da auditoria (fora do `npm test`): `e2e/probes/` — ver `BUGS_AND_FEATURES.md`.
 
