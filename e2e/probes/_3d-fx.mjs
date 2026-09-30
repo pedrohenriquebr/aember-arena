@@ -219,7 +219,12 @@ try {
     };
     const worst = Math.max(...Object.values(d));
     console.log(`INFO pouso: ghost=${JSON.stringify(landing.ghost)} slot=${JSON.stringify(landing.slot)} slotDebug=${JSON.stringify(landing.slotDebug)} rotate=${landing.rotate} slotTransform=${landing.slotTransform}`);
-    check("H3D-08: no pouso o ghost casa com a .card-art do slot (<= 3px por lado)", worst <= 3, `deltas=${JSON.stringify(Object.fromEntries(Object.entries(d).map(([k, v]) => [k, Math.round(v * 10) / 10])))}`);
+    // H3D-14: o ghost aproxima a carta em pe por escala uniforme + cos(lean); a
+    // magnificacao diferencial da perspectiva (topo mais perto que a base) e
+    // proporcional a ALTURA da carta, e o palco trouxe cartas maiores (96px no
+    // perfil alto). O piso de 3px vale; acima dele a tolerancia e 2,5% da altura.
+    const tol = Math.max(3, landing.slot.h * 0.025);
+    check(`H3D-08: no pouso o ghost casa com a .card-art do slot (<= ${Math.round(tol * 10) / 10}px por lado)`, worst <= tol, `deltas=${JSON.stringify(Object.fromEntries(Object.entries(d).map(([k, v]) => [k, Math.round(v * 10) / 10])))}`);
     await page.screenshot({ path: join(SHOTS, "probe-3d-fx-landing.png") });
   }
   await page.waitForTimeout(900);

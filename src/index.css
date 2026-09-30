@@ -827,10 +827,10 @@ button:disabled {
    bar descontados): por construção a soma das linhas é o palco. As duas zonas de
    batalha são as linhas elásticas (1fr); o resto usa os tokens do :root.
    Vive na classe do board (não na .game-screen) para o replay usar o mesmo encaixe.
-   min-height 520: abaixo disso volta a rolar em vez de espremer. O 2D é o palco;
-   o 3D (--3d/--lite) não recebe a classe até o FIT-04 (a mão em leque precisa do
-   overlay para caber) — o `.table-plane` fica `display: contents` aqui, então as
-   duas zonas e o console são linhas diretas do grid. */
+   min-height 520: abaixo disso volta a rolar em vez de espremer. O 2D e o 3D
+   (--3d/--lite, H3D-14) são o palco: no 2D o `.table-plane` fica `display: contents`
+   e as duas zonas e o console são linhas diretas do grid; no 3D ele ocupa as linhas
+   2-4 com o próprio grid (bloco H3D-14 no fim do arquivo). */
 .game-board--stage {
   --stage-off: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 12px + var(--title-h) + var(--tabbar-g));
   height: calc(100vh - var(--stage-off));
@@ -847,7 +847,7 @@ button:disabled {
     var(--console-h)
     minmax(0, 1fr)
     var(--hand-bar-h)
-    var(--hand-h);
+    var(--hand-row, var(--hand-h));
 }
 
 /* FIT-03 — battlelines flexíveis (§2.2): a zona é container de tamanho e a carta do
@@ -7027,15 +7027,25 @@ html .spin {
   initial-value: 0deg;
 }
 
-/* O lite não herda o 3D, mas o playmat (::before) precisa de um plano com caixa
-   e ancoragem: com `display: contents` ele vazaria sobre os HUDs. */
-.game-board--lite .table-plane {
-  display: block;
+/* H3D-14: no 3D (e no lite, cujo playmat precisa de um plano com caixa — com
+   `display: contents` ele vazaria sobre os HUDs) o plano é UM item do grid do
+   palco: ocupa as linhas 2-4 e tem o próprio grid interno (zona, console, zona).
+   O layout do plano é o espaço do palco; a projeção só o encurta. */
+.game-board--3d .board-content,
+.game-board--lite .board-content {
+  grid-template-columns: minmax(0, 1fr); /* a coluna implícita (auto) crescia com a mão */
+}
+
+:is(.game-board--3d, .game-board--lite) .table-plane {
+  display: grid;
+  grid-row: 2 / 5;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) var(--console-h) minmax(0, 1fr);
+  min-height: 0;
   position: relative;
 }
 
 .game-board--3d .table-plane {
-  display: block;
   /* O plano inclinado: 40° no desktop, 32° no tablet (H3D-03, abaixo). O celular
      fica em 0° (perfil 2.5D, H3D-09). O probe mede a projeção forçando 40°.
      `position: relative` ancora o playmat (::before) no plano — o transform já
@@ -7215,10 +7225,6 @@ html .spin {
     /* A camera recua um pouco no tablet (planilha §2.1): 32 graus e 1000px. */
     .game-board--3d .table-plane {
       --tilt: 32deg;
-      /* transform não devolve layout: a projeção encurta a mesa (~cos 32° = 0,85)
-         e deixa uma faixa vazia; as margens negativas recolhem essa faixa para a
-         mão subir no viewport. Afinadas por captura (H3D-03). */
-      margin-block: -32px;
     }
 
     /* H3D-12: a carta de pé avança acima da própria caixa (a rotação joga o topo
@@ -7275,7 +7281,6 @@ html .spin {
   @media (min-width: 1041px) {
     .game-board--3d .table-plane {
       --tilt: 40deg;
-      margin-block: -48px;
     }
 
     .game-board--3d .board-content {
@@ -7356,15 +7361,17 @@ html .spin {
     }
 
     .game-board--3d .battle-zone--player .board-lane {
-      padding-inline: 44px;
+      padding-inline: max(44px, 7%);
     }
 
     .game-board--3d .board-lane > .board-piece + .board-piece {
       margin-inline-start: var(--overlap);
     }
 
+    /* H3D-14: no palco a zona tem altura fixa — a carta também respeita a altura
+       (cqh da zona, que é container `size`; a lane é só inline-size). */
     .game-board--3d .board-lane > .board-piece > .card-tile--board {
-      width: clamp(64px, calc(var(--fit) / var(--n, 1)), var(--card-w-3d, 84px));
+      width: clamp(64px, min(calc(var(--fit) / var(--n, 1)), calc((100cqh - 40px) * 0.714)), var(--card-w-3d, 84px));
     }
 
     /* Teto de largura por zona, medido na projeção real (perspective-origin
@@ -7376,6 +7383,33 @@ html .spin {
        px vence o cqi em qualquer largura desta faixa. */
     .game-board--3d .battle-zone--opponent { --card-w-3d: 76px; }
     .game-board--3d .battle-zone--player { --card-w-3d: 84px; }   /* × ~1,14 ≈ 96px visuais */
+  }
+
+  /* Perfil ALTO (>= 760px) e >= 960px: a zona ganha altura e a carta acompanha
+     (H3D-14, plano §3.4). A razão oponente/jogador NÃO é fixa: quanto mais alto o
+     plano, mais o fundo recua (z = metade da mesa × sen θ), então o teto do
+     oponente sobe por faixa para manter ~0,77 na tela (medido no _3d-arena). */
+  @media (min-width: 701px) and (min-height: 760px) {
+    .game-board--3d .battle-zone--opponent { --card-w-3d: 88px; }
+    .game-board--3d .battle-zone--player { --card-w-3d: 96px; }
+  }
+
+  @media (min-width: 701px) and (max-width: 1040px) and (min-height: 760px) {
+    .game-board--3d .battle-zone--opponent { --card-w-3d: 82px; }
+  }
+
+  @media (min-width: 701px) and (min-height: 960px) {
+    .game-board--3d .battle-zone--opponent { --card-w-3d: 108px; }
+    .game-board--3d .battle-zone--player { --card-w-3d: 112px; }
+  }
+
+  /* Tablet em pé (768x1024): a lane (~690px) limita antes do teto de desktop. */
+  @media (min-width: 701px) and (max-width: 1040px) and (min-height: 960px) {
+    .game-board--3d .battle-zone--opponent { --card-w-3d: 88px; }
+    .game-board--3d .battle-zone--player { --card-w-3d: 92px; }
+  }
+
+  @media (min-width: 701px) {
 
     .game-board--3d .board-lane .card-tile--board .card-art {
       width: 100%;
@@ -7512,9 +7546,16 @@ html .spin {
      endireita e cresce 1,14x — no toque a seleção ergue igual (nada hover-only).
      O leque só vale >= 701px: no celular o scroll-snap fica como no 2D (H3D-09). */
   @media (min-width: 701px) {
+    /* H3D-14: a mão é overlay do palco — a linha reserva 70% do --hand-h e a
+       carta em repouso mostra >= 70% (o resto sai pela borda do board). Sem
+       padding vertical: a erguida sobe por cima da zona (hand-zone z-index 2). */
+    .game-board--3d {
+      --hand-row: calc(var(--hand-h) * 0.7);
+    }
+
     .game-board--3d .hand-track {
       overflow: visible;
-      padding-top: 36px; /* espaço para a carta erguida não encostar no heading */
+      padding-top: 0;
       /* O canto da carta girada sai para fora da caixa de layout (~1,3 × altura
          × sin θ): sem este recuo o leque cheio bate na borda do board e o
          overflow: hidden corta os cantos. Com o recuo, o flex encolhe as cartas
@@ -7522,17 +7563,17 @@ html .spin {
       padding-inline: 34px;
       /* As pontas descem d² × 2,2px e o canto girado sai da caixa: sem este
          respiro a legenda das pontas passa da borda do board e é cortada. */
-      padding-bottom: 32px;
+      padding-bottom: 0;
     }
 
     .game-board--3d .hand-track > .card-tile--hand {
       --d: calc(var(--i, 0) - (var(--n, 1) - 1) / 2);
-      width: 118px;
+      width: calc(var(--hand-card-w) * 0.9);
       /* A partir de 7 cartas o leque sobrepõe um pouco (o leque do Arena). */
       margin-inline: calc(-1 * max(0px, (var(--n, 1) - 6) * 4px));
       transform-origin: 50% 130%;
       rotate: calc(var(--d) * 3.5deg);
-      translate: 0 calc(var(--d) * var(--d) * 2.2px);
+      translate: 0 min(calc(var(--d) * var(--d) * 2.2px), 12px);
       transition: rotate 200ms var(--ease-out), translate 200ms var(--ease-out), scale 200ms var(--ease-out);
     }
 
@@ -7559,7 +7600,7 @@ html .spin {
     .game-board--3d .hand-track > .card-tile--hand:is(.is-selected, :focus-visible) {
       transform: none;
       rotate: 0deg;
-      translate: 0 -30px;
+      translate: 0 calc(-30% - 12px);
       scale: 1.14;
       z-index: 5;
     }
@@ -7586,7 +7627,7 @@ html .spin {
     html:not(.reduce-motion) .game-board--3d .hand-track > .card-tile--hand:not(:disabled):hover {
       transform: none;
       rotate: 0deg;
-      translate: 0 -30px;
+      translate: 0 calc(-30% - 12px);
       scale: 1.14;
       z-index: 5;
     }

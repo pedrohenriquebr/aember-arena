@@ -364,8 +364,8 @@ try {
   });
   const expectedRot = ((fan.n - 1) / 2) * 3.5;
   check(
-    "H3D-06: leque aberto (track sem clip, pontas na rotacao 3,5/carta)",
-    fan.n > 0 && fan.overflow === "visible" && parseFloat(fan.paddingTop) >= 30 && Math.abs(-fan.first - expectedRot) < 0.6 && Math.abs(fan.last - expectedRot) < 0.6,
+    "H3D-06/14: leque aberto (track sem clip nem padding de overlay, pontas na rotacao 3,5/carta)",
+    fan.n > 0 && fan.overflow === "visible" && parseFloat(fan.paddingTop) === 0 && Math.abs(-fan.first - expectedRot) < 0.6 && Math.abs(fan.last - expectedRot) < 0.6,
     JSON.stringify({ ...fan, expectedRot }),
   );
   const midPoint = await page.evaluate((i) => {
@@ -389,10 +389,12 @@ try {
     await page.mouse.move(4, 4);
     await page.waitForTimeout(200);
   }
-  check("H3D-06: hover puxa a carta do leque (0deg / -30px / 1,14) inteira visivel", Boolean(fanHover) && fanHover.rotate === "0deg" && fanHover.translate === "0px -30px" && fanHover.scale === "1.14" && fanHover.visible, JSON.stringify(fanHover));
+  // H3D-14: a mao e overlay, a erguida sobe 30% da propria altura + 12px.
+  check("H3D-06/14: hover puxa a carta do leque (0deg / -30% - 12px / 1,14) inteira visivel", Boolean(fanHover) && fanHover.rotate === "0deg" && fanHover.translate === "0px calc(-30% - 12px)" && fanHover.scale === "1.14" && fanHover.visible, JSON.stringify(fanHover));
 
-  // Legendas das pontas do leque com 7 e 8 cartas (clones temporarios, sem
-  // transicao) a 1280 e 768: nenhum pixel de legenda alem do .game-board.
+  // H3D-14: com 7 e 8 cartas (clones temporarios, sem transicao) a 1280 e 768 a
+  // mao-overlay mostra >= 70% de CADA carta, pontas incluidas (o resto sai pela
+  // borda do .game-board de proposito).
   const fanCaption = async (width, height) => {
     await page.setViewportSize({ width, height });
     await page.waitForTimeout(300);
@@ -403,16 +405,19 @@ try {
       const kids = [...track.children];
       const clones = [];
       const style = document.createElement("style");
-      style.textContent = ".hand-track > * { transition: none !important; }";
+      style.textContent = ".hand-track > * { transition: none !important; animation: none !important; }"; // clone novo = card-deal em voo
       document.head.append(style);
       const out = {};
       for (const n of [7, 8]) {
         while (track.children.length < n) { const c = kids[0].cloneNode(true); clones.push(c); track.append(c); }
         while (track.children.length > n && clones.length) clones.pop().remove();
         track.style.setProperty("--n", String(n));
-        let over = 0;
-        for (const el of track.querySelectorAll(".card-tile--hand *")) over = Math.max(over, el.getBoundingClientRect().bottom - board.bottom);
-        out[n] = Math.round(over * 10) / 10;
+        let worst = 1;
+        for (const el of track.querySelectorAll(".card-tile--hand")) {
+          const r = el.getBoundingClientRect();
+          worst = Math.min(worst, (Math.min(r.bottom, board.bottom) - r.top) / r.height);
+        }
+        out[n] = Math.round(worst * 1000) / 1000;
       }
       clones.forEach((c) => c.remove());
       style.remove();
@@ -422,7 +427,7 @@ try {
   };
   for (const [w, h] of [[1280, 800], [768, 1024]]) {
     const over = await fanCaption(w, h);
-    check(`H3D-06: legendas do leque dentro do board a ${w} (7 e 8 cartas)`, over[7] <= 0 && over[8] <= 0, JSON.stringify(over));
+    check(`H3D-06/14: mao-overlay >= 70% visivel por carta a ${w} (7 e 8 cartas)`, over[7] >= 0.7 && over[8] >= 0.7, JSON.stringify(over));
   }
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(300);
@@ -838,7 +843,7 @@ try {
     const cs = getComputedStyle(plane);
     return { cls: board.className, cores: navigator.hardwareConcurrency, display: cs.display, position: cs.position, before: getComputedStyle(plane, "::before").position };
   });
-  check("H3D-09: lite ativo com plano display:block/position:relative e playmat ancorado", liteInfo.cls.includes("game-board--lite") && !liteInfo.cls.includes("game-board--3d") && liteInfo.display === "block" && liteInfo.position === "relative" && liteInfo.before === "absolute", JSON.stringify(liteInfo));
+  check("H3D-09/14: lite ativo com plano grid do palco/position:relative e playmat ancorado", liteInfo.cls.includes("game-board--lite") && !liteInfo.cls.includes("game-board--3d") && liteInfo.display === "grid" && liteInfo.position === "relative" && liteInfo.before === "absolute", JSON.stringify(liteInfo));
   await liteCtx.close();
 
   console.log(PROBLEMS.length ? `\nFALHAS: ${PROBLEMS.join("; ")}` : "\nOK: cadeia 3D confere (2D intacto, projecao viva, toggle limpo)");

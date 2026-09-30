@@ -1428,7 +1428,7 @@ function GameBoard({
 
   return (
     <section
-      className={`game-board${view3d ? "" : " game-board--stage"}${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
+      className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
       aria-label={t("game.board")}
     >

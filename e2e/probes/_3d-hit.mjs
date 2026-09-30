@@ -289,6 +289,10 @@ try {
 
         // H3D-12: a camera no extremo do parallax nao pode custar precisao.
         if (vp.w >= 701) {
+          // H3D-14: a folha do inspetor (< 1041px) cobre a fileira do fundo no palco; o
+          // que se mede aqui e a camera, entao ela e fechada antes.
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(250);
           const extreme = await page.evaluate(async () => {
             const plane = document.querySelector(".table-plane");
             plane.style.setProperty("--cam-x", "1");
