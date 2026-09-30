@@ -520,13 +520,31 @@ try {
   // O probe corre a 1280 com animacoes ligadas: o hook esta ativo. O ponteiro
   // move de verdade; o que se mede e o transform computado do plano. O
   // matrix3d do CSS e COLUMN-major: o 3o valor (m[2]) e -sin(rotY).
+  // O smoke rola a pagina ate o botao de fim de turno; sem voltar ao topo, o
+  // topo do board pode ficar sob o header sticky e o ponteiro sai do board.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(200);
+  // O lerp da camera anda por quadro: em headless (raster por software) 450ms
+  // fixos nao bastam sempre. Espera a camera parar (duas leituras iguais).
+  const settleCam = async () => {
+    let prev = "";
+    for (let i = 0; i < 40; i += 1) {
+      await page.waitForTimeout(120);
+      const cur = await page.evaluate(() => {
+        const st = document.querySelector(".table-plane").style;
+        return `${st.getPropertyValue("--cam-x")}|${st.getPropertyValue("--cam-y")}`;
+      });
+      if (cur === prev) return;
+      prev = cur;
+    }
+  };
   const boardBox = await page.locator(".game-board").boundingBox();
   if (boardBox) {
     const vpSize = page.viewportSize();
     const midY = Math.min(boardBox.y + boardBox.height * 0.5, vpSize.height - 60);
     await page.evaluate(() => { window.__tileCommits = 0; });
     await page.mouse.move(boardBox.x + boardBox.width * 0.03, midY);
-    await page.waitForTimeout(450);
+    await settleCam();
     const readCam = (key) => page.evaluate((k) => {
       const plane = document.querySelector(".table-plane");
       const parts = getComputedStyle(plane).transform.match(/matrix3d\(([^)]+)\)/);
@@ -535,21 +553,26 @@ try {
     }, key);
     const left = await readCam("esquerda");
     await page.mouse.move(boardBox.x + boardBox.width * 0.97, midY);
-    await page.waitForTimeout(450);
+    await settleCam();
     const right = await readCam("direita");
     const degY = (value) => (value === null ? NaN : (Math.asin(Math.max(-1, Math.min(1, -value))) * 180) / Math.PI);
     check("H3D-12: ponteiro a esquerda inclina a camera em -2,5 graus (Y)", left.m13 !== null && Math.abs(degY(left.m13) + 2.5) < 0.6, JSON.stringify(left));
     check("H3D-12: ponteiro a direita em +2,5 graus (Y)", right.m13 !== null && Math.abs(degY(right.m13) - 2.5) < 0.6, JSON.stringify(right));
     // Eixo X: o topo do board soma -1,5 grau ao tilt (40 -> 38,5; cos = 0,7825).
-    await page.mouse.move(boardBox.x + boardBox.width * 0.5, boardBox.y + 6);
-    await page.waitForTimeout(450);
+    const headerBottom = await page.evaluate(() => document.querySelector(".app-header")?.getBoundingClientRect().bottom ?? 0);
+    const topX = boardBox.x + boardBox.width * 0.5;
+    const topY = Math.max(boardBox.y, headerBottom) + 6;
+    await page.mouse.move(topX, topY);
+    await settleCam();
+    const topInBoard = await page.evaluate(([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest(".game-board")), [topX, topY]);
+    check("H3D-12: ponto 'topo' do ponteiro cai dentro do board", topInBoard, `y=${topY.toFixed(0)} header=${headerBottom.toFixed(0)} board=${boardBox.y.toFixed(0)}`);
     const top = await readCam("topo");
     const degX = (value) => (value === null ? NaN : (Math.acos(Math.max(-1, Math.min(1, value))) * 180) / Math.PI);
     check("H3D-12: ponteiro no topo tira 1,5 grau do tilt (X)", top.m22 !== null && Math.abs(degX(top.m22) - 38.5) < 0.8, `tilt=${degX(top.m22)?.toFixed(2)} ${JSON.stringify(top)}`);
     check("H3D-12: parallax nao re-renderiza CardTile", left.commits === 0 && right.commits === 0, `commits=${left.commits}/${right.commits}`);
     // Ponteiro fora do board: volta ao neutro (lerp de 0,12/frame).
     await page.mouse.move(4, 4);
-    await page.waitForTimeout(900);
+    await settleCam();
     const neutral = await page.evaluate(() => {
       const plane = document.querySelector(".table-plane");
       return { camX: plane.style.getPropertyValue("--cam-x"), camY: plane.style.getPropertyValue("--cam-y") };
