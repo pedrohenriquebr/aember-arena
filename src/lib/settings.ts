@@ -8,8 +8,11 @@ export type OpponentMode = "mirror" | "deck" | "random";
 /** FEAT-13: solo against the local AI, or two humans sharing the device. */
 export type GameMode = "solo" | "passAndPlay";
 
-/** Onda 2 (ANIM §3): ritmo do turno da IA — normal (leitura) ou compactado. */
-export type AiSpeed = "normal" | "fast";
+/** FIT-08: pausa de leitura entre ações do Warden (ms) — 200..2000, passo 100. */
+export const AI_DELAY_MIN = 200;
+export const AI_DELAY_MAX = 2000;
+export const AI_DELAY_DEFAULT = 700;
+export const clampAiDelay = (value: number) => Math.min(AI_DELAY_MAX, Math.max(AI_DELAY_MIN, Math.round(value / 100) * 100));
 
 /** H3D-01 (VIEW3D_PLAN §2.11): visão da mesa — 2D (padrão, o board de sempre)
     ou 3D (a camada CSS inclinada, ligada pela classe `.game-board--3d`). */
@@ -28,8 +31,8 @@ export interface AppSettings {
   opponentMode: OpponentMode;
   opponentDeckId?: string;
   gameMode: GameMode;
-  /** Onda 2: duração das batidas do turno do Warden. */
-  aiSpeed: AiSpeed;
+  /** Pausa de leitura entre ações do Warden; escala as batidas do turno (k = ms / 400). */
+  aiDelayMs: number;
   /** H3D-01: "2d" (default) ou "3d" — sobrevive a reload; save antigo lê 2D. */
   tableView: TableView;
   /** FEAT-13: pass-and-play decks, one per human (ids from the library). */
@@ -39,7 +42,6 @@ export interface AppSettings {
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
 const OPPONENT_MODES: OpponentMode[] = ["mirror", "deck", "random"];
-const AI_SPEEDS: AiSpeed[] = ["normal", "fast"];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   difficulty: "Medium",
@@ -52,7 +54,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   language: "en",
   opponentMode: "mirror",
   gameMode: "solo",
-  aiSpeed: "normal",
+  aiDelayMs: AI_DELAY_DEFAULT,
   tableView: "2d",
 };
 
@@ -61,7 +63,8 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
   try {
     const saved = localStorage.getItem("aember-arena-settings");
     if (!saved) return base;
-    const parsed = JSON.parse(saved) as Partial<AppSettings>;
+    // `aiSpeed` é o formato antigo do ritmo: "fast" lê 300, o resto o padrão.
+    const parsed = JSON.parse(saved) as Partial<AppSettings> & { aiSpeed?: string };
     return {
       difficulty: DIFFICULTIES.includes(parsed.difficulty as Difficulty) ? (parsed.difficulty as Difficulty) : base.difficulty,
       thinkingDepth: Math.min(6, Math.max(1, Number(parsed.thinkingDepth) || base.thinkingDepth)),
@@ -74,7 +77,9 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
       opponentMode: OPPONENT_MODES.includes(parsed.opponentMode as OpponentMode) ? (parsed.opponentMode as OpponentMode) : base.opponentMode,
       opponentDeckId: typeof parsed.opponentDeckId === "string" ? parsed.opponentDeckId : base.opponentDeckId,
       gameMode: parsed.gameMode === "passAndPlay" ? "passAndPlay" : base.gameMode,
-      aiSpeed: AI_SPEEDS.includes(parsed.aiSpeed as AiSpeed) ? (parsed.aiSpeed as AiSpeed) : base.aiSpeed,
+      aiDelayMs: Number.isFinite(Number(parsed.aiDelayMs)) && parsed.aiDelayMs !== null && parsed.aiDelayMs !== undefined
+        ? clampAiDelay(Number(parsed.aiDelayMs))
+        : parsed.aiSpeed === "fast" ? 300 : base.aiDelayMs,
       tableView: parsed.tableView === "3d" ? "3d" : base.tableView,
       deckP1Id: typeof parsed.deckP1Id === "string" ? parsed.deckP1Id : base.deckP1Id,
       deckP2Id: typeof parsed.deckP2Id === "string" ? parsed.deckP2Id : base.deckP2Id,

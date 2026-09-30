@@ -2123,6 +2123,28 @@ button:disabled {
   animation: rise-in 320ms ease backwards;
 }
 
+/* FIT-08: slider do ritmo da IA (alvo de 44px, trilho fino do navegador). */
+.speed-control {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.speed-control input[type="range"] {
+  width: min(220px, 100%);
+  height: 44px;
+  margin: 0;
+  accent-color: #d3ad5d;
+}
+
+.speed-control output {
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+}
+
 /* T6 — default = mobile (scroll-snap horizontal); desktop ao lado. */
 .hand-track {
   display: flex;

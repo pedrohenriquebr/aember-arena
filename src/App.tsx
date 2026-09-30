@@ -66,7 +66,7 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, vaultErrorText } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
-import { readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
+import { AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
@@ -143,6 +143,10 @@ const UNDO_LIMIT = 40;
 const aiThinkMs = (difficulty: Difficulty) => 250 + DIFFICULTIES.indexOf(difficulty) * 100;
 const AI_PRE: Record<GameMove["type"], number> = { play: 120, fight: 260, reap: 200, use: 200, unstun: 160, discard: 80 };
 const AI_HOUSE_MS = 450;
+/** FIT-08: 400ms ≈ PRE médio (180) + GAP (220) de antes; k escala só as pausas. */
+const delayK = (delayMs: number) => delayMs / 400;
+const delaySeconds = (delayMs: number, language: string) =>
+  (delayMs / 1000).toLocaleString(language === "ptBR" ? "pt-BR" : "en", { maximumFractionDigits: 1 });
 /** Pausa que substitui o voo quando as animações estão desligadas. */
 const AI_HOLD = 520;
 const AI_GAP = 220;
@@ -935,19 +939,32 @@ function ConfigScreen({
               {settings.gameMode === "solo" && (
                 <div className="exp-row">
                   <span className="exp-icon"><Clock3 size={16} /></span>
-                  <div className="exp-copy"><strong>{t("config.experience.speed")}</strong></div>
-                  <div className="filter-chips" role="group" aria-label={t("config.experience.speed")}>
-                    {(["normal", "fast"] as const).map((speed) => (
-                      <button
-                        key={speed}
-                        type="button"
-                        className={`filter-chip${settings.aiSpeed === speed ? " is-active" : ""}`}
-                        aria-pressed={settings.aiSpeed === speed}
-                        onClick={() => onChange({ ...settings, aiSpeed: speed })}
-                      >
-                        {t(`config.speed.${speed}`)}
-                      </button>
-                    ))}
+                  <div className="exp-copy"><strong>{t("config.experience.speed")}</strong><small>{t("config.experience.speedSub")}</small></div>
+                  <div className="speed-control">
+                    <input
+                      type="range"
+                      min={AI_DELAY_MIN}
+                      max={AI_DELAY_MAX}
+                      step={100}
+                      value={settings.aiDelayMs}
+                      aria-label={t("config.experience.speed")}
+                      aria-valuetext={t("config.speed.value", { s: delaySeconds(settings.aiDelayMs, settings.language) })}
+                      onChange={(event) => onChange({ ...settings, aiDelayMs: clampAiDelay(Number(event.target.value)) })}
+                    />
+                    <output>{t("config.speed.value", { s: delaySeconds(settings.aiDelayMs, settings.language) })}</output>
+                    <div className="filter-chips" role="group" aria-label={t("config.experience.speed")}>
+                      {([["fast", 300], ["normal", 700], ["slow", 1200]] as const).map(([id, ms]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={`filter-chip${settings.aiDelayMs === ms ? " is-active" : ""}`}
+                          aria-pressed={settings.aiDelayMs === ms}
+                          onClick={() => onChange({ ...settings, aiDelayMs: ms })}
+                        >
+                          {t(`config.speed.${id}`)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1005,7 +1022,7 @@ function ConfigScreen({
                   <li><span>{t("config.experience.animations")}</span><strong>{settings.animations ? t("config.on") : t("config.off")}</strong></li>
                   <li><span>{t("config.experience.view3d")}</span><strong>{settings.tableView === "3d" ? t("config.on") : t("config.off")}</strong></li>
                   {hasHover && <li><span>{t("config.experience.zoom")}</span><strong>{settings.hoverZoom ? t("config.on") : t("config.off")}</strong></li>}
-                  {settings.gameMode === "solo" && <li><span>{t("config.experience.speed")}</span><strong>{t(`config.speed.${settings.aiSpeed}`)}</strong></li>}
+                  {settings.gameMode === "solo" && <li><span>{t("config.experience.speed")}</span><strong>{t("config.speed.value", { s: delaySeconds(settings.aiDelayMs, settings.language) })}</strong></li>}
                   <li><span>{t("config.experience.language")}</span><strong>{LANGUAGES.find((l) => l.id === settings.language)?.short}</strong></li>
                 </ul>
               </div>
@@ -2102,7 +2119,7 @@ function App() {
       const ai = side === 1 && matchModeRef.current === "solo";
       // Turno do Warden acelerado (opção rápida ou toque): o hold do voo encolhe
       // junto com as batidas, senão a carta continuaria 420ms parada no centro.
-      const rush = ai && (rushRef.current || settingsRef.current.aiSpeed === "fast");
+      const rush = ai && rushRef.current;
       if (move) {
         // A carta jogada sai da mão no commit: título para a legenda e face para
         // o ghost sem clone (FX-02) — o Warden joga da mão, fora do DOM.
@@ -2137,7 +2154,7 @@ function App() {
               face: source && !source.node ? played?.face : undefined,
               // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
               // ainda — é a jogada que o jogador precisa ler.
-              holdMs: Math.round((ai ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : 1)),
+              holdMs: Math.round((ai ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : ai ? Math.min(1.6, Math.max(0.45, delayK(settingsRef.current.aiDelayMs))) : 1)),
               gone,
               actorId: actor,
               amber: gained ? { side: gained.side, delta: gained.delta } : undefined,
@@ -2451,28 +2468,33 @@ function App() {
     aiTurnRef.current = turnKey;
     let cancelled = false;
     let actions = 0;
-    const fast = settingsRef.current.aiSpeed === "fast";
+    const delayMs = settingsRef.current.aiDelayMs;
+    const k = delayK(delayMs);
     // A batida em curso é cancelável: o toque no board corta a espera agora.
     let wake: (() => void) | null = null;
     const sleep = (ms: number) => new Promise<void>((resolve) => {
       wake = resolve;
       window.setTimeout(resolve, ms);
     });
-    /** Curva do plano §3: 1 nas 4 primeiras ações, -0.1 por ação até 0.45
-        (toque no board ou opção rápida compactam na hora). */
-    const tempo = () => (fast || rushRef.current ? 0.45 : Math.max(0.45, 1 - 0.1 * Math.max(0, actions - 4)));
-    const beat = (ms: number) => sleep(Math.round(ms * tempo()));
+    /** Curva do plano §3: 1 nas 5 primeiras ações, -0.1 por ação até o piso — 0.75
+        para quem pediu devagar (> 700ms), 0.45 no resto; o toque no board compacta
+        na hora. `think` (pensar) escala no máx. 2x, as demais batidas por k. */
+    const floor = delayMs > 700 ? 0.75 : 0.45;
+    const tempo = () => (rushRef.current ? 0.45 : Math.max(floor, 1 - 0.1 * Math.max(0, actions - 5)));
+    const beat = (ms: number, scale = k) => sleep(Math.round(ms * scale * tempo()));
     const rush = () => {
       rushRef.current = true;
       wake?.();
       cancelFx();
     };
     rushRef.current = false;
-    window.addEventListener("pointerdown", rush);
+    // Só o toque no board acelera: rail, drawer, header e scrollbar não.
+    const boardNode = document.querySelector(".game-screen .game-board");
+    boardNode?.addEventListener("pointerdown", rush);
 
     const takeAiTurn = async () => {
       setAiPhase("thinking");
-      await beat(aiThinkMs(settingsRef.current.difficulty));
+      await beat(aiThinkMs(settingsRef.current.difficulty), Math.min(k, 2));
       if (cancelled || !gameRef.current) return;
 
       let next = gameRef.current;
@@ -2530,7 +2552,7 @@ function App() {
     void takeAiTurn();
     return () => {
       cancelled = true;
-      window.removeEventListener("pointerdown", rush);
+      boardNode?.removeEventListener("pointerdown", rush);
       // Leaving the board mid-turn cancels the loop; clearing the marker lets
       // the effect resume the same turn from gameRef.current on return (BUG-03).
       aiTurnRef.current = null;
