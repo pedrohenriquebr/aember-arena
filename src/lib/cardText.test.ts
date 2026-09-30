@@ -74,10 +74,61 @@ describe("text normalisation", () => {
     expect(rules.coverage).toBe("vanilla");
   });
 
-  it("marks a persistent ability as partial coverage", () => {
+  it("reads constant text as a persistent effect instead of failing the card", () => {
     const rules = parseCardText(face("Each friendly creature gets +1 armor. Reap: Heal 2 damage from a creature."));
-    expect(rules.coverage).toBe("partial");
+    expect(rules.coverage).toBe("full");
+    expect(rules.effects[0]).toMatchObject({ target: { type: "Creature", side: "friendly" }, armor: 1 });
     expect(rules.abilities).toHaveLength(1);
+  });
+});
+
+describe("persistent text", () => {
+  it("reads power/armor modifiers, keyword grants and prohibitions", () => {
+    const armor = parseCardText(face("Each enemy creature gets -1 armor."));
+    expect(armor).toMatchObject({ coverage: "full" });
+    expect(armor.effects[0]).toMatchObject({ target: { type: "Creature", side: "enemy" }, armor: -1 });
+
+    const self = parseCardText(face("Each other friendly creature gets +1 power."));
+    expect(self.effects[0]).toMatchObject({ target: { type: "Creature", side: "friendly", other: true }, power: 1 });
+
+    const flank = parseCardText(face("Staunch Knight gets +2 power while it is on a flank.", "Creature", "Staunch Knight"));
+    expect(flank.effects[0]).toMatchObject({ target: { self: true }, power: 2, when: "flank" });
+
+    const neighbors = parseCardText(face("Each of Bulwark's neighbors gets +2 armor.", "Creature", "Bulwark"));
+    expect(neighbors.effects[0]).toMatchObject({ target: { neighborsOfSource: true }, armor: 2 });
+
+    const taunt = parseCardText(face("Each other friendly creature gains Taunt."));
+    expect(taunt.effects[0]).toMatchObject({ target: { type: "Creature", side: "friendly", other: true }, keywords: { taunt: 1 } });
+
+    const imp = parseCardText(face("Your opponent cannot play more than 2 cards each turn."));
+    expect(imp.coverage).toBe("full");
+    expect(imp.effects[0].restrict).toEqual({ who: "opponent", action: "play", limit: 2 });
+
+    const cannotUse = parseCardText(face("You cannot use artifacts."));
+    expect(cannotUse.effects[0].restrict).toEqual({ who: "you", action: "use", type: "Artifact" });
+  });
+
+  it("reads the duration of a triggered effect", () => {
+    const storm = parseCardText(face("Play: Your opponent cannot play action cards on their next turn.", "Action"));
+    expect(storm.coverage).toBe("full");
+    expect(storm.abilities[0].acts).toEqual([
+      { k: "lasting", e: { target: {}, restrict: { who: "opponent", action: "play", type: "Action" }, duration: "next" } },
+    ]);
+
+    const turn = parseCardText(face("Play: Each friendly creature gets +1 power for the remainder of the turn.", "Action"));
+    expect(turn.abilities[0].acts[0]).toMatchObject({ k: "lasting", e: { power: 1, duration: "turn" } });
+  });
+
+  it("parses a quoted ability grant with the same grammar", () => {
+    const rules = parseCardText(face("Each friendly creature gains 'Reap: Gain 1 amber.'"));
+    expect(rules.coverage).toBe("full");
+    expect(rules.effects[0].abilities).toEqual([{ on: ["reap"], acts: [{ k: "gainAmber", n: 1 }] }]);
+  });
+
+  it("keeps wording outside the grammar as vanilla text", () => {
+    const rules = parseCardText(face("During your draw step, refill your hand to 1 additional card."));
+    expect(rules.coverage).toBe("vanilla");
+    expect(rules.effects).toHaveLength(0);
   });
 });
 
@@ -102,11 +153,13 @@ describe("starter decks", () => {
     for (const card of unique) counts[rulesOf(card).coverage] += 1;
     // Snapshot of the parser's reach over the 58 distinct starter cards; a
     // change here must be deliberate (and reflected in MECHANICS_REPORT.md).
+    // 35 -> 40 full with the persistent layer (Bulwark, Grey Monk, Staunch
+    // Knight, Ember Imp and Scrambler Storm now read their constant text).
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 35,
-        "partial": 2,
-        "vanilla": 21,
+        "full": 40,
+        "partial": 1,
+        "vanilla": 17,
       }
     `);
   });

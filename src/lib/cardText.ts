@@ -5,7 +5,7 @@
 // AGPL-3.0). An ability is used only when EVERY sentence of it is understood;
 // otherwise it is dropped and the card's coverage becomes "partial"/"vanilla",
 // so the engine never half-resolves a card.
-import type { Ability, Act, CardRules, Condition, Filter, Selection, Trigger } from "./abilities";
+import type { Ability, Act, CardRules, Condition, Filter, PersistentEffect, Restrict, Selection, Trigger } from "./abilities";
 import { printedKeywords, readKeyword } from "./keywords";
 import type { CardFace } from "./game";
 
@@ -110,14 +110,19 @@ const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number; obj: n
   [/^(.+?) captures? (\d+) amber$/, (m) => ({ k: "capture", n: +m[2], obj: 1 })],
 ];
 
-function parseSentence(sentence: string, upgrade: boolean, creature: boolean): Sentence | null {
+function parseSentence(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): Sentence | null {
   const conditional = sentence.match(/^if ([^,]+), (.+)$/) ?? sentence.match(/^(.+?) if (you control more creatures than your opponent)$/);
   if (conditional) {
     const [condText, rest] = sentence.startsWith("if ") ? [conditional[1], conditional[2]] : [conditional[2], conditional[1]];
     const cond = parseCondition(condText);
-    const body = cond && parseSentence(rest, upgrade, creature);
+    const body = cond && parseSentence(rest, upgrade, creature, quoted);
     return body && !body.cond ? { ...body, cond } : null;
   }
+
+  // A sentence that sets a lasting effect ("… on their next turn") rather than
+  // resolving now (keyteki lastingEffect / duringOpponentNextTurn).
+  const persistent = parsePersistent(sentence, upgrade, creature, quoted);
+  if (persistent) return { acts: persistent.map((e) => ({ k: "lasting", e })) };
 
   for (const [pattern, build] of SIMPLE) {
     const m = sentence.match(pattern);
@@ -148,10 +153,10 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean): S
   return null;
 }
 
-function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean): Ability | null {
+function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[]): Ability | null {
   const ability: Ability = { on: triggers, acts: [] };
   for (const sentence of body.split(/\.\s*/).map((part) => part.trim()).filter(Boolean)) {
-    const parsed = parseSentence(sentence, upgrade, creature);
+    const parsed = parseSentence(sentence, upgrade, creature, quoted);
     if (!parsed) return null;
     if (parsed.target) {
       if (ability.target) return null;
@@ -174,6 +179,127 @@ function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creat
   return ability;
 }
 
+// ---------- persistent text (constant effects and lasting grants) ----------
+
+/** Quoted ability inside a persistent sentence. The body is masked before the
+    trigger-prefix scan, so a "Reap:" inside quotes cannot split the sentence;
+    the quoted text is re-parsed with the same grammar when the grant is read. */
+const QUOTED_ABILITY = /(['"])((?:play|reap|fight|destroyed|omni|action|scrap|before|after)[^'"]{2,300})\1/gi;
+
+function maskQuotes(text: string): { text: string; quoted: string[] } {
+  const quoted: string[] = [];
+  const masked = text.replace(QUOTED_ABILITY, (_match, _quote, inner: string) => {
+    quoted.push(inner);
+    return `\u0001${quoted.length - 1}\u0001`;
+  });
+  return { text: masked, quoted };
+}
+
+const FLANK_CLAUSE = / while (?:it|this creature|this card) is on a flank$/;
+
+/** Subject of a persistent sentence: the cards the effect applies to. */
+function parseSubject(phrase: string, upgrade: boolean): Filter | null {
+  if (/^(this card|this creature|it|itself)$/.test(phrase)) {
+    return upgrade && phrase === "this creature" ? { host: true } : { self: true };
+  }
+  if (phrase === "each of this card's neighbors" || phrase === "each neighbor of this card") return { neighborsOfSource: true };
+  const match = phrase.match(/^(?:each |all |your |each of your )?(other )?(friendly |enemy )?(flank )?(creature|artifact)s?$/);
+  if (!match) return null;
+  const filter: Filter = { type: match[4] === "artifact" ? "Artifact" : "Creature" };
+  if (match[1]) filter.other = true;
+  if (match[2]) filter.side = match[2].trim() === "friendly" ? "friendly" : "enemy";
+  if (match[3]) filter.flank = true;
+  return filter;
+}
+
+/** "<subject> gets +N power[/+N armor]" — the classic persistent modifier. */
+function parseStats(sentence: string, upgrade: boolean): PersistentEffect | null {
+  const match = sentence.match(/^(.+?) (?:gets|get) ([+-]\d+) (power|armor)(?: and ([+-]\d+) (power|armor))?$/);
+  if (!match) return null;
+  const target = parseSubject(match[1], upgrade);
+  if (!target) return null;
+  const effect: PersistentEffect = { target };
+  const add = (key: "power" | "armor", value: string) => (effect[key] = (effect[key] ?? 0) + Number(value));
+  add(match[3] as "power" | "armor", match[2]);
+  if (match[5]) add(match[5] as "power" | "armor", match[4]);
+  return effect;
+}
+
+/** "<subject> gains <keyword>" or "<subject> gains '<ability text>'". */
+function parseGrant(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): PersistentEffect | null {
+  const grant = sentence.match(/^(.+?) gains?,? \u0001(\d+)\u0001$/);
+  if (grant) {
+    const target = parseSubject(grant[1], upgrade);
+    const ability = target && parseQuoted(quoted[Number(grant[2])], upgrade, creature, quoted);
+    return ability ? { target, abilities: [ability] } : null;
+  }
+  const keyword = sentence.match(/^(.+?) gains? ([a-z-]+(?: \d+)?)$/);
+  if (!keyword) return null;
+  const target = parseSubject(keyword[1], upgrade);
+  const parsed = readKeyword(keyword[2]);
+  return target && parsed ? { target, keywords: { [parsed[0]]: parsed[1] } } : null;
+}
+
+/** Body of a quoted grant ("Reap: Gain 1A.") through the same parser. */
+function parseQuoted(inner: string, upgrade: boolean, creature: boolean, quoted: string[]): Ability | null {
+  const match = inner.match(
+    /^((?:play|reap|fight|destroyed|omni|action|scrap|before [^:.]{1,90}|after [^:.]{1,90})(?:\/(?:play|reap|fight|destroyed))*)\s*:\s*(.+)$/i,
+  );
+  if (!match) return null;
+  const triggers = match[1].split("/").map((part) => TRIGGERS[part.trim()]);
+  return triggers.every(Boolean) ? parseAbility(triggers, match[2], upgrade, creature, quoted) : null;
+}
+
+const RESTRICT_TYPES: Record<string, string> = { action: "Action", creature: "Creature", artifact: "Artifact", upgrade: "Upgrade" };
+
+/** "You cannot play/use/fight …" — a prohibition (keyteki effects.playerCannot). */
+function parseRestriction(sentence: string): Restrict | null {
+  const head = sentence.match(/^(you|your opponent) cannot (play|use|fight)(.*)$/);
+  if (!head) return null;
+  const restrict: Restrict = { who: head[1] === "you" ? "you" : "opponent", action: head[2] as Restrict["action"] };
+  const rest = head[3];
+  const limit = rest.match(/^ more than (\d+) cards?$/);
+  if (limit) {
+    restrict.limit = Number(limit[1]);
+    return restrict;
+  }
+  if (rest.match(/^ creatures to fight$/)) return { ...restrict, action: "fight" };
+  const type = rest.match(/^ (action|creature|artifact|upgrade)s?(?: cards?)?$/);
+  if (type) return { ...restrict, type: RESTRICT_TYPES[type[1]] };
+  if (rest.match(/^ (?:any )?cards?$/)) return restrict;
+  return null;
+}
+
+/** Constant text of a card (and the body of a triggered sentence that sets a
+    lasting one): stats, grants and prohibitions. Returns every part of the
+    sentence it understood, or null when the wording is outside the grammar. */
+function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): PersistentEffect[] | null {
+  let body = sentence;
+  let duration: PersistentEffect["duration"];
+  const prefix = body.match(/^for the remainder of the turn, (.+)$/);
+  if (prefix) {
+    body = prefix[1];
+    duration = "turn";
+  }
+  const tail = body.match(/ (for the remainder of the turn|on their next turn|during their next turn|each turn)$/);
+  if (tail) {
+    if (tail[1] !== "each turn") duration = tail[1].includes("next turn") ? "next" : "turn";
+    body = body.slice(0, -tail[0].length);
+  }
+  const restrict = parseRestriction(body);
+  if (restrict) return [{ target: {}, restrict, duration }];
+  let when: PersistentEffect["when"];
+  const flank = body.match(FLANK_CLAUSE);
+  if (flank) {
+    body = body.slice(0, -flank[0].length);
+    when = "flank";
+  }
+  const stats = parseStats(body, upgrade);
+  if (stats) return [{ ...stats, when, duration }];
+  const grant = parseGrant(body, upgrade, creature, quoted);
+  return grant ? [{ ...grant, when, duration }] : null;
+}
+
 export function parseCardText(face: CardFace): CardRules {
   try {
     return parseCardBody(face);
@@ -181,12 +307,12 @@ export function parseCardText(face: CardFace): CardRules {
     // A parser gap must never take the app down with it (BUG-01 was a white
     // screen): an unreadable card degrades to vanilla, like any text the
     // grammar does not understand.
-    return { abilities: [], keywords: {}, coverage: "vanilla" };
+    return { abilities: [], effects: [], keywords: {}, coverage: "vanilla" };
   }
 }
 
 function parseCardBody(face: CardFace): CardRules {
-  const text = normalise(face.text ?? "");
+  const { text, quoted } = maskQuotes(normalise(face.text ?? ""));
   // Self references only inside ability text, so a card named like a keyword keeps its keywords.
   const self = new RegExp(`\\b${normalise(face.title).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
   const upgrade = face.type === "Upgrade";
@@ -204,12 +330,27 @@ function parseCardBody(face: CardFace): CardRules {
   const header = segments[0].body.split(/\.\s*/).map((part) => part.trim()).filter(Boolean);
   const keywords = printedKeywords(face, header);
   let understood = 0;
-  let unknown = header.filter((sentence) => !readKeyword(sentence)).length;
+  let unknown = 0;
   const abilities: Ability[] = [];
+  const effects: PersistentEffect[] = [];
+
+  // Constant text: keywords and persistent effects that live while the card is in play.
+  for (const sentence of header) {
+    if (readKeyword(sentence)) continue;
+    const parsed = parsePersistent(sentence.replace(self, "this card"), upgrade, creature, quoted);
+    if (parsed) {
+      effects.push(...parsed);
+      understood += 1;
+    } else {
+      unknown += 1;
+    }
+  }
 
   for (const { prefix: raw, body } of segments.slice(1)) {
     const triggers = raw!.split("/").map((part) => TRIGGERS[part.trim()]);
-    const ability = triggers.every(Boolean) ? parseAbility(triggers, body.replace(self, "this card"), upgrade, creature) : null;
+    const ability = triggers.every(Boolean)
+      ? parseAbility(triggers, body.replace(self, "this card"), upgrade, creature, quoted)
+      : null;
     if (ability) {
       abilities.push(ability);
       understood += 1;
@@ -219,5 +360,5 @@ function parseCardBody(face: CardFace): CardRules {
   }
 
   const coverage = unknown === 0 ? "full" : understood === 0 ? "vanilla" : "partial";
-  return { abilities, keywords, coverage };
+  return { abilities, effects, keywords, coverage };
 }
