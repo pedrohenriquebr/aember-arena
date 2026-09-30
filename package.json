@@ -17,6 +17,7 @@
     "e2e:smoke:3d": "node e2e/capture.mjs --match-smoke --view 3d --out e2e/shots/match-smoke-3d",
     "e2e:record": "node e2e/record-session.mjs",
     "e2e:record:3d": "node e2e/record-session.mjs --view 3d --animations",
+    "e2e:fit": "node e2e/fit.mjs",
     "e2e:bundle": "node e2e/bundle-size.mjs",
     "e2e:acceptance": "node e2e/acceptance.mjs",
     "test": "vitest run"

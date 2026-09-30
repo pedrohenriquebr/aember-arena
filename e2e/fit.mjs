@@ -1,0 +1,162 @@
+// Harness de encaixe (UX_FIT_PLAN FIT-01): a partida demo tem de caber inteira no
+// viewport, sem rolar o documento, com a mão 100% visível. Imprime a altura medida
+// de cada faixa para diagnóstico e sai != 0 se algum cenário violar.
+// Uso: node e2e/fit.mjs   (sobe e derruba o dev server)
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const PORT = 5209;
+const VIEWPORTS = [
+  { name: "1280x800", width: 1280, height: 800 },
+  { name: "1296x668", width: 1296, height: 668 },
+  { name: "1920x1080", width: 1920, height: 1080 },
+  { name: "360x844", width: 360, height: 844 },
+];
+const SEED = `(() => {
+  localStorage.setItem("aember-arena-settings", JSON.stringify({
+    difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: false,
+    hoverZoom: false, hints: false, language: "en", opponentMode: "mirror", gameMode: "solo",
+  }));
+  localStorage.setItem("aember-arena-language", "en");
+  localStorage.setItem("aember-arena-tutorial-seen", "1");
+})()`;
+
+function startServer() {
+  const child = spawn(process.execPath, [join(ROOT, "node_modules", "vite", "bin", "vite.js"), "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  const url = `http://127.0.0.1:${PORT}/`;
+  return {
+    url,
+    stop: () => {
+      if (process.platform === "win32") spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      else child.kill("SIGTERM");
+    },
+    async ready() {
+      for (let i = 0; i < 200; i += 1) {
+        try {
+          if ((await fetch(url)).ok) return;
+        } catch { /* subindo */ }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      throw new Error("vite nao subiu");
+    },
+  };
+}
+
+const CANDIDATES = [
+  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+];
+
+async function launch() {
+  const { chromium } = await import("playwright-core");
+  for (const opts of [{ channel: "msedge" }, { channel: "chrome" }, ...CANDIDATES.filter(existsSync).map((executablePath) => ({ executablePath }))]) {
+    try {
+      return await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"], ...opts });
+    } catch { /* proximo */ }
+  }
+  throw new Error("sem Edge/Chrome do sistema");
+}
+
+// Roda no browser: alturas por faixa + retângulos da mão.
+const MEASURE = () => {
+  const visible = (el) => el && getComputedStyle(el).display !== "none";
+  const h = (sel) => {
+    const el = document.querySelector(sel);
+    return visible(el) ? el.getBoundingClientRect().height : 0;
+  };
+  const all = (sel) => [...document.querySelectorAll(sel)].map((el) => el.getBoundingClientRect().height);
+  const px = (v) => parseFloat(v) || 0;
+  const scs = getComputedStyle(document.querySelector(".game-screen"));
+  const bcs = getComputedStyle(document.querySelector(".game-board"));
+  const heading = document.querySelector(".match-heading");
+  const tabs = document.querySelector(".mobile-tabs");
+  const bands = all(".game-board .player-band");
+  const zones = all(".game-board .battle-zone");
+  const rows = {
+    header: h(".app-header"),
+    screenPadding: px(scs.paddingTop) + px(scs.paddingBottom),
+    title: visible(heading) ? heading.getBoundingClientRect().height + px(getComputedStyle(heading).marginBottom) : 0,
+    boardBorder: px(bcs.borderTopWidth) + px(bcs.borderBottomWidth),
+    bandOpponent: bands[0] ?? 0,
+    zoneOpponent: zones[0] ?? 0,
+    console: h(".game-board .turn-console"),
+    zonePlayer: zones[1] ?? 0,
+    bandPlayer: bands[1] ?? 0,
+    hand: h(".game-board .hand-zone"),
+    tabs: visible(tabs) ? tabs.getBoundingClientRect().height : 0,
+  };
+  const round = (n) => Math.round(n * 10) / 10;
+  const sum = Object.values(rows).reduce((a, b) => a + b, 0);
+  const hand = [...document.querySelectorAll(".hand-track > .card-tile--hand")].map((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom };
+  });
+  const boardCards = [...document.querySelectorAll(".game-board .board-lane .card-tile--board")].map((el) => el.getBoundingClientRect().width);
+  return {
+    rows: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, round(v)])),
+    sum: round(sum),
+    docScroll: document.scrollingElement.scrollHeight,
+    innerHeight: window.innerHeight,
+    hand,
+    boardCardMin: boardCards.length ? round(Math.min(...boardCards)) : null,
+    boardCardMax: boardCards.length ? round(Math.max(...boardCards)) : null,
+  };
+};
+
+const failures = [];
+const server = startServer();
+try {
+  await server.ready();
+  const browser = await launch();
+  for (const vp of VIEWPORTS) {
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+    await context.addInitScript(SEED);
+    const page = await context.newPage();
+    await page.goto(server.url, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".home-screen", { timeout: 30000 });
+    // JS click: no celular o header-nav some (a navegação é a tab bar).
+    await page.evaluate(() => document.querySelectorAll(".header-nav .nav-link")[2]?.click());
+    await page.waitForSelector(".config-screen", { timeout: 15000 });
+    const pills = page.locator(".config-screen .config-step-pill");
+    await pills.nth((await pills.count()) - 1).click();
+    await page.locator(".config-nav .cta-button").click();
+    await page.waitForSelector(".game-screen", { timeout: 20000 });
+    const keep = page.locator(".mulligan-keep");
+    if (await keep.count()) await keep.click();
+    await page.waitForSelector(".mulligan-shade", { state: "detached", timeout: 20000 }).catch(() => {});
+    await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 90000 });
+    await page.waitForTimeout(700);
+
+    const m = await page.evaluate(MEASURE);
+    const problems = [];
+    // Abaixo de 1041px o rail ainda cai depois da mao no fluxo (vira drawer no FIT-05):
+    // ali o documento rola so ate o rail, e o palco e medido pela soma e pela mao.
+    if (vp.width >= 1041 && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
+    if (m.sum > m.innerHeight + 1) problems.push(`soma das faixas ${m.sum} > viewport ${m.innerHeight}`);
+    const cut = m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
+    if (!m.hand.length) problems.push("mao vazia/ausente");
+    else if (cut.length) problems.push(`mao cortada: ${cut.length}/${m.hand.length} cartas fora (bottom max ${Math.max(...m.hand.map((r) => r.bottom)).toFixed(0)} > ${m.innerHeight})`);
+
+    console.log(`\n== ${vp.name} ${problems.length ? "FAIL" : "OK"}`);
+    console.log(`   faixas: ${Object.entries(m.rows).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+    console.log(`   soma=${m.sum} viewport=${m.innerHeight} docScroll=${m.docScroll} cartaBoard=${m.boardCardMin}-${m.boardCardMax}px mao=${m.hand.length} (bottom ${m.hand.length ? Math.max(...m.hand.map((r) => r.bottom)).toFixed(0) : "-"})`);
+    for (const p of problems) {
+      console.log(`   ! ${p}`);
+      failures.push(`${vp.name}: ${p}`);
+    }
+    await context.close();
+  }
+  await browser.close();
+} finally {
+  server.stop();
+}
+if (failures.length) {
+  console.log(`\nFIT FAIL - ${failures.length} violacao(oes)`);
+  process.exit(1);
+}
+console.log("\nFIT OK");
