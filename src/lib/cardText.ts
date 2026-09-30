@@ -101,6 +101,8 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^your opponent discards (a|\d+) random cards?(?: from their hand)?$/, (m) => ({ k: "discardRandom", n: num(m[1]), opp: true })],
   [/^keys cost \+(\d+) (?:amber )?during your opponent's next turn$/, (m) => ({ k: "keyCost", n: +m[1], opp: true })],
   [/^archive the top card of your deck$/, () => ({ k: "archiveTop" })],
+  // Onda 3: tokens nascem na mesa (keyteki MakeTokenCreatureAction).
+  [/^(?:make|create) (a|an|\d+) token creatures?$/, (m) => ({ k: "makeToken", n: num(m[1]) })],
   [/^return a card from your discard pile to your hand$/, () => ({ k: "fromDiscard" })],
   [/^return a creature from your discard pile to your hand$/, () => ({ k: "fromDiscard", type: "Creature" })],
 ];
@@ -109,7 +111,9 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
 // group that a sibling regex does not have crashes parseObject (BUG-01).
 const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number; obj: number }][] = [
   [/^destroy (.+)$/, () => ({ k: "destroy", obj: 1 })],
-  [/^sacrifice (.+)$/, () => ({ k: "destroy", obj: 1 })],
+  [/^purge (.+)$/, () => ({ k: "purge", obj: 1 })],
+  [/^sacrifice (.+)$/, () => ({ k: "sacrifice", obj: 1 })],
+  [/^exalt (.+?)( twice)?$/, (m) => ({ k: "exalt", n: m[2] ? 2 : 1, obj: 1 })],
   [/^deal (\d+)(?: damage)? to (.+)$/, (m) => ({ k: "damage", n: +m[1], obj: 2 })],
   [/^stun (.+)$/, () => ({ k: "stun", obj: 1 })],
   [/^exhaust (.+)$/, () => ({ k: "exhaust", obj: 1 })],
@@ -201,7 +205,7 @@ function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creat
   if (ability.acts.every((act) => act.optional)) ability.optional = true;
   // "Sacrifice X. Destroy an artifact." — the sacrifice consumed the source, so
   // the printed target cannot be the source itself (BUG-10).
-  if (ability.target && ability.acts.some((act) => act.k === "destroy" && "s" in act && act.s === "self")) {
+  if (ability.target && ability.acts.some((act) => (act.k === "destroy" || act.k === "sacrifice") && "s" in act && act.s === "self")) {
     ability.target = { ...ability.target, other: true };
   }
   return ability;

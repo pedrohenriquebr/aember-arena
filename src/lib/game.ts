@@ -58,6 +58,9 @@ export interface CardInstance {
   attachedTo?: string;
   /** Gigantic halves: the other half is played "under" this one (BUG-23). */
   under?: CardInstance[];
+  /** A token creature: engine-made, never a deck card (Onda 3). Plain boolean so
+      the state stays JSON-safe. */
+  isToken?: boolean;
 }
 
 export interface GamePlayer {
@@ -69,6 +72,8 @@ export interface GamePlayer {
   discard: CardInstance[];
   board: CardInstance[];
   archives: CardInstance[];
+  /** Purged cards: out of the game, never reshuffled back (keyteki 'purged'). */
+  purged: CardInstance[];
   amber: number;
   keys: number;
   chains: number;
@@ -117,6 +122,9 @@ export interface GameState {
   /** Triggered effects with a duration ("… on their next turn"): plain data
       copies of the parsed effect plus its owner and expiry stamp. */
   lasting?: PersistentEffect[];
+  /** Onda 3: how many token creatures this match has made — the counter keeps
+      their instance ids unique and deterministic (plain number, JSON-safe). */
+  tokenSerial?: number;
 }
 
 /** `target` optionally names the card chosen for the triggered ability (or the
@@ -191,6 +199,7 @@ function makePlayer(name: string, deck: DeckInfo, owner: string, rng: Rng): Game
     discard: [],
     board: [],
     archives: [],
+    purged: [],
     amber: 0,
     keys: 0,
     chains: 0,
@@ -312,6 +321,7 @@ export function cloneGame(state: GameState): GameState {
     discard: player.discard.map((card) => ({ ...card })),
     board: player.board.map((card) => ({ ...card, under: card.under?.map((half) => ({ ...half })) })),
     archives: (player.archives ?? []).map((card) => ({ ...card })),
+    purged: (player.purged ?? []).map((card) => ({ ...card })),
   });
 
   return {
@@ -498,7 +508,7 @@ function everyMatch(state: GameState, me: Side, source: CardInstance, filter: Fi
   return filter.top ? found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top) : found;
 }
 
-const HARMFUL = new Set<Act["k"]>(["destroy", "damage", "stun", "exhaust", "returnToHand", "returnToDeck", "archive"]);
+const HARMFUL = new Set<Act["k"]>(["destroy", "purge", "damage", "stun", "exhaust", "returnToHand", "returnToDeck", "archive"]);
 const isHarmful = (ability: Ability) => ability.acts.some((act) => HARMFUL.has(act.k));
 
 /** Default choice for a targeted ability: harmful effects hit the strongest
@@ -549,7 +559,7 @@ export function canResolve(state: GameState, me: Side, source: CardInstance, abi
 
 // ---------- game actions ----------
 
-function leavePlay(state: GameState, card: CardInstance, destination: "discard" | "hand" | "deck" | "archives"): void {
+function leavePlay(state: GameState, card: CardInstance, destination: "discard" | "hand" | "deck" | "archives" | "purged"): void {
   const side = controllerOf(state, card);
   if (side === undefined) return;
   const player = state.players[side];
@@ -567,6 +577,10 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   }
   card.under = undefined;
   Object.assign(card, { damage: 0, ready: false, stunned: false, amber: 0, armorUsed: 0, elusiveUsed: false, poisoned: false, attachedTo: undefined });
+  // A token creature has no card behind it (isToken): it is removed from the
+  // game instead of entering hand/discard/deck, so it can never be drawn or
+  // reshuffled into a deck (Onda 3).
+  if (card.isToken) return;
   if (destination === "deck") player.deck.push(card);
   else player[destination].push(card);
 }
@@ -586,6 +600,42 @@ function destroy(state: GameState, card: CardInstance, deterministic: boolean, b
   fire(state, side, card, "destroyed", { deterministic });
   dying.delete(card);
   leavePlay(state, card, "discard");
+}
+
+/** Sacrifice (keyteki GameActions.sacrifice → DestroyAction with isSacrifice):
+    the owner puts the card into their discard pile straight away. It is NOT a
+    destruction, so "Destroyed:" abilities stay silent and the kill is not
+    credited to anyone. */
+function sacrifice(state: GameState, card: CardInstance): void {
+  if (controllerOf(state, card) === undefined) return;
+  leavePlay(state, card, "discard");
+}
+
+/** "Make a token creature" (keyteki MakeTokenCreatureAction): the token enters
+    play exhausted on the right flank. Its face is synthesized — the engine has
+    no token card data — with the house of the card that made it, 1 power and
+    the "Token" trait; `isToken` marks the instance so it never touches a deck. */
+function makeToken(state: GameState, side: Side, house: string): void {
+  state.tokenSerial = (state.tokenSerial ?? 0) + 1;
+  state.players[side].board.push({
+    instanceId: `token-${side}-${state.tokenSerial}`,
+    face: {
+      id: `token-${state.tokenSerial}`,
+      title: "Token Creature",
+      house,
+      type: "Creature",
+      image: "",
+      text: "",
+      amber: 0,
+      power: 1,
+      armor: 0,
+      traits: "Token",
+    },
+    damage: 0,
+    ready: false,
+    stunned: false,
+    isToken: true,
+  });
 }
 
 /** Armor absorbs damage once per turn (keyteki DealDamageAction/armorUsed). */
@@ -618,7 +668,7 @@ function discardRandom(player: GamePlayer, deterministic: boolean, rng: Rng): vo
 
 function run(context: Context, act: Act): void {
   if (act.optional && context.decline) return;
-  const { state, me, deterministic } = context;
+  const { state, me, source, deterministic } = context;
   const player = state.players["opp" in act && act.opp ? other(me) : me];
   const cards = "s" in act ? select(context, act.s) : [];
   const amount = "n" in act ? act.n : 0;
@@ -666,6 +716,23 @@ function run(context: Context, act: Act): void {
       break;
     case "destroy":
       for (const card of cards) destroy(state, card, deterministic, me);
+      break;
+    case "purge":
+      // A leave-play destination of its own (keyteki PurgeAction): the card is
+      // out of the game and cannot come back through a reshuffle.
+      for (const card of cards) leavePlay(state, card, "purged");
+      break;
+    case "sacrifice":
+      for (const card of cards) sacrifice(state, card);
+      break;
+    case "exalt":
+      // keyteki ExaltAction: place N amber from the common supply on the
+      // creature. It behaves like captured amber (returns to the opponent when
+      // the creature leaves play) — no player's pool is touched.
+      for (const card of cards.filter(isCreature)) card.amber = (card.amber ?? 0) + amount;
+      break;
+    case "makeToken":
+      for (let count = 0; count < amount; count += 1) makeToken(state, me, source.face.house);
       break;
     case "stun":
       for (const card of cards.filter(isCreature)) card.stunned = true;
@@ -761,9 +828,12 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
   const alive = () => controllerOf(state, attacker) === me && controllerOf(state, defender) === other(me);
   // FEAT-06: a creature that ended in the discard pile during the exchange is a
   // kill for the other side (assault/hazardous/poison and "Fight:" included).
+  // A token killed in the fight leaves the game instead of reaching a discard
+  // pile, so "left play" is its mark (Onda 3).
   const credit = () => {
-    if (state.players[me].discard.includes(attacker)) tally(state.players[other(me)], "creaturesDestroyed");
-    if (state.players[other(me)].discard.includes(defender)) tally(state.players[me], "creaturesDestroyed");
+    const gone = (card: CardInstance) => card.isToken && controllerOf(state, card) === undefined;
+    if (state.players[me].discard.includes(attacker) || gone(attacker)) tally(state.players[other(me)], "creaturesDestroyed");
+    if (state.players[other(me)].discard.includes(defender) || gone(defender)) tally(state.players[me], "creaturesDestroyed");
   };
   if (!alive()) return credit();
   dealDamage(state, defender, keyword(state, attacker, "assault"));
@@ -1166,6 +1236,7 @@ export function normalizeSavedState(current: GameState): GameState {
   if (state.pendingMulligan !== 0 && state.pendingMulligan !== 1) state.pendingMulligan = null;
   for (const player of state.players) {
     player.archives ??= [];
+    player.purged ??= [];
     for (const key of ["amberGained", "amberStolen", "amberCaptured", "creaturesDestroyed", "cardsPlayed"] as const) {
       if (!Number.isFinite(player[key])) player[key] = 0;
     }

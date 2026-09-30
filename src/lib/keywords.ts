@@ -4,7 +4,9 @@
 // Copyright (C) keyteki contributors. Rewritten in TypeScript for Aember Arena.
 import type { CardFace } from "./game";
 
-/** Keywords the engine resolves by itself (see game.ts). */
+/** Keywords the engine resolves by itself (see game.ts). "exalt" is recognized
+    for coverage but resolved through the `exalt` act ("Exalt <card>"), as in
+    keyteki (docs/keywords.md: ExaltAction, not an automatic keyword effect). */
 export const ENGINE_KEYWORDS = [
   "elusive",
   "taunt",
@@ -16,6 +18,7 @@ export const ENGINE_KEYWORDS = [
   "assault",
   "hazardous",
   "splash-attack",
+  "exalt",
 ] as const;
 
 export type Keyword = (typeof ENGINE_KEYWORDS)[number];

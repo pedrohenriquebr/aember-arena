@@ -228,7 +228,7 @@ function resolvePassDecks(savedDecks: LibraryDeck[], fallback: DeckInfo, setting
     state — a deck removed from the library (or not loaded yet) must not fall
     into the demo deck and steal its title, W/L record and rematch. */
 function deckFromState(player: GameState["players"][number], id: string): DeckInfo {
-  const cards = [player.deck, player.hand, player.discard, player.board, player.archives ?? []]
+  const cards = [player.deck, player.hand, player.discard, player.board, player.archives ?? [], player.purged ?? []]
     .flat()
     .flatMap((card) => [card.face, ...(card.under ?? []).map((half) => half.face)]);
   return { id, name: player.deckName, houses: player.houses, cards };

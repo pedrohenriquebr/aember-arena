@@ -41,8 +41,11 @@ export type Selection = "self" | "host" | "target" | "targetAndNeighbors" | "nei
 export type Act = (
   | { k: "gainAmber" | "loseAmber" | "steal" | "gainChains" | "draw" | "discardRandom" | "keyCost"; n: number; opp?: boolean }
   | { k: "capture"; n: number; s: Selection }
-  | { k: "damage" | "heal"; n: number; s: Selection }
-  | { k: "destroy" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "returnToDeck" | "archive" | "use"; s: Selection }
+  | { k: "damage" | "heal" | "exalt"; n: number; s: Selection }
+  | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "returnToDeck" | "archive" | "use"; s: Selection }
+  /** "Make a token creature": the token is born on the battleline (keyteki
+      MakeTokenCreatureAction), never in the deck. */
+  | { k: "makeToken"; n: number }
   | { k: "fromDiscard"; type?: "Creature" }
   | { k: "archiveTop" }
   /** A triggered effect with a duration ("Play: … on their next turn"). */

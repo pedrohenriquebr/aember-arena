@@ -73,7 +73,7 @@ describe("text normalisation", () => {
 
   it("maps the card's own name to itself", () => {
     const rules = parseCardText(face("Omni: Sacrifice Boom Box. Your opponent loses 2A.", "Artifact", "Boom Box"));
-    expect(rules.abilities[0].acts).toEqual([{ k: "destroy", n: 0, s: "self" }, { k: "loseAmber", n: 2, opp: true }]);
+    expect(rules.abilities[0].acts).toEqual([{ k: "sacrifice", n: 0, s: "self" }, { k: "loseAmber", n: 2, opp: true }]);
   });
 
   it("parses conditions in front of and behind the effect", () => {
@@ -95,8 +95,41 @@ describe("text normalisation", () => {
   });
 });
 
-describe("optional 'You may' clauses (Onda 2)", () => {
-  it("marks a whole 'You may' sentence as optional and keeps the card full", () => {
+describe("zone verbs and tokens (Onda 3)", () => {
+  it("reads purge, sacrifice and exalt as separate verbs", () => {
+    const purge = parseCardText(face("Play: Purge an enemy creature."));
+    expect(purge.coverage).toBe("full");
+    expect(purge.abilities[0]).toMatchObject({
+      target: { type: "Creature", side: "enemy" },
+      acts: [{ k: "purge", n: 0, s: "target" }],
+    });
+
+    const sacrifice = parseCardText(face("Play: Sacrifice a friendly creature."));
+    expect(sacrifice.abilities[0]).toMatchObject({ acts: [{ k: "sacrifice", n: 0, s: "target" }] });
+
+    const exalt = parseCardText(face("Play: Exalt a friendly creature."));
+    expect(exalt.abilities[0]).toMatchObject({
+      target: { type: "Creature", side: "friendly" },
+      acts: [{ k: "exalt", n: 1, s: "target" }],
+    });
+    const twice = parseCardText(face("Play: Exalt Grimlocus Dux twice.", "Creature", "Grimlocus Dux"));
+    expect(twice.abilities[0].acts).toEqual([{ k: "exalt", n: 2, s: "self" }]);
+  });
+
+  it("reads 'Make/Create a token creature' with a count", () => {
+    expect(parseCardText(face("Play: Make a token creature.")).abilities[0].acts).toEqual([{ k: "makeToken", n: 1 }]);
+    expect(parseCardText(face("Play: Make 2 token creatures.")).abilities[0].acts).toEqual([{ k: "makeToken", n: 2 }]);
+    expect(parseCardText(face("Reap: Create a token creature.")).abilities[0].acts).toEqual([{ k: "makeToken", n: 1 }]);
+  });
+
+  it("keeps purge wording outside the object grammar unparsed", () => {
+    const rules = parseCardText(face("Play: Purge a creature with power 3 or lower."));
+    expect(rules.coverage).toBe("vanilla");
+    expect(rules.abilities).toHaveLength(0);
+  });
+});
+
+describe("optional 'You may' clauses (Onda 2)", () => {  it("marks a whole 'You may' sentence as optional and keeps the card full", () => {
     const rules = parseCardText(face("Play: You may draw a card."));
     expect(rules.coverage).toBe("full");
     expect(rules.abilities[0]).toMatchObject({ on: ["play"], optional: true });
