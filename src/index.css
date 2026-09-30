@@ -160,7 +160,7 @@ button,
   --header-h: 58px;
   --title-h: 0px;
   --band-h: 48px;
-  --console-h: 56px;
+  --console-h: 100px; /* VA-01: 2 linhas de 44px no celular (status + toggles / casas + End turn) */
   --hand-bar-h: 44px;
   --hand-h: 152px;
   --hand-card-w: 82px;
@@ -171,6 +171,7 @@ button,
 
 @media (min-width: 701px) {
   :root {
+    --console-h: 60px;
     --tabbar-g: 0px;
     --board-min: 60px;
     --board-max: 104px;
@@ -841,6 +842,9 @@ button:disabled {
 .game-board--stage .board-content {
   display: grid;
   height: 100%;
+  /* VA-01: sem coluna explícita o track `auto` cresce até o max-content (a lane
+     em nowrap) e empurra console/faixas para fora do viewport. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows:
     var(--band-h)
     minmax(0, 1fr)
@@ -1071,6 +1075,7 @@ button:disabled {
 
 .player-name-row {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 5px;
 }
@@ -1514,6 +1519,15 @@ button:disabled {
   object-fit: cover;
 }
 
+/* VA-02: enquanto a arte não chega, o <img> carrega invisível por cima da face tipográfica. */
+.card-art img.card-img-pending,
+.card-zoom-art img.card-img-pending {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (hover: hover) {
 .card-tile--hand:not(:disabled):hover {
   z-index: 3;
@@ -1681,9 +1695,19 @@ button:disabled {
 }
 
 .fallback-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
   color: #d3b469;
   /* Número de poder/aember: informacional não-caps -> piso 11px (§2). */
   font-size: max(var(--fs-2xs), 7cqi);
+}
+
+.fallback-armor {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #b9c3c9;
 }
 
 /* Onde a carta é pequena demais para o piso, o texto sai da carta (T4/§5): o
@@ -1788,12 +1812,46 @@ button:disabled {
   position: relative;
   display: flex;
   min-height: 0;
+  flex-wrap: wrap;
+  align-content: center;
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   padding: 3px 8px;
   border-top: 1px solid rgba(216, 204, 175, 0.15);
   border-bottom: 1px solid rgba(216, 204, 175, 0.15);
   background: linear-gradient(90deg, rgba(17, 22, 18, 0.78), rgba(26, 31, 25, 0.7), rgba(17, 22, 18, 0.74));
+}
+
+/* VA-01 (celular): linha 1 = status + toggles (order 1), quebra forçada pelo ::after
+   (order 2), linha 2 = casas + End turn (order 3). Desktop volta à linha única. */
+.turn-console > .view-toggle {
+  order: 1;
+}
+
+.turn-console::after {
+  content: "";
+  order: 2;
+  flex: 0 0 100%;
+  height: 0;
+}
+
+.turn-console > .house-picker,
+.turn-console > .end-turn-button {
+  order: 3;
+}
+
+@media (min-width: 701px) {
+  .turn-console {
+    flex-wrap: nowrap;
+  }
+  .turn-console::after {
+    display: none;
+  }
+  .turn-console > .view-toggle,
+  .turn-console > .house-picker,
+  .turn-console > .end-turn-button {
+    order: 0;
+  }
 }
 
 @media (min-width: 701px) {
@@ -1898,14 +1956,15 @@ button:disabled {
 .house-picker {
   display: flex;
   min-width: 0;
-  flex: 0 0 auto;
+  flex: 1 1 0;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px;
 }
 
 @media (min-width: 701px) {
   .house-picker {
+    justify-content: center;
     flex: 1;
     gap: 6px;
   }
@@ -1931,13 +1990,13 @@ button:disabled {
 }
 
 /* Celular (§2.7): só o ícone; o nome vive no aria-label/title. */
-.house-choice > span,
+.house-choice > span:not(.house-icon),
 .house-choice .house-check {
   display: none;
 }
 
 @media (min-width: 701px) {
-  .house-choice > span {
+  .house-choice > span:not(.house-icon) {
     display: inline;
   }
   .house-choice .house-check {
@@ -2032,7 +2091,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 8px;
+  padding: 8px 12px;
   border: 1px solid rgba(211, 173, 93, 0.47);
   border-radius: var(--radius-sm);
   color: #f0d38b;
@@ -2044,11 +2103,7 @@ button:disabled {
 }
 
 .end-turn-button svg {
-  width: 18px;
-}
-
-.end-turn-button > span {
-  display: none;
+  width: 16px;
 }
 
 @media (min-width: 701px) {
@@ -2112,6 +2167,7 @@ button:disabled {
 .hand-bar-info {
   display: flex;
   min-width: 0;
+  overflow: hidden;
   align-items: center;
   gap: 8px;
   padding-left: 12px;
@@ -2144,8 +2200,15 @@ button:disabled {
   color: var(--faint);
 }
 
+.hand-prompt > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .hand-prompt {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   padding: 3px 0 0;
@@ -5299,7 +5362,9 @@ button:disabled {
 }
 
 .card-lightbox-art {
+  position: relative;
   width: min(58%, 218px);
+  aspect-ratio: 0.714;
   margin: 0 auto;
 }
 
@@ -7652,12 +7717,33 @@ html .spin {
       margin-inline: calc(-1 * max(0px, (var(--n, 1) - 6) * 4px));
       transform-origin: 50% 130%;
       rotate: calc(var(--d) * 3.5deg);
-      translate: 0 min(calc(var(--d) * var(--d) * 2.2px), 12px);
+      /* VA-03: -8px sobe o leque para o rodapé da carta (custo/poder) caber. */
+      translate: 0 calc(min(calc(var(--d) * var(--d) * 2.2px), 6px) - 8px);
       transition: rotate 200ms var(--ease-out), translate 200ms var(--ease-out), scale 200ms var(--ease-out);
     }
 
     .game-board--3d .hand-track > .card-tile--hand .card-art {
       width: 100%;
+    }
+
+    /* VA-03: a legenda de baixo sairia pela borda do board — no leque o nome vira uma
+       tarja sobre o rodapé da arte (o 2D segue com a legenda sob a carta). */
+    .game-board--3d .hand-track > .card-tile--hand {
+      position: relative;
+    }
+
+    .game-board--3d .hand-track > .card-tile--hand .card-caption {
+      position: absolute;
+      z-index: 1;
+      right: 3px;
+      bottom: 3px;
+      left: 3px;
+      width: auto;
+      margin: 0;
+      padding: 2px 4px;
+      border-radius: var(--radius-sm);
+      background: rgba(10, 12, 10, 0.82);
+      text-align: center;
     }
 
     /* Fallback do índice (cartas 13+ ficam na posição da 12ª). */

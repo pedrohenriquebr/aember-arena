@@ -1179,7 +1179,7 @@ const PlayerBand = memo(function PlayerBand({
           <span className="hand-title">{t("game.yourHand")}</span>
           <span className="hand-count">{handCount} {t("common.cards").toUpperCase()}</span>
           {hint ? (
-            <span className="hand-prompt"><Zap size={13} /> {t("game.unlockHint")}</span>
+            <span className="hand-prompt"><Zap size={13} /><span>{t("game.unlockHint")}</span></span>
           ) : (
             <span className="deck-count">{deckCount} {t("game.inDeck")}</span>
           )}

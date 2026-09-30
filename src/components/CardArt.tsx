@@ -30,40 +30,56 @@ const LONG_PRESS_SLOP = 12;
 
 function CardImage({ face, size }: { face: CardFace; size: Size }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => setFailed(false), [face.image]);
+  useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [face.image]);
 
-  if (!failed && face.image) {
-    return (
-      <img
-        src={face.image}
-        alt={`${face.title} card art`}
-        /* T7a — CLS: proporção real da arte Master Vault (300×420 = 5:7 ≈ 0.714,
-           a mesma usada em aspect-ratio no CSS e em ZOOM_WIDTH / 0.714). Os atributos
-           dão aspect-ratio intrínseco ao browser antes do download; decoding async
-           tira o decode do caminho crítico do paint. */
-        width={300}
-        height={420}
-        loading={size === "preview" ? "eager" : "lazy"}
-        decoding="async"
-        draggable={false}
-        onError={() => setFailed(true)}
-      />
-    );
-  }
+  const hasImage = Boolean(face.image) && !failed;
 
   return (
-    <div className="card-fallback">
-      <span className="fallback-house">{houseLabel(face.house)}</span>
-      <span className="fallback-symbol">
-        <Sparkles size={size === "preview" ? 25 : 19} strokeWidth={1.5} />
-      </span>
-      <strong>{face.title}</strong>
-      <span className="fallback-type">{face.type}</span>
-      <span className="fallback-stats">
-        {face.power > 0 ? <span>{face.power}</span> : <span>{face.amber}A</span>}
-      </span>
-    </div>
+    <>
+      {/* VA-02: a face tipográfica cobre TODO estado sem imagem pronta (sem URL, erro, e
+          a espera do download/lazy) — não depende de o <img> ter falhado. */}
+      {!(hasImage && loaded) && (
+        <div className="card-fallback" aria-hidden={hasImage || undefined}>
+          <span className="fallback-house">{houseLabel(face.house)}</span>
+          <span className="fallback-symbol">
+            <Sparkles size={size === "preview" ? 25 : 19} strokeWidth={1.5} />
+          </span>
+          <strong>{face.title}</strong>
+          <span className="fallback-type">{face.type}</span>
+          <span className="fallback-stats">
+            {face.power > 0 ? <span>{face.power}</span> : <span>{face.amber}A</span>}
+            {face.armor > 0 && <span className="fallback-armor"><Shield size={11} aria-hidden="true" />{face.armor}</span>}
+          </span>
+        </div>
+      )}
+      {hasImage && (
+        <img
+          className={loaded ? undefined : "card-img-pending"}
+          src={face.image}
+          alt={`${face.title} card art`}
+          /* T7a — CLS: proporção real da arte Master Vault (300×420 = 5:7 ≈ 0.714,
+             a mesma usada em aspect-ratio no CSS e em ZOOM_WIDTH / 0.714). Os atributos
+             dão aspect-ratio intrínseco ao browser antes do download; decoding async
+             tira o decode do caminho crítico do paint. */
+          width={300}
+          height={420}
+          loading={size === "preview" ? "eager" : "lazy"}
+          decoding="async"
+          draggable={false}
+          ref={(img) => {
+            // Imagem já em cache: o load pode ter disparado antes do handler.
+            if (img?.complete && img.naturalWidth > 0) setLoaded(true);
+          }}
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+        />
+      )}
+    </>
   );
 }
 

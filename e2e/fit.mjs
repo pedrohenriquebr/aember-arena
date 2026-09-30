@@ -16,6 +16,7 @@ const VIEWPORTS = [
   { name: "1296x668", width: 1296, height: 668 },
   { name: "1920x1080", width: 1920, height: 1080 },
   { name: "360x844", width: 360, height: 844 },
+  { name: "390x844", width: 390, height: 844 },
   { name: "1024x768", width: 1024, height: 768 },
   { name: "768x1024", width: 768, height: 1024 },
 ];
@@ -127,6 +128,11 @@ const MEASURE = () => {
     hand,
     is3d,
     boardBottom,
+    // VA-01: o board nao pode estourar na horizontal (console/faixas cortados).
+    // No 3D o scrollWidth do board inclui a PROJECAO do plano (perspectiva alarga a
+    // frente de proposito): ali vale o layout das faixas planas e do plano (offsetWidth).
+    boardScrollW: is3d ? Math.max(...[...document.querySelectorAll(".game-board .player-band, .game-board .turn-console")].map((el) => el.scrollWidth), document.querySelector(".game-board .table-plane")?.offsetWidth ?? 0) : document.querySelector(".game-board").scrollWidth,
+    boardClientW: document.querySelector(".game-board").clientWidth,
     overflow,
     boardCardMin: boardCards.length ? round(Math.min(...boardCards)) : null,
     boardCardMax: boardCards.length ? round(Math.max(...boardCards)) : null,
@@ -171,6 +177,7 @@ async function report(page, vp, label) {
     const cut = m.is3d
       ? m.hand.filter((r) => (Math.min(r.bottom, m.boardBottom) - Math.max(r.top, 0)) / (r.bottom - r.top) < 0.7)
       : m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
+    if (m.boardScrollW > m.boardClientW + 1) problems.push(`board estoura na horizontal: scrollWidth ${m.boardScrollW} > clientWidth ${m.boardClientW}`);
     if (!m.hand.length) problems.push("mao vazia/ausente");
     else if (cut.length) problems.push(`mao cortada: ${cut.length}/${m.hand.length} cartas fora (bottom max ${Math.max(...m.hand.map((r) => r.bottom)).toFixed(0)} > ${m.innerHeight})`);
 
