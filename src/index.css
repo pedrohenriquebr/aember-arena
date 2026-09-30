@@ -607,7 +607,7 @@ button:disabled {
 
 /* T6 — default = mobile; desktop invertido em min-width: 701px ao lado do seletor. */
 .game-screen {
-  padding: 6px clamp(8px, 1.4vw, 20px);
+  padding: 6px clamp(13px, 2.4vw, 32px);
 }
 
 /* T6 — default = 1 coluna até 1040px; as colunas do rail entram em faixas
@@ -810,7 +810,10 @@ button:disabled {
    bar descontados): por construção a soma das linhas é o palco. As duas zonas de
    batalha são as linhas elásticas (1fr); o resto usa os tokens do :root.
    Vive na classe do board (não na .game-screen) para o replay usar o mesmo encaixe.
-   min-height 520: abaixo disso volta a rolar em vez de espremer. */
+   min-height 520: abaixo disso volta a rolar em vez de espremer. O 2D é o palco;
+   o 3D (--3d/--lite) não recebe a classe até o FIT-04 (a mão em leque precisa do
+   overlay para caber) — o `.table-plane` fica `display: contents` aqui, então as
+   duas zonas e o console são linhas diretas do grid. */
 .game-board--stage {
   --stage-off: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 12px + var(--title-h) + var(--tabbar-g));
   height: calc(100vh - var(--stage-off));
@@ -821,24 +824,74 @@ button:disabled {
 .game-board--stage .board-content {
   display: grid;
   height: 100%;
-  grid-template-rows: var(--band-h) minmax(0, 1fr) var(--hand-bar-h) var(--hand-h);
+  grid-template-rows:
+    var(--band-h)
+    minmax(0, 1fr)
+    var(--console-h)
+    minmax(0, 1fr)
+    var(--hand-bar-h)
+    var(--hand-h);
 }
 
-/* O plano da mesa (oponente / console / jogador) ocupa a linha elástica e reparte
-   por dentro. A especificidade (0,3,0) vale mais que o `display: block` do 3D/lite:
-   o plano é grid nos dois modos. As margens negativas do 3D saem — o palco tem
-   altura fixa e a folga da projeção fica dentro do plano. */
-.game-board.game-board--stage .table-plane {
-  position: relative;
-  display: grid;
-  min-height: 0;
-  grid-template-rows: minmax(0, 1fr) var(--console-h) minmax(0, 1fr);
-  margin-block: 0;
-}
-
+/* FIT-03 — battlelines flexíveis (§2.2): a zona é container de tamanho e a carta do
+   board deriva a largura da ALTURA da zona (cqh), não da página. O rótulo da zona
+   sai do fluxo (canto superior, sem pointer-events) — o padding-top de 12px é a
+   sua faixa. Piso/teto: --board-min/--board-max por perfil. */
 .game-board--stage .battle-zone {
+  display: flex;
   min-height: 0;
-  padding: 6px 12px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 12px 4px;
+  container: zone / size;
+}
+
+.game-board--stage .zone-heading {
+  position: absolute;
+  z-index: 1;
+  inset: 3px 12px auto;
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Altura da carta = altura da zona - legenda (15) - respiro da lane (8) - folga da
+   seleção. A largura também respeita a lane dividida por --n (criaturas + anexos). */
+.game-board--stage .board-lane {
+  min-height: 0;
+  padding: 4px 2px;
+}
+
+.game-board--stage .card-tile--board {
+  width: clamp(
+    var(--board-min),
+    min(
+      calc((100cqh - 26px) * 0.714),
+      calc((100cqw - 28px - (var(--nc, 1) - 1) * 12px) / var(--nc, 1))
+    ),
+    var(--board-max)
+  );
+}
+
+.game-board--stage .card-tile--board > .card-art {
+  width: 100%;
+}
+
+.game-board--stage .card-tile--board .card-caption {
+  max-width: 100%;
+  margin-top: 2px;
+}
+
+/* Artefatos/upgrades na mesma fileira das criaturas (não viram 2ª linha). */
+.game-board--stage .board-attachments {
+  width: auto;
+  flex-wrap: nowrap;
+  margin: 0 0 0 12px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(218, 205, 171, 0.14);
+}
+
+.game-board--stage .empty-battleline {
+  min-height: 0;
 }
 
 .game-board--stage .player-band {
@@ -861,11 +914,11 @@ button:disabled {
   line-height: 1.15;
 }
 
-/* A instrução de luta vira toast: fora do fluxo, não cria linha no grid. */
+/* A instrução de luta vira toast no topo da zona do jogador: fora do fluxo. */
 .game-board--stage .fight-instruction {
   position: absolute;
   z-index: 3;
-  top: calc(50% - 15px);
+  top: 3px;
   left: 50%;
   min-height: 0;
   padding: 4px 12px;

@@ -1227,8 +1227,8 @@ const BoardLane = memo(function BoardLane({
       className={`board-lane${targetIds?.length ? " board-lane--targeting" : ""}`}
       /* H3D-04: --n dimensiona as cartas no 3D (clamp da lane sem scroll). O
          comparador do memo já olha `cards`, então a lane re-renderiza quando a
-         contagem de criaturas muda — nenhuma prop nova desce para o CardTile. */
-      style={{ "--n": Math.max(1, creatures.length) } as CSSProperties}
+         contagem de criaturas muda (--nc = criaturas + anexos, do palco 2D) — nenhuma prop nova desce para o CardTile. */
+      style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, cards.length) } as CSSProperties}
     >
       {creatures.length === 0 && (
         <div className="empty-battleline">
@@ -1390,7 +1390,7 @@ function GameBoard({
 
   return (
     <section
-      className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
+      className={`game-board${view3d ? "" : " game-board--stage"}${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
       aria-label={t("game.board")}
     >
@@ -1470,17 +1470,16 @@ function GameBoard({
             {consoleExtra}
           </div>
 
-          {pick && (
-            <div className="fight-instruction" role="status">
-              {pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
-            </div>
-          )}
-
           <section className="battle-zone battle-zone--player" aria-label={t("game.yourLine")}>
             <div className="zone-heading">
               <span>{t("game.yourLine")}</span>
               <span className="zone-card-count">{player.board.length} {t("game.onTable")}</span>
             </div>
+            {pick && (
+              <div className="fight-instruction" role="status">
+                {pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
+              </div>
+            )}
             <BoardLane
               cards={player.board}
               owner={humanSide}

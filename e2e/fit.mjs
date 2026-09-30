@@ -94,6 +94,15 @@ const MEASURE = () => {
   const overflow = [".game-board .player-band", ".game-board .battle-zone", ".game-board .turn-console", ".game-board .hand-zone", ".game-board .hand-track"]
     .flatMap((sel) => [...document.querySelectorAll(sel)].map((el, i) => (el.scrollHeight > el.clientHeight + 1 ? `${sel.split(" ").pop()}[${i}] ${el.scrollHeight}>${el.clientHeight}` : null)))
     .filter(Boolean);
+  // Peças do board que vazam da própria zona (a carta tem de caber na altura dela).
+  const spill = [...document.querySelectorAll(".game-board .battle-zone")].flatMap((zone, zi) => {
+    const zr = zone.getBoundingClientRect();
+    return [...zone.querySelectorAll(".board-piece")].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top < zr.top - 1 || r.bottom > zr.bottom + 1;
+    }).map(() => zi);
+  });
+  if (spill.length) overflow.push(`pecas fora da zona: ${spill.length}`);
   const round = (n) => Math.round(n * 10) / 10;
   const sum = Object.values(rows).reduce((a, b) => a + b, 0);
   const hand = [...document.querySelectorAll(".hand-track > .card-tile--hand")].map((el) => {
@@ -112,6 +121,55 @@ const MEASURE = () => {
     boardCardMax: boardCards.length ? round(Math.max(...boardCards)) : null,
   };
 };
+
+// Move cartas da mão/baralho para a mesa (criaturas prontas; 1 artefato do jogador).
+const FILL_BOARDS = () => {
+  const raw = localStorage.getItem("aember-arena-match");
+  if (!raw) return "sem save";
+  const saved = JSON.parse(raw);
+  const game = saved.game;
+  const fill = (player, n, artifact) => {
+    const pool = [...player.deck];
+    let i = 0;
+    for (const card of pool) {
+      if (player.board.length >= n + (artifact ? 1 : 0)) break;
+      const from = player.hand.includes(card) ? player.hand : player.deck;
+      from.splice(from.indexOf(card), 1);
+      const isArtifact = artifact && player.board.length === n;
+      card.face = { ...card.face, type: isArtifact ? "Artifact" : "Creature", power: 4, armor: 0, text: "" };
+      card.ready = true;
+      card.damage = 0;
+      card.stunned = false;
+      player.board.push(card);
+      i += 1;
+    }
+  };
+  fill(game.players[0], 8, true);
+  fill(game.players[1], 8, false);
+  localStorage.setItem("aember-arena-match", JSON.stringify(saved));
+  return { p: game.players[0].board.length, e: game.players[1].board.length };
+};
+
+async function report(page, vp, label) {
+    const m = await page.evaluate(MEASURE);
+    const problems = [];
+    // Abaixo de 1041px o rail ainda cai depois da mao no fluxo (vira drawer no FIT-05):
+    // ali o documento rola so ate o rail, e o palco e medido pela soma e pela mao.
+    if (vp.width >= 1041 && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
+    if (m.sum > m.innerHeight + 1) problems.push(`soma das faixas ${m.sum} > viewport ${m.innerHeight}`);
+    const cut = m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
+    if (!m.hand.length) problems.push("mao vazia/ausente");
+    else if (cut.length) problems.push(`mao cortada: ${cut.length}/${m.hand.length} cartas fora (bottom max ${Math.max(...m.hand.map((r) => r.bottom)).toFixed(0)} > ${m.innerHeight})`);
+
+    console.log(`\n== ${vp.name} [${label}] ${problems.length ? "FAIL" : "OK"}`);
+    console.log(`   faixas: ${Object.entries(m.rows).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+    console.log(`   soma=${m.sum} viewport=${m.innerHeight} docScroll=${m.docScroll} cartaBoard=${m.boardCardMin}-${m.boardCardMax}px mao=${m.hand.length} (bottom ${m.hand.length ? Math.max(...m.hand.map((r) => r.bottom)).toFixed(0) : "-"})`);
+    if (m.overflow.length) console.log(`   transborda: ${m.overflow.join(", ")}`);
+    for (const p of problems) {
+      console.log(`   ! ${p}`);
+      failures.push(`${vp.name} [${label}]: ${p}`);
+    }
+}
 
 const failures = [];
 const server = startServer();
@@ -137,23 +195,20 @@ try {
     await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 90000 });
     await page.waitForTimeout(700);
 
-    const m = await page.evaluate(MEASURE);
-    const problems = [];
-    // Abaixo de 1041px o rail ainda cai depois da mao no fluxo (vira drawer no FIT-05):
-    // ali o documento rola so ate o rail, e o palco e medido pela soma e pela mao.
-    if (vp.width >= 1041 && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
-    if (m.sum > m.innerHeight + 1) problems.push(`soma das faixas ${m.sum} > viewport ${m.innerHeight}`);
-    const cut = m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
-    if (!m.hand.length) problems.push("mao vazia/ausente");
-    else if (cut.length) problems.push(`mao cortada: ${cut.length}/${m.hand.length} cartas fora (bottom max ${Math.max(...m.hand.map((r) => r.bottom)).toFixed(0)} > ${m.innerHeight})`);
+    await report(page, vp, "vazia");
 
-    console.log(`\n== ${vp.name} ${problems.length ? "FAIL" : "OK"}`);
-    console.log(`   faixas: ${Object.entries(m.rows).map(([k, v]) => `${k}=${v}`).join(" ")}`);
-    console.log(`   soma=${m.sum} viewport=${m.innerHeight} docScroll=${m.docScroll} cartaBoard=${m.boardCardMin}-${m.boardCardMax}px mao=${m.hand.length} (bottom ${m.hand.length ? Math.max(...m.hand.map((r) => r.bottom)).toFixed(0) : "-"})`);
-    if (m.overflow.length) console.log(`   transborda: ${m.overflow.join(", ")}`);
-    for (const p of problems) {
-      console.log(`   ! ${p}`);
-      failures.push(`${vp.name}: ${p}`);
+    // Mesa cheia: 8 criaturas por lado + 1 artefato do jogador (patch do save).
+    const patched = await page.evaluate(FILL_BOARDS);
+    if (typeof patched === "string") {
+      console.log(`   (mesa cheia pulada: ${patched})`);
+    } else {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForSelector(".home-screen", { timeout: 20000 });
+      await page.locator(".resume-bar").first().click();
+      await page.waitForSelector(".game-screen", { timeout: 20000 });
+      await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 60000 });
+      await page.waitForTimeout(700);
+      await report(page, vp, "8x8+artefato");
     }
     await context.close();
   }
