@@ -92,7 +92,7 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **145 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **148 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
@@ -153,6 +153,20 @@ src/
    IA configurável `aiDelayMs`. Só CSS/TS, zero dependência; FIT-04 mediu
    143,20 e FIT-05 143,66 kB gz. Teto ÚNICO deste lote — acima de 145: parar.
    Varredura de mortos pré-revisão: 0 removível (`.match-chip` já saiu).)
+   → **148** (onda 1 da camada de efeitos, `docs/ROADMAP_REVIEW.md` §3:
+   persistentEffect derivado do board em `game.activeEffects` — gramática
+   constante no `cardText.ts` (gets/gains/gets ±N power|armor/cannot play|use|fight/
+   gains '<ability citada>'), leitura efetiva (`effectivePower`/`effectiveArmor`/
+   `keyword(state,…)`/`abilitiesOf`) em luta, dano, morte por poder e avaliação da
+   IA, proibições na legalidade, duração ("remainder of the turn"/"on their next
+   turn") como dado primitivo em `GameState.lasting` podado no endTurn, e o fix de
+   regra dos arquivos opcionais ("may") com botão no console. Só TS/CSS, zero
+   dependência; a gramática sozinha mediu 145,38 e o fechamento **146,34 kB** gz.
+   Deixou de fora da onda (documentado no roadmap): bonusFightDamage (Valdr),
+   contadores de poder, "instead" e tokens. Teto ÚNICO deste lote — acima de 148:
+   parar. Varredura de mortos pré-revisão: 0 removível (o nome novo
+   `.archives-action/.archives-count` é usado pelo botão; os nomes "sem uso" do CSS
+   continuam dinâmicos).)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.

@@ -3,7 +3,12 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 145 kB (UX-FIT lote 2, ver CLAUDE.md §7); antes 143,5 — revisado de 141 em 29/09 pelo visual do 3D
+//      Default 148 kB (onda 1 da camada de efeitos, docs/ROADMAP_REVIEW.md §3:
+//      persistentEffect derivado do board, leitura efetiva de poder/armadura/
+//      keywords, proibicoes, duracao e gainAbility + arquivos opcionais; so
+//      TS/CSS, zero dependencia — a gramatica sozinha mediu 145,38 e o
+//      fechamento 146,34 kB gz; ver CLAUDE.md §7).
+//      Antes: 145 (UX-FIT lote 2); antes 143,5 — revisado de 141 em 29/09 pelo visual do 3D
 //      (VIEW3D H3D-03..06, docs/VIEW3D_PLAN.md §2.1-§2.5: mesa inclinada com
 //      playmat e billboards, cartas de pe/levitando com --n por lane, sombras
 //      no tapete e mao em leque + checks do probe _3d-chain; so CSS/TS, zero
@@ -62,7 +67,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 145);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 148);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const skipFloor3d = hasFlag("--skip-floor3d");
