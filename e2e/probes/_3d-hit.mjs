@@ -35,7 +35,7 @@ const SEED = (animations = false) => `(() => {
 
 // Board fixo com n criaturas por lado, todas prontas e da casa ativa do
 // jogador: os cliques, a selecao e a luta sao legais no motor.
-const FIXTURE = (n) => `(async () => {
+const FIXTURE = (n, att = false) => `(async () => {
   const game = await import("/src/lib/game.ts");
   const demo = await import("/src/lib/demoDeck.ts");
   const deck = demo.DEMO_DECK;
@@ -50,8 +50,17 @@ const FIXTURE = (n) => `(async () => {
     const face = pool[i % pool.length];
     return { instanceId: "hit-" + i + "-" + face.id, face, damage: 0, ready: true, stunned: false };
   };
-  state.players[0].board = Array.from({ length: ${n} }, (_, i) => mk(i));
-  state.players[1].board = Array.from({ length: ${n} }, (_, i) => mk(100 + i));
+  // H3D-15: com ${att} cada lado ganha 2 artefatos (iid hit-art-*) e o jogador 1 upgrade
+  // preso a criatura 0 (hit-up-*): os cliques na fileira externa entram no probe.
+  const artifacts = deck.cards.filter((c) => c.type === "Artifact");
+  const upgrade = deck.cards.find((c) => c.type === "Upgrade");
+  const extra = (base, host) => ${att} ? [
+    ...[0, 1].map((i) => ({ instanceId: "hit-art-" + (base + i) + "-" + artifacts[i].id, face: artifacts[i], damage: 0, ready: true, stunned: false })),
+    ...(host ? [{ instanceId: "hit-up-" + base + "-" + upgrade.id, face: upgrade, damage: 0, ready: true, stunned: false, attachedTo: host }] : []),
+  ] : [];
+  const mine = Array.from({ length: ${n} }, (_, i) => mk(i));
+  state.players[0].board = [...mine, ...extra(0, mine[0].instanceId)];
+  state.players[1].board = [...Array.from({ length: ${n} }, (_, i) => mk(100 + i)), ...extra(100, null)];
   state.activePlayer = 0;
   state.activeHouse = house;
   localStorage.setItem("aember-arena-match", JSON.stringify({ game: state, deckId: demo.DEMO_DECK_ID, savedAt: 1 }));
@@ -214,8 +223,8 @@ try {
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForSelector(".home-screen", { timeout: 30000 });
 
-        for (const n of [1, 6, 12]) {
-          const fixture = await page.evaluate(FIXTURE(n));
+        for (const [n, att] of [[1, false], [6, false], [12, false], [6, true]]) {
+          const fixture = await page.evaluate(FIXTURE(n, att));
           await page.reload({ waitUntil: "domcontentloaded" });
           await page.waitForSelector(".home-screen", { timeout: 30000 });
           await page.locator(".resume-bar").first().click();
@@ -225,12 +234,14 @@ try {
           const measure = await page.evaluate(MEASURE);
           const minW = vp.w >= 701 ? 56 : 44;
           const minH = vp.w >= 701 ? 78 : 44;
-          const small = measure.cards.filter((card) => card.w < minW || card.h < minH);
-          check(`${tag} n=${n}: ${measure.cards.length} cartas na mesa (ao menos ${Math.min(n, 12) * 2})`, measure.cards.length >= n * 2, `cartas=${measure.cards.length}`);
-          check(`${tag} n=${n}: caixa visual >= ${minW}x${minH}`, small.length === 0, small.length ? JSON.stringify(small.slice(0, 3)) : `menor=${Math.min(...measure.cards.map((c) => c.w))}x${Math.min(...measure.cards.map((c) => c.h))}`);
+          // A fileira externa (artefatos/upgrade, 0,6x) fica fora do piso de 56x78 do
+          // board (excecao documentada do plano Arena §3.2); o alvo de toque e >= 44.
+          const small = measure.cards.filter((card) => !/^hit-(art|up)-/.test(card.iid ?? "") && (card.w < minW || card.h < minH));
+          check(`${tag} n=${n}${att ? "+anexos" : ""}: ${measure.cards.length} cartas na mesa (ao menos ${Math.min(n, 12) * 2})`, measure.cards.length >= n * 2, `cartas=${measure.cards.length}`);
+          check(`${tag} n=${n}${att ? "+anexos" : ""}: caixa visual >= ${minW}x${minH}`, small.length === 0, small.length ? JSON.stringify(small.slice(0, 3)) : `menor=${Math.min(...measure.cards.map((c) => c.w))}x${Math.min(...measure.cards.map((c) => c.h))}`);
           const misses = measure.cards.filter((card) => !card.hitOk);
           check(
-            `${tag} n=${n}: centro visual acerta a propria carta (${measure.visible}/${measure.cards.length} no scrollport)`,
+            `${tag} n=${n}${att ? "+anexos" : ""}: centro visual acerta a propria carta (${measure.visible}/${measure.cards.length} no scrollport)`,
             misses.length === 0 && measure.visible > 0,
             misses.length ? JSON.stringify(misses.slice(0, 4)) : "elementFromPoint = mesmo data-iid",
           );
@@ -248,25 +259,30 @@ try {
                 iid: tile.dataset.iid,
                 selected: selected?.dataset.iid ?? null,
                 mine,
+                inspected: (() => {
+                  const title = (tile.getAttribute("aria-label") ?? "").split(",")[0];
+                  return title !== "" && (document.querySelector(".inspector-section")?.textContent ?? "").includes(title);
+                })(),
                 actions: document.querySelectorAll(".inspector-actions button").length,
                 hint: Boolean(document.querySelector(".inspector-hint")),
               });
             }
             return out;
           });
-          const wrong = clicks.filter((click) => click.iid !== click.selected);
-          check(`${tag} n=${n}: clique em cada carta seleciona a propria (${clicks.length} cliques)`, wrong.length === 0, wrong.length ? JSON.stringify(wrong.slice(0, 4)) : "todas certas");
+          // Anexos nao levam `is-selected`: o inspetor aberto com o titulo e a resposta.
+          const wrong = clicks.filter((click) => (/^hit-(art|up)-/.test(click.iid) ? !click.inspected : click.iid !== click.selected));
+          check(`${tag} n=${n}${att ? "+anexos" : ""}: clique em cada carta seleciona a propria (${clicks.length} cliques)`, wrong.length === 0, wrong.length ? JSON.stringify(wrong.slice(0, 4)) : "todas certas");
           // A barra de acoes do inspetor: criatura propria mostra Reap/Fight;
           // carta do oponente mostra a dica (nao ha acao a oferecer).
-          const mineOk = clicks.filter((click) => click.mine).every((click) => click.actions >= 2);
-          const theirsOk = clicks.filter((click) => !click.mine).every((click) => click.hint);
+          const mineOk = clicks.filter((click) => click.mine && !/^hit-(art|up)-/.test(click.iid)).every((click) => click.actions >= 2);
+          const theirsOk = clicks.filter((click) => !click.mine && !/^hit-(art|up)-/.test(click.iid)).every((click) => click.hint);
           check(
             `${tag} n=${n}: inspetor acessivel (acoes na propria, dica no oponente)`,
             mineOk && theirsOk,
             JSON.stringify({ proprias: clicks.filter((c) => c.mine).length, acoes: clicks.find((c) => c.mine)?.actions, dicas: clicks.filter((c) => !c.mine && c.hint).length }),
           );
 
-          if (n === 12) {
+          if (n === 12 && !att) {
             const controls = measure.controls;
             const bad = Object.entries(controls).filter(([, box]) => box && (box.w < 44 || box.h < 44));
             check(`${tag}: controles >= 44x44 visuais`, bad.length === 0, JSON.stringify(controls));

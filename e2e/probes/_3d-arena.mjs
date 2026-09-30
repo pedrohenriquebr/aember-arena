@@ -265,10 +265,14 @@ try {
         }
         const ratio = avg(m.opp.map((c) => c.art.w)) / avg(m.player.map((c) => c.art.w));
         check(`${t} H3D-14/15: escala visual oponente/jogador 0,74-0,80`, ratio >= 0.74 && ratio <= 0.8, `razao ${r1(ratio * 100) / 100}`);
-        const row3 = px(m.lanes.player?.rows);
-        check(`${t} H3D-15: sem artefato a linha 3 mede 0px`, row3.length === 3 && Math.abs(row3[2]) <= 1, `rows=${m.lanes.player?.rows}`);
+        // 2 linhas na lane (criaturas | externa); a externa e a ultima no jogador e a
+        // primeira no oponente. A faixa de upgrade (3a linha) e da H3D-17.
+        const rowP = px(m.lanes.player?.rows);
+        const rowO = px(m.lanes.opp?.rows);
+        check(`${t} H3D-15: sem artefato a fileira externa mede 0px (jogador = ultima, oponente = primeira)`, rowP.length === 2 && rowO.length === 2 && Math.abs(rowP[1]) <= 1 && Math.abs(rowO[0]) <= 1, `jogador=${m.lanes.player?.rows} oponente=${m.lanes.opp?.rows}`);
+        // Colunas: goteira 1fr + n criaturas + goteira 1fr.
         const cols = px(m.lanes.player?.cols);
-        check(`${t} H3D-15: 6 colunas na fileira das criaturas`, cols.length === 6, `cols=${m.lanes.player?.cols}`);
+        check(`${t} H3D-15: 6 colunas na fileira das criaturas (entre 2 goteiras)`, cols.length === 8, `cols=${m.lanes.player?.cols}`);
       }
 
       // ---- H3D-14: nenhuma carta sob HUD; hit-test do centro ----
@@ -297,12 +301,19 @@ try {
         check(`${t} H3D-15: artefato do oponente acima do topo das criaturas`, artO.every((c) => c.art.b <= topO + 1), `base art ${r1(Math.max(...artO.map((c) => c.art.b)))} / topo cri ${r1(topO)} (base cri ${r1(baseOpp)})`);
         const notch = [...artP, ...artO].filter((c) => c.art.r > m.boardCenter - 100 && c.art.l < m.boardCenter + 100);
         check(`${t} H3D-15: nenhum artefato no notch central de 200px`, notch.length === 0, notch.map((c) => `${c.iid}:${r1(c.art.l)}..${r1(c.art.r)}`).join(" "));
-        const kP = avg(artP.map((c) => c.art.w)) / avg(crP.map((c) => c.art.w));
-        const kO = avg(artO.map((c) => c.art.w)) / avg(crO.map((c) => c.art.w));
-        check(`${t} H3D-15: artefato visual 0,55-0,65x da criatura`, kP >= 0.55 && kP <= 0.65 && kO >= 0.55 && kO <= 0.65, `jogador ${r1(kP * 100) / 100} oponente ${r1(kO * 100) / 100}`);
-        check(`${t} H3D-15: fileira do artefato (jogador = 3, oponente = 1)`, artP.every((c) => c.gridRow === "3") && artO.every((c) => c.gridRow === "1"), `${artP.map((c) => c.gridRow)} / ${artO.map((c) => c.gridRow)}`);
+        // Escala: a largura de LAYOUT e exatamente 0,6x (construcao); a caixa visual
+        // da largura engorda com o skew da perspectiva nas pontas da lane, entao o
+        // olho e medido pela ALTURA projetada (mais deitada = menor que 0,6x).
+        const lw = (xs) => avg(xs.map((c) => c.layoutW));
+        const kwP = lw(artP) / lw(crP);
+        const kwO = lw(artO) / lw(crO);
+        check(`${t} H3D-15: artefato de layout 0,55-0,65x da criatura`, kwP >= 0.55 && kwP <= 0.65 && kwO >= 0.55 && kwO <= 0.65, `jogador ${r1(kwP * 100) / 100} oponente ${r1(kwO * 100) / 100}`);
+        const khP = avg(artP.map((c) => c.art.h)) / avg(crP.map((c) => c.art.h));
+        const khO = avg(artO.map((c) => c.art.h)) / avg(crO.map((c) => c.art.h));
+        check(`${t} H3D-15: artefato visual (altura) 0,45-0,70x da criatura`, khP >= 0.45 && khP <= 0.7 && khO >= 0.45 && khO <= 0.7, `jogador ${r1(khP * 100) / 100} oponente ${r1(khO * 100) / 100}`);
+        check(`${t} H3D-15: fileira externa (jogador = 2, oponente = 1)`, artP.every((c) => c.gridRow === "2") && artO.every((c) => c.gridRow === "1"), `${artP.map((c) => c.gridRow)} / ${artO.map((c) => c.gridRow)}`);
         const up = m.player.find((c) => c.role === "up");
-        check(`${t} H3D-15: upgrade na mesma coluna do hospedeiro`, Boolean(up) && up.gridCol === crP[0].gridCol, `${up?.gridCol} / ${crP[0].gridCol}`);
+        check(`${t} H3D-15: upgrade na fileira externa (a coluna do hospedeiro e da H3D-17)`, Boolean(up) && up.gridRow === "2", `${up?.gridRow}`);
         const list = await page.getByRole("list", { name: /artifacts and upgrades/i }).count();
         check(`${t} H3D-15: lista "anexos" na arvore de acessibilidade`, list >= 2, `${list} listas`);
       }
@@ -311,10 +322,15 @@ try {
         const targets = [...m.player, ...m.opp].filter((c) => c.role !== "cr");
         const wrong = [];
         for (const c of targets) {
+          // Anexos nao levam `is-selected`: quem responde e o inspetor, com o titulo dela.
           await page.mouse.click(c.art.l + c.art.w / 2, c.art.t + c.art.h / 2);
           await page.waitForTimeout(80);
-          const sel = await page.evaluate(() => document.querySelector(".card-tile.is-selected")?.dataset.iid ?? null);
-          if (sel !== c.iid) wrong.push(`${c.iid}->${sel}`);
+          const got = await page.evaluate((iid) => {
+            const title = (document.querySelector(`[data-iid="${iid}"]`)?.getAttribute("aria-label") ?? "").split(",")[0];
+            const panel = document.querySelector(".inspector-section")?.textContent ?? "";
+            return { title, open: title !== "" && panel.includes(title) };
+          }, c.iid);
+          if (!got.open) wrong.push(`${c.iid}->"${got.title}" ausente no inspetor`);
         }
         check(`${t} H3D-15: clique nos artefatos/upgrade seleciona a propria (${targets.length})`, wrong.length === 0, wrong.join(" "));
       }

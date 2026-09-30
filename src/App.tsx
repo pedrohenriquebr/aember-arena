@@ -1260,7 +1260,7 @@ const BoardLane = memo(function BoardLane({
       /* H3D-04: --n dimensiona as cartas no 3D (clamp da lane sem scroll). O
          comparador do memo já olha `cards`, então a lane re-renderiza quando a
          contagem de criaturas muda (--nc = criaturas + anexos, do palco 2D) — nenhuma prop nova desce para o CardTile. */
-      style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, cards.length) } as CSSProperties}
+      style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, cards.length), "--na": attachments.length } as CSSProperties}
     >
       {creatures.length === 0 && (
         <div className="empty-battleline">
@@ -1268,7 +1268,9 @@ const BoardLane = memo(function BoardLane({
           <span>{t("game.clearLine")}</span>
         </div>
       )}
-      {creatures.map((card) => {
+      {/* H3D-15: --col/--acol posicionam as peças na grade do 3D (criaturas numa
+          fileira, artefatos/upgrades na fileira externa); inertes no 2D. */}
+      {creatures.map((card, index) => {
         const canUse = owner === humanSide && card.ready && !card.stunned && (!activeHouse || card.face.house === activeHouse);
         // T4: o estado da peça é indicador visual (borda/opacidade, index.css) +
         // aria-label via t(); não existe mais label de texto sob a carta.
@@ -1276,7 +1278,7 @@ const BoardLane = memo(function BoardLane({
         const stateClass = card.stunned ? " board-piece--stunned" : card.ready ? "" : " board-piece--resting";
         const hinted = Boolean(hintIds?.has(card.instanceId));
         return (
-          <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}`} key={card.instanceId}>
+          <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}`} key={card.instanceId} style={{ "--col": index + 1 } as CSSProperties}>
             <CardTile
               card={card}
               size="board"
@@ -1295,10 +1297,10 @@ const BoardLane = memo(function BoardLane({
       })}
       {attachments.length > 0 && (
         <div className="board-attachments" role="list" aria-label={t("game.attachments")}>
-          {attachments.map((card) => {
+          {attachments.map((card, index) => {
             const hostTitle = cards.find((item) => item.instanceId === card.attachedTo)?.face.title;
             return (
-              <div className="board-piece board-piece--attachment" key={card.instanceId} role="listitem">
+              <div className="board-piece board-piece--attachment" key={card.instanceId} role="listitem" style={{ "--acol": index + 1 } as CSSProperties}>
                 <CardTile
                   card={card}
                   size="board"

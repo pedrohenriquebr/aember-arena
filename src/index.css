@@ -7356,8 +7356,66 @@ html .spin {
     .game-board--3d .board-lane {
       --fit: calc(100cqi - (var(--n, 1) - 1) * 10px);
       --overlap: min(0px, calc((var(--fit) - var(--n, 1) * 64px) / (var(--n, 1) - 1)));
-      justify-content: center;
-      gap: 10px;
+      /* H3D-15: fileiras por zona. Criaturas na fileira do meio (colunas por
+         --col entre duas goteiras 1fr que as centram); artefatos/upgrades na fileira
+         externa (abaixo no jogador, acima no oponente) — a linha `auto` mede 0 sem
+         eles. A altura da carta desconta a fileira externa (0,6x + respiro). */
+      --a-extra: 8px; /* respiro da fileira externa (o oponente reserva mais, abaixo) */
+      --cw: clamp(64px, min(calc(var(--fit) / var(--n, 1)), calc((100cqh - 40px - var(--a-extra) * min(1, var(--na, 0))) / (1 + 0.6 * min(1, var(--na, 0))) * 0.714)), var(--card-w-3d, 84px));
+      --aw: calc(var(--cw) * 0.6);
+      /* Passo dos artefatos: pára antes do notch central de 200px (+14px: a
+         perspectiva encurta o lado do fundo) reservado ao avatar. */
+      --a-slot: min(calc(var(--aw) + 8px), calc((50cqi - 114px - var(--aw)) / max(1, var(--na, 1) - 1)));
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) repeat(var(--n, 1), auto) minmax(0, 1fr);
+      grid-template-rows: auto auto;
+      column-gap: 10px;
+      justify-content: stretch;
+      align-items: start;
+    }
+
+    .game-board--3d .board-attachments {
+      display: contents;
+    }
+
+    .game-board--3d .board-lane > .board-piece {
+      grid-row: 1;
+      grid-column: calc(var(--col, 1) + 1);
+      justify-self: center;
+    }
+
+    .game-board--3d .board-lane > .empty-battleline {
+      grid-row: 1;
+      grid-column: 1 / -1;
+    }
+
+    .game-board--3d .board-piece--attachment {
+      grid-row: 2;
+      grid-column: 1 / -1;
+      justify-self: start;
+      margin-block-start: 6px;
+      margin-inline-start: calc((var(--acol, 1) - 1) * var(--a-slot));
+    }
+
+    /* Oponente = espelho: a fileira externa fica em cima. Sobra 12px para o
+       heading da zona e ~0,5x da carta entre as fileiras: a criatura em pé avança
+       acima da própria caixa (limite (a)) e cobriria o artefato. */
+    .game-board--3d .battle-zone--opponent .board-lane {
+      --a-extra: 44px;
+    }
+
+    .game-board--3d .battle-zone--opponent .board-lane > .board-piece:not(.board-piece--attachment) {
+      grid-row: 2;
+    }
+
+    .game-board--3d .battle-zone--opponent .board-lane > .empty-battleline {
+      grid-row: 2;
+    }
+
+    .game-board--3d .battle-zone--opponent .board-piece--attachment {
+      grid-row: 1;
+      align-self: end;
+      margin-block: 12px calc(var(--cw) * 0.5 + 2px);
     }
 
     .game-board--3d .battle-zone--player .board-lane {
@@ -7371,7 +7429,7 @@ html .spin {
     /* H3D-14: no palco a zona tem altura fixa — a carta também respeita a altura
        (cqh da zona, que é container `size`; a lane é só inline-size). */
     .game-board--3d .board-lane > .board-piece > .card-tile--board {
-      width: clamp(64px, min(calc(var(--fit) / var(--n, 1)), calc((100cqh - 40px) * 0.714)), var(--card-w-3d, 84px));
+      width: var(--cw);
     }
 
     /* Teto de largura por zona, medido na projeção real (perspective-origin
@@ -7403,6 +7461,11 @@ html .spin {
     .game-board--3d .battle-zone--player { --card-w-3d: 112px; }
   }
 
+  /* O plano alto amplia mais o lado de perto (~1,27 em 1080p): o recuo cresce. */
+  @media (min-width: 1041px) and (min-height: 960px) {
+    .game-board--3d .battle-zone--player .board-lane { padding-inline: max(44px, 11%); }
+  }
+
   /* Tablet em pé (768x1024): a lane (~690px) limita antes do teto de desktop. */
   @media (min-width: 701px) and (max-width: 1040px) and (min-height: 960px) {
     .game-board--3d .battle-zone--opponent { --card-w-3d: 88px; }
@@ -7415,9 +7478,15 @@ html .spin {
       width: 100%;
     }
 
-    /* Anexos seguem a mesma pose, a 0,75x da largura da zona (§2.3). */
+    /* Fileira externa: 0,6x da criatura, mais deitada (24°) e rente ao tapete. */
+    .game-board--3d .table-plane .board-piece--attachment {
+      --lean: 24deg;
+      --lift: 8px;
+      --raise: 10px;
+    }
+
     .game-board--3d .board-piece--attachment > .card-tile--board {
-      width: calc(var(--card-w-3d, 84px) * 0.75);
+      width: var(--aw);
       max-width: none;
     }
   }
