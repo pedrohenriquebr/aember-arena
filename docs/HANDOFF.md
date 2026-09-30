@@ -14,6 +14,9 @@
 - Opus VIEW3D (coder-16/17/18): **12 histórias H3D implementadas** + `docs/VIEW3D_VALIDATE.md` — PRONTO COM RESSALVAS
 - Opus UX-FIT: `docs/UX_FIT_PLAN.md` (654 l) — plano do palco de viewport medido NO NOTEBOOK do dono (1296×668) ✅
 
+**NOVA PENDÊNCIA (30/09, print do dono — `docs/ux-prints/print-5-console-invasao-perfil-baixo.png`):**
+desktop em janela BAIXA (perfil "Baixo" do UX_FIT_PLAN, ≤759px de altura — o notebook do dono): no 3D, o topo da carta em pé INVADE a linha do console (chips de casa + "Encerrar turno"). O fix do VA-06 (apoio 16px abaixo) foi insuficiente nesse perfil — a âncora precisa considerar a ALTURA DISPONÍVEL (ex.: apoio = max(16px, altura_excedente) ou os tetos `--card-w-3d` do perfil Baixo baixando o lift), e o VA-07 (exausta distinta) piora a sobreposição. Evidência no print (seta do dono).
+
 **Pendências para retomar (especs completas nos docs):**
 1. VIEW3D punch list (docs/VIEW3D_VALIDATE.md §5): legendas do leque cortadas (H3D-06), playmat do --lite vazando (H3D-09), assert do parallax instável no _3d-chain
 2. UX-FIT implementação: FIT-01..08 (docs/UX_FIT_PLAN.md — palco 100dvh, preview maior, aiDelayMs) em 3 lotes deepseek
