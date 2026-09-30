@@ -7550,6 +7550,19 @@ html .spin {
       white-space: nowrap;
     }
 
+    /* R-05: no fundo do palco a fileira vazia do oponente lia só como faixa escura —
+       o mesmo texto volta, em billboard e fraco (o do jogador segue oculto: o console
+       e o heading já estão ao lado). */
+    .game-board--3d .battle-zone--opponent .empty-battleline {
+      position: static;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      clip-path: none;
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
     .game-board--3d .board-piece--attachment {
       grid-row: 2;
       grid-column: 1 / -1;
@@ -7836,6 +7849,12 @@ html .spin {
       border-radius: var(--radius-sm);
       background: rgba(10, 12, 10, 0.82);
       text-align: center;
+    }
+
+    /* R-01: a tarja do nome cobria o custo/poder da face tipográfica (rodapé). O rodapé
+       da face sobe acima da tarja — nome e custo legíveis ao mesmo tempo. */
+    .game-board--3d .hand-track > .card-tile--hand .card-fallback {
+      padding-bottom: 28px;
     }
 
     /* Fallback do índice (cartas 13+ ficam na posição da 12ª). */
