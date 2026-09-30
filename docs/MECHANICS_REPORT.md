@@ -304,12 +304,14 @@ do motor (ver FEAT-03).
 
 | Cobertura | Cartas | % |
 |---|---:|---:|
-| `full` | 134 | 5,1% |
-| — com ≥1 ability simulada | 107 | |
-| — só keywords (ex.: "Taunt.") | 27 | |
-| `partial` | 33 | 1,3% |
-| `vanilla` | 2.420 | 93,0% |
-| **parser lança exceção** (BUG-01) | 16 | 0,6% |
+| `full` | **200** | 7,7% |
+| — com ≥1 ability simulada | 232 | |
+| — só keywords | 45 | |
+| `partial` | **88** | 3,4% |
+| `vanilla` | 2.315 | 88,9% |
+| parser lança exceção | **0** (BUG-01 corrigido) | — |
+
+*Re-medido em 30/09 pós-ondas 1-3 de mecânicas (`KF_DATA=keyteki-json-data/packs`, KF_DATA em .kfdata-tmp/ gitignored): full 134→200 (+49%), partial 33→88 (+167%), crashes 16→0. Com-ability: 140→288 (+106%).*
 
 Cartas com ≥1 ability simulada: **140** (107 full + 33 partial), somando **143**
 abilities.
