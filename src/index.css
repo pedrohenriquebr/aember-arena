@@ -7064,6 +7064,14 @@ html .spin {
 /* A câmera fica no pai do plano (não no plano): a perspectiva precisa dos
    filhos em 3D, e os HUDs (bands, mão) são irmãos do plano. --persp existe
    para o H3D-03 afinar a distância por faixa (1100px desktop / 1000px tablet). */
+/* H3D-14: a mão-overlay sai pela borda do board; com `overflow: hidden` isso vira
+   overflow ROLÁVEL e o browser rola o board ao focar/selecionar uma carta da mão
+   (a faixa do Warden subia ~40px). `clip` recorta igual e não é rolável; quem não
+   suporta mantém o `hidden` da regra base. */
+.game-board--3d {
+  overflow: clip;
+}
+
 .game-board--3d .board-content {
   perspective: var(--persp, 1100px);
   perspective-origin: 50% 38%;

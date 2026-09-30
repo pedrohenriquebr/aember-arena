@@ -251,9 +251,14 @@ try {
           const board = document.querySelector(".game-board").getBoundingClientRect();
           if (!el) return null;
           const r = el.getBoundingClientRect();
-          return { top: r.top, bottom: r.bottom, board: board.bottom };
+          const boardEl = document.querySelector(".game-board");
+          const band = document.querySelector(".board-content > .player-band").getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, board: board.bottom, scrollTop: boardEl.scrollTop, bandTop: band.top, boardTop: board.top };
         });
         check(`${t} H3D-14: carta selecionada 100% visivel`, Boolean(focused) && focused.bottom <= focused.board + 1 && focused.top >= 0, JSON.stringify(focused));
+        // A mao-overlay sai pela borda do board: um overflow rolavel la faria o browser
+        // rolar o board ao focar/selecionar e cortaria a faixa do Warden (visto no record).
+        check(`${t} H3D-14: board nao rola ao selecionar na mao (faixa do Warden intacta)`, Boolean(focused) && focused.scrollTop === 0 && focused.bandTop >= focused.boardTop - 1, JSON.stringify({ scrollTop: focused?.scrollTop }));
         if (vp.w >= 1041 && vp.h >= 668) {
           const w = m.player[0]?.layoutW ?? 0;
           check(`${t} H3D-14: criatura do jogador >= 84px de layout`, w >= 84, `${w}px`);
