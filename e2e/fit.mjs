@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 5209;
+// H3D-13: `--view 3d` roda o mesmo encaixe com a mesa inclinada (mao em overlay).
+const VIEW3D = process.argv.includes("--view") && process.argv[process.argv.indexOf("--view") + 1] === "3d";
 const VIEWPORTS = [
   { name: "1280x800", width: 1280, height: 800 },
   { name: "1296x668", width: 1296, height: 668 },
@@ -17,10 +19,10 @@ const VIEWPORTS = [
   { name: "1024x768", width: 1024, height: 768 },
   { name: "768x1024", width: 768, height: 1024 },
 ];
-const SEED = `(() => {
+const SEED = () => `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
     difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: false,
-    hoverZoom: false, hints: false, language: "en", opponentMode: "mirror", gameMode: "solo",
+    hoverZoom: false, hints: false, language: "en", opponentMode: "mirror", gameMode: "solo",${VIEW3D ? ' tableView: "3d",' : ""}
   }));
   localStorage.setItem("aember-arena-language", "en");
   localStorage.setItem("aember-arena-tutorial-seen", "1");
@@ -67,11 +69,14 @@ async function launch() {
 // Roda no browser: alturas por faixa + retângulos da mão.
 const MEASURE = () => {
   const visible = (el) => el && getComputedStyle(el).display !== "none";
+  // No 3D o bbox e PROJETADO (o plano encurta): a altura de layout e o offsetHeight.
+  const is3d = Boolean(document.querySelector(".game-board--3d"));
+  const hOf = (el) => (is3d ? el.offsetHeight : el.getBoundingClientRect().height);
   const h = (sel) => {
     const el = document.querySelector(sel);
-    return visible(el) ? el.getBoundingClientRect().height : 0;
+    return visible(el) ? hOf(el) : 0;
   };
-  const all = (sel) => [...document.querySelectorAll(sel)].map((el) => el.getBoundingClientRect().height);
+  const all = (sel) => [...document.querySelectorAll(sel)].map(hOf);
   const px = (v) => parseFloat(v) || 0;
   const scs = getComputedStyle(document.querySelector(".game-screen"));
   const bcs = getComputedStyle(document.querySelector(".game-board"));
@@ -97,7 +102,7 @@ const MEASURE = () => {
     .flatMap((sel) => [...document.querySelectorAll(sel)].map((el, i) => (el.scrollHeight > el.clientHeight + 1 ? `${sel.split(" ").pop()}[${i}] ${el.scrollHeight}>${el.clientHeight}` : null)))
     .filter(Boolean);
   // Peças do board que vazam da própria zona (a carta tem de caber na altura dela).
-  const spill = [...document.querySelectorAll(".game-board .battle-zone")].flatMap((zone, zi) => {
+  const spill = is3d ? [] : [...document.querySelectorAll(".game-board .battle-zone")].flatMap((zone, zi) => {
     const zr = zone.getBoundingClientRect();
     return [...zone.querySelectorAll(".board-piece")].filter((el) => {
       const r = el.getBoundingClientRect();
@@ -111,6 +116,7 @@ const MEASURE = () => {
     const r = el.getBoundingClientRect();
     return { top: r.top, bottom: r.bottom };
   });
+  const boardBottom = document.querySelector(".game-board").getBoundingClientRect().bottom;
   const boardCards = [...document.querySelectorAll(".game-board .board-lane .card-tile--board")].map((el) => el.getBoundingClientRect().width);
   return {
     rows: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, round(v)])),
@@ -119,6 +125,8 @@ const MEASURE = () => {
     where: [".app-header", ".game-screen", ".workspace", ".main-column", ".game-board"].map((q) => { const r = document.querySelector(q).getBoundingClientRect(); const pv = q === ".game-screen" ? (document.querySelector(q).previousElementSibling?.className ?? "") : ""; return `${pv}|${q}=${Math.round(r.top)}..${Math.round(r.bottom)}`; }).join(" "),
     innerHeight: window.innerHeight,
     hand,
+    is3d,
+    boardBottom,
     overflow,
     boardCardMin: boardCards.length ? round(Math.min(...boardCards)) : null,
     boardCardMax: boardCards.length ? round(Math.max(...boardCards)) : null,
@@ -159,7 +167,10 @@ async function report(page, vp, label) {
     // Abaixo de 1041px o rail e um drawer (FIT-05), mas o celular ainda rola (FIT-06).
     if (vp.width >= 701 && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
     if (m.sum > m.innerHeight + 1) problems.push(`soma das faixas ${m.sum} > viewport ${m.innerHeight}`);
-    const cut = m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
+    // 3D: a mao e overlay cortado pela borda do board; cada carta mostra >= 70%.
+    const cut = m.is3d
+      ? m.hand.filter((r) => (Math.min(r.bottom, m.boardBottom) - Math.max(r.top, 0)) / (r.bottom - r.top) < 0.7)
+      : m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
     if (!m.hand.length) problems.push("mao vazia/ausente");
     else if (cut.length) problems.push(`mao cortada: ${cut.length}/${m.hand.length} cartas fora (bottom max ${Math.max(...m.hand.map((r) => r.bottom)).toFixed(0)} > ${m.innerHeight})`);
 
@@ -210,7 +221,7 @@ try {
   const browser = await launch();
   for (const vp of VIEWPORTS) {
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
-    await context.addInitScript(SEED);
+    await context.addInitScript(SEED());
     const page = await context.newPage();
     await page.goto(server.url, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".home-screen", { timeout: 30000 });

@@ -18,6 +18,8 @@
     "e2e:record": "node e2e/record-session.mjs",
     "e2e:record:3d": "node e2e/record-session.mjs --view 3d --animations",
     "e2e:fit": "node e2e/fit.mjs",
+    "e2e:fit:3d": "node e2e/fit.mjs --view 3d",
+    "e2e:arena": "node e2e/probes/_3d-arena.mjs",
     "e2e:bundle": "node e2e/bundle-size.mjs",
     "e2e:acceptance": "node e2e/acceptance.mjs",
     "test": "vitest run"
