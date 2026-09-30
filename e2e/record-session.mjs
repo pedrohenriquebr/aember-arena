@@ -1,6 +1,7 @@
 // Gravador de sessao em video para revisao de UX (artefato de analise, nao gate).
 //
 //   node e2e/record-session.mjs [--port N] [--base-url URL] [--animations] [--view 3d]
+//                               [--viewport WxH]   (ex.: 360x844 -> session-360x844.webm, frames-360x844)
 //
 // Sobe o vite dev server sozinho (porta alta propria, derrubado ao sair) e abre
 // UM contexto Playwright com recordVideo a 1280x800. Percorre o fluxo real de
@@ -45,7 +46,9 @@ const MIN_VIDEO_BYTES = 200 * 1024;
 const MIN_FRAMES = 8;
 
 const DEFAULT_PORT = 5199;
-const VIEWPORT = { width: 1280, height: 800 };
+let VIEWPORT = { width: 1280, height: 800 };
+// Viewport movel (--viewport 360x844): contexto touch, sem rail/log e sem Vault.
+let MOBILE = false;
 
 // Ordem fixa dos controles de navegacao no DOM (src/App.tsx:2507-2522):
 //   .header-nav .nav-link = home, browse, config, [game]
@@ -59,6 +62,7 @@ function parseArgs(argv) {
     else if (a === "--base-url") args.baseUrl = argv[(i += 1)];
     else if (a === "--animations") args.animations = true;
     else if (a === "--view") args.view = argv[(i += 1)];
+    else if (a === "--viewport") args.viewport = argv[(i += 1)];
     else {
       console.error(`record: argumento desconhecido "${a}"`);
       process.exit(2);
@@ -531,6 +535,7 @@ async function recordSession(browser, base) {
 
   const context = await browser.newContext({
     viewport: VIEWPORT,
+    ...(MOBILE ? { hasTouch: true, isMobile: true, deviceScaleFactor: 2 } : {}),
     reducedMotion: MOTION ? "no-preference" : "reduce",
     recordVideo: { dir: TMP_VIDEO_DIR, size: VIEWPORT },
   });
@@ -621,6 +626,15 @@ async function recordSession(browser, base) {
       stats.actions += stats.turn2Plays;
     }
 
+    if (MOBILE) {
+      // Celular: sheet do inspetor com a carta selecionada e o drawer do rail.
+      const tile = page.locator(".hand-track .card-tile:not(.is-dimmed)").first();
+      if (await tile.count()) {
+        await tile.click().catch(() => {});
+        await breathe(page);
+        await frames.shot("inspector-sheet");
+      }
+    } else {
     // (e) Scroll do board/rail e log completo com filtro.
     await wheelPageToEdge(page, { x: 620, y: 520, direction: 1, maxSteps: 14, stepPx: 220 });
     await breathe(page);
@@ -651,6 +665,7 @@ async function recordSession(browser, base) {
     await page.waitForSelector(".home-screen", { timeout: 15000 });
     await settle(page, 700);
     await frames.shot("home-final");
+    }
   } catch (err) {
     failure = err;
     console.error(`[record] FALHA no fluxo: ${err.message}`);
@@ -705,6 +720,18 @@ async function main() {
   if (VIEW === "3d") {
     FRAMES_DIR = join(CLIPS_DIR, "frames-3d");
     VIDEO_NAME = "session-1280x800-3d.webm";
+  }
+  if (args.viewport) {
+    const m = /^(\d+)x(\d+)$/.exec(args.viewport);
+    if (!m) {
+      console.error(`record: --viewport espera WxH, recebi "${args.viewport}"`);
+      process.exit(2);
+    }
+    VIEWPORT = { width: Number(m[1]), height: Number(m[2]) };
+    MOBILE = VIEWPORT.width <= 700;
+    const tag = `${VIEWPORT.width}x${VIEWPORT.height}`;
+    FRAMES_DIR = join(CLIPS_DIR, VIEW === "3d" ? `frames-${tag}-3d` : `frames-${tag}`);
+    VIDEO_NAME = VIEW === "3d" ? `session-${tag}-3d.webm` : `session-${tag}.webm`;
   }
   const server = args.baseUrl ? null : startDevServer(args.port);
   const base = args.baseUrl ?? server.url;
