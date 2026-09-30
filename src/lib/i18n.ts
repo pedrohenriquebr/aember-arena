@@ -280,6 +280,8 @@ const DICT: Record<string, [string, string]> = {
   "log.house": ["{name} chose {house}.", "{name} escolheu {house}."],
   "log.endTurn": ["{name} ended the turn.", "{name} encerrou o turno."],
   "log.forge": ["{name} forged a key.", "{name} forjou uma chave."],
+  "log.unforge": ["A key of {name} was unforged.", "Uma chave de {name} foi desforjada."],
+  "log.takeControl": ["{name} took control of {card}.", "{name} tomou o controle de {card}."],
   "log.wins": ["{name} wins the match.", "{name} vence a partida."],
   "log.synced": ["Card data synced for {deck}.", "Cartas sincronizadas para {deck}."],
   "log.discard": ["{name} discarded {card}.", "{name} descartou {card}."],

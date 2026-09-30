@@ -6,7 +6,9 @@ import type { CardFace } from "./game";
 
 /** Keywords the engine resolves by itself (see game.ts). "exalt" is recognized
     for coverage but resolved through the `exalt` act ("Exalt <card>"), as in
-    keyteki (docs/keywords.md: ExaltAction, not an automatic keyword effect). */
+    keyteki (docs/keywords.md: ExaltAction, not an automatic keyword effect).
+    "ward" (Onda 4) is the same shape: a token placed by the `ward` act, listed
+    here so a JSON keyword array that carries it is read as ward, not as text. */
 export const ENGINE_KEYWORDS = [
   "elusive",
   "taunt",
@@ -19,6 +21,7 @@ export const ENGINE_KEYWORDS = [
   "hazardous",
   "splash-attack",
   "exalt",
+  "ward",
 ] as const;
 
 export type Keyword = (typeof ENGINE_KEYWORDS)[number];

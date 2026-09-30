@@ -43,9 +43,16 @@ export type Act = (
   | { k: "capture"; n: number; s: Selection }
   | { k: "damage" | "heal" | "exalt"; n: number; s: Selection }
   | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "returnToDeck" | "archive" | "use"; s: Selection }
+  /** Set tokens of the set layer (keyteki WardAction/EnrageAction/RemoveWardAction)
+      and control changes (game.takeControl). */
+  | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection }
   /** "Make a token creature": the token is born on the battleline (keyteki
       MakeTokenCreatureAction), never in the deck. */
   | { k: "makeToken"; n: number }
+  /** Forging/unforging outside the key step (keyteki ForgeAction/UnforgeAction):
+      `free` is "at no cost", `mod` a "+N cost" modifier. */
+  | { k: "forgeKey"; n: number; free?: boolean; mod?: number }
+  | { k: "unforgeKey"; n: number }
   | { k: "fromDiscard"; type?: "Creature" }
   | { k: "archiveTop" }
   /** A triggered effect with a duration ("Play: … on their next turn"). */
@@ -86,6 +93,18 @@ export interface Restrict {
   limit?: number;
 }
 
+/** An "instead" replacement of an engine default (Onda 4, docs/ROADMAP_REVIEW.md
+    §3): a `destroy` that moves the card to another zone instead of the discard
+    pile, or damage redirected to the effect's source. Consulted by
+    game.destroy()/leavePlay()/dealDamage() before they run the default. */
+export interface Replacement {
+  on: "destroy" | "damage";
+  /** Where a destroyed card goes instead (keyteki's leave-play interrupt). */
+  to?: "archives" | "hand" | "deck" | "purged";
+  /** The damage is dealt to the effect's source instead (Shadow Self). */
+  redirect?: boolean;
+}
+
 /** A persistent effect: stat deltas, granted keywords/abilities and prohibitions
     a card projects on the cards its `target` matches. Constant text is derived
     from the board on every query (game.activeEffects) and never stored; a
@@ -99,6 +118,8 @@ export interface PersistentEffect {
   /** Abilities granted by "gains 'Reap: …'", parsed with the same grammar. */
   abilities?: Ability[];
   restrict?: Restrict;
+  /** "Instead" replacement of the engine default for the target cards. */
+  replace?: Replacement;
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
   when?: "flank";
   /** Printed duration of a triggered effect: end of this turn, or of the

@@ -45,6 +45,22 @@ function getRecord(value: unknown): ApiRecord {
   return value && typeof value === "object" ? (value as ApiRecord) : {};
 }
 
+/** Enhanced bonus icons (Onda 4): the payload's `enhancements` array lists one
+    icon per enhancement ("amber", "capture", "damage", "draw", "discard",
+    "power" or a house name — keyteki deck.js / Card.bonusIcons). Amber icons add
+    to the printed amber; the capture/damage/draw ones are the extra icons the
+    engine resolves on play. House/discard/power enhancements are not modelled,
+    and a payload without enhancements keeps `amber` alone. Exported for the
+    specs: the shape is the Master Vault one, so the mapping is worth asserting. */
+export function readBonusIcons(raw: ApiRecord, amber: number): CardFace["bonusIcons"] {
+  const enhancements = Array.isArray(raw.enhancements)
+    ? raw.enhancements.filter((item): item is string => typeof item === "string").map((item) => item.toLowerCase())
+    : [];
+  if (!enhancements.length) return undefined;
+  const count = (icon: string) => enhancements.filter((item) => item === icon).length;
+  return { amber: amber + count("amber"), capture: count("capture"), damage: count("damage"), draw: count("draw") };
+}
+
 function normaliseCard(value: unknown): CardFace | null {
   const raw = getRecord(value);
   const id = valueAsString(raw.id);
@@ -55,6 +71,7 @@ function normaliseCard(value: unknown): CardFace | null {
   // made the engine discard them like Actions and the UI show raw keys (BUG-22).
   const type = valueAsString(raw.card_type ?? raw.Card_Type ?? raw.type, "Action");
   if (!["Creature", "Artifact", "Upgrade", "Action"].includes(type)) return null;
+  const amber = valueAsNumber(raw.amber ?? raw.Amber);
 
   return {
     id,
@@ -63,7 +80,7 @@ function normaliseCard(value: unknown): CardFace | null {
     type,
     image: valueAsString(raw.front_image ?? raw.Front_Image ?? raw.image),
     text: valueAsString(raw.card_text ?? raw.Card_Text ?? raw.text).replace(/\u000b/g, "\n"),
-    amber: valueAsNumber(raw.amber ?? raw.Amber),
+    amber,
     power: valueAsNumber(raw.power ?? raw.Power),
     armor: valueAsNumber(raw.armor ?? raw.Armor),
     traits: valueAsString(raw.traits ?? raw.Traits),
@@ -73,6 +90,7 @@ function normaliseCard(value: unknown): CardFace | null {
     // keyteki-style keyword array ("elusive", "assault:2") when the payload has one;
     // otherwise the engine reads the keywords printed in card_text.
     keywords: Array.isArray(raw.keywords) ? raw.keywords.filter((item): item is string => typeof item === "string") : undefined,
+    bonusIcons: readBonusIcons(raw, amber),
   };
 }
 

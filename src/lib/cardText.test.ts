@@ -82,7 +82,9 @@ describe("text normalisation", () => {
   });
 
   it("drops a whole ability when one of its sentences is not understood", () => {
-    const rules = parseCardText(face("Play: Lose 1A. If you do, you may forge a key at current cost.", "Action"));
+    // "If you do, …" itself is understood (keyteki `then`, Onda 4); the second
+    // sentence here is not, and the whole ability has to be dropped with it.
+    const rules = parseCardText(face("Play: Lose 1A. Then name a house and archive it.", "Action"));
     expect(rules.abilities).toHaveLength(0);
     expect(rules.coverage).toBe("vanilla");
   });
@@ -222,11 +224,13 @@ describe("starter decks", () => {
     // change here must be deliberate (and reflected in MECHANICS_REPORT.md).
     // 35 -> 40 full with the persistent layer (Bulwark, Grey Monk, Staunch
     // Knight, Ember Imp and Scrambler Storm now read their constant text).
+    // 40 -> 41 with the Onda 4 "if you do" continuation (Key Charge: lose 1A,
+    // then may forge a key at the current cost).
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 40,
+        "full": 41,
         "partial": 1,
-        "vanilla": 17,
+        "vanilla": 16,
       }
     `);
   });

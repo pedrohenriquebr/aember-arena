@@ -5,7 +5,7 @@
 // AGPL-3.0). An ability is used only when EVERY sentence of it is understood;
 // otherwise it is dropped and the card's coverage becomes "partial"/"vanilla",
 // so the engine never half-resolves a card.
-import type { Ability, Act, CardRules, Condition, Filter, PersistentEffect, Restrict, Selection, Trigger } from "./abilities";
+import type { Ability, Act, CardRules, Condition, Filter, PersistentEffect, Replacement, Restrict, Selection, Trigger } from "./abilities";
 import { printedKeywords, readKeyword } from "./keywords";
 import type { CardFace } from "./game";
 
@@ -59,6 +59,8 @@ function parseObject(phrase: string, upgrade: boolean): { s: Selection; target?:
   if (/^(this card|this creature|itself|it)$/.test(phrase)) return { s: upgrade && phrase === "this creature" ? "host" : "self" };
   if (phrase === "a creature and each of its neighbors") return { s: "targetAndNeighbors", target: { type: "Creature" } };
   if (/^each neighbor of the creature this card fights$/.test(phrase)) return { s: "neighborsOfFought" };
+  // "Ward each of Old Egad's neighbors" — the source's own neighbors.
+  if (/^(?:each of )?(?:this card's|its) neighbors?$/.test(phrase)) return { s: { each: { neighborsOfSource: true } } };
   const top = phrase.match(/^the (\d+) most powerful creatures$/);
   if (top) return { s: { each: { type: "Creature", top: Number(top[1]) } } };
   const m = phrase.match(
@@ -103,6 +105,12 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^archive the top card of your deck$/, () => ({ k: "archiveTop" })],
   // Onda 3: tokens nascem na mesa (keyteki MakeTokenCreatureAction).
   [/^(?:make|create) (a|an|\d+) token creatures?$/, (m) => ({ k: "makeToken", n: num(m[1]) })],
+  // Onda 4: forjar/desforjar fora do passo de chave (keyteki ForgeAction e
+  // UnforgeAction — todo texto "unforge" impresso mira a chave do oponente).
+  [/^forge (?:another )?a? ?key at current cost$/, () => ({ k: "forgeKey", n: 1 })],
+  [/^forge (?:another )?a? ?key at no cost$/, () => ({ k: "forgeKey", n: 1, free: true })],
+  [/^forge (?:another )?a? ?key at \+(\d+)(?: amber)?(?: current)?(?: cost)?$/, (m) => ({ k: "forgeKey", n: 1, mod: Number(m[1]) })],
+  [/^unforge (?:your )?(?:an? )?(?:opponent's|opponents'?|enemy) keys?$/, () => ({ k: "unforgeKey", n: 1 })],
   [/^return a card from your discard pile to your hand$/, () => ({ k: "fromDiscard" })],
   [/^return a creature from your discard pile to your hand$/, () => ({ k: "fromDiscard", type: "Creature" })],
 ];
@@ -125,6 +133,16 @@ const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number; obj: n
   [/^put (.+) on top of your deck$/, () => ({ k: "returnToDeck", obj: 1 })],
   [/^archive (.+)$/, () => ({ k: "archive", obj: 1 })],
   [/^use (.+)$/, () => ({ k: "use", obj: 1 })],
+  // Onda 4: tokens de set e troca de controle ("Ward a creature", "Ward each
+  // creature", "Enrage a creature", "Take control of an enemy creature",
+  // "Gain control of an enemy artifact"). A counted target ("Ward 2 friendly
+  // creatures") needs a multi-target choice the move model does not have, so
+  // the sentence stays unparsed instead of resolving only half of it.
+  [/^ward (.+)$/, () => ({ k: "ward", obj: 1 })],
+  [/^remove (?:the |a )?ward(?: token)? from (.+)$/, () => ({ k: "removeWard", obj: 1 })],
+  [/^enrage (.+)$/, () => ({ k: "enrage", obj: 1 })],
+  [/^remove (?:the |a )?enrage(?: token)? from (.+)$/, () => ({ k: "removeEnrage", obj: 1 })],
+  [/^(?:take|gain) control of (.+)$/, () => ({ k: "takeControl", obj: 1 })],
   [/^(.+?) captures? (\d+) amber$/, (m) => ({ k: "capture", n: +m[2], obj: 1 })],
 ];
 
@@ -141,6 +159,13 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean, qu
 }
 
 function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): Sentence | null {
+  // "… If you do, X." is keyteki's `then` (Key Charge): the condition is the
+  // previous clause of the same ability. The engine resolves each act of an
+  // ability unconditionally, so the continuation is parsed as a plain
+  // sentence — a no-op first clause still lets X happen (documented in
+  // docs/MECHANICS_REPORT.md §6).
+  const then = sentence.match(/^if you do,? (.+)$/);
+  if (then) return parseSentence(then[1], upgrade, creature, quoted);
   const conditional = sentence.match(/^if ([^,]+), (.+)$/) ?? sentence.match(/^(.+?) if (you control more creatures than your opponent)$/);
   if (conditional) {
     const [condText, rest] = sentence.startsWith("if ") ? [conditional[1], conditional[2]] : [conditional[2], conditional[1]];
@@ -286,6 +311,35 @@ function parseQuoted(inner: string, upgrade: boolean, creature: boolean, quoted:
 
 const RESTRICT_TYPES: Record<string, string> = { action: "Action", creature: "Creature", artifact: "Artifact", upgrade: "Upgrade" };
 
+/** "Instead" replacements of an engine default (Onda 4): a destroyed card that
+    leaves play to another zone, or damage redirected to this card. Supported
+    forms, all constant text:
+      "If this creature would be destroyed, archive it instead."
+      "… return it to your hand instead." / "… purge it instead." /
+      "… put it on top of your deck instead."
+      "When a creature would enter a discard pile from play, it is purged instead."
+      "Damage dealt to [non-<trait>] neighbors is dealt to this creature instead."
+    The trait exception of the redirect form is not modelled (the filter has no
+    trait clause) — see docs/MECHANICS_REPORT.md §6. */
+const LEAVE_INSTEAD: Record<string, Replacement["to"]> = {
+  "archive it": "archives",
+  "return it to your hand": "hand",
+  "put it on top of your deck": "deck",
+  "purge it": "purged",
+};
+
+function parseReplacement(sentence: string): PersistentEffect | null {
+  const self = sentence.match(/^if (?:this creature|this card|it) would be destroyed, (?:instead )?(.+?) instead$/);
+  if (self) {
+    const to = LEAVE_INSTEAD[self[1]];
+    return to ? { target: { self: true }, replace: { on: "destroy", to } } : null;
+  }
+  const pile = sentence.match(/^when a creature would enter a discard pile from play, it is (purged|archived) instead$/);
+  if (pile) return { target: { type: "Creature" }, replace: { on: "destroy", to: pile[1] === "purged" ? "purged" : "archives" } };
+  const redirect = sentence.match(/^damage dealt to (?:non-\w+ )?neighbors is dealt to (?:this creature|this card|it) instead$/);
+  return redirect ? { target: { neighborsOfSource: true }, replace: { on: "damage", redirect: true } } : null;
+}
+
 /** "You cannot play/use/fight …" — a prohibition (keyteki effects.playerCannot). */
 function parseRestriction(sentence: string): Restrict | null {
   const head = sentence.match(/^(you|your opponent) cannot (play|use|fight)(.*)$/);
@@ -322,6 +376,8 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
   }
   const restrict = parseRestriction(body);
   if (restrict) return [{ target: {}, restrict, duration }];
+  const replacement = parseReplacement(body);
+  if (replacement) return [{ ...replacement, duration }];
   let when: PersistentEffect["when"];
   const flank = body.match(FLANK_CLAUSE);
   if (flank) {

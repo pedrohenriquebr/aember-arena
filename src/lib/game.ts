@@ -8,7 +8,7 @@
 //
 // Pure API: every exported function clones its input and returns a new state;
 // the helpers below mutate only that private clone.
-import { rulesOf, type Ability, type Act, type Condition, type Filter, type PersistentEffect, type Restrict, type Selection, type Trigger } from "./abilities";
+import { rulesOf, type Ability, type Act, type Condition, type Filter, type PersistentEffect, type Replacement, type Restrict, type Selection, type Trigger } from "./abilities";
 import type { Keyword } from "./keywords";
 
 export type CardType = "Creature" | "Action" | "Artifact" | "Upgrade" | string;
@@ -29,6 +29,18 @@ export interface CardFace {
   cardNumber?: string | number;
   /** Master Vault / keyteki keyword array ("elusive", "assault:2"), when present. */
   keywords?: string[];
+  /** Enhanced bonus icons (keyteki card.bonusIcons, ResolveBonusIconsAction):
+      `amber` is the total amber printed on the icons (it replaces `amber` when
+      the payload carried enhancements), the rest are the extra icons resolved
+      on play. Absent when the payload had no enhancements. */
+  bonusIcons?: BonusIcons;
+}
+
+export interface BonusIcons {
+  amber: number;
+  capture?: number;
+  damage?: number;
+  draw?: number;
 }
 
 export interface DeckInfo {
@@ -61,6 +73,17 @@ export interface CardInstance {
   /** A token creature: engine-made, never a deck card (Onda 3). Plain boolean so
       the state stays JSON-safe. */
   isToken?: boolean;
+  /** Ward tokens (Onda 4, keyteki Card.warded): the first destruction or damage
+      instance consumes one and is prevented instead. Tokens do not stack
+      (keyteki Card.ward() no-ops when already warded), so this is 0 or 1. */
+  warded?: number;
+  /** Enrage tokens (keyteki Card.enraged): while enraged, using the creature
+      forces a fight when one is legal; the token is removed when it fights. */
+  enraged?: number;
+  /** The side an effect gave control to (keyteki game.takeControl): the card
+      sits in that side's battleline and its owner — the other side, the pile it
+      returns to when it leaves play — is derived from it. */
+  controlledBy?: Side;
 }
 
 export interface GamePlayer {
@@ -346,9 +369,23 @@ const tally = (player: GamePlayer, key: "amberGained" | "amberStolen" | "amberCa
 const isCreature = (card: CardInstance) => card.face.type === "Creature";
 const battleline = (player: GamePlayer) => player.board.filter(isCreature);
 
+/** Amber printed on a face: the bonus-icon total when the payload carried
+    enhancements (amber icons are bonus icons too), the plain `amber` otherwise
+    (keyteki Card.bonusIcons, Onda 4). */
+const printedAmber = (face: CardFace) => face.bonusIcons?.amber ?? face.amber;
+
 function controllerOf(state: GameState, card: CardInstance): Side | undefined {
   if (state.players[0].board.includes(card)) return 0;
   return state.players[1].board.includes(card) ? 1 : undefined;
+}
+
+/** The side a card belongs to (keyteki card.owner): the side that took control
+    of it is the controller, so the owner is the other side (keyteki
+    player.moveCard sends a card leaving play to its owner's pile). */
+function ownerOf(state: GameState, card: CardInstance): Side | undefined {
+  const holder = controllerOf(state, card);
+  if (holder === undefined) return undefined;
+  return card.controlledBy === undefined ? holder : other(card.controlledBy);
 }
 
 function findOnBoard(state: GameState, side: Side, instanceId: string | undefined): CardInstance | undefined {
@@ -404,6 +441,24 @@ const allEffects = (state: GameState): ActiveEffect[] => [...activeEffects(state
 /** Does this effect apply to `card` right now? (target filter + clause) */
 function effectHits(state: GameState, owner: ActiveEffect, card: CardInstance): boolean {
   return matches(state, owner.side, owner.source, card, owner.effect.target) && (owner.effect.when !== "flank" || onFlank(state, card));
+}
+
+/** First active "instead" replacement of `on` that applies to `card` (Onda 4),
+    if any. Self-replacements are read off the card's own text; a board effect
+    can replace for other cards too (Annihilation Ritual). */
+function replacementFor(state: GameState, card: CardInstance, on: Replacement["on"]): ActiveEffect | undefined {
+  return allEffects(state).find((owner) => owner.effect.replace?.on === on && effectHits(state, owner, card));
+}
+
+/** Live damage redirect for `card` (Shadow Self): the effect's source takes the
+    damage instead. A source that already left play does not redirect. */
+function redirectFor(state: GameState, card: CardInstance): CardInstance | undefined {
+  const owner = allEffects(state).find(
+    (item) => item.effect.replace?.redirect && item.source !== undefined && effectHits(state, item, card),
+  );
+  const source = owner?.source;
+  if (!source || source === card || controllerOf(state, source) === undefined) return undefined;
+  return source;
 }
 
 /** Power including every active modifier (keyteki card.power through effects). */
@@ -472,6 +527,33 @@ export function keyCost(state: GameState, side: Side): number {
   return BASE_KEY_COST + (state.players[side].keyCostMod ?? 0);
 }
 
+/** Key step core shared by endTurn and the "forge a key" acts (keyteki
+    player.forgeKey): pays the (modified) cost from the pool and forges one key.
+    Returns false when the side cannot forge (three keys already forged, or not
+    enough amber). */
+function forge(state: GameState, side: Side, options: { free?: boolean; mod?: number } = {}): boolean {
+  const player = state.players[side];
+  if (player.keys >= 3) return false;
+  const cost = options.free ? 0 : Math.max(0, keyCost(state, side) + (options.mod ?? 0));
+  if (player.amber < cost) return false;
+  player.amber -= cost;
+  player.keys += 1;
+  record(state, "log.forge", { name: player.name });
+  if (player.keys >= 3) {
+    state.winner = side;
+    record(state, "log.wins", { name: player.name });
+  }
+  return true;
+}
+
+/** Pure wrapper for abilities: "forge a key at current/no cost" outside the key
+    step (Onda 4, docs/ROADMAP_REVIEW.md §3). */
+export function forgeKey(current: GameState, side: Side, n = 1, options: { free?: boolean; mod?: number } = {}): GameState {
+  const state = cloneGame(current);
+  for (let count = 0; count < n; count += 1) if (!forge(state, side, options)) break;
+  return state;
+}
+
 // ---------- specification (conditions and targets) ----------
 
 /** Exported for the AI: the same condition evaluation the engine runs (FEAT-03). */
@@ -508,7 +590,7 @@ function everyMatch(state: GameState, me: Side, source: CardInstance, filter: Fi
   return filter.top ? found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top) : found;
 }
 
-const HARMFUL = new Set<Act["k"]>(["destroy", "purge", "damage", "stun", "exhaust", "returnToHand", "returnToDeck", "archive"]);
+const HARMFUL = new Set<Act["k"]>(["destroy", "purge", "damage", "stun", "exhaust", "enrage", "returnToHand", "returnToDeck", "archive"]);
 const isHarmful = (ability: Ability) => ability.acts.some((act) => HARMFUL.has(act.k));
 
 /** Default choice for a targeted ability: harmful effects hit the strongest
@@ -563,6 +645,9 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   const side = controllerOf(state, card);
   if (side === undefined) return;
   const player = state.players[side];
+  // A card leaving play goes to its owner's pile, not its controller's
+  // (keyteki player.moveCard: "card.owner.moveCard(card, targetLocation)").
+  const owner = state.players[ownerOf(state, card) ?? side];
   player.board = player.board.filter((item) => item !== card);
   // Captured amber goes to the opponent of the creature's controller.
   if (card.amber) state.players[other(side)].amber += card.amber;
@@ -576,22 +661,50 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
     player.discard.push(half);
   }
   card.under = undefined;
-  Object.assign(card, { damage: 0, ready: false, stunned: false, amber: 0, armorUsed: 0, elusiveUsed: false, poisoned: false, attachedTo: undefined });
+  // Leaving play strips the set-layer state too: keyteki resets the controller
+  // to the owner and the tokens travel with the zone move (Onda 4).
+  Object.assign(card, {
+    damage: 0,
+    ready: false,
+    stunned: false,
+    amber: 0,
+    armorUsed: 0,
+    elusiveUsed: false,
+    poisoned: false,
+    attachedTo: undefined,
+    warded: undefined,
+    enraged: undefined,
+    controlledBy: undefined,
+  });
   // A token creature has no card behind it (isToken): it is removed from the
   // game instead of entering hand/discard/deck, so it can never be drawn or
   // reshuffled into a deck (Onda 3).
   if (card.isToken) return;
-  if (destination === "deck") player.deck.push(card);
-  else player[destination].push(card);
+  if (destination === "deck") owner.deck.push(card);
+  else owner[destination].push(card);
 }
 
 // Cards whose "Destroyed:" abilities are resolving: still in play, but already
 // on their way out, so sweep() must not destroy them a second time.
 const dying = new WeakSet<CardInstance>();
 
-function destroy(state: GameState, card: CardInstance, deterministic: boolean, by?: Side): void {
+function destroy(state: GameState, card: CardInstance, deterministic: boolean, by?: Side): boolean {
   const side = controllerOf(state, card);
-  if (side === undefined || dying.has(card)) return;
+  if (side === undefined || dying.has(card)) return false;
+  // Onda 4 — ward first (keyteki Card.js keywordReactions: an interrupt that
+  // cancels the destruction and discards the token), then the printed "instead"
+  // replacement ("If this creature would be destroyed, archive it instead").
+  // A replaced destruction is not a destruction: "Destroyed:" stays silent and
+  // no kill is credited, like keyteki's cancelled onCardDestroyed event.
+  if (card.warded) {
+    card.warded = 0;
+    return false;
+  }
+  const replacement = replacementFor(state, card, "destroy")?.effect.replace;
+  if (replacement?.to) {
+    leavePlay(state, card, replacement.to);
+    return true;
+  }
   // FEAT-06: an enemy creature destroyed by an effect is a kill for the acting
   // side; damage-based deaths are credited by fight() (a board wipe destroys
   // both sides at once, so no single "destroyer" exists).
@@ -600,15 +713,22 @@ function destroy(state: GameState, card: CardInstance, deterministic: boolean, b
   fire(state, side, card, "destroyed", { deterministic });
   dying.delete(card);
   leavePlay(state, card, "discard");
+  return true;
 }
 
 /** Sacrifice (keyteki GameActions.sacrifice → DestroyAction with isSacrifice):
     the owner puts the card into their discard pile straight away. It is NOT a
     destruction, so "Destroyed:" abilities stay silent and the kill is not
-    credited to anyone. */
+    credited to anyone. A "would be destroyed" replacement still applies, as
+    sacrifice is a destruction event in keyteki (Onda 4). */
 function sacrifice(state: GameState, card: CardInstance): void {
   if (controllerOf(state, card) === undefined) return;
-  leavePlay(state, card, "discard");
+  if (card.warded) {
+    card.warded = 0;
+    return;
+  }
+  const replacement = replacementFor(state, card, "destroy")?.effect.replace;
+  leavePlay(state, card, replacement?.to ?? "discard");
 }
 
 /** "Make a token creature" (keyteki MakeTokenCreatureAction): the token enters
@@ -638,9 +758,27 @@ function makeToken(state: GameState, side: Side, house: string): void {
   });
 }
 
-/** Armor absorbs damage once per turn (keyteki DealDamageAction/armorUsed). */
-function dealDamage(state: GameState, card: CardInstance, amount: number, poison = false): void {
+/** Armor absorbs damage once per turn (keyteki DealDamageAction/armorUsed).
+    Ward prevents the whole instance and an active redirect takes it instead
+    (Onda 4); `allowRedirect` stops a redirected packet from bouncing again. */
+function dealDamage(state: GameState, card: CardInstance, amount: number, poison = false, allowRedirect = true): void {
   if (!isCreature(card) || amount <= 0) return;
+  // A redirect is an interrupt on the damage-applied event (keyteki Shadow
+  // Self), so it runs before armor and before the target's own ward: a warded
+  // neighbor still sends the damage to the redirecting creature.
+  if (allowRedirect) {
+    const redirected = redirectFor(state, card);
+    if (redirected) {
+      dealDamage(state, redirected, amount, poison, false);
+      return;
+    }
+  }
+  // Ward cancels the damage event (keyteki unwardAndCancel) before armor is
+  // accounted: the token is discarded and nothing else happens.
+  if (card.warded) {
+    card.warded = 0;
+    return;
+  }
   const absorbed = Math.min(Math.max(0, effectiveArmor(state, card) - (card.armorUsed ?? 0)), amount);
   card.armorUsed = (card.armorUsed ?? 0) + absorbed;
   const applied = amount - absorbed;
@@ -649,7 +787,9 @@ function dealDamage(state: GameState, card: CardInstance, amount: number, poison
   if (poison) card.poisoned = true;
 }
 
-/** Destroys every creature whose damage reached its power (or took poison damage). */
+/** Destroys every creature whose damage reached its power (or took poison damage).
+    A ward spares the first pass and is consumed, so the next pass destroys the
+    creature — keyteki re-checks the game state after the cancelled destruction. */
 function sweep(state: GameState, deterministic: boolean): void {
   for (;;) {
     const doomed = state.players
@@ -664,6 +804,29 @@ function discardRandom(player: GamePlayer, deterministic: boolean, rng: Rng): vo
   if (!player.hand.length) return;
   const index = deterministic ? 0 : Math.floor(roll(rng) * player.hand.length);
   player.discard.push(...player.hand.splice(index, 1));
+}
+
+/** Extra bonus icons resolved when a card is played (keyteki
+    ResolveBonusIconsAction): each capture icon captures 1 amber from the
+    opponent onto a friendly creature, each damage icon deals 1 damage to a
+    creature and each draw icon draws a card. keyteki prompts for the capture/
+    damage target; the engine auto-picks like every other auto-target. */
+function resolveBonusIcons(state: GameState, side: Side, icons: BonusIcons): void {
+  const me = state.players[side];
+  for (let count = 0; count < (icons.capture ?? 0); count += 1) {
+    const host = autoPick(state, side, battleline(me), false);
+    if (!host) break;
+    const taken = Math.min(1, state.players[other(side)].amber);
+    state.players[other(side)].amber -= taken;
+    host.amber = (host.amber ?? 0) + taken;
+    tally(me, "amberCaptured", taken);
+  }
+  for (let count = 0; count < (icons.damage ?? 0); count += 1) {
+    const target = autoPick(state, side, state.players.flatMap((player) => battleline(player)), true);
+    if (!target) break;
+    dealDamage(state, target, 1);
+  }
+  if (icons.draw) draw(me, icons.draw, state);
 }
 
 function run(context: Context, act: Act): void {
@@ -730,6 +893,51 @@ function run(context: Context, act: Act): void {
       // creature. It behaves like captured amber (returns to the opponent when
       // the creature leaves play) — no player's pool is touched.
       for (const card of cards.filter(isCreature)) card.amber = (card.amber ?? 0) + amount;
+      break;
+    case "ward":
+      // keyteki WardAction/Card.ward(): the token does not stack, so warding a
+      // warded creature is a no-op ("if (!this.hasToken('ward')) addToken").
+      for (const card of cards.filter(isCreature)) if (!card.warded) card.warded = 1;
+      break;
+    case "removeWard":
+      for (const card of cards.filter(isCreature)) card.warded = 0;
+      break;
+    case "enrage":
+      // keyteki EnrageAction/Card.enrage(): one token, never stacked.
+      for (const card of cards.filter(isCreature)) if (!card.enraged) card.enraged = 1;
+      break;
+    case "removeEnrage":
+      for (const card of cards.filter(isCreature)) card.enraged = 0;
+      break;
+    case "takeControl":
+      // keyteki game.takeControl: the card leaves its controller's battleline
+      // and joins the new controller's on a flank (the left one unless a
+      // "takeControlOn…" effect says otherwise) — this engine always takes the
+      // left flank, as the automated keyteki prompt does by default.
+      for (const card of cards) {
+        const from = controllerOf(state, card);
+        if (from === undefined || from === me) continue;
+        // Control given back to the owner is not foreign control any more.
+        const returning = ownerOf(state, card) === me;
+        state.players[from].board = state.players[from].board.filter((item) => item !== card);
+        state.players[me].board.unshift(card);
+        card.controlledBy = returning ? undefined : me;
+        record(state, "log.takeControl", { name: state.players[me].name, card: card.face.title });
+      }
+      break;
+    case "forgeKey":
+      // keyteki ForgeAction: the cost comes out of the pool unless the text
+      // says "at no cost"; `mod` is the printed "+N cost".
+      for (let count = 0; count < amount; count += 1) if (!forge(state, me, act)) break;
+      break;
+    case "unforgeKey":
+      // keyteki UnforgeAction: every printed "unforge" takes an opponent's key.
+      for (let count = 0; count < amount; count += 1) {
+        const foe = state.players[other(me)];
+        if (foe.keys <= 0) break;
+        foe.keys -= 1;
+        record(state, "log.unforge", { name: foe.name });
+      }
       break;
     case "makeToken":
       for (let count = 0; count < amount; count += 1) makeToken(state, me, source.face.house);
@@ -824,6 +1032,9 @@ function reap(state: GameState, me: Side, creature: CardInstance, choice: Choice
     Skirmish, Poison and Splash-attack, then "Fight:" if the attacker survived. */
 function fight(state: GameState, me: Side, attacker: CardInstance, defender: CardInstance, choice: Choice, deterministic: boolean, decline?: boolean): void {
   attacker.ready = false;
+  // keyteki ResolveFightAction: the enrage token is removed when the creature
+  // fights (its onUseCard child event calls card.unenrage()).
+  attacker.enraged = 0;
   fire(state, me, attacker, "beforeFight", { fought: defender, choice, deterministic, decline });
   const alive = () => controllerOf(state, attacker) === me && controllerOf(state, defender) === other(me);
   // FEAT-06: a creature that ended in the discard pile during the exchange is a
@@ -934,9 +1145,9 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
   }
   // The bonus amber is granted before "Play:" fires (applyMove), so a target
   // condition like "If you have 3A or more" must count it (BUG-09).
-  if (move.type === "play" && source.face.amber > 0) {
+  if (move.type === "play" && printedAmber(source.face) > 0) {
     const players = [...view.players] as [GamePlayer, GamePlayer];
-    players[side] = { ...players[side], amber: players[side].amber + source.face.amber };
+    players[side] = { ...players[side], amber: players[side].amber + printedAmber(source.face) };
     view = { ...view, players };
   }
   const card = source;
@@ -985,13 +1196,21 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
         moves.push({ type: "unstun", instanceId: card.instanceId });
         continue;
       }
-      moves.push({ type: "reap", instanceId: card.instanceId });
-      if (hasOptionalTrigger(state, side, card, ["reap"])) moves.push({ type: "reap", instanceId: card.instanceId, decline: true });
+      const targets = fightTargets(state, side, card);
+      // Enrage (Onda 4, keyteki effects.mustFightIfAble): a creature that can
+      // fight may only fight — its reap and Action/Omni uses are closed. With
+      // no legal target it is used normally ("if able").
+      const forced = card.enraged && targets.length > 0;
+      if (!forced) {
+        moves.push({ type: "reap", instanceId: card.instanceId });
+        if (hasOptionalTrigger(state, side, card, ["reap"])) moves.push({ type: "reap", instanceId: card.instanceId, decline: true });
+      }
       const optionalFight = hasOptionalTrigger(state, side, card, ["beforeFight", "fight"]);
-      for (const target of fightTargets(state, side, card)) {
+      for (const target of targets) {
         moves.push({ type: "fight", attackerId: card.instanceId, targetId: target.instanceId });
         if (optionalFight) moves.push({ type: "fight", attackerId: card.instanceId, targetId: target.instanceId, decline: true });
       }
+      if (forced) continue;
     }
     if (card.face.type !== "Upgrade" && canUseCard(state, side, card, house)) {
       moves.push({ type: "use", instanceId: card.instanceId });
@@ -1032,7 +1251,7 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   if (move.type === "discard") return false;
   const source = moveSource(state, side, move);
   if (!source) return false;
-  if (move.type === "play" && (source.face.type !== "Action" || source.face.amber > 0)) return true;
+  if (move.type === "play" && (source.face.type !== "Action" || printedAmber(source.face) > 0)) return true;
   const triggers = triggersFor(move);
   const declined = declines(move);
   return abilitiesOf(state, source).some(
@@ -1095,8 +1314,8 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     player.discard.push(source);
     record(state, "log.discard", params, silent);
   } else if (move.type === "play") {
-    player.amber += source.face.amber;
-    tally(player, "amberGained", source.face.amber);
+    player.amber += printedAmber(source.face);
+    tally(player, "amberGained", printedAmber(source.face));
     tally(player, "cardsPlayed");
     Object.assign(source, { ready: false, stunned: false, damage: 0 });
     record(state, "log.play", params, silent);
@@ -1109,8 +1328,8 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
         const half = player.hand.find((item) => item !== source && item.face.title === source.face.title);
         if (half) {
           player.hand = player.hand.filter((item) => item !== half);
-          player.amber += half.face.amber;
-          tally(player, "amberGained", half.face.amber);
+          player.amber += printedAmber(half.face);
+          tally(player, "amberGained", printedAmber(half.face));
           source.under = [half];
         }
       }
@@ -1124,6 +1343,9 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
       player.board.push(source);
     }
     fire(state, playerIndex, source, "play", { choice, deterministic, decline });
+    // The extra bonus icons resolve after the card is played (keyteki
+    // BasePlayAction: the bonus sub-event follows the Play: ability).
+    if (source.face.bonusIcons) resolveBonusIcons(state, playerIndex, source.face.bonusIcons);
     if (source.face.type !== "Creature" && source.face.type !== "Artifact" && source.face.type !== "Upgrade") player.discard.push(source);
     if (keyword(state, source, "omega") && playerIndex === state.activePlayer) state.omega = true;
   } else if (move.type === "unstun") {
@@ -1194,17 +1416,8 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   // amber from these effects counts toward this turn's key.
   for (const card of [...nextPlayer.board]) fire(state, nextIndex, card, "startOfTurn", { deterministic: false });
 
-  // Key step: forging is mandatory when affordable.
-  const cost = keyCost(state, nextIndex);
-  if (nextPlayer.amber >= cost) {
-    nextPlayer.amber -= cost;
-    nextPlayer.keys += 1;
-    record(state, "log.forge", { name: nextPlayer.name });
-    if (nextPlayer.keys >= 3) {
-      state.winner = nextIndex;
-      record(state, "log.wins", { name: nextPlayer.name });
-    }
-  }
+  // Key step: forging is mandatory when affordable (keyteki KeyPhase/forgeKey).
+  forge(state, nextIndex);
 
   return state;
 }
@@ -1284,7 +1497,9 @@ export function summarizeDeck(deck: DeckInfo): DeckSummary {
     byHouse[card.house] = (byHouse[card.house] ?? 0) + 1;
     const rarity = card.rarity || "Unknown";
     byRarity[rarity] = (byRarity[rarity] ?? 0) + 1;
-    bonusAmber += card.amber;
+    // Amber icons are bonus icons too: an enhanced card adds them to the
+    // printed amber (keyteki Card.bonusIcons, Onda 4).
+    bonusAmber += printedAmber(card);
     if (card.type === "Creature") {
       creatureCount += 1;
       powerTotal += card.power;
