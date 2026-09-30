@@ -212,6 +212,8 @@ const DICT: Record<string, [string, string]> = {
   "inspector.stunned": ["Stunned: using this creature only removes the stun and exhausts it.", "Atordoada: usar esta criatura só remove o atordoamento e a exaure."],
   "inspector.unstun": ["Remove stun", "Remover atordoamento"],
   "inspector.discard": ["Discard", "Descartar"],
+  // Onda 2 ("You may"): resolve a jogada sem a cláusula opcional da carta.
+  "inspector.withoutEffect": ["Without effect", "Sem efeito"],
   "inspector.cannotPlay": ["Cannot be played now", "Não pode ser jogada agora"],
   "inspector.cancelTarget": ["Cancel target", "Cancelar alvo"],
   "inspector.captured": ["{amount} captured", "{amount} capturado"],

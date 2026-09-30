@@ -1689,7 +1689,8 @@ function SelectedCardPanel({
   /** FEAT-13: side whose cards the actions apply to (the active side in 2P). */
   humanSide: 0 | 1;
   onMove: (move: GameMove) => void;
-  onFight: () => void;
+  /** `decline` starts the fight pick resolving it without its "You may" clauses. */
+  onFight: (decline?: boolean) => void;
   onCancelPick: () => void;
   onClear: () => void;
 }) {
@@ -1701,7 +1702,15 @@ function SelectedCardPanel({
   const canPlay = legal({ type: "play", instanceId: id });
   const canUse = legal({ type: "use", instanceId: id });
   const printsUse = Boolean(card && /(?:^|[\s/.])(?:Action|Omni):/i.test(card.face.text));
-  const canFight = Boolean(card && isHumanTurn && activeForHouse && fightTargets(game, humanSide, card).length);
+  const fightChoices = card ? fightTargets(game, humanSide, card) : [];
+  const canFight = Boolean(card && isHumanTurn && activeForHouse && fightChoices.length);
+  // Onda 2, "You may": o botão de recusa só aparece quando o motor expõe a
+  // variante declinada (a carta imprime a cláusula) — a legalidade é a regra.
+  const canDeclinePlay = legal({ type: "play", instanceId: id, decline: true });
+  const canDeclineReap = legal({ type: "reap", instanceId: id, decline: true });
+  const canDeclineUse = legal({ type: "use", instanceId: id, decline: true });
+  const canDeclineFight = canFight && fightChoices.some((target) => legal({ type: "fight", attackerId: id, targetId: target.instanceId, decline: true }));
+  const declineLabel = t("inspector.withoutEffect");
 
   return (
     <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}`} aria-live="polite">
@@ -1743,6 +1752,11 @@ function SelectedCardPanel({
                       <Zap size={15} />
                       {canPlay ? t("inspector.play") : !isHumanTurn ? t("inspector.waitTurn") : !game.activeHouse ? t("inspector.chooseHouseFirst") : activeForHouse ? t("inspector.cannotPlay") : t("inspector.offHouse")}
                     </button>
+                    {canDeclinePlay && (
+                      <button className="secondary-action" type="button" title={declineLabel} onClick={() => onMove({ type: "play", instanceId: id, decline: true })}>
+                        {declineLabel}
+                      </button>
+                    )}
                     {legal({ type: "discard", instanceId: id }) && (
                       <button className="secondary-action" type="button" onClick={() => onMove({ type: "discard", instanceId: id })}>
                         <Trash2 size={15} /> {t("inspector.discard")}
@@ -1759,15 +1773,32 @@ function SelectedCardPanel({
                     <button className="primary-action" type="button" disabled={!legal({ type: "reap", instanceId: id })} onClick={() => onMove({ type: "reap", instanceId: id })}>
                       <Gem size={15} /> {t("inspector.reap")}
                     </button>
-                    <button className="secondary-action" type="button" disabled={!canFight} onClick={onFight}>
+                    {canDeclineReap && (
+                      <button className="secondary-action" type="button" title={declineLabel} onClick={() => onMove({ type: "reap", instanceId: id, decline: true })}>
+                        {declineLabel}
+                      </button>
+                    )}
+                    <button className="secondary-action" type="button" disabled={!canFight} onClick={() => onFight()}>
                       <Swords size={15} /> {t("inspector.fight")}
                     </button>
+                    {canDeclineFight && (
+                      <button className="secondary-action" type="button" title={declineLabel} onClick={() => onFight(true)}>
+                        {declineLabel}
+                      </button>
+                    )}
                   </>
                 ))}
                 {selection.zone === "board" && (card.face.type === "Artifact" || (card.face.type === "Creature" && printsUse && !card.stunned)) && (
-                  <button className="primary-action" type="button" disabled={!canUse} onClick={() => onMove({ type: "use", instanceId: id })}>
-                    <Zap size={15} /> {printsUse ? t("inspector.use") : t("inspector.passive")}
-                  </button>
+                  <>
+                    <button className="primary-action" type="button" disabled={!canUse} onClick={() => onMove({ type: "use", instanceId: id })}>
+                      <Zap size={15} /> {printsUse ? t("inspector.use") : t("inspector.passive")}
+                    </button>
+                    {canDeclineUse && (
+                      <button className="secondary-action" type="button" title={declineLabel} onClick={() => onMove({ type: "use", instanceId: id, decline: true })}>
+                        {declineLabel}
+                      </button>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -3317,13 +3348,13 @@ function App() {
                   t={t}
                   humanSide={humanSide}
                   onMove={performHumanMove}
-                  onFight={() => {
+                  onFight={(decline) => {
                     const live = gameRef.current;
                     if (!selectedCard || !live) return;
                     sound.play("select");
                     const side = humanSideOf(live, matchModeRef.current);
                     setPick({
-                      move: { type: "fight", attackerId: selectedCard.instanceId, targetId: "" },
+                      move: { type: "fight", attackerId: selectedCard.instanceId, targetId: "", decline },
                       ids: fightTargets(live, side, selectedCard).map((target) => target.instanceId),
                     });
                   }}
