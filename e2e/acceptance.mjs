@@ -180,6 +180,20 @@ if (skipFloor3d) {
   }
 }
 
+// 5) e 6) Probes do 3D (cada um sobe o proprio dev server)
+for (const [n, label, file] of [[5, "layout Arena", "_3d-arena.mjs"], [6, "cadeia 3D", "_3d-chain.mjs"]]) {
+  if (skipProbes) {
+    console.log(`\n[${n}/6] ${label}: PULADO (--skip-probes)`);
+    continue;
+  }
+  console.log(`\n[${n}/6] ${label} (node e2e/probes/${file}):`);
+  const res = spawnSync(process.execPath, [join(ROOT, "e2e", "probes", file)], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  // So as falhas e o veredito: o log completo de cada probe e longo.
+  for (const line of (res.stdout ?? "").split(/\r?\n/).filter((l) => /^(FAIL|FALHAS|ARENA|OK:)/.test(l))) console.log(`  ${line}`);
+  if (res.error) violations.push(`${label}: nao conseguiu executar ${file} (${res.error.message})`);
+  else if (res.status !== 0) violations.push(`${label}: ${file} saiu com code ${res.status} (falhas listadas acima)`);
+}
+
 console.log("\n== RESULTADO ==");
 if (violations.length) {
   console.error(`ACCEPTANCE: FALHOU - ${violations.length} check(s) com violacao:`);
