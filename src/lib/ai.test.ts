@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { chooseAiMove, shouldMulligan, type Difficulty } from "./ai";
-import { isLegalMove } from "./game";
+import { getLegalMoves, isLegalMove, type GameMove } from "./game";
 import { card, setupTest } from "./testkit";
 
 const hard = { difficulty: "Very hard" as const, thinkingDepth: 2 };
@@ -73,8 +73,31 @@ describe("AI", () => {
   });
 });
 
-describe("FEAT-10 mulligan heuristic", () => {
-  it("takes the mulligan when the most numerous house holds no creature", () => {
+describe("persistent effects (docs/ROADMAP_REVIEW.md §3)", () => {
+  it("searches only the fights a granted Taunt allows", () => {
+    // The banner sits between two taunting neighbors: the AI cannot attack it.
+    const banner = card("Banner", { type: "Creature", house: "Brobnar", power: 3, text: "Each other friendly creature gains Taunt." });
+    const state = setupTest(
+      { inPlay: [card("Small", { power: 1 }), banner, card("Far", { power: 1 })] },
+      { inPlay: [card("Attacker", { power: 5, house: "Brobnar" })] },
+      "Brobnar",
+    );
+    state.activePlayer = 1;
+    const fights = getLegalMoves(state, 1).filter(
+      (move): move is Extract<GameMove, { type: "fight" }> => move.type === "fight",
+    );
+    const allowed = fights
+      .map((move) => state.players[0].board.find((item) => item.instanceId === move.targetId)!.face.title)
+      .sort();
+    expect(allowed).toEqual(["Far", "Small"]);
+    const move = chooseAiMove(state, 1, "Brobnar", { difficulty: "Easy", thinkingDepth: 1 });
+    if (move?.type === "fight") {
+      expect(allowed).toContain(state.players[0].board.find((item) => item.instanceId === move.targetId)!.face.title);
+    }
+  });
+});
+
+describe("FEAT-10 mulligan heuristic", () => {  it("takes the mulligan when the most numerous house holds no creature", () => {
     const state = setupTest({
       hand: [card("Plot", { house: "Dis", type: "Action" }), card("Scheme", { house: "Dis", type: "Action" }), card("Grunt", { house: "Brobnar", type: "Creature" })],
     });

@@ -8,7 +8,7 @@
 //
 // Pure API: every exported function clones its input and returns a new state;
 // the helpers below mutate only that private clone.
-import { rulesOf, type Ability, type Act, type Condition, type Filter, type Selection, type Trigger } from "./abilities";
+import { rulesOf, type Ability, type Act, type Condition, type Filter, type PersistentEffect, type Restrict, type Selection, type Trigger } from "./abilities";
 import type { Keyword } from "./keywords";
 
 export type CardType = "Creature" | "Action" | "Artifact" | "Upgrade" | string;
@@ -103,6 +103,8 @@ export interface GameState {
   acted: number;
   /** Cards played or discarded this turn (first-turn rule). */
   played: number;
+  /** Cards played this turn — discards do not count (play-limit effects). */
+  plays: number;
   /** An Omega card ended the main step. */
   omega: boolean;
   /** FEAT-08: PRNG seed and how many draws the match has consumed so far.
@@ -112,6 +114,9 @@ export interface GameState {
   /** FEAT-10: which side still has to decide its mulligan before turn 1
       (null once both did). */
   pendingMulligan: 0 | 1 | null;
+  /** Triggered effects with a duration ("… on their next turn"): plain data
+      copies of the parsed effect plus its owner and expiry stamp. */
+  lasting?: PersistentEffect[];
 }
 
 /** `target` optionally names the card chosen for the triggered ability (or the
@@ -234,10 +239,12 @@ export function createMatch(playerDeck: DeckInfo, rivalDeck: DeckInfo, options: 
     log: [{ key: "log.matchStart", params: { deck: playerDeck.name, rival: players[1].deckName }, turn: 1 }],
     acted: 0,
     played: 0,
+    plays: 0,
     omega: false,
     seed: rng.seed,
     rngCalls: rng.rngCalls,
     pendingMulligan: 0,
+    lasting: [],
   };
 }
 
@@ -306,6 +313,7 @@ export function cloneGame(state: GameState): GameState {
     ...state,
     players: [copyPlayer(state.players[0]), copyPlayer(state.players[1])],
     log: [...state.log],
+    lasting: state.lasting ? [...state.lasting] : [],
   };
 }
 
@@ -320,7 +328,6 @@ const tally = (player: GamePlayer, key: "amberGained" | "amberStolen" | "amberCa
 
 // ---------- board queries ----------
 
-export const keyword = (card: CardInstance, name: Keyword): number => rulesOf(card.face).keywords[name] ?? 0;
 const isCreature = (card: CardInstance) => card.face.type === "Creature";
 const battleline = (player: GamePlayer) => player.board.filter(isCreature);
 
@@ -345,6 +352,103 @@ function onFlank(state: GameState, card: CardInstance): boolean {
   return neighbors(state, card).length < 2;
 }
 
+// ---------- persistent effects (derived from the board) ----------
+
+/** Monotonic stamp of the turn in progress (round × 2 + the side taking it).
+    Lasting effects store the stamp at which they stop applying. */
+export function turnStamp(state: GameState): number {
+  return state.turn * 2 + state.activePlayer;
+}
+
+/** An effect owned by `side`: the constant text of one of its cards in play, or
+    a lasting effect recorded by a move (whose source may already be gone). */
+export interface ActiveEffect {
+  side: Side;
+  source?: CardInstance;
+  effect: PersistentEffect;
+}
+
+/** Every persistent effect `side`'s cards project right now. Derived from the
+    board on each query — the engine clones the state on every move, so a stored
+    mutable effect list would fight the purity of the model (keyteki rebuilds
+    its effect engine the same way). */
+export function activeEffects(state: GameState, side: Side): ActiveEffect[] {
+  const result: ActiveEffect[] = [];
+  for (const card of state.players[side].board) {
+    for (const effect of rulesOf(card.face).effects) result.push({ side, source: card, effect });
+  }
+  const stamp = turnStamp(state);
+  for (const effect of state.lasting ?? []) {
+    if (effect.side === side && (effect.until ?? 0) > stamp) result.push({ side, effect });
+  }
+  return result;
+}
+
+const allEffects = (state: GameState): ActiveEffect[] => [...activeEffects(state, 0), ...activeEffects(state, 1)];
+
+/** Does this effect apply to `card` right now? (target filter + clause) */
+function effectHits(state: GameState, owner: ActiveEffect, card: CardInstance): boolean {
+  return matches(state, owner.side, owner.source, card, owner.effect.target) && (owner.effect.when !== "flank" || onFlank(state, card));
+}
+
+/** Power including every active modifier (keyteki card.power through effects). */
+export function effectivePower(state: GameState, card: CardInstance): number {
+  let power = card.face.power;
+  for (const owner of allEffects(state)) if (owner.effect.power && effectHits(state, owner, card)) power += owner.effect.power;
+  return Math.max(0, power);
+}
+
+/** Armor including every active modifier; as in keyteki it never drops below 0. */
+export function effectiveArmor(state: GameState, card: CardInstance): number {
+  let armor = card.face.armor;
+  for (const owner of allEffects(state)) if (owner.effect.armor && effectHits(state, owner, card)) armor += owner.effect.armor;
+  return Math.max(0, armor);
+}
+
+/** Keyword value including the granted ones ("Each friendly creature gains Taunt"). */
+export function keyword(state: GameState, card: CardInstance, name: Keyword): number {
+  let value = rulesOf(card.face).keywords[name] ?? 0;
+  for (const owner of allEffects(state)) {
+    const granted = owner.effect.keywords?.[name];
+    if (granted && effectHits(state, owner, card)) value += granted;
+  }
+  return value;
+}
+
+/** Abilities of a card right now: printed plus granted ("gains 'Reap: …'"). */
+export function abilitiesOf(state: GameState, card: CardInstance): Ability[] {
+  const printed = rulesOf(card.face).abilities;
+  const granted: Ability[] = [];
+  for (const owner of allEffects(state)) {
+    if (owner.effect.abilities?.length && effectHits(state, owner, card)) granted.push(...owner.effect.abilities);
+  }
+  return granted.length ? [...printed, ...granted] : printed;
+}
+
+/** Does a "You cannot play/use/fight …" effect forbid `action` for `side`? */
+function restricted(state: GameState, side: Side, action: Restrict["action"], card?: CardInstance): boolean {
+  for (const owner of allEffects(state)) {
+    const restrict = owner.effect.restrict;
+    if (!restrict || restrict.action !== action) continue;
+    if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
+    if (restrict.type && (!card || card.face.type !== restrict.type)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** Tightest "cannot play more than N cards each turn" in force for `side`. */
+function playLimit(state: GameState, side: Side): number {
+  let limit = Infinity;
+  for (const owner of allEffects(state)) {
+    const restrict = owner.effect.restrict;
+    if (!restrict?.limit || restrict.action !== "play") continue;
+    if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
+    limit = Math.min(limit, restrict.limit);
+  }
+  return limit;
+}
+
 /** Key cost for `side` right now: 6 + active modifiers (keyteki player.getCurrentKeyCost). */
 export function keyCost(state: GameState, side: Side): number {
   return BASE_KEY_COST + (state.players[side].keyCostMod ?? 0);
@@ -364,7 +468,7 @@ export function conditionHolds(condition: Condition, state: GameState, me: Side)
   return condition.k === "moreCreatures" ? mine > theirs : mine < theirs;
 }
 
-function matches(state: GameState, me: Side, source: CardInstance, card: CardInstance, filter: Filter): boolean {
+function matches(state: GameState, me: Side, source: CardInstance | undefined, card: CardInstance, filter: Filter): boolean {
   const side = controllerOf(state, card);
   return (
     (!filter.type || card.face.type === filter.type) &&
@@ -372,7 +476,10 @@ function matches(state: GameState, me: Side, source: CardInstance, card: CardIns
     (filter.damaged === undefined || card.damage > 0 === filter.damaged) &&
     (filter.flank === undefined || onFlank(state, card) === filter.flank) &&
     (!filter.other || card !== source) &&
-    (!filter.ready || (card.ready && !card.stunned))
+    (!filter.ready || (card.ready && !card.stunned)) &&
+    (!filter.self || card === source) &&
+    (!filter.host || card.instanceId === source?.attachedTo) &&
+    (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card)))
   );
 }
 
@@ -380,7 +487,7 @@ function everyMatch(state: GameState, me: Side, source: CardInstance, filter: Fi
   const found = [...state.players[me].board, ...state.players[other(me)].board].filter((card) =>
     matches(state, me, source, card, filter),
   );
-  return filter.top ? found.sort((a, b) => b.face.power - a.face.power).slice(0, filter.top) : found;
+  return filter.top ? found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top) : found;
 }
 
 const HARMFUL = new Set<Act["k"]>(["destroy", "damage", "stun", "exhaust", "returnToHand", "returnToDeck", "archive"]);
@@ -390,11 +497,11 @@ const isHarmful = (ability: Ability) => ability.acts.some((act) => HARMFUL.has(a
     enemy (then the weakest friendly), helpful ones the strongest friendly. */
 function autoPick(state: GameState, me: Side, candidates: CardInstance[], harmful: boolean): CardInstance | undefined {
   const strongest = (cards: CardInstance[]) =>
-    [...cards].sort((a, b) => b.face.power - a.face.power || b.damage - a.damage)[0];
+    [...cards].sort((a, b) => effectivePower(state, b) - effectivePower(state, a) || b.damage - a.damage)[0];
   const friendly = candidates.filter((card) => controllerOf(state, card) === me);
   const enemy = candidates.filter((card) => !friendly.includes(card));
   if (!harmful) return strongest(friendly) ?? strongest(enemy);
-  return strongest(enemy) ?? [...friendly].sort((a, b) => a.face.power - b.face.power)[0];
+  return strongest(enemy) ?? [...friendly].sort((a, b) => effectivePower(state, a) - effectivePower(state, b))[0];
 }
 
 interface Context {
@@ -472,9 +579,9 @@ function destroy(state: GameState, card: CardInstance, deterministic: boolean, b
 }
 
 /** Armor absorbs damage once per turn (keyteki DealDamageAction/armorUsed). */
-function dealDamage(card: CardInstance, amount: number, poison = false): void {
+function dealDamage(state: GameState, card: CardInstance, amount: number, poison = false): void {
   if (!isCreature(card) || amount <= 0) return;
-  const absorbed = Math.min(Math.max(0, card.face.armor - (card.armorUsed ?? 0)), amount);
+  const absorbed = Math.min(Math.max(0, effectiveArmor(state, card) - (card.armorUsed ?? 0)), amount);
   card.armorUsed = (card.armorUsed ?? 0) + absorbed;
   const applied = amount - absorbed;
   if (applied <= 0) return;
@@ -487,7 +594,7 @@ function sweep(state: GameState, deterministic: boolean): void {
   for (;;) {
     const doomed = state.players
       .flatMap((player) => battleline(player))
-      .find((card) => !dying.has(card) && (card.poisoned || (card.damage > 0 && card.damage >= card.face.power)));
+      .find((card) => !dying.has(card) && (card.poisoned || (card.damage > 0 && card.damage >= effectivePower(state, card))));
     if (!doomed) return;
     destroy(state, doomed, deterministic);
   }
@@ -541,7 +648,7 @@ function run(context: Context, act: Act): void {
       }
       break;
     case "damage":
-      for (const card of cards) dealDamage(card, amount);
+      for (const card of cards) dealDamage(state, card, amount);
       break;
     case "heal":
       for (const card of cards) card.damage = Math.max(0, card.damage - amount);
@@ -577,7 +684,7 @@ function run(context: Context, act: Act): void {
         // Using a creature is reap, fight or its Action, the player's choice;
         // until the UI prompts for it the engine resolves the printed Action
         // when there is one, reap otherwise (BUG-11).
-        const via = context.useVia ?? (hasPrinted(card, "Action") ? "action" : "reap");
+        const via = context.useVia ?? (hasAbility(state, card, "action") ? "action" : "reap");
         if (via === "action") fire(state, side, card, "action", { choice: {}, deterministic });
         else reap(state, side, card, {}, deterministic);
       }
@@ -593,6 +700,13 @@ function run(context: Context, act: Act): void {
       if (card) player.archives.push(card);
       break;
     }
+    case "lasting": {
+      // A triggered effect with a duration: stored as plain data (like keyteki's
+      // lasting effects) and pruned when the stamp it expires on is reached.
+      const until = turnStamp(state) + (act.e.duration === "next" ? 2 : 1);
+      state.lasting = [...(state.lasting ?? []), { ...act.e, side: me, until }];
+      break;
+    }
   }
   sweep(state, deterministic);
 }
@@ -605,7 +719,7 @@ function fire(
   trigger: Trigger,
   options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action" },
 ): void {
-  for (const ability of rulesOf(source.face).abilities) {
+  for (const ability of abilitiesOf(state, source)) {
     if (!ability.on.includes(trigger) || (ability.if && !holds(ability.if, state, me))) continue;
     const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic, useVia: options.via };
     if (ability.target) {
@@ -639,19 +753,19 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
     if (state.players[other(me)].discard.includes(defender)) tally(state.players[me], "creaturesDestroyed");
   };
   if (!alive()) return credit();
-  dealDamage(defender, keyword(attacker, "assault"));
-  dealDamage(attacker, keyword(defender, "hazardous"));
+  dealDamage(state, defender, keyword(state, attacker, "assault"));
+  dealDamage(state, attacker, keyword(state, defender, "hazardous"));
   sweep(state, deterministic);
   if (!alive()) return credit();
 
-  const elusive = keyword(defender, "elusive") > 0 && !defender.elusiveUsed;
+  const elusive = keyword(state, defender, "elusive") > 0 && !defender.elusiveUsed;
   defender.elusiveUsed = true;
   if (!elusive) {
-    if (!keyword(attacker, "skirmish")) dealDamage(attacker, defender.face.power, keyword(defender, "poison") > 0);
-    dealDamage(defender, attacker.face.power, keyword(attacker, "poison") > 0);
+    if (!keyword(state, attacker, "skirmish")) dealDamage(state, attacker, effectivePower(state, defender), keyword(state, defender, "poison") > 0);
+    dealDamage(state, defender, effectivePower(state, attacker), keyword(state, attacker, "poison") > 0);
   }
-  const splash = keyword(attacker, "splash-attack");
-  if (splash) for (const neighbor of neighbors(state, defender)) dealDamage(neighbor, splash);
+  const splash = keyword(state, attacker, "splash-attack");
+  if (splash) for (const neighbor of neighbors(state, defender)) dealDamage(state, neighbor, splash);
   sweep(state, deterministic);
   if (controllerOf(state, attacker) === me) fire(state, me, attacker, "fight", { fought: defender, choice, deterministic });
   credit();
@@ -661,6 +775,10 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
 
 const houseAllows = (card: CardInstance, house: string | null) => !house || card.face.house === house;
 const hasPrinted = (card: CardInstance, prefix: "Action" | "Omni") => new RegExp(`(^|[\\s/.])${prefix}:`, "i").test(card.face.text);
+
+/** Does the card have an Action (or Omni) ability right now — printed or granted? */
+const hasAbility = (state: GameState, card: CardInstance, trigger: "action" | "omni") =>
+  hasPrinted(card, trigger === "action" ? "Action" : "Omni") || abilitiesOf(state, card).some((ability) => ability.on.includes(trigger));
 
 function mayAct(state: GameState, side: Side): boolean {
   return !mulliganPending(state) && state.winner === null && !(side === state.activePlayer && state.omega);
@@ -672,7 +790,8 @@ function mayPlay(state: GameState, side: Side): boolean {
 }
 
 function canPlay(state: GameState, side: Side, card: CardInstance): boolean {
-  if (keyword(card, "alpha") && side === state.activePlayer && state.acted > 0) return false;
+  if (restricted(state, side, "play", card)) return false;
+  if (keyword(state, card, "alpha") && side === state.activePlayer && state.acted > 0) return false;
   if (card.face.type === "Upgrade") return state.players.some((player) => battleline(player).length > 0);
   // Gigantic creatures are one creature printed on two cards: both halves must
   // be in hand and they leave the hand together (BUG-23). The reminder text is
@@ -685,16 +804,19 @@ function canPlay(state: GameState, side: Side, card: CardInstance): boolean {
 
 const isGigantic = (card: CardInstance) => /play only with the other half of/i.test(card.face.text ?? "");
 
-/** Enemy creatures `attacker` may fight: taunt protects its neighbors (keyteki Card.js). */
+/** Enemy creatures `attacker` may fight: taunt protects its neighbors (keyteki Card.js),
+    and "cannot fight" effects close the whole step. */
 export function fightTargets(state: GameState, side: Side, attacker: CardInstance): CardInstance[] {
   if (!isCreature(attacker) || !attacker.ready || attacker.stunned) return [];
+  if (restricted(state, side, "fight", attacker)) return [];
   return battleline(state.players[other(side)]).filter(
-    (target) => keyword(target, "taunt") > 0 || !neighbors(state, target).some((neighbor) => keyword(neighbor, "taunt") > 0),
+    (target) => keyword(state, target, "taunt") > 0 || !neighbors(state, target).some((neighbor) => keyword(state, neighbor, "taunt") > 0),
   );
 }
 
-function canUseCard(card: CardInstance, house: string | null): boolean {
-  return card.ready && !card.stunned && ((houseAllows(card, house) && hasPrinted(card, "Action")) || hasPrinted(card, "Omni"));
+function canUseCard(state: GameState, side: Side, card: CardInstance, house: string | null): boolean {
+  if (restricted(state, side, "use", card)) return false;
+  return card.ready && !card.stunned && ((houseAllows(card, house) && hasAbility(state, card, "action")) || hasAbility(state, card, "omni"));
 }
 
 function triggersFor(move: GameMove): Trigger[] {
@@ -735,7 +857,7 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
   }
   const card = source;
   const triggers = triggersFor(move);
-  const ability = rulesOf(card.face).abilities.find(
+  const ability = abilitiesOf(view, card).find(
     (item) => item.target && item.on.some((trigger) => triggers.includes(trigger)) && (!item.if || holds(item.if, view, side)),
   );
   return ability?.target ? everyMatch(view, side, card, ability.target).map((item) => item.instanceId) : [];
@@ -752,9 +874,10 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
   const moves: GameMove[] = [];
 
   if (mayPlay(state, side)) {
+    const limit = playLimit(state, side);
     for (const card of player.hand) {
       if (!houseAllows(card, house)) continue;
-      if (canPlay(state, side, card)) moves.push({ type: "play", instanceId: card.instanceId });
+      if (state.plays < limit && canPlay(state, side, card)) moves.push({ type: "play", instanceId: card.instanceId });
       moves.push({ type: "discard", instanceId: card.instanceId });
     }
   }
@@ -770,7 +893,7 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
         moves.push({ type: "fight", attackerId: card.instanceId, targetId: target.instanceId });
       }
     }
-    if (card.face.type !== "Upgrade" && canUseCard(card, house)) moves.push({ type: "use", instanceId: card.instanceId });
+    if (card.face.type !== "Upgrade" && canUseCard(state, side, card, house)) moves.push({ type: "use", instanceId: card.instanceId });
   }
   return moves;
 }
@@ -794,7 +917,7 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   if (!source) return false;
   if (move.type === "play" && (source.face.type !== "Action" || source.face.amber > 0)) return true;
   const triggers = triggersFor(move);
-  return rulesOf(source.face).abilities.some(
+  return abilitiesOf(state, source).some(
     (ability) => ability.on.some((trigger) => triggers.includes(trigger)) && canResolve(state, side, source, ability),
   );
 }
@@ -813,10 +936,10 @@ export interface MoveOptions {
   deterministic?: boolean;
 }
 
-function placeCreature(player: GamePlayer, card: CardInstance, move: Extract<GameMove, { type: "play" }>): void {
+function placeCreature(state: GameState, player: GamePlayer, card: CardInstance, move: Extract<GameMove, { type: "play" }>): void {
   const line = battleline(player);
   let slot = move.flank === "left" ? 0 : line.length;
-  if (keyword(card, "deploy") && move.slot !== undefined) slot = Math.max(0, Math.min(line.length, move.slot));
+  if (keyword(state, card, "deploy") && move.slot !== undefined) slot = Math.max(0, Math.min(line.length, move.slot));
   const anchor = line[slot];
   player.board.splice(anchor ? player.board.indexOf(anchor) : player.board.length, 0, card);
 }
@@ -835,6 +958,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
 
   if (move.type === "play" || move.type === "discard") {
     if (playerIndex === state.activePlayer) state.played += 1;
+    if (move.type === "play" && playerIndex === state.activePlayer) state.plays += 1;
     player.hand = player.hand.filter((card) => card !== source);
   }
 
@@ -848,7 +972,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     Object.assign(source, { ready: false, stunned: false, damage: 0 });
     record(state, "log.play", params, silent);
     if (isCreature(source)) {
-      placeCreature(player, source, move);
+      placeCreature(state, player, source, move);
       // The other Gigantic half leaves the hand with its partner: both amber
       // bonuses count, the second half sits "under" and is discarded with the
       // creature (BUG-23). Fidelity note: its power/text are not merged yet.
@@ -872,7 +996,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     }
     fire(state, playerIndex, source, "play", { choice, deterministic });
     if (source.face.type !== "Creature" && source.face.type !== "Artifact" && source.face.type !== "Upgrade") player.discard.push(source);
-    if (keyword(source, "omega") && playerIndex === state.activePlayer) state.omega = true;
+    if (keyword(state, source, "omega") && playerIndex === state.activePlayer) state.omega = true;
   } else if (move.type === "unstun") {
     // A stunned creature's use only removes the stun (keyteki RemoveStunAction on use).
     Object.assign(source, { ready: false, stunned: false });
@@ -887,7 +1011,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   } else {
     source.ready = false;
     const house = playerIndex === state.activePlayer ? state.activeHouse : null;
-    if (houseAllows(source, house) && hasPrinted(source, "Action")) {
+    if (houseAllows(source, house) && hasAbility(state, source, "action")) {
       fire(state, playerIndex, source, "action", { choice, deterministic, via: move.via });
     }
     fire(state, playerIndex, source, "omni", { choice, deterministic, via: move.via });
@@ -929,8 +1053,11 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
 
   const nextIndex = other(playerIndex);
   const nextPlayer = state.players[nextIndex];
-  Object.assign(state, { activePlayer: nextIndex, activeHouse: null, acted: 0, played: 0, omega: false });
+  Object.assign(state, { activePlayer: nextIndex, activeHouse: null, acted: 0, played: 0, plays: 0, omega: false });
   if (nextIndex === 0) state.turn += 1;
+  // Lasting effects whose duration ran out with this turn stop applying.
+  const stamp = turnStamp(state);
+  state.lasting = (state.lasting ?? []).filter((effect) => (effect.until ?? 0) > stamp);
 
   // Key step: forging is mandatory when affordable.
   const cost = keyCost(state, nextIndex);
@@ -969,6 +1096,8 @@ export function normalizeSavedState(current: GameState): GameState {
   const state = cloneGame(current);
   if (!Number.isFinite(state.seed)) state.seed = Math.floor(Math.random() * 4294967296) >>> 0;
   if (!Number.isFinite(state.rngCalls)) state.rngCalls = 0;
+  if (!Number.isFinite(state.plays)) state.plays = 0;
+  if (!Array.isArray(state.lasting)) state.lasting = [];
   if (state.pendingMulligan !== 0 && state.pendingMulligan !== 1) state.pendingMulligan = null;
   for (const player of state.players) {
     player.archives ??= [];

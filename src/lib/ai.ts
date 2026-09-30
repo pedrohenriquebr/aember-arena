@@ -1,15 +1,18 @@
 import {
+  abilitiesOf,
   applyMove,
   chooseHouse,
   conditionHolds,
+  effectiveArmor,
+  effectivePower,
   endTurn,
   getLegalMoves,
   keyCost,
   moveHasEffect,
+  type CardInstance,
   type GameMove,
   type GameState,
 } from "./game";
-import { rulesOf } from "./abilities";
 import { canResolve, seededValue } from "./game";
 
 export type Difficulty = "Easy" | "Medium" | "Hard" | "Very hard" | "Impossible";
@@ -48,12 +51,14 @@ function scoreForPlayer(state: GameState, index: 0 | 1, abilityAware: boolean): 
   const player = state.players[index];
   const creatureScore = player.board.reduce((sum, card) => {
     if (card.face.type !== "Creature") return sum + (card.face.type === "Artifact" ? 0.65 : 0.25);
-    const healthLeft = Math.max(0, card.face.power - card.damage) + card.face.armor;
+    const power = effectivePower(state, card);
+    const healthLeft = Math.max(0, power - card.damage) + effectiveArmor(state, card);
     const readiness = card.ready && !card.stunned ? 0.85 : 0;
     // FEAT-03 (Hard+): value by the parsed abilities whose conditions hold
     // right now (reap/fight/action), replacing the raw-text regex guess.
+    // Persistent effects count too: a granted ability is part of the card.
     const textValue = abilityAware
-      ? rulesOf(card.face).abilities.filter(
+      ? abilitiesOf(state, card).filter(
           (ability) =>
             ability.on.some((trigger) => trigger === "reap" || trigger === "fight" || trigger === "action" || trigger === "omni") &&
             canResolve(state, index, card, ability),
@@ -61,7 +66,7 @@ function scoreForPlayer(state: GameState, index: 0 | 1, abilityAware: boolean): 
       : /(?:steal|capture|forge|gain)/i.test(card.face.text)
         ? 0.28
         : 0;
-    return sum + 0.85 + card.face.power * 0.38 + Math.min(healthLeft, 4) * 0.12 + readiness + textValue - (card.amber ?? 0) * 0.9;
+    return sum + 0.85 + power * 0.38 + Math.min(healthLeft, 4) * 0.12 + readiness + textValue - (card.amber ?? 0) * 0.9;
   }, 0);
   const handScore = [...player.hand, ...player.archives].reduce(
     (sum, card) => sum + 0.27 + card.face.amber * 0.18 + (card.face.type === "Creature" ? card.face.power * 0.07 : 0),
@@ -169,10 +174,10 @@ export function chooseAiHouse(state: GameState, aiIndex: 0 | 1): string {
     .sort((a, b) => b.score - a.score)[0].house;
 }
 
-function moveSourceFace(state: GameState, side: 0 | 1, move: GameMove) {
+function moveSource(state: GameState, side: 0 | 1, move: GameMove): CardInstance | undefined {
   const player = state.players[side];
   const id = move.type === "fight" ? move.attackerId : move.instanceId;
-  return [...player.hand, ...player.board].find((card) => card.instanceId === id)?.face ?? player.hand[0]?.face;
+  return [...player.hand, ...player.board].find((card) => card.instanceId === id) ?? player.hand[0];
 }
 
 export function chooseAiMove(
@@ -207,7 +212,7 @@ export function chooseAiMove(
       // FEAT-03 (Hard+): playing a card whose printed condition is not met yet
       // spends it for nothing — hold it and let the search find the setup.
       const heldBack = profile.abilityAware
-        ? -0.45 * rulesOf(moveSourceFace(view, aiIndex, move)).abilities.filter(
+        ? -0.45 * abilitiesOf(view, moveSource(view, aiIndex, move)!).filter(
             (ability) => ability.on.includes("play") && ability.if && !conditionHolds(ability.if, view, aiIndex),
           ).length
         : 0;
