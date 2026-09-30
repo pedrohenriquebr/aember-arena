@@ -2336,9 +2336,9 @@ button:disabled {
   position: fixed;
   z-index: 60;
   right: 0;
-  bottom: var(--tabbar-h);
+  bottom: calc(var(--tabbar-h, 54px) + var(--hand-h, 152px) + 8px);
   left: 0;
-  max-height: min(44dvh, 360px);
+  max-height: min(40dvh, 320px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 18px 14px 14px;
@@ -2373,7 +2373,8 @@ button:disabled {
 @media (min-width: 701px) {
   .inspector-section--docked {
     right: max(12px, calc(50% - 320px));
-    bottom: 0;
+    top: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 8px);
+    bottom: auto;
     left: max(12px, calc(50% - 320px));
     padding: 20px 18px calc(16px + env(safe-area-inset-bottom, 0px));
   }
