@@ -658,7 +658,7 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   // A Gigantic half under this creature leaves play with it (BUG-23).
   for (const half of card.under ?? []) {
     Object.assign(half, { damage: 0, ready: false, stunned: false, amber: 0, armorUsed: 0, elusiveUsed: false, poisoned: false });
-    player.discard.push(half);
+    owner.discard.push(half);
   }
   card.under = undefined;
   // Leaving play strips the set-layer state too: keyteki resets the controller
@@ -1045,10 +1045,14 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
   // kill for the other side (assault/hazardous/poison and "Fight:" included).
   // A token killed in the fight leaves the game instead of reaching a discard
   // pile, so "left play" is its mark (Onda 3).
+  // A dead card lands in its OWNER's discard, which differs from the
+  // controller's when control was taken (MX-06): capture the owners up front.
+  const attackerOwner = ownerOf(state, attacker) ?? me;
+  const defenderOwner = ownerOf(state, defender) ?? other(me);
   const credit = () => {
     const gone = (card: CardInstance) => card.isToken && controllerOf(state, card) === undefined;
-    if (state.players[me].discard.includes(attacker) || gone(attacker)) tally(state.players[other(me)], "creaturesDestroyed");
-    if (state.players[other(me)].discard.includes(defender) || gone(defender)) tally(state.players[me], "creaturesDestroyed");
+    if (state.players[attackerOwner].discard.includes(attacker) || gone(attacker)) tally(state.players[other(me)], "creaturesDestroyed");
+    if (state.players[defenderOwner].discard.includes(defender) || gone(defender)) tally(state.players[me], "creaturesDestroyed");
   };
   if (!alive()) return credit();
   dealDamage(state, defender, keyword(state, attacker, "assault"));

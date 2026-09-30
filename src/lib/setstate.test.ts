@@ -228,6 +228,27 @@ describe("take control (keyteki game.takeControl)", () => {
     expect(state.players[0].creaturesDestroyed).toBe(0);
   });
 
+  it("credits the kill when a stolen creature dies in a fight (MX-06)", () => {
+    let state = setupTest({ hand: [hypnobeam()] }, { inPlay: [creature("Beast", 2), creature("Wall", 9)] });
+    state = play(state, 0, "Hypnobeam", board(state, 1, "Beast").instanceId);
+    expect(board(state, 0, "Beast")).toBeDefined();
+    state.activeHouse = "Brobnar";
+    const fought = fight(state, 0, "Beast", "Wall"); // the Beast (2 power) dies to the 9-power Wall
+    expect(titles(fought.players[1].discard)).toContain("Beast"); // back in the owner's discard
+    expect(fought.players[1].creaturesDestroyed).toBe(1);
+  });
+
+  it("sends Gigantic halves under a stolen creature to the owner's discard (MX-07)", () => {
+    let state = setupTest({ hand: [hypnobeam()] }, { inPlay: [creature("Colossus", 6)] });
+    state.players[1].board[0].under = [creature("Half", 0)];
+    state = play(state, 0, "Hypnobeam");
+    state.players[0].hand = [cardOf("Decimation", "Play: Destroy a creature.")];
+    state.activeHouse = "Brobnar";
+    state = play(state, 0, "Decimation");
+    expect(titles(state.players[1].discard)).toEqual(expect.arrayContaining(["Colossus", "Half"]));
+    expect(state.players[0].discard.map((item) => item.face.title)).not.toContain("Half");
+  });
+
   it("clears the marker when the owner takes the card back", () => {
     const state = setupTest({ hand: [hypnobeam()] }, { hand: [hypnobeam()], inPlay: [creature("Beast", 6)], amber: 0 });
     const taken = play(state, 0, "Hypnobeam");
