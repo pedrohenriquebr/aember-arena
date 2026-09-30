@@ -11,11 +11,12 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
   plugins: [react(), viteSingleFile()],
   server: {
-    // Acesso remoto via tunel (trycloudflare muda de subdominio a cada run).
-    allowedHosts: [".trycloudflare.com"],
+    // Acesso remoto (tuneis ngrok/trycloudflare/host-local da rede). O dono
+    // joga de fora: libera qualquer host (o app nao tem servidor-state).
+    allowedHosts: true,
   },
   preview: {
-    allowedHosts: [".trycloudflare.com"],
+    allowedHosts: true,
   },
   build: {
     // Orcamento de bundle (CLAUDE.md §7): o app e um chunk unico inlined, entao
