@@ -583,6 +583,11 @@ button:disabled {
   .app-main {
     padding: 20px 0 0;
   }
+
+  /* O palco de viewport já desconta o header: sem respiro extra acima dele. */
+  .app-main:has(.game-screen) {
+    padding: 0;
+  }
 }
 
 @media (min-width: 1041px) {
@@ -2293,7 +2298,7 @@ button:disabled {
   right: 0;
   bottom: var(--tabbar-h);
   left: 0;
-  max-height: min(58dvh, 560px);
+  max-height: min(44dvh, 360px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 18px 14px 14px;
@@ -2323,11 +2328,6 @@ button:disabled {
   height: 44px;
   margin: -12px -10px -12px 0;
   border-color: transparent;
-}
-
-/* O sheet cobre a base da tela: folga para ainda rolar a mão acima dele. */
-.game-screen:has(.inspector-section--docked) {
-  padding-bottom: min(58dvh, 560px);
 }
 
 @media (min-width: 701px) {
@@ -2361,8 +2361,75 @@ button:disabled {
     margin: 0;
     border-color: rgba(229, 219, 195, 0.13);
   }
-  .game-screen:has(.inspector-section--docked) {
-    padding-bottom: 30px;
+}
+
+/* FIT-05: abaixo de 1041px o rail é um DRAWER (lateral em 701-1040, sheet de baixo
+   no celular). Fechado, o <aside> some do fluxo (display: contents) e só o inspetor
+   docked segue visível — selecionar carta continua abrindo o sheet. Aberto, o
+   inspetor volta ao fluxo dentro do drawer. */
+@media (max-width: 1040px) {
+  .command-rail--drawer {
+    display: contents;
+  }
+  .command-rail--drawer:not(.is-open) > :not(.inspector-section--docked) {
+    display: none;
+  }
+  .command-rail--drawer.is-open {
+    position: fixed;
+    z-index: 71;
+    top: var(--header-h);
+    right: 0;
+    bottom: 0;
+    display: flex;
+    width: min(340px, 100%);
+    max-height: none;
+    margin: 0;
+    overflow: auto;
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    animation: none;
+  }
+  .command-rail--drawer.is-open .rail-topline {
+    display: flex;
+  }
+  .command-rail--drawer.is-open .inspector-section--docked {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 13px 15px 14px;
+    border: 0;
+    border-bottom: 1px solid rgba(225, 216, 194, 0.1);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    animation: none;
+  }
+  .command-rail--drawer.is-open .inspector-section--docked::before {
+    content: none;
+  }
+  .rail-backdrop {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    border: 0;
+    background: rgba(8, 10, 8, 0.55);
+    cursor: pointer;
+  }
+  .rail-close {
+    width: 44px;
+    height: 44px;
+    margin: -12px -10px -12px 0;
+    border-color: transparent;
+  }
+}
+
+@media (max-width: 700px) {
+  .command-rail--drawer.is-open {
+    top: auto;
+    bottom: var(--tabbar-h);
+    left: 0;
+    width: auto;
+    max-height: min(80dvh, 640px);
+    border-radius: 16px 16px 0 0;
   }
 }
 

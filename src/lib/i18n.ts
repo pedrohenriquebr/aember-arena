@@ -224,6 +224,8 @@ const DICT: Record<string, [string, string]> = {
   "inspector.power": ["power", "poder"],
   "inspector.armor": ["armor", "armadura"],
   "inspector.damage": ["damage", "dano"],
+  "rail.open": ["Open table notes", "Abrir notas da mesa"],
+  "rail.close": ["Close table notes", "Fechar notas da mesa"],
   "rail.notes": ["TABLE NOTES", "NOTAS DA MESA"],
   "rail.controls": ["Match controls and card information", "Controles da partida e informações de cartas"],
   "rail.warden": ["THE EMBER WARDEN", "O EMBER WARDEN"],

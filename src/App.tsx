@@ -5,6 +5,7 @@ import {
   ArrowRight,
   BookOpen,
   Box,
+  PanelRight,
   Check,
   ChevronRight,
   CircleHelp,
@@ -157,17 +158,19 @@ function prefersHover() {
     título; o atalho da visão da mesa muda para o turn-console. Espelha os @media
     dos tokens de altura no index.css. */
 const COMPACT_STAGE = "(max-width: 700px), (max-height: 759px)";
-function useCompactStage() {
+function useMedia(media: string) {
   return useSyncExternalStore(
     (notify) => {
-      const query = window.matchMedia?.(COMPACT_STAGE);
+      const query = window.matchMedia?.(media);
       query?.addEventListener("change", notify);
       return () => query?.removeEventListener("change", notify);
     },
-    () => window.matchMedia?.(COMPACT_STAGE)?.matches === true,
+    () => window.matchMedia?.(media)?.matches === true,
     () => false,
   );
 }
+
+const useCompactStage = () => useMedia(COMPACT_STAGE);
 
 /** H3D-09 (VIEW3D_PLAN §3): hardware fraco (<= 2 núcleos) troca o 3D real pelo
     perfil 2.5D — a mesa inclinada vira só cenário e as cartas ficam planas. Sem
@@ -2963,6 +2966,19 @@ function App() {
   }
 
   const compactStage = useCompactStage();
+  // FIT-05: abaixo de 1041px o rail é um drawer (o botão vive no console do board).
+  const drawerMode = !useMedia("(min-width: 1041px)");
+  const [railOpenRaw, setRailOpen] = useState(false);
+  const drawerOpen = drawerMode && railOpenRaw && screen === "game";
+  const railRef = useDialogFocus<HTMLElement>(drawerOpen);
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setRailOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
+  // No 2P o drawer nunca fica aberto por cima da mão do outro lado.
+  useEffect(() => setRailOpen(false), [humanSide]);
   // H3D-01: atalho da visão da mesa — alterna sem sair da partida. 44px (regra 9),
   // estado no aria-pressed. Um nó só: na faixa de título ou, no perfil compacto, no console.
   const viewToggle = (
@@ -3198,12 +3214,41 @@ function App() {
                   passPending={passPending}
                   onPassConfirm={() => { sound.play("click"); setPassPending(null); }}
                   viewSwitching={viewSwitching}
-                  consoleExtra={compactStage ? viewToggle : undefined}
+                  consoleExtra={compactStage || drawerMode ? (
+                    <>
+                      {compactStage && viewToggle}
+                      {drawerMode && !passAndPlay && (
+                        <button type="button" className="view-toggle" aria-label={t("game.undo")} title={undo?.blocked ? t("game.undoBlocked") : t("game.undo")} onClick={undoLastMove} disabled={!undoable}>
+                          <RotateCcw size={16} />
+                        </button>
+                      )}
+                      {drawerMode && (
+                        <button type="button" className="view-toggle" aria-label={t("rail.open")} aria-expanded={drawerOpen} aria-controls="command-rail" onClick={() => { sound.play("click"); setRailOpen(true); }}>
+                          <PanelRight size={16} />
+                        </button>
+                      )}
+                    </>
+                  ) : undefined}
                 />
               </div>
 
-              <aside className="command-rail" aria-label={t("rail.controls")}>
-                <div className="rail-topline"><span>{t("rail.notes")}</span><span className="table-number">01</span></div>
+              {drawerOpen && <button type="button" className="rail-backdrop" tabIndex={-1} aria-label={t("rail.close")} onClick={() => setRailOpen(false)} />}
+              <aside
+                id="command-rail"
+                ref={railRef}
+                className={`command-rail${drawerMode ? " command-rail--drawer" : ""}${drawerOpen ? " is-open" : ""}`}
+                aria-label={t("rail.controls")}
+                role={drawerOpen ? "dialog" : undefined}
+                aria-modal={drawerOpen ? true : undefined}
+              >
+                <div className="rail-topline">
+                  <span>{t("rail.notes")}</span>
+                  {drawerOpen ? (
+                    <button type="button" className="quiet-icon-button rail-close" onClick={() => setRailOpen(false)} aria-label={t("rail.close")}><X size={14} /></button>
+                  ) : (
+                    <span className="table-number">01</span>
+                  )}
+                </div>
                 <SelectedCardPanel
                   selection={selected}
                   card={selectedCard}

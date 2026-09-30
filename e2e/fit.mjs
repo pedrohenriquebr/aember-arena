@@ -14,6 +14,8 @@ const VIEWPORTS = [
   { name: "1296x668", width: 1296, height: 668 },
   { name: "1920x1080", width: 1920, height: 1080 },
   { name: "360x844", width: 360, height: 844 },
+  { name: "1024x768", width: 1024, height: 768 },
+  { name: "768x1024", width: 768, height: 1024 },
 ];
 const SEED = `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
@@ -114,6 +116,7 @@ const MEASURE = () => {
     rows: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, round(v)])),
     sum: round(sum),
     docScroll: document.scrollingElement.scrollHeight,
+    where: [".app-header", ".game-screen", ".workspace", ".main-column", ".game-board"].map((q) => { const r = document.querySelector(q).getBoundingClientRect(); const pv = q === ".game-screen" ? (document.querySelector(q).previousElementSibling?.className ?? "") : ""; return `${pv}|${q}=${Math.round(r.top)}..${Math.round(r.bottom)}`; }).join(" "),
     innerHeight: window.innerHeight,
     hand,
     overflow,
@@ -153,9 +156,8 @@ const FILL_BOARDS = () => {
 async function report(page, vp, label) {
     const m = await page.evaluate(MEASURE);
     const problems = [];
-    // Abaixo de 1041px o rail ainda cai depois da mao no fluxo (vira drawer no FIT-05):
-    // ali o documento rola so ate o rail, e o palco e medido pela soma e pela mao.
-    if (vp.width >= 1041 && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
+    // Abaixo de 1041px o rail e um drawer (FIT-05), mas o celular ainda rola (FIT-06).
+    if (vp.width >= 701 && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
     if (m.sum > m.innerHeight + 1) problems.push(`soma das faixas ${m.sum} > viewport ${m.innerHeight}`);
     const cut = m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
     if (!m.hand.length) problems.push("mao vazia/ausente");
@@ -164,11 +166,41 @@ async function report(page, vp, label) {
     console.log(`\n== ${vp.name} [${label}] ${problems.length ? "FAIL" : "OK"}`);
     console.log(`   faixas: ${Object.entries(m.rows).map(([k, v]) => `${k}=${v}`).join(" ")}`);
     console.log(`   soma=${m.sum} viewport=${m.innerHeight} docScroll=${m.docScroll} cartaBoard=${m.boardCardMin}-${m.boardCardMax}px mao=${m.hand.length} (bottom ${m.hand.length ? Math.max(...m.hand.map((r) => r.bottom)).toFixed(0) : "-"})`);
+    if (problems.length) console.log(`   onde: ${m.where}`);
     if (m.overflow.length) console.log(`   transborda: ${m.overflow.join(", ")}`);
     for (const p of problems) {
       console.log(`   ! ${p}`);
       failures.push(`${vp.name} [${label}]: ${p}`);
     }
+}
+
+// FIT-05: o drawer abre pelo botao do console, guarda as funcoes do rail, fecha com
+// Esc/backdrop/X e devolve o foco ao botao.
+async function checkDrawer(page, vp) {
+  const bad = (msg) => { console.log(`   ! drawer: ${msg}`); failures.push(`${vp.name} [drawer]: ${msg}`); };
+  const btn = page.locator('button[aria-controls="command-rail"]');
+  if (!(await btn.count())) return bad("botao do drawer ausente");
+  const box = await btn.boundingBox();
+  if (!box || box.width < 44 || box.height < 44) bad(`alvo < 44px (${box?.width}x${box?.height})`);
+  const rail = page.locator(".command-rail");
+  for (const how of ["Escape", "backdrop", "X"]) {
+    await btn.click();
+    await page.waitForTimeout(150);
+    if (!(await rail.evaluate((el) => el.classList.contains("is-open")))) return bad("nao abriu");
+    if (how === "Escape") {
+      const found = await page.evaluate(() => [".undo-button", ".log-full-button", ".ai-brief", ".quick-rules"].filter((q) => !document.querySelector(q) || getComputedStyle(document.querySelector(q)).display === "none"));
+      if (found.length) bad(`funcoes ausentes no drawer: ${found.join(",")}`);
+      await page.keyboard.press("Escape");
+    } else if (how === "backdrop") {
+      await page.mouse.click(5, 5);
+    } else {
+      await page.locator(".rail-close").click();
+    }
+    await page.waitForTimeout(150);
+    if (await rail.evaluate((el) => el.classList.contains("is-open"))) bad(`nao fechou via ${how}`);
+  }
+  if (!(await page.evaluate(() => document.activeElement?.getAttribute("aria-controls") === "command-rail"))) bad("foco nao voltou ao botao");
+  console.log(`   drawer ${failures.some((f) => f.includes(`${vp.name} [drawer]`)) ? "FAIL" : "OK"}`);
 }
 
 const failures = [];
@@ -210,6 +242,7 @@ try {
       await page.waitForTimeout(700);
       await report(page, vp, "8x8+artefato");
     }
+    if (vp.width < 1041) await checkDrawer(page, vp);
     await context.close();
   }
   await browser.close();
