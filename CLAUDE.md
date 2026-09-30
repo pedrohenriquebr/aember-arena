@@ -92,7 +92,7 @@ src/
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **148 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **151 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
@@ -167,6 +167,18 @@ src/
    parar. Varredura de mortos pré-revisão: 0 removível (o nome novo
    `.archives-action/.archives-count` é usado pelo botão; os nomes "sem uso" do CSS
    continuam dinâmicos).)
+   → **151** (onda 4, "estado de set", `docs/ROADMAP_REVIEW.md` §3: ward/enrage
+   como tokens em `CardInstance` (`warded`/`enraged`) com consumo no destroy/dano e
+   a luta forçada na legalidade, `CardFace.bonusIcons` + `enhancements` do Master
+   Vault lidos no `normaliseCard` e resolvidos no play, `controlledBy` para a troca
+   de controle (que move a carta de battleline e devolve à pilha do dono), `forge()`
+   compartilhado com `forgeKey`/`unforgeKey` fora do passo de chave e
+   `PersistentEffect.replace` para as substituições "instead" suportadas. Só TS,
+   zero dependência; medido **148,35 kB** gz no fechamento (147,16 antes da onda).
+   Teto ÚNICO deste lote — acima de 151: parar. Varredura de mortos pré-revisão
+   (`_dead-css`): 0 removível (os nomes "sem uso" continuam dinâmicos:
+   `card-art--${size}`, `house-icon--${size}`, `coverage-note--*`,
+   `toast-message--${kind}`).)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.

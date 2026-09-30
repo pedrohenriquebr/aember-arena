@@ -3,7 +3,13 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 148 kB (onda 1 da camada de efeitos, docs/ROADMAP_REVIEW.md §3:
+//      Default 151 kB (onda 4 "estado de set", docs/ROADMAP_REVIEW.md §3: ward/
+//      enrage como tokens na instancia (warded/enraged), bonusIcons +
+//      enhancements do Master Vault, take control com controlledBy, forge/
+//      unforge fora do passo de chave e as substituicoes "instead"; so TS, zero
+//      dependencia — o fechamento mediu 148,35 kB gz sobre os 147,16 do inicio
+//      da onda; varredura de mortos `_dead-css`: 0 removivel; ver CLAUDE.md §7).
+//      Antes: 148 (onda 1 da camada de efeitos, docs/ROADMAP_REVIEW.md §3:
 //      persistentEffect derivado do board, leitura efetiva de poder/armadura/
 //      keywords, proibicoes, duracao e gainAbility + arquivos opcionais; so
 //      TS/CSS, zero dependencia — a gramatica sozinha mediu 145,38 e o
@@ -67,7 +73,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 148);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 151);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const skipFloor3d = hasFlag("--skip-floor3d");
