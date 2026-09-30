@@ -1529,3 +1529,15 @@ export function summarizeDeck(deck: DeckInfo): DeckSummary {
   };
 }
 const holds = conditionHolds;
+
+/** BUG2-04: rebuilds the DeckInfo a saved match played with, straight from the
+    state — a deck removed from the library (or not loaded yet) must not fall
+    into the demo deck and steal its title, W/L record and rematch. */
+export function deckFromState(player: GameState["players"][number], id: string): DeckInfo {
+  // Tokens are not deck cards (MX-05): they would inflate the count and the summary.
+  const cards = [player.deck, player.hand, player.discard, player.board, player.archives ?? [], player.purged ?? []]
+    .flat()
+    .filter((card) => !card.isToken)
+    .flatMap((card) => [card.face, ...(card.under ?? []).map((half) => half.face)]);
+  return { id, name: player.deckName, houses: player.houses, cards };
+}

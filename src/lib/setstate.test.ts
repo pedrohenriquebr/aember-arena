@@ -11,7 +11,7 @@
 // AGPL-3.0 — adapted to this engine's API.
 import { describe, expect, it } from "vitest";
 import { rulesOf } from "./abilities";
-import { applyMove, chooseHouse, endTurn, forgeKey, getLegalMoves, moveHasEffect, type CardFace, type GameState } from "./game";
+import { applyMove, chooseHouse, deckFromState, endTurn, forgeKey, getLegalMoves, moveHasEffect, type CardFace, type GameState } from "./game";
 import { readBonusIcons } from "./keyforgeApi";
 import { byTitle, card, setupTest, titles } from "./testkit";
 
@@ -323,5 +323,18 @@ describe("instead replacements (keyteki DestroyAction/DealDamageAction)", () => 
     const automaton = creature("Reassembling Automaton", 3, "If this creature would be destroyed, archive it instead.");
     const state = play(setupTest({ inPlay: [automaton], hand: [gateway()] }), 0, "Gateway to Dis");
     expect(state.players[0].archives).toHaveLength(1);
+  });
+});
+
+describe("deckFromState (MX-05)", () => {
+  it("rebuilds the deck without the token creatures in play", () => {
+    const hive = cardOf("Hive", "Play: Make a token creature.");
+    const state = setupTest({ hand: [hive], inPlay: [creature("Grunt", 3)] });
+    const next = play(state, 0, "Hive");
+    expect(next.players[0].board.some((item) => item.isToken)).toBe(true);
+    const before = deckFromState(state.players[0], "x").cards.length;
+    const rebuilt = deckFromState(next.players[0], "x").cards;
+    expect(rebuilt).toHaveLength(before);
+    expect(rebuilt.some((face) => face.title === "Token Creature")).toBe(false);
   });
 });

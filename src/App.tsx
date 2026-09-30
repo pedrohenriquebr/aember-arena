@@ -47,6 +47,7 @@ import {
   chooseHouse,
   createMatch,
   createPassAndPlayMatch,
+  deckFromState,
   endTurn,
   fightTargets,
   getLegalMoves,
@@ -222,16 +223,6 @@ function resolvePassDecks(savedDecks: LibraryDeck[], fallback: DeckInfo, setting
     savedDecks.find((item) => item.id !== p1.id) ??
     fallback;
   return [p1, p2];
-}
-
-/** BUG2-04: rebuilds the DeckInfo a saved match played with, straight from the
-    state — a deck removed from the library (or not loaded yet) must not fall
-    into the demo deck and steal its title, W/L record and rematch. */
-function deckFromState(player: GameState["players"][number], id: string): DeckInfo {
-  const cards = [player.deck, player.hand, player.discard, player.board, player.archives ?? [], player.purged ?? []]
-    .flat()
-    .flatMap((card) => [card.face, ...(card.under ?? []).map((half) => half.face)]);
-  return { id, name: player.deckName, houses: player.houses, cards };
 }
 
 /** FEAT-05: log keys the type filter knows about (the rest pass every filter). */
