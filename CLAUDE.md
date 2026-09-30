@@ -6,10 +6,14 @@ Shipped as **one self-contained `index.html`** (JS + CSS inlined by
 `vite-plugin-singlefile`), so it can be opened from disk, emailed, or dropped on any
 static host with no server.
 
-**Estado atual (pós-refactor mobile-first, 40+ commits, set 2026):** escala tipográfica
-fluida por tokens, cascata mobile-first invertida, interação touch real, Tailwind
-removido, harness de regressão visual em `e2e/`. Este arquivo descreve o estado ATUAL —
-não o histórico (isso está em `docs/CODE_REVIEW.md` e `docs/WORKFLOW.md`).
+**Estado atual (30/09, ~260 commits):** Mobile-first + palco de viewport (UX-FIT
+FIT-01..08), animações estilo Arena (3 ondas), áudio procedural (14 timbres),
+tutorial, modo 3D da mesa (12 histórias + punch list) e **motor de abilities
+declarativas (ondas 1-4)** — efeitos persistentes, "you may", reações,
+purge/sacrifice/tokens/exalt, ward/enrage/enhanced/take-control/forja/instead
+(cobertura do catálogo: full 200/2.603, crashes 0). Specs: 222+. Este arquivo
+descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
+MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*).
 
 ## Stack
 
@@ -69,6 +73,32 @@ src/
                            keyforgeApi.ts, cache.ts (IndexedDB singleton), houses.ts,
                            demoDeck(s).ts, settings.ts, sound.ts (WebAudio)
 ```
+
+## Motor de abilities (ondas 1-4 — leia antes de mexer em regras)
+
+As cartas têm efeitos declarativos derivados do `card_text` (não mais if/else por
+título): `rulesOf()` em `abilities.ts` retorna `CardRules { abilities, keywords,
+effects, coverage }` memoizado. LEIA `docs/MECHANICS_REPORT.md` (a bíblia: triggers,
+ações, cobertura por set, pendências).
+
+- **Efeitos persistentes derivados**: `activeEffects(state, side)` coleta do board
+  a cada consulta (nada armazenado); leitura efetiva via `effectivePower/Armor`,
+  `keyword(state, card, name)` — NUNCA leia `face.power` cru no motor.
+- **"You may"** = `Act.optional` + variante `decline` no GameMove (UI: botão "Sem
+  efeito"); IA compara variantes no search.
+- **Reações**: `After <ev>:`/`Each time <ev>:` = pós-evento (sem contador — `fire`
+  roda por ocorrência); `At the start/end of your turn:` = `startOfTurn`/`endOfTurn`
+  (endOfTurn dispara APÓS ready+compra; startOfTurn ANTES da forja).
+- **Zonas**: `purged` (sai do jogo, nunca volta), `sacrifice` (descarte do dono,
+  DISPARA Destroyed: — keyteki DestroyAction), tokens (`isToken: true`, nascem
+  exaustos, nunca em deck, saem do jogo em qualquer leavePlay).
+- **Estado de set**: `warded`/`enraged` (tokens com consumo — dano cancela evento
+  inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
+  de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
+  `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
+- **Cobertura do catálogo**: full 200/2.603 (7,7%), partial 88, crashes 0.
+  Pendente (ondas 3-5 do ROADMAP_REVIEW): efeitos persistentes complexos,
+  opcionalidade de fase, verbos de busca, tide/enhanced-completo/prophecy.
 
 ## Regras de estilo vigentes
 
@@ -240,6 +270,12 @@ src/
 - Erros do Master Vault são `VaultError` (chave `vault.*`), texto via `vaultErrorText(e, t)`.
 - Em aberto: sombras ainda ad-hoc; emblemas de casas novas caem em iniciais; a 1280×800
   a mão começa perto da dobra (lanes com min-height para não pular).
+- Imagens de carta LOCALIZADAS: o S3 oficial tem **9 idiomas** (en, pt, es, fr,
+  de, it, pl, zh-hans, zh-hant) para os sets 341-600 (era FFG); GR (700) mantém pt;
+  Æmber Skies (800+) é en/fr/de/zh. URL: `media/card_front/{lang}/{id}_{lang}.png`
+  (id vem do `front_image` da API, trocando o sufixo de idioma). Pendente: rewrite
+  client-side pt→EN-fallback no CardArt (~0,3-0,5 kB). Sem CORS (BUG2-05) e sem
+  listagem do bucket. Pesquisa completa: `docs/RESEARCH_CARD_IMAGES_S3.md`.
 - Mesa 3D, limites conhecidos (medidos nos probes): (a) com a lane cheia a carta de
   pé avança ~30px acima da própria caixa e cobre parte do texto do `zone-heading`
   (o do oponente fica ~8px atrás no desktop) — fechar isso com padding na lane
