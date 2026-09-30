@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -21,7 +21,6 @@ import {
   Link2,
   LoaderCircle,
   Music,
-  Radio,
   RefreshCw,
   RotateCcw,
   Settings2,
@@ -152,6 +151,22 @@ const AI_END_MS = 300;
 // toggle hoverZoom some e a inspeção vai por long-press (CardLightbox).
 function prefersHover() {
   return typeof window !== "undefined" && window.matchMedia?.("(hover: hover)")?.matches === true;
+}
+
+/** FIT-02: perfil compacto do palco (celular ou altura < 760px) — sem faixa de
+    título; o atalho da visão da mesa muda para o turn-console. Espelha os @media
+    dos tokens de altura no index.css. */
+const COMPACT_STAGE = "(max-width: 700px), (max-height: 759px)";
+function useCompactStage() {
+  return useSyncExternalStore(
+    (notify) => {
+      const query = window.matchMedia?.(COMPACT_STAGE);
+      query?.addEventListener("change", notify);
+      return () => query?.removeEventListener("change", notify);
+    },
+    () => window.matchMedia?.(COMPACT_STAGE)?.matches === true,
+    () => false,
+  );
 }
 
 /** H3D-09 (VIEW3D_PLAN §3): hardware fraco (<= 2 núcleos) troca o 3D real pelo
@@ -1299,6 +1314,7 @@ function GameBoard({
   passPending = null,
   onPassConfirm = NOOP,
   viewSwitching = false,
+  consoleExtra,
 }: {
   game: GameState;
   selected: Selection | null;
@@ -1323,6 +1339,8 @@ function GameBoard({
   onPassConfirm?: () => void;
   /** H3D-10: troca de visão em curso — liga o fade e o will-change. */
   viewSwitching?: boolean;
+  /** FIT-02: controle extra no fim do turn-console (o atalho 3D no perfil compacto). */
+  consoleExtra?: ReactNode;
   onHouse: (house: string) => void;
   onSelectHand: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
@@ -1372,7 +1390,7 @@ function GameBoard({
 
   return (
     <section
-      className={`game-board${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
+      className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
       aria-label={t("game.board")}
     >
@@ -1449,6 +1467,7 @@ function GameBoard({
               <span>{t("game.endTurn")}</span>
               <ArrowRight size={15} />
             </button>
+            {consoleExtra}
           </div>
 
           {pick && (
@@ -2930,15 +2949,20 @@ function App() {
     showToast(t("toast.deckRemoved", { name: deck.name }));
   }
 
-  const currentTurnLabel = !game
-    ? ""
-    : game.winner !== null
-      ? t("game.matchComplete")
-      : passAndPlay
-        ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
-        : game.activePlayer === 0
-          ? t("game.yourTurn")
-          : t("game.opponentTurn");
+  const compactStage = useCompactStage();
+  // H3D-01: atalho da visão da mesa — alterna sem sair da partida. 44px (regra 9),
+  // estado no aria-pressed. Um nó só: na faixa de título ou, no perfil compacto, no console.
+  const viewToggle = (
+    <button
+      type="button"
+      className="view-toggle"
+      aria-pressed={settings.tableView === "3d"}
+      aria-label={t("game.view3dToggle")}
+      onClick={toggleTableView}
+    >
+      <Box size={16} />
+    </button>
+  );
 
   return (
     <div className="app-root">
@@ -3135,23 +3159,7 @@ function App() {
                     {/* BUG2-12: no 2P o título acompanha o lado ativo (o board gira junto). */}
                     <h1>{passAndPlay ? localizeName(game.players[humanSide].deckName, t) : currentDeck.name}</h1>
                   </div>
-                  <div className="match-actions">
-                    {/* H3D-01: atalho da visão da mesa — alterna sem sair da
-                        partida. 44px (regra 9), estado no aria-pressed. */}
-                    <button
-                      type="button"
-                      className="view-toggle"
-                      aria-pressed={settings.tableView === "3d"}
-                      aria-label={t("game.view3dToggle")}
-                      onClick={toggleTableView}
-                    >
-                      <Box size={16} />
-                    </button>
-                    <div className="match-chip">
-                      <span className="match-chip-icon"><Radio size={14} /></span>
-                      <span><small>{t("game.round")} {String(game.turn).padStart(2, "0")}</small><strong>{currentTurnLabel}</strong></span>
-                    </div>
-                  </div>
+                  {!compactStage && <div className="match-actions">{viewToggle}</div>}
                 </div>
 
                 <GameBoard
@@ -3177,6 +3185,7 @@ function App() {
                   passPending={passPending}
                   onPassConfirm={() => { sound.play("click"); setPassPending(null); }}
                   viewSwitching={viewSwitching}
+                  consoleExtra={compactStage ? viewToggle : undefined}
                 />
               </div>
 

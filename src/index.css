@@ -153,6 +153,62 @@ button,
   /* Altura da tab bar mobile (44px de alvo + 2×5px + 1px de borda ≈ 54px) mais a
      safe-area: âncora dos docks fixos/sticky que ficam logo acima dela. */
   --tabbar-h: calc(54px + env(safe-area-inset-bottom, 0px));
+
+  /* Palco de viewport (UX_FIT_PLAN §2.1/§2.3): alturas das faixas da partida por
+     perfil de altura — o default é o celular; ALTO e BAIXO (desktop) entram em
+     @media logo abaixo. --hand-h já inclui a linha de título da mão (18px): a
+     fusão com a barra do jogador é o FIT-04. */
+  --header-h: 58px;
+  --title-h: 0px;
+  --band-h: 48px;
+  --console-h: auto;
+  --hand-bar-h: 48px;
+  --hand-h: 160px;
+  --hand-card-w: 82px;
+  --board-min: 56px;
+  --board-max: 76px;
+  --tabbar-g: 62px;
+}
+
+@media (min-width: 701px) {
+  :root {
+    --tabbar-g: 0px;
+    --board-min: 60px;
+    --board-max: 104px;
+  }
+}
+
+/* ALTO: notebook 1280x800 e maiores. */
+@media (min-width: 701px) and (min-height: 760px) {
+  :root {
+    --header-h: 62px;
+    --title-h: 46px;
+    --band-h: 52px;
+    --console-h: 60px;
+    --hand-bar-h: 44px;
+    --hand-h: 180px;
+    --hand-card-w: 96px;
+  }
+}
+
+@media (min-width: 701px) and (min-height: 960px) {
+  :root {
+    --hand-h: 211px;
+    --hand-card-w: 118px;
+    --board-max: 128px;
+  }
+}
+
+/* BAIXO: a janela útil do notebook de 1080p a 150% (~1296x668). */
+@media (min-width: 701px) and (max-height: 759px) {
+  :root {
+    --header-h: 52px;
+    --band-h: 44px;
+    --console-h: 52px;
+    --hand-bar-h: 42px;
+    --hand-h: 170px;
+    --hand-card-w: 88px;
+  }
 }
 
 * {
@@ -230,7 +286,7 @@ button:disabled {
   z-index: 30;
   top: 0;
   display: flex;
-  height: calc(58px + env(safe-area-inset-top, 0px));
+  height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -242,7 +298,7 @@ button:disabled {
 
 @media (min-width: 701px) {
   .app-header {
-    height: calc(62px + env(safe-area-inset-top, 0px));
+    height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
     gap: 18px;
     padding: env(safe-area-inset-top, 0px) clamp(14px, 2.6vw, 34px) 0;
   }
@@ -551,13 +607,7 @@ button:disabled {
 
 /* T6 — default = mobile; desktop invertido em min-width: 701px ao lado do seletor. */
 .game-screen {
-  padding: 18px clamp(13px, 2.4vw, 32px) 82px;
-}
-
-@media (min-width: 701px) {
-  .game-screen {
-    padding-bottom: 30px;
-  }
+  padding: 6px clamp(8px, 1.4vw, 20px);
 }
 
 /* T6 — default = 1 coluna até 1040px; as colunas do rail entram em faixas
@@ -588,19 +638,39 @@ button:disabled {
   min-width: 0;
 }
 
+/* Perfil compacto (celular / altura baixa): a faixa some da vista mas o H1 segue
+   na árvore de acessibilidade (visualmente oculto, não display: none). */
 .match-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0 0 11px;
-  animation: rise-in 520ms var(--ease-out) backwards;
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-@media (min-width: 701px) {
+/* ALTO: faixa de título de 40px, eyebrow e H1 na mesma linha (plano §2.5). */
+@media (min-width: 701px) and (min-height: 760px) {
   .match-heading {
+    position: relative;
+    display: flex;
+    overflow: visible;
+    width: auto;
+    height: calc(var(--title-h) - 6px);
+    align-items: center;
+    justify-content: space-between;
     gap: 16px;
-    margin-bottom: 12px;
+    margin: 0 0 6px;
+    clip-path: none;
+    white-space: normal;
+    animation: rise-in 520ms var(--ease-out) backwards;
+  }
+
+  .match-heading > div:first-child {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 14px;
   }
 }
 
@@ -634,87 +704,20 @@ button:disabled {
 }
 
 .match-heading h1 {
-  margin: 6px 0 3px;
+  overflow: hidden;
+  margin: 0;
   color: #f1ecdf;
   font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  font-size: var(--fs-2xl);
+  font-size: var(--fs-lg);
   font-weight: 500;
-  letter-spacing: -0.035em;
-  line-height: 1.04;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (min-width: 701px) {
-  .match-heading h1 {
-    margin: 7px 0 3px;
-  }
-}
-
-/* Mobile: o turn-console já diz rodada e de quem é a vez — o chip duplicava a
-   informação (e quebrava em 2 linhas em pt-BR) empurrando a mão para baixo. */
-.match-chip {
-  display: none;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  padding: 7px;
-  border: 1px solid rgba(221, 212, 189, 0.12);
-  border-radius: var(--radius-md);
-  background: rgba(245, 238, 216, 0.025);
-}
-
-@media (min-width: 701px) {
-  .match-chip {
-    display: flex;
-    min-width: 134px;
-    gap: 10px;
-    padding: 10px 12px;
-  }
-}
-
-.match-chip-icon {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  color: #dabb75;
-  background: rgba(211, 173, 93, 0.12);
-}
-
-@media (min-width: 701px) {
-  .match-chip-icon {
-    width: 29px;
-    height: 29px;
-  }
-}
-
-.match-chip span:last-child {
-  display: grid;
-  gap: 3px;
-}
-
-.match-chip small {
-  color: #918f82;
-  font-size: var(--fs-2xs);
-  font-weight: 750;
-  letter-spacing: 0.12em;
-}
-
-.match-chip strong {
-  color: #e6e0d2;
-  font-size: var(--fs-2xs);
-  font-weight: 650;
-  letter-spacing: 0.05em;
-}
-
-@media (min-width: 701px) {
-  .match-chip strong {
-    font-size: var(--fs-xs);
-  }
-}
-
-/* H3D-01: o chip do round ganha companhia — o atalho da visão da mesa fica
-   encostado nele (à direita do cabeçalho), fora do fluxo do board. */
+/* H3D-01: o atalho da visão da mesa fica à direita da faixa de título (no perfil
+   compacto ele mora no turn-console — não existe faixa). */
 .match-actions {
   display: flex;
   align-items: center;
@@ -800,6 +803,117 @@ button:disabled {
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+/* ---------- Palco de viewport (UX_FIT_PLAN FIT-02, §2.1) ---------- */
+/* O board tem a altura EXATA que sobra do viewport (header, faixa de título e tab
+   bar descontados): por construção a soma das linhas é o palco. As duas zonas de
+   batalha são as linhas elásticas (1fr); o resto usa os tokens do :root.
+   Vive na classe do board (não na .game-screen) para o replay usar o mesmo encaixe.
+   min-height 520: abaixo disso volta a rolar em vez de espremer. */
+.game-board--stage {
+  --stage-off: calc(var(--header-h) + env(safe-area-inset-top, 0px) + 12px + var(--title-h) + var(--tabbar-g));
+  height: calc(100vh - var(--stage-off));
+  height: calc(100dvh - var(--stage-off));
+  min-height: 520px;
+}
+
+.game-board--stage .board-content {
+  display: grid;
+  height: 100%;
+  grid-template-rows: var(--band-h) minmax(0, 1fr) var(--hand-bar-h) var(--hand-h);
+}
+
+/* O plano da mesa (oponente / console / jogador) ocupa a linha elástica e reparte
+   por dentro. A especificidade (0,3,0) vale mais que o `display: block` do 3D/lite:
+   o plano é grid nos dois modos. As margens negativas do 3D saem — o palco tem
+   altura fixa e a folga da projeção fica dentro do plano. */
+.game-board.game-board--stage .table-plane {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) var(--console-h) minmax(0, 1fr);
+  margin-block: 0;
+}
+
+.game-board--stage .battle-zone {
+  min-height: 0;
+  padding: 6px 12px;
+}
+
+.game-board--stage .player-band {
+  min-height: 0;
+  padding-block: 1px;
+  overflow: hidden;
+}
+
+.game-board--stage .player-deck-name {
+  margin-top: 1px;
+}
+
+.game-board--stage .turn-console {
+  min-height: 0;
+  padding-block: 3px;
+}
+
+.game-board--stage .turn-console-copy {
+  gap: 1px;
+  line-height: 1.15;
+}
+
+/* A instrução de luta vira toast: fora do fluxo, não cria linha no grid. */
+.game-board--stage .fight-instruction {
+  position: absolute;
+  z-index: 3;
+  top: calc(50% - 15px);
+  left: 50%;
+  min-height: 0;
+  padding: 4px 12px;
+  border: 1px solid rgba(210, 127, 95, 0.3);
+  border-radius: var(--radius-pill);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.game-board--stage .hand-zone {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding-block: 2px;
+}
+
+.game-board--stage .hand-heading {
+  min-height: 18px;
+  margin-bottom: 0;
+}
+
+/* A dica de casa não ocupa linha: fica ao centro da linha do título da mão. */
+.game-board--stage .hand-prompt {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  padding: 0;
+  transform: translateX(-50%);
+}
+
+.game-board--stage .hand-track {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 3px 3px 1px;
+}
+
+.game-board--stage .card-tile--hand {
+  width: var(--hand-card-w);
+}
+
+/* A arte segue a largura do tile (as larguras fixas de 100/85px são do modo scroll). */
+.game-board--stage .card-tile--hand > .card-art {
+  width: 100%;
+}
+
+.replay-overlay .game-board--stage {
+  --stage-off: 90px;
 }
 
 /* T6 — default = mobile; desktop invertido ao lado do seletor. */
@@ -2000,6 +2114,7 @@ button:disabled {
   align-items: start;
   overflow: visible;
   margin-top: 11px;
+  margin-bottom: var(--tabbar-h);
   border: 1px solid rgba(225, 216, 194, 0.13);
   border-radius: var(--radius-md);
   background: linear-gradient(155deg, rgba(31, 33, 28, 0.98), rgba(23, 25, 21, 0.98));
@@ -2013,6 +2128,7 @@ button:disabled {
     grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr);
     max-height: none;
     min-height: 0;
+    margin-bottom: 0;
     align-items: start;
     overflow: visible;
     margin-top: 0;

@@ -80,7 +80,7 @@ const MEASURE = () => {
   const rows = {
     header: h(".app-header"),
     screenPadding: px(scs.paddingTop) + px(scs.paddingBottom),
-    title: visible(heading) ? heading.getBoundingClientRect().height + px(getComputedStyle(heading).marginBottom) : 0,
+    title: visible(heading) && getComputedStyle(heading).position !== "absolute" ? heading.getBoundingClientRect().height + px(getComputedStyle(heading).marginBottom) : 0,
     boardBorder: px(bcs.borderTopWidth) + px(bcs.borderBottomWidth),
     bandOpponent: bands[0] ?? 0,
     zoneOpponent: zones[0] ?? 0,
@@ -90,6 +90,10 @@ const MEASURE = () => {
     hand: h(".game-board .hand-zone"),
     tabs: visible(tabs) ? tabs.getBoundingClientRect().height : 0,
   };
+  // Conteúdo maior que a faixa que o contém (diagnóstico do que transborda).
+  const overflow = [".game-board .player-band", ".game-board .battle-zone", ".game-board .turn-console", ".game-board .hand-zone", ".game-board .hand-track"]
+    .flatMap((sel) => [...document.querySelectorAll(sel)].map((el, i) => (el.scrollHeight > el.clientHeight + 1 ? `${sel.split(" ").pop()}[${i}] ${el.scrollHeight}>${el.clientHeight}` : null)))
+    .filter(Boolean);
   const round = (n) => Math.round(n * 10) / 10;
   const sum = Object.values(rows).reduce((a, b) => a + b, 0);
   const hand = [...document.querySelectorAll(".hand-track > .card-tile--hand")].map((el) => {
@@ -103,6 +107,7 @@ const MEASURE = () => {
     docScroll: document.scrollingElement.scrollHeight,
     innerHeight: window.innerHeight,
     hand,
+    overflow,
     boardCardMin: boardCards.length ? round(Math.min(...boardCards)) : null,
     boardCardMax: boardCards.length ? round(Math.max(...boardCards)) : null,
   };
@@ -145,6 +150,7 @@ try {
     console.log(`\n== ${vp.name} ${problems.length ? "FAIL" : "OK"}`);
     console.log(`   faixas: ${Object.entries(m.rows).map(([k, v]) => `${k}=${v}`).join(" ")}`);
     console.log(`   soma=${m.sum} viewport=${m.innerHeight} docScroll=${m.docScroll} cartaBoard=${m.boardCardMin}-${m.boardCardMax}px mao=${m.hand.length} (bottom ${m.hand.length ? Math.max(...m.hand.map((r) => r.bottom)).toFixed(0) : "-"})`);
+    if (m.overflow.length) console.log(`   transborda: ${m.overflow.join(", ")}`);
     for (const p of problems) {
       console.log(`   ! ${p}`);
       failures.push(`${vp.name}: ${p}`);
