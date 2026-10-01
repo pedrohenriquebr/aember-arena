@@ -24,7 +24,8 @@
     "e2e:acceptance": "node e2e/acceptance.mjs",
     "test": "vitest run",
     "gen:schema": "node scripts/gen-dsl-schema.mjs",
-    "harvest": "vite-node scripts/ability-harvest.mjs --"
+    "harvest": "vite-node scripts/ability-harvest.mjs --",
+    "llm-relay": "node scripts/llm-cors-relay.mjs",
   },
   "dependencies": {
     "lucide-react": "^1.48.0",
