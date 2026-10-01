@@ -1252,6 +1252,19 @@ const BoardLane = memo(function BoardLane({
   // non-adjacent when the engine treats them as neighbours).
   const creatures = cards.filter((card) => card.face.type === "Creature");
   const attachments = cards.filter((card) => card.face.type !== "Creature");
+  // H3D-17: upgrade com hospedeiro visível vira tira presa à criatura (--col/--up);
+  // o órfão cai no comportamento de artefato.
+  const hostCol = new Map(creatures.map((card, index) => [card.instanceId, index + 1]));
+  const isUpgrade = (card: CardInstance) => Boolean(card.attachedTo && hostCol.has(card.attachedTo));
+  const upgrades = attachments.filter(isUpgrade);
+  const artifacts = attachments.filter((card) => !isUpgrade(card));
+  const upgradeRank = new Map<string, number>();
+  const perHost = new Map<string, number>();
+  for (const card of upgrades) {
+    const k = (perHost.get(card.attachedTo as string) ?? 0) + 1;
+    perHost.set(card.attachedTo as string, k);
+    upgradeRank.set(card.instanceId, k);
+  }
   if (!cards.length) {
     return (
       <div className="empty-battleline">
@@ -1263,11 +1276,11 @@ const BoardLane = memo(function BoardLane({
 
   return (
     <div
-      className={`board-lane${targetIds?.length ? " board-lane--targeting" : ""}`}
+      className={`board-lane${targetIds?.length ? " board-lane--targeting" : ""}${upgrades.length ? " board-lane--upgrades" : ""}`}
       /* H3D-04: --n dimensiona as cartas no 3D (clamp da lane sem scroll). O
          comparador do memo já olha `cards`, então a lane re-renderiza quando a
          contagem de criaturas muda (--nc = criaturas + anexos, do palco 2D) — nenhuma prop nova desce para o CardTile. */
-      style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, cards.length), "--na": attachments.length } as CSSProperties}
+      style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, cards.length), "--na": artifacts.length, "--nu": Math.max(0, ...perHost.values()) } as CSSProperties}
     >
       {creatures.length === 0 && (
         <div className="empty-battleline">
@@ -1310,11 +1323,15 @@ const BoardLane = memo(function BoardLane({
       })}
       {attachments.length > 0 && (
         <div className="board-attachments" role="list" aria-label={t("game.attachments")}>
-          {attachments.map((card, index) => {
+          {attachments.map((card) => {
             const host = cards.find((item) => item.instanceId === card.attachedTo);
             const hostTitle = host?.face.title;
+            const up = upgradeRank.get(card.instanceId);
+            const place = up
+              ? ({ "--col": hostCol.get(card.attachedTo as string), "--up": up } as CSSProperties)
+              : ({ "--acol": artifacts.indexOf(card) + 1 } as CSSProperties);
             return (
-              <div className="board-piece board-piece--attachment" key={card.instanceId} role="listitem" style={{ "--acol": index + 1, ...jitterVars(host?.instanceId ?? card.instanceId) } as CSSProperties}>
+              <div className={`board-piece board-piece--attachment ${up ? "board-piece--upgrade" : "board-piece--artifact"}`} key={card.instanceId} role="listitem" style={{ ...place, ...jitterVars(host?.instanceId ?? card.instanceId) }}>
                 <CardTile
                   card={card}
                   size="board"

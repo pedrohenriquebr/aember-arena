@@ -59,7 +59,7 @@ const FIXTURE = (spec) => `(async () => {
   const side = (s, base) => {
     const cr = Array.from({ length: s.cr }, (_, i) => mk("cr", base + i, pool[i % pool.length]));
     const art = Array.from({ length: s.art }, (_, i) => mk("art", base + i, artifacts[i % artifacts.length]));
-    const up = s.up ? [mk("up", base, upgrade, { attachedTo: cr[0].instanceId })] : [];
+    const up = Array.from({ length: s.up }, (_, i) => mk("up", base + i, upgrade, { attachedTo: cr[0].instanceId }));
     if (spec.states && cr.length >= 3) {
       cr[1].stunned = true;
       cr[2].ready = false;
@@ -78,6 +78,7 @@ const FIXTURE = (spec) => `(async () => {
 const SEEDS = [
   { tag: "base6", player: { cr: 6, art: 0, up: 0 }, opp: { cr: 6, art: 0, up: 0 } },
   { tag: "arts", player: { cr: 6, art: 2, up: 1 }, opp: { cr: 6, art: 2, up: 0 } },
+  { tag: "ups", player: { cr: 6, art: 2, up: 2 }, opp: { cr: 6, art: 2, up: 2 } },
   { tag: "c12", player: { cr: 12, art: 0, up: 0 }, opp: { cr: 12, art: 0, up: 0 } },
   { tag: "states", player: { cr: 6, art: 1, up: 0 }, opp: { cr: 6, art: 0, up: 0 }, states: true },
 ];
@@ -228,7 +229,8 @@ try {
       await page.waitForTimeout(600);
       const m = await page.evaluate(MEASURE);
       const t = `${tag} ${spec.tag}`;
-      const all = [...m.player, ...m.opp];
+      // O upgrade fica atras do hospedeiro (so a tira externa e clicavel, H3D-17): o hit-test do centro e do topo nao se aplica a ele.
+      const all = [...m.player, ...m.opp].filter((c) => c.role !== "up");
       if (SHOOT) {
         mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({ path: join(SHOTS, `arena-${tag}-${spec.tag}.png`) });
@@ -270,11 +272,11 @@ try {
         }
         const ratio = avg(m.opp.map((c) => c.art.w)) / avg(m.player.map((c) => c.art.w));
         check(`${t} H3D-14/15: escala visual oponente/jogador 0,74-0,80`, ratio >= 0.74 && ratio <= 0.8, `razao ${r1(ratio * 100) / 100}`);
-        // 2 linhas na lane (criaturas | externa); a externa e a ultima no jogador e a
-        // primeira no oponente. A faixa de upgrade (3a linha) e da H3D-17.
+        // 2 linhas na lane (criaturas | externa; 3 no tablet em pe, com a linha das tiras); a externa abriga artefatos (na goteira)
+        // e a altura das tiras de upgrade, e mede 0 sem nenhum dos dois.
         const rowP = px(m.lanes.player?.rows);
         const rowO = px(m.lanes.opp?.rows);
-        check(`${t} H3D-15: sem artefato a fileira externa mede 0px (jogador = ultima, oponente = primeira)`, rowP.length === 2 && rowO.length === 2 && Math.abs(rowP[1]) <= 1 && Math.abs(rowO[0]) <= 1, `jogador=${m.lanes.player?.rows} oponente=${m.lanes.opp?.rows}`);
+        check(`${t} H3D-15: sem artefato a fileira externa mede 0px (jogador = ultima, oponente = primeira)`, rowP.length >= 2 && rowO.length === rowP.length && Math.abs(rowP[rowP.length - 1]) <= 1 && Math.abs(rowO[0]) <= 1, `jogador=${m.lanes.player?.rows} oponente=${m.lanes.opp?.rows}`);
         // Colunas: goteira 1fr + n criaturas + goteira 1fr.
         const cols = px(m.lanes.player?.cols);
         check(`${t} H3D-15: 6 colunas na fileira das criaturas (entre 2 goteiras)`, cols.length === 8, `cols=${m.lanes.player?.cols}`);
@@ -316,15 +318,61 @@ try {
         const khP = avg(artP.map((c) => c.art.h)) / avg(crP.map((c) => c.art.h));
         const khO = avg(artO.map((c) => c.art.h)) / avg(crO.map((c) => c.art.h));
         check(`${t} H3D-15: artefato visual (altura) 0,45-0,70x da criatura`, khP >= 0.45 && khP <= 0.7 && khO >= 0.45 && khO <= 0.7, `jogador ${r1(khP * 100) / 100} oponente ${r1(khO * 100) / 100}`);
-        check(`${t} H3D-15: fileira externa (jogador = 2, oponente = 1)`, artP.every((c) => c.gridRow === "2") && artO.every((c) => c.gridRow === "1"), `${artP.map((c) => c.gridRow)} / ${artO.map((c) => c.gridRow)}`);
+        check(`${t} H3D-15: fileira externa (jogador = ultima, oponente = 1)`, artP.every((c) => c.gridRow === String(px(m.lanes.player?.rows).length)) && artO.every((c) => c.gridRow === "1"), `${artP.map((c) => c.gridRow)} / ${artO.map((c) => c.gridRow)}`);
         const up = m.player.find((c) => c.role === "up");
-        check(`${t} H3D-15: upgrade na fileira externa (a coluna do hospedeiro e da H3D-17)`, Boolean(up) && up.gridRow === "2", `${up?.gridRow}`);
+        check(`${t} H3D-17: upgrade na celula do hospedeiro (linha das criaturas, mesma coluna)`, Boolean(up) && up.gridRow === "1" && up.gridCol === crP[0].gridCol, `${up?.gridRow}/${up?.gridCol} host ${crP[0].gridCol}`);
         const list = await page.getByRole("list", { name: /artifacts and upgrades/i }).count();
         check(`${t} H3D-15: lista "anexos" na arvore de acessibilidade`, list >= 2, `${list} listas`);
       }
+      if (spec.tag === "ups" && vp.w >= 701) {
+        for (const [name, list, dir] of [["jogador", m.player, 1], ["oponente", m.opp, -1]]) {
+          const host = list.find((c) => c.role === "cr");
+          const ups = list.filter((c) => c.role === "up").sort((a, b) => (a.iid < b.iid ? -1 : 1));
+          const arts = list.filter((c) => c.role === "art");
+          // Quanto a tira passa da borda externa do hospedeiro (bbox projetado).
+          const reach = (c) => (dir > 0 ? c.art.b - host.art.b : host.art.t - c.art.t);
+          const dx = Math.max(...ups.map((c) => Math.abs(c.art.l + c.art.w / 2 - (host.art.l + host.art.w / 2))));
+          check(`${t} H3D-17 ${name}: centro do upgrade a <= 8px do centro do hospedeiro`, ups.length === 2 && dx <= 8, `dx=${r1(dx)}px`);
+          check(`${t} H3D-17 ${name}: tira visivel >= 44px de altura e >= 56px de largura`, ups.length === 2 && reach(ups[0]) >= 44 && ups.every((c) => c.art.w >= 56), `tira=${r1(reach(ups[0]))} larg=${ups.map((c) => r1(c.art.w))}`);
+          check(`${t} H3D-17 ${name}: 2 upgrades = 2 tiras (alcance >= ${dir > 0 ? 80 : 88}px)`, ups.length === 2 && reach(ups[1]) >= (dir > 0 ? 80 : 88), `alcance=${r1(reach(ups[1]))}px`);
+          // Artefatos dividem a fileira externa com as tiras (ficam na goteira ao lado
+          // das criaturas): nenhum retangulo de artefato intersecta uma tira.
+          const hit2 = (p, q) => p.l < q.r - 1 && q.l < p.r - 1 && p.t < q.b - 1 && q.t < p.b - 1;
+          const clear = arts.every((c) => ups.every((u) => !hit2(c.art, u.art)));
+          check(`${t} H3D-17 ${name}: nenhum artefato sob uma tira`, clear, arts.map((c) => `x${r1(c.art.l)}..${r1(c.art.r)} y${r1(c.art.t)}..${r1(c.art.b)}`).join(" ") + ` tira x${r1(ups[1]?.art.l)}..${r1(ups[1]?.art.r)} y${r1(ups[1]?.art.t)}..${r1(ups[1]?.art.b)}`);
+        }
+      }
+      if (spec.tag === "ups" && vp.w === 1296) {
+        // Clique REAL no centro de cada tira: quem responde e o upgrade (data-iid).
+        const wrong = [];
+        for (const [list, dir] of [[m.player, 1], [m.opp, -1]]) {
+          for (const c of list.filter((x) => x.role === "up")) {
+            await page.mouse.click(c.art.l + c.art.w / 2, dir > 0 ? c.art.b - 28 : c.art.t + 28);
+            await page.waitForTimeout(80);
+            const got = await page.evaluate((iid) => {
+              const title = (document.querySelector(`[data-iid="${iid}"]`)?.getAttribute("aria-label") ?? "").split(",")[0];
+              const panel = document.querySelector(".inspector-section")?.textContent ?? "";
+              return title !== "" && panel.includes(title);
+            }, c.iid);
+            if (!got) wrong.push(c.iid);
+          }
+        }
+        check(`${t} H3D-17: clique no centro da tira abre o upgrade`, wrong.length === 0, wrong.join(" "));
+        // Zero z-fighting: 3 capturas seguidas da regiao da pilha, byte a byte iguais.
+        const host = m.player.find((c) => c.role === "cr");
+        const lastUp = m.player.filter((c) => c.role === "up").pop();
+        const clip = { x: Math.max(0, host.art.l - 4), y: Math.max(0, host.art.t), width: host.art.w + 8, height: Math.max(40, lastUp.art.b - host.art.t + 4) };
+        const shots = [];
+        for (let i = 0; i < 3; i += 1) {
+          shots.push(await page.screenshot({ clip }));
+          await page.waitForTimeout(60);
+        }
+        check(`${t} H3D-17: sem z-fighting (3 capturas identicas)`, shots[0].equals(shots[1]) && shots[1].equals(shots[2]), `${shots.map((b) => b.length)}`);
+      }
       if (spec.tag === "arts" && vp.w >= 701 && vp.w === 1296) {
         // Clique REAL no centro de cada artefato e do upgrade: a peca certa responde.
-        const targets = [...m.player, ...m.opp].filter((c) => c.role !== "cr");
+        // O upgrade (atras do hospedeiro) tem o clique na tira externa: caso da secao H3D-17.
+        const targets = [...m.player, ...m.opp].filter((c) => c.role === "art");
         const wrong = [];
         for (const c of targets) {
           // Anexos nao levam `is-selected`: quem responde e o inspetor, com o titulo dela.
@@ -337,7 +385,7 @@ try {
           }, c.iid);
           if (!got.open) wrong.push(`${c.iid}->"${got.title}" ausente no inspetor`);
         }
-        check(`${t} H3D-15: clique nos artefatos/upgrade seleciona a propria (${targets.length})`, wrong.length === 0, wrong.join(" "));
+        check(`${t} H3D-15: clique nos artefatos seleciona o proprio (${targets.length})`, wrong.length === 0, wrong.join(" "));
       }
     }
     await context.close();

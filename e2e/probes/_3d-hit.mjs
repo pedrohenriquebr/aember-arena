@@ -139,7 +139,12 @@ const MEASURE = () => {
     const tile = piece.querySelector(".card-tile");
     const r = tile.getBoundingClientRect();
     const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
+    // H3D-17: o upgrade fica atras do hospedeiro e so a tira externa existe (28px para
+    // dentro da borda externa da arte); as demais cartas miram o centro.
+    const isUp = piece.classList.contains("board-piece--upgrade");
+    const ar = (tile.querySelector(".card-art") ?? tile).getBoundingClientRect();
+    const outer = piece.closest(".battle-zone--opponent") ? ar.top + 28 : ar.bottom - 28;
+    const cy = isUp ? outer : r.top + r.height / 2;
     const lane = piece.closest(".battle-zone--opponent") ? "opponent" : "player";
     const box = lanes[lane];
     // No 2.5D a lane rola: a carta fora do scrollport nao e alcancavel por um
@@ -316,7 +321,10 @@ try {
             await new Promise((r) => setTimeout(r, 150));
             const cards = [...document.querySelectorAll(".table-plane .board-piece .card-tile")].map((tile) => {
               const r = tile.getBoundingClientRect();
-              const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              const isUp = Boolean(tile.closest(".board-piece--upgrade"));
+              const ar = (tile.querySelector(".card-art") ?? tile).getBoundingClientRect();
+              const outer = tile.closest(".battle-zone--opponent") ? ar.top + 28 : ar.bottom - 28;
+              const hit = document.elementFromPoint(r.left + r.width / 2, isUp ? outer : r.top + r.height / 2);
               return hit?.closest?.(".card-tile") === tile;
             });
             const transform = getComputedStyle(plane).transform;

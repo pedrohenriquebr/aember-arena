@@ -7468,7 +7468,9 @@ html .spin {
       --lift: 12px;
       --raise: 14px;
       transform-style: preserve-3d;
-      translate: 0 var(--drop, 0px) var(--lift);
+      /* H3D-16: --jy (cardJitter) soma ao recuo; na tile ele deixava a tile e a caixa
+         da peca fora de fase no hit-test (o topo caia na peca). */
+      translate: 0 calc(var(--drop, 0px) + var(--jy, 0px)) var(--lift);
       rotate: x calc(var(--lean) - var(--tilt));
       transform-origin: 50% 100%; /* os "pés" da carta ficam no tapete */
       transition: translate 150ms var(--ease-out), rotate 150ms var(--ease-out);
@@ -7494,11 +7496,10 @@ html .spin {
   @media (min-width: 701px) {
     .game-board--3d .table-plane .board-piece > .card-tile {
       transition: translate 150ms var(--ease-out), rotate 150ms var(--ease-out), scale 150ms var(--ease-out);
-      translate: 0 var(--jy, 0px) 0;
     }
 
     /* Artefatos "jogados na mesa": giro 1,5x (H3D-16). */
-    .game-board--3d .board-attachments .card-art {
+    .game-board--3d .board-piece--artifact .card-art {
       rotate: z calc(var(--jr, 0deg) * 1.5);
     }
 
@@ -7534,14 +7535,24 @@ html .spin {
          externa (abaixo no jogador, acima no oponente) — a linha `auto` mede 0 sem
          eles. A altura da carta desconta a fileira externa (0,6x + respiro). */
       --a-extra: 8px; /* respiro da fileira externa (o oponente reserva mais, abaixo) */
-      --cw: clamp(64px, min(calc(var(--fit) / var(--n, 1)), calc((100cqh - 40px - var(--a-extra) * min(1, var(--na, 0))) / (1 + 0.6 * min(1, var(--na, 0))) * 0.714)), var(--card-w-3d, 84px));
+      --cw: clamp(64px, min(calc(var(--fit) / var(--n, 1)), calc((100cqh - 40px - max(0px, var(--strip-h) - var(--a-share) * min(1, var(--na, 0))) - var(--a-extra) * min(1, var(--na, 0))) / (1 + 0.6 * min(1, var(--na, 0))) * 0.714)), var(--card-w-3d, 84px));
       --aw: calc(var(--cw) * 0.6);
+      /* H3D-17: a tira de upgrade (40px visuais no jogador, 46 no oponente) reserva
+         altura mínima na fileira externa (a dos artefatos, que ficam na goteira ao
+         lado das criaturas e dividem a linha com as tiras): --nu = máx. de upgrades
+         por hospedeiro, --up-h a altura de UMA tira e --up-r o que ela reserva no
+         plano (a mesa inclinada encurta o plano: 1px de plano rende ~0,87px na tela). */
+      --up-h: 44px;
+      --up-r: 46px;
+      --strip-h: calc(var(--nu, 0) * var(--up-r));
+      --a-share: 52px; /* quanto da fileira externa os artefatos já ocupam (a tira divide a linha) */
+      --dir: 1;
       /* Passo dos artefatos: pára antes do notch central de 200px (+14px: a
          perspectiva encurta o lado do fundo) reservado ao avatar. */
       --a-slot: min(calc(var(--aw) + 8px), calc((50cqi - 114px - var(--aw)) / max(1, var(--na, 1) - 1)));
       display: grid;
       grid-template-columns: minmax(0, 1fr) repeat(var(--n, 1), auto) minmax(0, 1fr);
-      grid-template-rows: auto auto;
+      grid-template-rows: auto minmax(var(--strip-h), auto);
       column-gap: 10px;
       justify-content: stretch;
       align-items: start;
@@ -7581,7 +7592,7 @@ html .spin {
       pointer-events: none;
     }
 
-    .game-board--3d .board-piece--attachment {
+    .game-board--3d .board-piece--artifact {
       grid-row: 2;
       grid-column: 1 / -1;
       justify-self: start;
@@ -7594,9 +7605,13 @@ html .spin {
        acima da própria caixa (limite (a)) e cobriria o artefato. */
     .game-board--3d .battle-zone--opponent .board-lane {
       --a-extra: 44px;
+      --up-h: 52px;
+      --up-r: 54px;
+      --dir: -1;
+      grid-template-rows: minmax(var(--strip-h), auto) auto;
     }
 
-    .game-board--3d .battle-zone--opponent .board-lane > .board-piece:not(.board-piece--attachment) {
+    .game-board--3d .battle-zone--opponent .board-lane > .board-piece {
       grid-row: 2;
     }
 
@@ -7604,7 +7619,7 @@ html .spin {
       grid-row: 2;
     }
 
-    .game-board--3d .battle-zone--opponent .board-piece--attachment {
+    .game-board--3d .battle-zone--opponent .board-piece--artifact {
       grid-row: 1;
       align-self: end;
       margin-block: 8px calc(var(--cw) * 0.5 + 6px); /* mesma altura total; +4px de folga para o jitter da criatura (dy -3 / giro) */
@@ -7677,15 +7692,77 @@ html .spin {
     }
 
     /* Fileira externa: 0,6x da criatura, mais deitada (24°) e rente ao tapete. */
-    .game-board--3d .table-plane .board-piece--attachment {
+    .game-board--3d .table-plane .board-piece--artifact {
       --lean: 24deg;
       --lift: 8px;
       --raise: 10px;
     }
 
-    .game-board--3d .board-piece--attachment > .card-tile--board {
+    .game-board--3d .board-piece--artifact > .card-tile--board {
       width: var(--aw);
       max-width: none;
+    }
+
+    /* H3D-17: o upgrade ocupa a MESMA célula do hospedeiro, 2px atrás em Z (sem
+       z-fighting), com a tile deslocada para a borda externa (a `top` relativa é
+       no quadro da peça: vertical na tela, e não mexe na translate do hover/seleção).
+       Só a tira que passa da criatura fica visível e clicável. */
+    .game-board--3d .table-plane .board-piece--upgrade {
+      grid-row: 1;
+      grid-column: calc(var(--col, 1) + 1);
+      justify-self: center;
+      translate: 0 calc(var(--drop, 0px) + var(--jy, 0px)) calc(var(--lift) - 2px * var(--up, 1));
+    }
+
+    .game-board--3d .board-piece--upgrade::before {
+      display: none;
+    }
+
+    .game-board--3d .board-piece--upgrade > .card-tile--board {
+      width: var(--cw);
+      position: relative;
+      top: calc(var(--up, 1) * var(--up-h) * var(--dir));
+      /* Só a faixa que passa da borda externa existe (pintura E clique): a ordem de
+         profundidade entre planos paralelos variava com o viewport e o corpo do
+         upgrade chegava a cobrir o topo do hospedeiro. clip-path na tile (folha),
+         e não entre o plano e a peça, não achata a cadeia. */
+      clip-path: inset(calc(100% - var(--up-h)) -4px -4px -4px);
+    }
+
+    .game-board--3d .battle-zone--opponent .board-piece--upgrade {
+      grid-row: 2;
+    }
+
+    .game-board--3d .battle-zone--opponent .board-piece--upgrade > .card-tile--board {
+      clip-path: inset(-4px -4px calc(100% - var(--up-h)) -4px);
+    }
+  }
+
+  /* H3D-17: no tablet em pé a goteira some (as criaturas ocupam a fileira) e os
+     artefatos ficariam sob as tiras — há altura de sobra, então a tira ganha uma
+     linha própria entre as criaturas e os artefatos. */
+  @media (min-width: 701px) and (max-width: 1040px) and (min-height: 900px) {
+    .game-board--3d .board-lane {
+      --a-share: 0px;
+      grid-template-rows: auto var(--strip-h) auto;
+    }
+
+    .game-board--3d .board-piece--artifact {
+      grid-row: 3;
+    }
+
+    .game-board--3d .battle-zone--opponent .board-lane {
+      grid-template-rows: auto var(--strip-h) auto;
+    }
+
+    .game-board--3d .battle-zone--opponent .board-lane > .board-piece,
+    .game-board--3d .battle-zone--opponent .board-lane > .empty-battleline,
+    .game-board--3d .battle-zone--opponent .board-piece--upgrade {
+      grid-row: 3;
+    }
+
+    .game-board--3d .battle-zone--opponent .board-piece--artifact {
+      grid-row: 1;
     }
   }
 
