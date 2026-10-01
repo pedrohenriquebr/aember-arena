@@ -26,6 +26,7 @@
     "gen:schema": "node scripts/gen-dsl-schema.mjs",
     "harvest": "vite-node scripts/ability-harvest.mjs --",
     "llm-relay": "node scripts/llm-cors-relay.mjs",
+    "harvest:cards": "vite-node scripts/catalog-export.mjs --"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",
