@@ -42,7 +42,8 @@ import {
 import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
 import { vendoredOverrides } from "./lib/vendored";
 import { flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides } from "./lib/abilities";
-import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadAbilityOverrides, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
+import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCatalogCards, listCachedDecks, loadAbilityOverrides, loadSavedMatch, putAbilityOverride, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
+import { LLM_RUN_LIMIT, pendingTranslations, runTranslation, type RunProgress } from "./lib/catalogLlm";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
 import {
@@ -70,7 +71,7 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, syncCatalog, vaultErrorText, type CatalogProgress } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
-import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
+import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, llmReady, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
@@ -644,6 +645,9 @@ function ConfigScreen({
   onCancelCatalog,
   llm,
   onLlmChange,
+  llmRun,
+  onLlmTranslate,
+  onLlmCancel,
   onChange,
   onLanguage,
   onBack,
@@ -665,6 +669,10 @@ function ConfigScreen({
   /** BYOK do pipeline de abilities (settings.readLlmConfig). */
   llm: LlmConfig;
   onLlmChange: (next: LlmConfig) => void;
+  /** Onda 2: rodada de tradução em andamento (dona: App) + disparo/cancelar. */
+  llmRun: RunProgress | null;
+  onLlmTranslate: () => void;
+  onLlmCancel: () => void;
   onChange: (settings: AppSettings) => void;
   onLanguage: (language: Language) => void;
   onBack: () => void;
@@ -1065,7 +1073,7 @@ function ConfigScreen({
               </div>
               <div className="review-card">
                 <span className="review-label">{t("config.llm.title")}</span>
-                <LlmSettings config={llm} onChange={onLlmChange} t={t} />
+                <LlmSettings config={llm} onChange={onLlmChange} catalogCount={catalogCount} run={llmRun} onTranslate={onLlmTranslate} onCancel={onLlmCancel} t={t} />
               </div>
             </div>
           </section>
@@ -2071,6 +2079,8 @@ function App() {
   /** DB v4 (plano §5): cards in the local catalog and the running sync, or null. */
   const [catalogCount, setCatalogCount] = useState(0);
   const [catalogSync, setCatalogSync] = useState<CatalogProgress | null>(null);
+  /** Onda 2 (plano §4): rodada de tradução LLM em curso, ou null. */
+  const [llmRun, setLlmRun] = useState<RunProgress | null>(null);
   const [llm, setLlm] = useState<LlmConfig>(readLlmConfig);
 
   const [deckModalOpen, setDeckModalOpen] = useState(false);
@@ -2111,6 +2121,8 @@ function App() {
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   /** DB v4: o sync em curso, para o botão Cancelar abortar entre páginas. */
   const catalogAbortRef = useRef<AbortController | null>(null);
+  /** Onda 2: a rodada LLM em curso, para o Cancelar abortar entre cartas. */
+  const llmAbortRef = useRef<AbortController | null>(null);
   const prevKeysRef = useRef({ player: 0, ai: 0 });
   /** FEAT-06: matchVersion already recorded locally (a match ends once). */
   const recordedMatchRef = useRef(-1);
@@ -3090,6 +3102,32 @@ function App() {
     }
   }
 
+  /** Onda 2 (plano §4): dispara a fila de tradução LLM em background — uma
+      carta por vez, cada resposta gravada na hora; o Cancelar aborta entre
+      cartas. `known` vem do store (rascunhos e falhas contam: cache eterno por
+      textHash). Nunca bloqueia a UI. */
+  async function translateCatalogNow() {
+    if (llmRun || !llmReady(llm)) return;
+    const controller = new AbortController();
+    llmAbortRef.current = controller;
+    setLlmRun({ done: 0, total: 0, drafted: 0, failed: 0 });
+    try {
+      const [cards, overrides] = await Promise.all([listCatalogCards(), loadAbilityOverrides()]);
+      const progress = await runTranslation(pendingTranslations(cards, (id) => overrides.get(id)), llm, {
+        limit: LLM_RUN_LIMIT,
+        save: putAbilityOverride,
+        onProgress: setLlmRun,
+        signal: controller.signal,
+      });
+      if (progress.total && !controller.signal.aborted) showToast(t("toast.llmDone", { drafted: progress.drafted, failed: progress.failed }), progress.drafted ? "success" : "error");
+    } catch (error) {
+      showToast(vaultErrorText(error, t), "error");
+    } finally {
+      llmAbortRef.current = null;
+      setLlmRun(null);
+    }
+  }
+
   async function fetchDeck(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setDeckLoading(true);
@@ -3395,6 +3433,9 @@ function App() {
             onCancelCatalog={() => { sound.play("click"); catalogAbortRef.current?.abort(); }}
             llm={llm}
             onLlmChange={setLlm}
+            llmRun={llmRun}
+            onLlmTranslate={() => { sound.play("click"); void translateCatalogNow(); }}
+            onLlmCancel={() => { sound.play("click"); llmAbortRef.current?.abort(); }}
             onChange={setSettings}
             onLanguage={setLanguage}
             onOpenTutorial={() => { sound.play("click"); setTutorialOpen(true); }}

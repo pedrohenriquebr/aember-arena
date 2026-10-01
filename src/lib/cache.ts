@@ -480,3 +480,17 @@ export async function loadAbilityOverrides(): Promise<Map<string, AbilityOverrid
   }
   return overrides;
 }
+
+/** Review rejection (onda 2): removes the row from the store so the next run may
+    translate the card again. The row was never trusted by the engine (unreviewed
+    `llm`), so the in-memory map needs no purge. Failures stay swallowed. */
+export async function deleteAbilityOverride(cardId: string): Promise<void> {
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(ABILITY_STORE, "readwrite");
+    transaction.objectStore(ABILITY_STORE).delete(cardId);
+    await transactionDone(transaction);
+  } catch {
+    // Storage unavailable: there is no stored row to remove.
+  }
+}

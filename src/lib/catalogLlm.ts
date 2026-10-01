@@ -386,6 +386,12 @@ export function pendingTranslations(cards: CardFace[], known: (id: string) => Ab
   });
 }
 
+/** The review queue's open rows (onda 2): `llm` answers a human has not ruled on
+    yet — valid drafts and failures (vanilla + motive) — newest first. */
+export function reviewQueue(rows: AbilityOverride[]): AbilityOverride[] {
+  return rows.filter((row) => row.source === "llm" && !row.reviewed).sort((a, b) => b.generatedAt - a.generatedAt);
+}
+
 export interface RunProgress {
   done: number;
   total: number;

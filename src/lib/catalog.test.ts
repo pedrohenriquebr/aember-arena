@@ -6,7 +6,7 @@
 // in-memory stand-in of the IDB surface cache.ts uses.
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyAbilityOverride, mergeAbilityOverrides, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
-import { countCatalogCards, listCatalogCardHashes, loadAbilityOverrides, putAbilityOverride, putCatalogCards } from "./cache";
+import { countCatalogCards, deleteAbilityOverride, listCatalogCardHashes, loadAbilityOverrides, putAbilityOverride, putCatalogCards } from "./cache";
 import { PARSER_VERSION, parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
 import { syncCatalog } from "./keyforgeApi";
@@ -255,6 +255,19 @@ describe("DB v4 stores", () => {
     const loaded = await loadAbilityOverrides();
     expect(loaded.get("card-a")).toEqual(stored);
     expect(loaded.get("card-a")?.source).toBe("llm");
+  });
+
+  it("deleteAbilityOverride removes a rejected draft from the store", async () => {
+    const card = face("reject-1", "Play: Look at the top card of your deck.");
+    await putAbilityOverride(overrideFor(card, { source: "llm", reviewed: false }));
+    expect((await loadAbilityOverrides()).has(card.id)).toBe(true);
+    await deleteAbilityOverride(card.id);
+    expect((await loadAbilityOverrides()).has(card.id)).toBe(false);
+    // Store indisponível: a remoção segue engolida, como as outras escritas.
+    const realIndexedDB = globalThis.indexedDB;
+    vi.stubGlobal("indexedDB", undefined);
+    await expect(deleteAbilityOverride(card.id)).resolves.toBeUndefined();
+    vi.stubGlobal("indexedDB", realIndexedDB);
   });
 
   it("reads an unavailable store as empty (storage failures stay swallowed)", async () => {

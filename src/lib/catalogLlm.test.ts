@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normaliseAbilityOverride, rulesOf, setAbilityOverrides, type AbilityOverride } from "./abilities";
-import { buildMessages, callProvider, dryRunProblem, extractJson, FEW_SHOTS, pendingTranslations, runTranslation, sanityProblem, translateCard, validateDraft } from "./catalogLlm";
+import { buildMessages, callProvider, dryRunProblem, extractJson, FEW_SHOTS, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, validateDraft } from "./catalogLlm";
 import { parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
 import { DSL_SCHEMA } from "./generated/dslSchema";
@@ -248,6 +248,27 @@ describe("queue run", () => {
     const fetcher = stub();
     await expect(runTranslation(cards, { ...config, apiKey: "" }, { fetcher, save: async () => undefined })).rejects.toMatchObject({ key: "llm.noKey" });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("review queue", () => {
+  it("lists unreviewed llm rows (drafts and failures), newest first", () => {
+    const row = (patch: Partial<AbilityOverride>): AbilityOverride => ({
+      cardId: "x",
+      dsl: [],
+      textHash: "h",
+      source: "llm",
+      reviewed: false,
+      generatedAt: 1,
+      ...patch,
+    });
+    const rows = [
+      row({ cardId: "draft", generatedAt: 2 }),
+      row({ cardId: "approved", reviewed: true, generatedAt: 9 }),
+      row({ cardId: "manual", source: "manual", generatedAt: 8 }),
+      row({ cardId: "failed", failure: "unsupported: no", generatedAt: 3 }),
+    ];
+    expect(reviewQueue(rows).map((item) => item.cardId)).toEqual(["failed", "draft"]);
   });
 });
 

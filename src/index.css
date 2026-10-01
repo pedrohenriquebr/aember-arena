@@ -4465,6 +4465,45 @@ button:disabled {
   color: #e0a86a;
 }
 
+/* Fila de revisão (onda 2, plano §5): rodada + rascunhos no card do LLM. */
+.llm-review {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(225, 216, 194, 0.1);
+}
+
+.llm-review-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.llm-review-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(225, 216, 194, 0.08);
+  border-radius: var(--radius-sm);
+}
+
+.llm-review-meta {
+  display: block;
+  margin-top: 2px;
+  color: #92938a;
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.llm-review-actions {
+  display: flex;
+  gap: 6px;
+}
+
 /* T6 — default = mobile (1 coluna); desktop ao lado. */
 .home-shortcuts {
   display: grid;
