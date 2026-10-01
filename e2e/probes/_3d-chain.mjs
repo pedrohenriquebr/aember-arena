@@ -624,6 +624,15 @@ try {
   check("teste do teste: o contador enxerga render de tile", detectorClicked && detector.commits > 0 && detector.tiles > 0, `click=${detectorClicked} commits=${detector.commits} tilesVistas=${detector.tiles}`);
 
   // ---- 7. H3D-01: toggle da Config + persistencia + reload
+  // H3D-16 (no tabuleiro, antes de sair da partida): o giro de cada carta (--jr inline, do cardJitter) sobrevive ao reload.
+  const jrOf = () =>
+    page.evaluate(() =>
+      Object.fromEntries(
+        [...document.querySelectorAll(".board-piece")].map((p) => [p.querySelector(".card-tile")?.dataset.iid, p.style.getPropertyValue("--jr")]),
+      ),
+    );
+  const jrBefore = await jrOf();
+
   // (a sessao esta em 2D: o toggle da Config comeca desligado e liga ao clique.)
   await page.locator(".header-nav .nav-link").nth(2).click();
   await page.waitForSelector(".config-screen", { timeout: 15000 });
@@ -669,6 +678,31 @@ try {
     return { cls3d: board?.className.includes("game-board--3d") ?? false, view: board?.getAttribute("data-view") ?? null };
   });
   check("reload: setting sobreviveu (partida retomada abre em 3D)", resumed.cls3d && resumed.view === "3d", JSON.stringify(resumed));
+
+  // H3D-16: mesmo id -> mesmo giro depois do reload, e a arte em repouso o aplica.
+  const jrAfter = await jrOf();
+  const jrIds = Object.keys(jrBefore).filter((id) => id && id in jrAfter);
+  const jrSame = jrIds.every((id) => jrBefore[id] === jrAfter[id]);
+  const jrApplied = await page.evaluate(() =>
+    [...document.querySelectorAll(".game-board--3d .battle-zone .board-lane > .board-piece:not(.board-piece--resting)")].every((p) => {
+      const jr = parseFloat(p.style.getPropertyValue("--jr")) || 0;
+      const rot = getComputedStyle(p.querySelector(".card-art")).rotate;
+      return Math.abs((rot === "none" ? 0 : parseFloat(rot) || 0) - jr) < 0.01;
+    }),
+  );
+  // H3D-16: a selecionada endireita (rotate z = 0 na arte apos 150ms).
+  const jrSel = await page.evaluate(async () => {
+    const piece = document.querySelector(".table-plane .board-lane > .board-piece:not(.board-piece--resting)");
+    const tile = piece?.querySelector(".card-tile");
+    if (!tile) return null;
+    tile.classList.add("is-selected");
+    await new Promise((r) => setTimeout(r, 200));
+    const rot = getComputedStyle(tile.querySelector(".card-art")).rotate;
+    tile.classList.remove("is-selected");
+    return rot;
+  });
+  check("H3D-16: carta selecionada tem rotate z = 0 na arte", jrSel === "none" || parseFloat(jrSel) === 0, String(jrSel));
+  check("H3D-16: reload mantem o --jr de cada carta e a arte aplica o giro", jrIds.length > 0 && jrSame && jrApplied, JSON.stringify({ ids: jrIds.length, jrSame, jrApplied }));
 
   // ---- 8. H3D-10: a transicao entre modos (partida retomada esta em 3D)
   await page.evaluate(() => {

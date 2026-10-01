@@ -2,7 +2,7 @@
 // o motor segue puro e o estado não ganha eventos — tudo sai de prev → next.
 import { describe, expect, it } from "vitest";
 import { applyMove, endTurn, type GameMove } from "./game";
-import { diffFx } from "./fx";
+import { cardJitter, diffFx } from "./fx";
 import { byTitle, card, setupTest } from "./testkit";
 
 function play(state: ReturnType<typeof setupTest>, title: string, side: 0 | 1 = 0) {
@@ -104,5 +104,24 @@ describe("diffFx", () => {
     const events = diffFx(state, next);
     expect(events).toContainEqual({ kind: "leave", side: 0, id: doomed.instanceId });
     expect(events.some((event) => event.kind === "enter")).toBe(false);
+  });
+});
+
+describe("cardJitter", () => {
+  it("is deterministic and stays inside the pose bounds", () => {
+    expect(cardJitter("p0-card-7")).toEqual(cardJitter("p0-card-7"));
+    for (let i = 0; i < 1000; i++) {
+      const { rot, dy } = cardJitter(`id-${i}-${(i * 7919) % 1013}`);
+      expect(rot).toBeGreaterThanOrEqual(-1.6);
+      expect(rot).toBeLessThanOrEqual(1.6);
+      expect(dy).toBeGreaterThanOrEqual(-3);
+      expect(dy).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("does not concentrate on zero", () => {
+    let sum = 0;
+    for (let i = 0; i < 1000; i++) sum += Math.abs(cardJitter(`c${i}`).rot);
+    expect(sum / 1000).toBeGreaterThanOrEqual(0.6);
   });
 });

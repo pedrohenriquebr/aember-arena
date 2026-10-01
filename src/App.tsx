@@ -70,7 +70,7 @@ import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language,
   cardTypeLabel,} from "./lib/i18n";
 import { AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
-import { diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
+import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
 import { CoverageBadge, DeckCoverageChip } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
@@ -1228,6 +1228,12 @@ function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
   return a.cards.length === b.cards.length && a.cards.every((card, index) => sameCardInstance(card, b.cards[index]));
 }
 
+// H3D-16: pose orgânica por carta (inerte no 2D); o upgrade usa o id do hospedeiro.
+function jitterVars(id: string) {
+  const { rot, dy } = cardJitter(id);
+  return { "--jr": `${rot}deg`, "--jy": `${dy}px` };
+}
+
 const BoardLane = memo(function BoardLane({
   cards,
   owner,
@@ -1279,7 +1285,7 @@ const BoardLane = memo(function BoardLane({
         const stateClass = card.stunned ? " board-piece--stunned" : card.ready ? "" : " board-piece--resting";
         const hinted = Boolean(hintIds?.has(card.instanceId));
         return (
-          <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}`} key={card.instanceId} style={{ "--col": index + 1 } as CSSProperties}>
+          <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}`} key={card.instanceId} style={{ "--col": index + 1, ...jitterVars(card.instanceId) } as CSSProperties}>
             <CardTile
               card={card}
               size="board"
@@ -1305,9 +1311,10 @@ const BoardLane = memo(function BoardLane({
       {attachments.length > 0 && (
         <div className="board-attachments" role="list" aria-label={t("game.attachments")}>
           {attachments.map((card, index) => {
-            const hostTitle = cards.find((item) => item.instanceId === card.attachedTo)?.face.title;
+            const host = cards.find((item) => item.instanceId === card.attachedTo);
+            const hostTitle = host?.face.title;
             return (
-              <div className="board-piece board-piece--attachment" key={card.instanceId} role="listitem" style={{ "--acol": index + 1 } as CSSProperties}>
+              <div className="board-piece board-piece--attachment" key={card.instanceId} role="listitem" style={{ "--acol": index + 1, ...jitterVars(host?.instanceId ?? card.instanceId) } as CSSProperties}>
                 <CardTile
                   card={card}
                   size="board"

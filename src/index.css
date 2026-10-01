@@ -7326,7 +7326,19 @@ html .spin {
   /* Exausta: o mesmo giro de 20 graus (VA-07) do 3D (o slot nao muda, §1.5) — a
      dessaturacao continua vindo da regra 2D. */
   :is(.game-board--3d, .game-board--lite) .board-piece--resting > .card-tile > .card-art {
-    rotate: z 20deg;
+    rotate: z calc(20deg + var(--jr, 0deg));
+  }
+
+  /* H3D-16: pose organica — giro por carta (--jr, do cardJitter) na ARTE, nao no
+     tile: a rotate z do tile quebrava o hit-test do centro em preserve-3d (medido
+     no _3d-arena) e a arte ja carrega o giro da exausta, que e o que o pouso do FX
+     le. Estatica: vale tambem no reduce-motion; a selecionada endireita. */
+  :is(.game-board--3d, .game-board--lite) .board-piece .card-art {
+    rotate: z var(--jr, 0deg);
+  }
+
+  :is(.game-board--3d, .game-board--lite) .board-piece:not(.board-piece--resting) > .card-tile.is-selected > .card-art {
+    rotate: none;
   }
 
   /* Sombra estatica no tapete: separa a carta do plano sem lift. */
@@ -7482,6 +7494,12 @@ html .spin {
   @media (min-width: 701px) {
     .game-board--3d .table-plane .board-piece > .card-tile {
       transition: translate 150ms var(--ease-out), rotate 150ms var(--ease-out), scale 150ms var(--ease-out);
+      translate: 0 var(--jy, 0px) 0;
+    }
+
+    /* Artefatos "jogados na mesa": giro 1,5x (H3D-16). */
+    .game-board--3d .board-attachments .card-art {
+      rotate: z calc(var(--jr, 0deg) * 1.5);
     }
 
     /* Estado (seleção/acting) ergue SEMPRE — é informação, não enfeite: vale
@@ -7499,7 +7517,7 @@ html .spin {
        fica na arte (a `rotate` do tile já é do eixo X e a propriedade aceita uma
        rotação só); os badges de dano/âmbar seguem em pé, legíveis. */
     .game-board--3d .table-plane .board-piece--resting > .card-tile > .card-art {
-      rotate: z 20deg;
+      rotate: z calc(20deg + var(--jr, 0deg));
     }
 
     /* Lanes sem scroll do H3D-02: as cartas dividem a largura da lane (--n vem
@@ -7589,7 +7607,7 @@ html .spin {
     .game-board--3d .battle-zone--opponent .board-piece--attachment {
       grid-row: 1;
       align-self: end;
-      margin-block: 12px calc(var(--cw) * 0.5 + 2px);
+      margin-block: 8px calc(var(--cw) * 0.5 + 6px); /* mesma altura total; +4px de folga para o jitter da criatura (dy -3 / giro) */
     }
 
     .game-board--3d .battle-zone--player .board-lane {

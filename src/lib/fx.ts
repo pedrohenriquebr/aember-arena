@@ -116,3 +116,18 @@ export type FxDirector = {
 export function motionEnabled(animations: boolean): boolean {
   return animations && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 }
+
+/** Pose orgânica (H3D-16): a mesma carta sempre com o mesmo giro — FNV-1a do id. */
+export function cardJitter(id: string): { rot: number; dy: number } {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  // Avalanche (fmix32): ids sequenciais ("cr-1", "cr-2") só mexem nos bits baixos do FNV.
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  const u = (h >>> 0) / 4294967295;
+  const v = ((h >>> 11) & 0xffff) / 65535;
+  return { rot: Math.round((u * 2 - 1) * 16) / 10, dy: Math.round((v * 2 - 1) * 3) };
+}
