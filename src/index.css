@@ -4388,6 +4388,20 @@ button:disabled {
   margin: 16px 0 8px;
 }
 
+/* DB v4 (plano §5): chip do catálogo + contagem de baralhos no canto direito. */
+.deck-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.deck-list-meta .deck-list-count {
+  margin-bottom: 0;
+}
+
 .deck-list-count {
   margin-bottom: 8px;
   color: #7d7f74;
@@ -5167,6 +5181,22 @@ button:disabled {
 .exp-copy small {
   color: #92938a;
   font-size: var(--fs-xs);
+}
+
+/* Catálogo (DB v4, plano §5): chip + botão de sync no passo Catálogo. Mobile é
+   a coluna default; a linha vira flex junto do seletor desktop. */
+.catalog-row {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin-top: 14px;
+}
+
+@media (min-width: 701px) {
+  .catalog-row {
+    grid-auto-flow: column;
+    justify-content: start;
+  }
 }
 
 /* T6 — default = mobile (1 coluna); desktop ao lado. */

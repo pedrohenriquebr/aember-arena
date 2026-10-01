@@ -27,6 +27,7 @@ const INITIAL_BROWSE: BrowseState = { page: 1, search: "", ordering: "-date" };
 export function DeckBrowser({
   t,
   offline,
+  catalogCount,
   onBack,
   onInspect,
   onUseDeck,
@@ -37,6 +38,8 @@ export function DeckBrowser({
 }: {
   t: Translator;
   offline: boolean;
+  /** DB v4 (plano §5): cards in the local catalog; 0 hides the chip. */
+  catalogCount: number;
   onBack: () => void;
   onInspect: (deck: DeckInfo) => void;
   onUseDeck: (deck: DeckInfo) => void;
@@ -154,6 +157,10 @@ export function DeckBrowser({
         )}
         {!loading && !error && (
           <span className="status-page">{t("browse.pageOf", { page, total: totalPages.toLocaleString(t("meta.locale")) })}</span>
+        )}
+        {/* DB v4 (plano §5): o catálogo sincronizado aparece junto do status. */}
+        {catalogCount > 0 && (
+          <span className="meta-chip">{t("catalog.chip", { count: catalogCount.toLocaleString(t("meta.locale")) })}</span>
         )}
       </div>
 

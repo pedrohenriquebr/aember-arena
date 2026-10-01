@@ -6,7 +6,7 @@
 // Copyright (C) keyteki contributors. Rewritten in TypeScript for Aember Arena:
 // abilities are plain data interpreted by game.ts, so the same objects feed the
 // rules engine, the AI's move pruning and the coverage badge in the UI.
-import { parseCardText } from "./cardText";
+import { parseCardText, textHash } from "./cardText";
 import type { Keywords } from "./keywords";
 import type { CardFace } from "./game";
 
@@ -170,15 +170,50 @@ export interface AbilityOverride {
   model?: string;
 }
 
-const cache = new WeakMap<CardFace, CardRules>();
+/** Cards with a DSL stored on disk, keyed by card id (DB v4 `abilities`). The
+    map is loaded once at boot by App (`cache.loadAbilityOverrides`) because
+    rulesOf is synchronous — the store is read into memory, never per card. */
+let overrides = new Map<string, AbilityOverride>();
 
-/** Abilities, keywords and honest coverage for a card face (memoised per face). */
+/** Boot/reload hook: swaps the override map and drops the memo (faces already
+    answered keep the parser result otherwise). Overrides that arrive later —
+    a wave-2 review approval, a re-sync — go through here again, so the next
+    rulesOf call re-reads the card. */
+export function setAbilityOverrides(next: Map<string, AbilityOverride>): void {
+  overrides = next;
+  cache = new WeakMap();
+}
+
+/** Memo per face; replaced (not mutated) when the overrides map changes. */
+let cache = new WeakMap<CardFace, CardRules>();
+
+/** The stored DSL for this exact face, when it can be trusted: `manual`
+    (human-authored), `parser` (deterministic output for the same text) or an
+    `llm` entry a human reviewed. An unreviewed LLM draft never reaches the
+    table — plano §4: nunca meio-resolver. The text hash must match, so a card
+    whose text changed falls back to the live parser. */
+function storedAbility(face: CardFace): AbilityOverride | null {
+  const entry = overrides.get(face.id);
+  if (!entry || entry.textHash !== textHash(face.text ?? "")) return null;
+  if (entry.source === "llm" && !entry.reviewed) return null;
+  return entry;
+}
+
+/** Abilities, keywords and honest coverage for a card face (memoised per face).
+    Order: store `abilities` (trusted entry, plano §1/§4) → hand-written script →
+    text parser. A reviewed/manual stored DSL covers the card fully; a parser
+    entry keeps the parser's own tally. */
 export function rulesOf(face: CardFace): CardRules {
   let rules = cache.get(face);
   if (!rules) {
     const parsed = parseCardText(face);
+    const stored = storedAbility(face);
     const title = face.title.toLowerCase();
-    rules = title in scripts ? { ...parsed, abilities: scripts[title] ?? [], coverage: "full" } : parsed;
+    if (stored) {
+      rules = { ...parsed, abilities: stored.dsl, coverage: stored.source === "parser" ? parsed.coverage : "full" };
+    } else {
+      rules = title in scripts ? { ...parsed, abilities: scripts[title] ?? [], coverage: "full" } : parsed;
+    }
     cache.set(face, rules);
   }
   return rules;

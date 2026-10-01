@@ -40,7 +40,8 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
-import { cacheDeck, clearSavedMatch, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
+import { setAbilityOverrides } from "./lib/abilities";
+import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadAbilityOverrides, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
 import {
@@ -65,7 +66,7 @@ import {
   type LogEntry,
   refreshGameFaces,
 } from "./lib/game";
-import { fetchKeyforgeDeck, loadDeckOrCache, vaultErrorText } from "./lib/keyforgeApi";
+import { fetchKeyforgeDeck, loadDeckOrCache, syncCatalog, vaultErrorText, type CatalogProgress } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
 import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
@@ -450,6 +451,7 @@ function HomeScreen({
   language,
   savedDecks,
   selectedDeck,
+  catalogCount,
   onSelectDeck,
   onInspectDeck,
   onToggleFavorite,
@@ -464,6 +466,8 @@ function HomeScreen({
   language: Language;
   savedDecks: LibraryDeck[];
   selectedDeck: DeckInfo;
+  /** DB v4: cards in the local catalog (chip, plano §5). */
+  catalogCount: number;
   onSelectDeck: (deck: DeckInfo) => void;
   onInspectDeck: (deck: DeckInfo) => void;
   onToggleFavorite: (deck: LibraryDeck) => void;
@@ -513,7 +517,11 @@ function HomeScreen({
         </div>
         <div className="deck-list-head">
           <span className="deck-group-label">{t("home.yourLibrary")}</span>
-          <span className="deck-list-count">{t("home.deckCount", { count: allDecks.length })}</span>
+          <span className="deck-list-meta">
+            {/* DB v4 (plano §5): the catalog chip only shows when there is one. */}
+            {catalogCount > 0 && <span className="meta-chip">{t("catalog.chip", { count: catalogCount.toLocaleString(t("meta.locale")) })}</span>}
+            <span className="deck-list-count">{t("home.deckCount", { count: allDecks.length })}</span>
+          </span>
         </div>
 
         <div className="deck-grid">
@@ -592,10 +600,12 @@ function HomeScreen({
 
 // ---------- Config screen (stepper) ----------
 
-const MODE_CONFIG_STEPS = ["mode", "difficulty", "opponent", "thinking", "experience", "review"] as const;
+// DB v4 (plano §5): "catalog" entra ANTES do review — o review segue sendo o
+// passo final (o CTA "Iniciar partida" depende disso).
+const MODE_CONFIG_STEPS = ["mode", "difficulty", "opponent", "thinking", "experience", "catalog", "review"] as const;
 // FEAT-13: pass-and-play has no AI, so the difficulty/opponent/thinking steps
 // (and their settings) leave the wizard; the decks step takes their place.
-const PASS_CONFIG_STEPS = ["mode", "decks", "experience", "review"] as const;
+const PASS_CONFIG_STEPS = ["mode", "decks", "experience", "catalog", "review"] as const;
 type ConfigStep = (typeof MODE_CONFIG_STEPS)[number] | (typeof PASS_CONFIG_STEPS)[number];
 const OPPONENT_MODES = ["mirror", "deck", "random"] as const;
 
@@ -625,6 +635,10 @@ function ConfigScreen({
   deck,
   savedDecks,
   hasHover,
+  catalogCount,
+  catalogSync,
+  onSyncCatalog,
+  onCancelCatalog,
   onChange,
   onLanguage,
   onBack,
@@ -638,6 +652,11 @@ function ConfigScreen({
   savedDecks: LibraryDeck[];
   /** T5 — sem "(hover: hover)" o toggle hoverZoom não faz sentido e some. */
   hasHover: boolean;
+  /** DB v4: catálogo em disco + sync em curso (n/total) para o passo Catálogo. */
+  catalogCount: number;
+  catalogSync: CatalogProgress | null;
+  onSyncCatalog: () => void;
+  onCancelCatalog: () => void;
   onChange: (settings: AppSettings) => void;
   onLanguage: (language: Language) => void;
   onBack: () => void;
@@ -978,6 +997,28 @@ function ConfigScreen({
                 <LanguageMenu language={settings.language} onChange={onLanguage} label={t("nav.language")} />
               </div>
             </div>
+          </section>
+        )}
+
+        {activeStep === "catalog" && (
+          <section className="config-panel">
+            <div className="config-panel-head">
+              <h2>{t("config.catalog.title")}</h2>
+              <p>{t("config.catalog.sub")}</p>
+            </div>
+            <div className="catalog-row">
+              <span className="meta-chip">{t("catalog.chip", { count: catalogCount.toLocaleString(t("meta.locale")) })}</span>
+              <button type="button" className="ghost-button" onClick={onSyncCatalog} disabled={catalogSync !== null}>
+                {catalogSync ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
+                {catalogSync ? t("config.catalog.syncing", { done: catalogSync.done, total: catalogSync.total }) : t("config.catalog.sync")}
+              </button>
+              {catalogSync && (
+                <button type="button" className="ghost-button" onClick={onCancelCatalog}>
+                  <X size={15} /> {t("common.cancel")}
+                </button>
+              )}
+            </div>
+            <p className="deck-input-hint">{t("config.catalog.hint")}</p>
           </section>
         )}
 
@@ -2019,6 +2060,9 @@ function App() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  /** DB v4 (plano §5): cards in the local catalog and the running sync, or null. */
+  const [catalogCount, setCatalogCount] = useState(0);
+  const [catalogSync, setCatalogSync] = useState<CatalogProgress | null>(null);
 
   const [deckModalOpen, setDeckModalOpen] = useState(false);
   const [deckInput, setDeckInput] = useState(DEMO_DECK_ID);
@@ -2056,6 +2100,8 @@ function App() {
   const matchSetupRef = useRef<MatchSetup | null>(null);
   const aiTurnRef = useRef<string | null>(null);
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  /** DB v4: o sync em curso, para o botão Cancelar abortar entre páginas. */
+  const catalogAbortRef = useRef<AbortController | null>(null);
   const prevKeysRef = useRef({ player: 0, ai: 0 });
   /** FEAT-06: matchVersion already recorded locally (a match ends once). */
   const recordedMatchRef = useRef(-1);
@@ -2411,6 +2457,16 @@ function App() {
   // FEAT-01: offer an interrupted match (if any) once at mount.
   useEffect(() => {
     setResumeMatch(loadSavedMatch());
+  }, []);
+
+  // DB v4 (plano §2/§3): rulesOf é síncrono, então o store `abilities` sobe para
+  // um mapa em memória no boot (chegando depois, setAbilityOverrides limpa o memo).
+  // O mesmo efeito lê a contagem do catálogo para o chip da Home/Vault.
+  useEffect(() => {
+    let disposed = false;
+    void loadAbilityOverrides().then((overrides) => { if (!disposed) setAbilityOverrides(overrides); });
+    void countCatalogCards().then((count) => { if (!disposed) setCatalogCount(count); });
+    return () => { disposed = true; };
   }, []);
 
   // Restore every deck cached in IndexedDB, plus the last one the player chose.
@@ -2986,6 +3042,32 @@ function App() {
     }
   }
 
+  /** DB v4 (plano §3/§5): sync incremental do catálogo, com progresso n/total e
+      cancelamento entre páginas — o que já entrou no disco fica. */
+  async function syncCatalogNow() {
+    if (catalogSync) return;
+    const controller = new AbortController();
+    catalogAbortRef.current = controller;
+    setCatalogSync({ done: 0, total: 0, cards: catalogCount });
+    try {
+      const summary = await syncCatalog({
+        signal: controller.signal,
+        onProgress: (progress) => setCatalogSync(progress),
+      });
+      setCatalogCount(summary.cards);
+      showToast(
+        summary.cancelled
+          ? t("toast.catalogCancelled", { count: summary.added })
+          : t("toast.catalogSynced", { count: summary.added }),
+      );
+    } catch (error) {
+      showToast(vaultErrorText(error, t), "error");
+    } finally {
+      catalogAbortRef.current = null;
+      setCatalogSync(null);
+    }
+  }
+
   async function fetchDeck(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setDeckLoading(true);
@@ -3240,6 +3322,7 @@ function App() {
             language={language}
             savedDecks={savedDecks}
             selectedDeck={selectedDeck}
+            catalogCount={catalogCount}
             onSelectDeck={(deck) => { sound.play("select"); setSelectedDeck(deck); }}
             onInspectDeck={openInspector}
             onToggleFavorite={toggleFavorite}
@@ -3258,6 +3341,7 @@ function App() {
             state={browseState}
             onStateChange={setBrowseState}
             offline={!online}
+            catalogCount={catalogCount}
             onBack={() => setScreen("home")}
             onInspect={openInspector}
             onUseDeck={(deck) => { adoptDeck(deck); setScreen("home"); }}
@@ -3282,6 +3366,10 @@ function App() {
             deck={selectedDeck}
             savedDecks={savedDecks}
             hasHover={hasHover}
+            catalogCount={catalogCount}
+            catalogSync={catalogSync}
+            onSyncCatalog={() => { sound.play("click"); void syncCatalogNow(); }}
+            onCancelCatalog={() => { sound.play("click"); catalogAbortRef.current?.abort(); }}
             onChange={setSettings}
             onLanguage={setLanguage}
             onOpenTutorial={() => { sound.play("click"); setTutorialOpen(true); }}
