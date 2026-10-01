@@ -50,7 +50,6 @@ const DICT: Record<string, [string, string]> = {
   "config.step.thinking": ["Thinking", "Raciocínio"],
   "config.step.experience": ["Experience", "Experiência"],
   "config.step.review": ["Review", "Revisão"],
-  "config.step.catalog": ["Catalog", "Catálogo"],
   "config.step.mode": ["Mode", "Modo"],
   "config.step.decks": ["Decks", "Baralhos"],
   "config.mode.title": ["Match mode", "Modo de partida"],
@@ -109,7 +108,6 @@ const DICT: Record<string, [string, string]> = {
   "config.review.interface": ["Interface", "Interface"],
   // Catálogo dinâmico (DB v4, docs/DYNAMIC_CATALOG_PLAN.md §5).
   "config.catalog.title": ["Card catalog", "Catálogo de cartas"],
-  "config.catalog.sub": ["Download card data from the Master Vault and keep it on this device for offline matches.", "Baixe os dados das cartas do Master Vault e mantenha neste aparelho para partidas offline."],
   "config.catalog.sync": ["Sync catalog", "Sincronizar catálogo"],
   "config.catalog.syncing": ["Syncing {done}/{total}", "Sincronizando {done}/{total}"],
   "config.catalog.hint": ["Optional: without a catalog decks still load from the Vault and card text keeps working.", "Opcional: sem catálogo os baralhos ainda vêm do Vault e o texto das cartas continua funcionando."],

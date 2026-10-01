@@ -600,12 +600,13 @@ function HomeScreen({
 
 // ---------- Config screen (stepper) ----------
 
-// DB v4 (plano §5): "catalog" entra ANTES do review — o review segue sendo o
-// passo final (o CTA "Iniciar partida" depende disso).
-const MODE_CONFIG_STEPS = ["mode", "difficulty", "opponent", "thinking", "experience", "catalog", "review"] as const;
+// DB v4 (plano §5): o catálogo entra como card do passo Review — um 7º pill no
+// stepper não cabe com rótulo no desktop (o container tem ~693px e ficava
+// clipado), e o review é onde o setup do catálogo faz sentido.
+const MODE_CONFIG_STEPS = ["mode", "difficulty", "opponent", "thinking", "experience", "review"] as const;
 // FEAT-13: pass-and-play has no AI, so the difficulty/opponent/thinking steps
 // (and their settings) leave the wizard; the decks step takes their place.
-const PASS_CONFIG_STEPS = ["mode", "decks", "experience", "catalog", "review"] as const;
+const PASS_CONFIG_STEPS = ["mode", "decks", "experience", "review"] as const;
 type ConfigStep = (typeof MODE_CONFIG_STEPS)[number] | (typeof PASS_CONFIG_STEPS)[number];
 const OPPONENT_MODES = ["mirror", "deck", "random"] as const;
 
@@ -1000,28 +1001,6 @@ function ConfigScreen({
           </section>
         )}
 
-        {activeStep === "catalog" && (
-          <section className="config-panel">
-            <div className="config-panel-head">
-              <h2>{t("config.catalog.title")}</h2>
-              <p>{t("config.catalog.sub")}</p>
-            </div>
-            <div className="catalog-row">
-              <span className="meta-chip">{t("catalog.chip", { count: catalogCount.toLocaleString(t("meta.locale")) })}</span>
-              <button type="button" className="ghost-button" onClick={onSyncCatalog} disabled={catalogSync !== null}>
-                {catalogSync ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
-                {catalogSync ? t("config.catalog.syncing", { done: catalogSync.done, total: catalogSync.total }) : t("config.catalog.sync")}
-              </button>
-              {catalogSync && (
-                <button type="button" className="ghost-button" onClick={onCancelCatalog}>
-                  <X size={15} /> {t("common.cancel")}
-                </button>
-              )}
-            </div>
-            <p className="deck-input-hint">{t("config.catalog.hint")}</p>
-          </section>
-        )}
-
         {activeStep === "review" && (
           <section className="config-panel">
             <div className="config-panel-head">
@@ -1058,6 +1037,24 @@ function ConfigScreen({
                   {settings.gameMode === "solo" && <li><span>{t("config.experience.speed")}</span><strong>{t("config.speed.value", { s: delaySeconds(settings.aiDelayMs, settings.language) })}</strong></li>}
                   <li><span>{t("config.experience.language")}</span><strong>{LANGUAGES.find((l) => l.id === settings.language)?.short}</strong></li>
                 </ul>
+              </div>
+              {/* DB v4 (plano §5): seção Catálogo — chip com o que está em disco,
+                  sync incremental (n/total) e cancelamento. */}
+              <div className="review-card">
+                <span className="review-label">{t("config.catalog.title")}</span>
+                <p className="deck-input-hint">{t("config.catalog.hint")}</p>
+                <div className="catalog-row">
+                  <span className="meta-chip">{t("catalog.chip", { count: catalogCount.toLocaleString(t("meta.locale")) })}</span>
+                  <button type="button" className="ghost-button" onClick={onSyncCatalog} disabled={catalogSync !== null}>
+                    {catalogSync ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
+                    {catalogSync ? t("config.catalog.syncing", { done: catalogSync.done, total: catalogSync.total }) : t("config.catalog.sync")}
+                  </button>
+                  {catalogSync && (
+                    <button type="button" className="ghost-button" onClick={onCancelCatalog}>
+                      <X size={15} /> {t("common.cancel")}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </section>
