@@ -1001,7 +1001,10 @@ function run(context: Context, act: Act): void {
   sweep(state, deterministic);
 }
 
-/** Resolves every ability of `source` bound to `trigger` (keyteki TriggeredAbility). */
+/** Resolves every ability of `source` bound to `trigger` (keyteki TriggeredAbility).
+    The `if` of every ability of the trigger is read BEFORE the first act runs:
+    "If you are overwhelmed, steal 2. Otherwise, steal 1." must pick its branch
+    from the state as it was, not from what the first branch just changed. */
 function fire(
   state: GameState,
   me: Side,
@@ -1009,10 +1012,14 @@ function fire(
   trigger: Trigger,
   options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean },
 ): void {
+  const firing: Ability[] = [];
   for (const ability of abilitiesOf(state, source)) {
-    if (!ability.on.includes(trigger) || (ability.if && !holds(ability.if, state, me))) continue;
-    // A declined "You may" ability is skipped whole: no target has to be chosen.
-    if (options.decline && ability.optional) continue;
+    if (!ability.on.includes(trigger) || (options.decline && ability.optional)) continue;
+    firing.push(ability);
+  }
+  const live = firing.map((ability) => !ability.if || holds(ability.if, state, me));
+  for (const [index, ability] of firing.entries()) {
+    if (!live[index]) continue;
     const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic, useVia: options.via, decline: options.decline };
     if (ability.target) {
       const legal = everyMatch(state, me, source, ability.target);

@@ -2,7 +2,10 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    // lib ES2022 only for the typings: the row gate uses Object.hasOwn (required
+    // by the versioning contract — ACTS["constructor"] is not undefined). The
+    // runtime is the bundler's baseline target, which has it.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "types": ["node"],

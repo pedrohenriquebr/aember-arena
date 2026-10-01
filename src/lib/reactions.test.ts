@@ -171,3 +171,31 @@ describe("optional archives (human and AI)", () => {
     expect(shouldTakeArchives(state, 1)).toBe(true); // playable in the active house
   });
 });
+
+describe("Lote 1: the if of every ability is read before the first one runs", () => {
+  const probe = (text: string) => card("Probe", { type: "Action", house: "Brobnar", text });
+
+  it("an Otherwise branch does not fire on a condition the first branch just changed", () => {
+    const state = setupTest(
+      { hand: [probe("Play: If you are overwhelmed, destroy an enemy creature. Otherwise, gain 1 amber.")], inPlay: [creature("Mine A", 3), creature("Mine B", 3)] },
+      { inPlay: [creature("Theirs A", 3), creature("Theirs B", 3), creature("Theirs C", 3)] },
+      "Brobnar",
+    );
+    const next = play(state, 0, "Probe");
+    // Overwhelmed was true when the ability fired; the destroy ties the counts
+    // (2 vs 2), and a lazy evaluation would run the Otherwise branch as well.
+    expect(next.players[1].board).toHaveLength(2);
+    expect(next.players[0].amber).toBe(0);
+  });
+
+  it("the Otherwise branch is the one that resolves when its condition holds", () => {
+    const state = setupTest(
+      { hand: [probe("Play: If you are overwhelmed, destroy an enemy creature. Otherwise, gain 1 amber.")], inPlay: [creature("Mine A", 3), creature("Mine B", 3)] },
+      { inPlay: [creature("Theirs A", 3)] },
+      "Brobnar",
+    );
+    const next = play(state, 0, "Probe");
+    expect(next.players[1].board).toHaveLength(1);
+    expect(next.players[0].amber).toBe(1);
+  });
+});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rulesOf } from "./abilities";
-import { parseCardText } from "./cardText";
+import { normalise, parseCardText, PARSER_VERSION, textHash } from "./cardText";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
 import { getLegalMoves } from "./game";
@@ -94,6 +94,115 @@ describe("text normalisation", () => {
     expect(rules.coverage).toBe("full");
     expect(rules.effects[0]).toMatchObject({ target: { type: "Creature", side: "friendly" }, armor: 1 });
     expect(rules.abilities).toHaveLength(1);
+  });
+});
+
+describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.md)", () => {
+  it("reads the private-use glyphs and the typographic punctuation before the grammar", () => {
+    expect(parseCardText(face("Play: Steal 1\uF360.")).abilities[0].acts).toEqual([{ k: "steal", n: 1 }]);
+    expect(parseCardText(face("Play: Deal 3\uF361 to an enemy creature.")).abilities[0]).toMatchObject({
+      target: { type: "Creature", side: "enemy" },
+      acts: [{ k: "damage", n: 3, s: "target" }],
+    });
+  });
+
+  it("drops the Enhance sentence (deck-building icons) and keeps the rest full", () => {
+    const rules = parseCardText(face("Enhance \uF362\uF362.\nPlay: Gain 1<A>."));
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities[0].acts).toEqual([{ k: "gainAmber", n: 1 }]);
+    expect(normalise("Play: Gain 1<A>. Enhance \uF362.")).not.toContain("enhance");
+  });
+
+  it("reads a double-quoted grant that contains an apostrophe", () => {
+    const rules = parseCardText(
+      face("Enhance \uF362.\nEach friendly creature gains, \u201CAfter Reap: Return a creature to its owner\u2019s hand.\u201D"),
+    );
+    expect(rules.coverage).toBe("full");
+    expect(rules.effects[0]).toMatchObject({
+      target: { type: "Creature", side: "friendly" },
+      abilities: [{ on: ["reap"], acts: [{ k: "returnToHand", n: 0, s: "target" }], target: { type: "Creature" } }],
+    });
+    // The quoted header accepts "At the …" too, and the tail accepts "/after X".
+    const at = parseCardText(face("Each friendly creature gains, \"At the start of your turn: Gain 1<A>.\""));
+    expect(at.effects[0].abilities).toEqual([{ on: ["startOfTurn"], acts: [{ k: "gainAmber", n: 1 }] }]);
+    expect(parseCardText(face("Play/After Reap: Gain 1<A>.")).abilities[0].on).toEqual(["play", "reap"]);
+  });
+
+  it("keeps textHash frozen over the raw legacy body (pre/post never touch it)", () => {
+    const glyphs = "Enhance \uF362\uF362.\nPlay: Steal 1\uF360. Each of its neighbors gains, \u201CAfter Reap: Gain 1\uF360.\u201D";
+    // The pre-1.1 normalise body, replicated here: the hash of a row stored on
+    // disk is taken over exactly this, so the three-pass normalise cannot move it.
+    const legacy = (text: string) =>
+      text
+        .replace(/\u000b/g, "\n")
+        .replace(/\([^)]*\)/g, " ")
+        .replace(/(\d+)\s?<?A>?(?=[\s.,;:]|$)/g, "$1 amber")
+        .replace(/(\d+)\s?<?D>?(?=[\s.,;:]|$)/g, "$1 damage")
+        .replace(/\bno A\b/g, "no amber")
+        .toLowerCase()
+        .replace(/æmber|aember|æ/g, "amber")
+        .replace(/[’`]/g, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+    const legacyHash = (text: string) => {
+      let hash = 0x811c9dc5;
+      const source = legacy(text);
+      for (let index = 0; index < source.length; index += 1) {
+        hash ^= source.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      return (hash >>> 0).toString(16).padStart(8, "0");
+    };
+    expect(textHash(glyphs)).toBe(legacyHash(glyphs));
+    expect(textHash(glyphs)).toBe("5b680e87");
+    expect(textHash("Play: Gain 1A.")).toBe("1d7e0240");
+    expect(legacyHash("Play: Gain 1A.")).toBe("1d7e0240");
+  });
+
+  it("segments Fate: instead of leaking it into the ability before", () => {
+    const rules = parseCardText(face("Play: Gain 1<A>. Fate: Do something strange."));
+    expect(rules.coverage).toBe("partial");
+    expect(rules.abilities).toHaveLength(1);
+    expect(rules.abilities[0]).toMatchObject({ on: ["play"], acts: [{ k: "gainAmber", n: 1 }] });
+  });
+
+  it("turns an Otherwise clause into a second ability with the negated condition", () => {
+    const rules = parseCardText(face("After Reap: If you are overwhelmed, steal 2<A>. Otherwise, steal 1<A>."));
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities).toEqual([
+      { on: ["reap"], if: { k: "fewerCreatures" }, acts: [{ k: "steal", n: 2 }] },
+      { on: ["reap"], if: { k: "not", c: { k: "fewerCreatures" } }, acts: [{ k: "steal", n: 1 }] },
+    ]);
+    // An "Otherwise" without a condition before it is not understood.
+    expect(parseCardText(face("Play: Gain 1A. Otherwise, draw a card.")).coverage).toBe("vanilla");
+  });
+
+  it("reads flank creatures, opponent gains/draws, each player and return to your hand", () => {
+    const rules = parseCardText(
+      face("Play: Deal 2<D> to each enemy flank creature. Each player gains 1<A>. Return a friendly creature to your hand.", "Action"),
+    );
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities).toEqual([
+      {
+        on: ["play"],
+        acts: [
+          { k: "damage", n: 2, s: { each: { type: "Creature", side: "enemy", flank: true } } },
+          { k: "gainAmber", n: 1 },
+          { k: "gainAmber", n: 1, opp: true },
+          { k: "returnToHand", n: 0, s: "target" },
+        ],
+        target: { type: "Creature", side: "friendly" },
+      },
+    ]);
+    expect(parseCardText(face("Play: Destroy each enemy creature not on a flank.")).abilities[0].acts).toEqual([
+      { k: "destroy", n: 0, s: { each: { type: "Creature", side: "enemy", flank: false } } },
+    ]);
+    expect(parseCardText(face("Play: Your opponent gains 2<A>.")).abilities[0].acts).toEqual([{ k: "gainAmber", n: 2, opp: true }]);
+    expect(parseCardText(face("Play: Your opponent draws a card.")).abilities[0].acts).toEqual([{ k: "draw", n: 1, opp: true }]);
+  });
+
+  it("bumps PARSER_VERSION with the grammar", () => {
+    expect(PARSER_VERSION).toBe(2);
   });
 });
 

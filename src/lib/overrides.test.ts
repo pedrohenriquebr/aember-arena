@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Onda 2, entrada: parserVersion na linha `parser` e overrides só entre partidas.
 import { afterEach, describe, expect, it } from "vitest";
-import { abilityOverrideOf, applyAbilityOverride, flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides, normaliseAbilityOverride, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
+import { abilityOverrideOf, applyAbilityOverride, DSL_VERSION, flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides, normaliseAbilityOverride, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
 import { PARSER_VERSION, textHash } from "./cardText";
 import type { CardFace } from "./game";
 
@@ -38,6 +38,30 @@ describe("parserVersion", () => {
     expect(normaliseAbilityOverride({ ...row({ source: "parser" }), parserVersion: 7 })?.parserVersion).toBe(7);
     setAbilityOverrides(new Map([[card.id, row()]]));
     expect(rulesOf(card).abilities).toEqual([ability]);
+  });
+});
+
+describe("DSL_VERSION (versioning contract)", () => {
+  it("rejects a row written by a newer grammar and copies the version", () => {
+    expect(DSL_VERSION).toBe(2);
+    expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION })?.v).toBe(DSL_VERSION);
+    expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION + 1 })).toBeNull();
+    expect(normaliseAbilityOverride({ ...row(), v: "2" })).toBeNull();
+    // A row without `v` is version 1 (implicit) and still readable.
+    expect(normaliseAbilityOverride(row())?.v).toBeUndefined();
+  });
+
+  it("drops a row carrying a key the running grammar would silently ignore", () => {
+    const filterKey = { ...row(), dsl: [{ on: ["play"], target: { type: "Creature", house: "Mars" }, acts: [{ k: "destroy", s: "target" }] }] };
+    expect(normaliseAbilityOverride(filterKey)).toBeNull();
+    const eachFilter = { ...row(), dsl: [{ on: ["play"], acts: [{ k: "destroy", s: { each: { type: "Creature", trait: "Knight" } } }] }] };
+    expect(normaliseAbilityOverride(eachFilter)).toBeNull();
+    const conditionKey = { ...row(), dsl: [{ on: ["play"], if: { k: "amber", opp: true, op: "gte", n: 1, house: "Mars" }, acts: [{ k: "gainAmber", n: 1 }] }] };
+    expect(normaliseAbilityOverride(conditionKey)).toBeNull();
+    // `constructor` is inherited, not owned: the act table must not accept it.
+    expect(normaliseAbilityOverride({ ...row(), dsl: [{ on: ["play"], acts: [{ k: "constructor", n: 1 }] }] })).toBeNull();
+    // The whitelist is not stricter than the current DSL: known keys still pass.
+    expect(normaliseAbilityOverride({ ...row(), dsl: [{ on: ["play"], target: { type: "Creature", flank: false }, acts: [{ k: "destroy", s: "target" }] }] })).not.toBeNull();
   });
 });
 

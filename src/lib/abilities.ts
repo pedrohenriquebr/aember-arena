@@ -10,6 +10,13 @@ import { PARSER_VERSION, parseCardText, textHash } from "./cardText";
 import { ENGINE_KEYWORDS, type Keywords } from "./keywords";
 import type { CardFace } from "./game";
 
+/** Version of the STORED-ROW contract (docs/DSL_EXPANSION_PLAN.md, "Contrato de
+    versionamento"). The DSL itself only grows — a new `k`, a new optional field
+    or a new literal, never a rename — so a row is readable as long as its `v`
+    is at most this. Bump with every batch that changes what a row means: rows
+    above are discarded by the shape gate and stale failures earn a retry. */
+export const DSL_VERSION = 2; // 1 = implicit (rows without `v`)
+
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
     engine calls fire() once per occurrence, so no per-turn counter is needed.
@@ -176,6 +183,10 @@ export interface AbilityOverride {
   /** `parser` rows only: the cardText.PARSER_VERSION that produced the DSL. A row
       from another version (or without one) is stale and ignored. */
   parserVersion?: number;
+  /** The DSL_VERSION that produced the row. A row above the running version
+      would be read as if its narrowing fields were absent (abilities.DSL_VERSION
+      is the version the engine understands), so the shape gate rejects it. */
+  v?: number;
   /** `llm` rows that failed validation are not stored as rules; the queue keeps
       the motive so the owner sees why the card stayed vanilla (catalogLlm). */
   failure?: string;
@@ -345,86 +356,67 @@ const ABILITY_TRIGGERS: ReadonlySet<string> = new Set<Trigger>([
   "endOfTurn",
 ]);
 
-const ACT_KEYS: ReadonlySet<string> = new Set([
-  "gainAmber",
-  "loseAmber",
-  "steal",
-  "gainChains",
-  "draw",
-  "discardRandom",
-  "keyCost",
-  "capture",
-  "damage",
-  "heal",
-  "exalt",
-  "destroy",
-  "purge",
-  "sacrifice",
-  "stun",
-  "exhaust",
-  "ready",
-  "unstun",
-  "returnToHand",
-  "returnToDeck",
-  "archive",
-  "use",
-  "ward",
-  "removeWard",
-  "enrage",
-  "removeEnrage",
-  "takeControl",
-  "makeToken",
-  "forgeKey",
-  "unforgeKey",
-  "fromDiscard",
-  "archiveTop",
-  "lasting",
-]);
-
-/** Acts whose `n` is mandatory (a missing count would become NaN in the engine). */
-const NUMERIC_ACTS: ReadonlySet<string> = new Set([
-  "gainAmber",
-  "loseAmber",
-  "steal",
-  "gainChains",
-  "draw",
-  "discardRandom",
-  "keyCost",
-  "capture",
-  "damage",
-  "heal",
-  "exalt",
-  "makeToken",
-  "forgeKey",
-  "unforgeKey",
-]);
-
-/** Acts whose `s` selection is mandatory. */
-const SELECTED_ACTS: ReadonlySet<string> = new Set([
-  "capture",
-  "damage",
-  "heal",
-  "exalt",
-  "destroy",
-  "purge",
-  "sacrifice",
-  "stun",
-  "exhaust",
-  "ready",
-  "unstun",
-  "returnToHand",
-  "returnToDeck",
-  "archive",
-  "use",
-  "ward",
-  "removeWard",
-  "enrage",
-  "removeEnrage",
-  "takeControl",
-]);
+/** Every stored act, and which of its fields the engine needs: `n` (a finite
+    count, a missing one would become NaN) and `s` (a selection). The table
+    replaces three key sets with one map — `Object.hasOwn` is mandatory here,
+    `ACTS["constructor"]` is not undefined. */
+const ACTS: Record<string, string> = {
+  gainAmber: "n",
+  loseAmber: "n",
+  steal: "n",
+  gainChains: "n",
+  draw: "n",
+  discardRandom: "n",
+  keyCost: "n",
+  capture: "ns",
+  damage: "ns",
+  heal: "ns",
+  exalt: "ns",
+  destroy: "s",
+  purge: "s",
+  sacrifice: "s",
+  stun: "s",
+  exhaust: "s",
+  ready: "s",
+  unstun: "s",
+  returnToHand: "s",
+  returnToDeck: "s",
+  archive: "s",
+  use: "s",
+  ward: "s",
+  removeWard: "s",
+  enrage: "s",
+  removeEnrage: "s",
+  takeControl: "s",
+  makeToken: "n",
+  forgeKey: "n",
+  unforgeKey: "n",
+  fromDiscard: "",
+  archiveTop: "",
+  lasting: "",
+};
 
 const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "neighborsOfFought"]);
-const CONDITION_KINDS: ReadonlySet<string> = new Set(["amber", "moreCreatures", "fewerCreatures", "not"]);
+
+/** Fields a stored Filter may carry. A key outside the list means the row was
+    written by a NEWER grammar whose narrowing field this engine would silently
+    ignore ("destroy each Mars creature" would become "each creature"), so the
+    row is discarded instead. Condition fields come comma-delimited below
+    (`,key,` matching, so a name is never a prefix of another). */
+const FILTER_FIELDS: Record<string, 0> = {
+  type: 0,
+  side: 0,
+  damaged: 0,
+  flank: 0,
+  other: 0,
+  ready: 0,
+  top: 0,
+  self: 0,
+  host: 0,
+  neighborsOfSource: 0,
+};
+
+const CONDITION_FIELDS: Record<string, string> = { amber: "k,opp,op,n", moreCreatures: "k", fewerCreatures: "k", not: "k,c" };
 const KEYWORD_NAMES: ReadonlySet<string> = new Set(ENGINE_KEYWORDS);
 const OVERRIDE_SOURCES: ReadonlySet<string> = new Set(["parser", "llm", "manual"]);
 
@@ -436,23 +428,32 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** A stored Filter is a closed record: a key the engine does not know is not
+    "ignored", it is a reason to drop the row. */
+function validFilter(value: unknown): boolean {
+  return isRecord(value) && Object.keys(value).every((key) => Object.hasOwn(FILTER_FIELDS, key));
+}
+
 function validSelection(value: unknown): boolean {
   if (typeof value === "string") return SELECTIONS.has(value);
-  return isRecord(value) && isRecord(value.each);
+  return isRecord(value) && validFilter(value.each);
 }
 
 function validCondition(value: unknown): boolean {
-  if (!isRecord(value) || typeof value.k !== "string" || !CONDITION_KINDS.has(value.k)) return false;
+  if (!isRecord(value) || typeof value.k !== "string" || !Object.hasOwn(CONDITION_FIELDS, value.k)) return false;
+  const fields = CONDITION_FIELDS[value.k];
+  if (!Object.keys(value).every((key) => `,${fields},`.includes(`,${key},`))) return false;
   if (value.k === "amber") return typeof value.opp === "boolean" && (value.op === "eq" || value.op === "gte") && isFiniteNumber(value.n);
   if (value.k === "not") return validCondition(value.c);
   return true;
 }
 
 function validAct(value: unknown): boolean {
-  if (!isRecord(value) || typeof value.k !== "string" || !ACT_KEYS.has(value.k)) return false;
+  if (!isRecord(value) || typeof value.k !== "string" || !Object.hasOwn(ACTS, value.k)) return false;
+  const need = ACTS[value.k];
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
-  if (NUMERIC_ACTS.has(value.k) && !isFiniteNumber(value.n)) return false;
-  if (SELECTED_ACTS.has(value.k) && !validSelection(value.s)) return false;
+  if (need.includes("n") && !isFiniteNumber(value.n)) return false;
+  if (need.includes("s") && !validSelection(value.s)) return false;
   if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target);
   return true;
 }
@@ -462,7 +463,7 @@ function validAbility(value: unknown): value is Ability {
   if (!Array.isArray(value.on) || !value.on.length || !value.on.every((trigger) => typeof trigger === "string" && ABILITY_TRIGGERS.has(trigger))) return false;
   if (!Array.isArray(value.acts) || !value.acts.length || !value.acts.every(validAct)) return false;
   if (value.if !== undefined && !validCondition(value.if)) return false;
-  if (value.target !== undefined && !isRecord(value.target)) return false;
+  if (value.target !== undefined && !validFilter(value.target)) return false;
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
   return true;
 }
@@ -477,7 +478,7 @@ function validEffects(value: unknown): value is PersistentEffect[] {
     value.every(
       (effect) =>
         isRecord(effect) &&
-        isRecord(effect.target) &&
+        validFilter(effect.target) &&
         (effect.power === undefined || isFiniteNumber(effect.power)) &&
         (effect.armor === undefined || isFiniteNumber(effect.armor)) &&
         (effect.keywords === undefined || validKeywords(effect.keywords)) &&
@@ -491,7 +492,9 @@ function validEffects(value: unknown): value is PersistentEffect[] {
     known fields only, so junk properties never ride into the rules. Required:
     `cardId`, a DSL of structurally valid abilities, `textHash` and a source in
     the whitelist. `reviewed` defaults to false (an llm row without it is simply
-    untrusted) and a missing `generatedAt` becomes 0. */
+    untrusted) and a missing `generatedAt` becomes 0. A `v` above DSL_VERSION
+    means the row was written by a grammar this engine does not fully know, and
+    it is discarded like a malformed one. */
 export function normaliseAbilityOverride(value: unknown): AbilityOverride | null {
   if (!isRecord(value)) return null;
   const { cardId, dsl, textHash: hash, source, model } = value;
@@ -501,6 +504,7 @@ export function normaliseAbilityOverride(value: unknown): AbilityOverride | null
   if (typeof source !== "string" || !OVERRIDE_SOURCES.has(source)) return null;
   if (value.effects !== undefined && !validEffects(value.effects)) return null;
   if (value.keywords !== undefined && !validKeywords(value.keywords)) return null;
+  if (value.v !== undefined && (!isFiniteNumber(value.v) || value.v > DSL_VERSION)) return null;
 
   const record: AbilityOverride = {
     cardId,
@@ -510,6 +514,7 @@ export function normaliseAbilityOverride(value: unknown): AbilityOverride | null
     reviewed: value.reviewed === true,
     generatedAt: isFiniteNumber(value.generatedAt) ? value.generatedAt : 0,
   };
+  if (isFiniteNumber(value.v)) record.v = value.v;
   if (typeof model === "string") record.model = model;
   if (isFiniteNumber(value.parserVersion)) record.parserVersion = value.parserVersion;
   if (typeof value.failure === "string") record.failure = value.failure;

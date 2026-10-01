@@ -5,9 +5,9 @@
 // sintética, (c) sanidade semântica. Reprovou = a carta segue vanilla e a fila
 // guarda o motivo. Nada aqui é meio-resolvido: o rascunho que passa entra como
 // `source: "llm"`, `reviewed: false` e só um humano o torna regra (abilities.ts).
-import { type Ability, type AbilityOverride, type PersistentEffect, normaliseAbilityOverride, rulesOf, withTrialOverride } from "./abilities";
+import { type Ability, type AbilityOverride, DSL_VERSION, type PersistentEffect, normaliseAbilityOverride, rulesOf, withTrialOverride } from "./abilities";
 import { putAbilityOverride } from "./cache";
-import { normalise, parseCardText, textHash } from "./cardText";
+import { normalise, parseCardText, readableText, textHash } from "./cardText";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
 import { applyMove, canResolve, createMatch, effectivePower, endTurn, getLegalMoves, type CardFace, type CardInstance, type GameState } from "./game";
@@ -83,6 +83,7 @@ const SYSTEM_RULES = [
   "Keep the order of the text. Printed keywords (Elusive. Skirmish. Taunt. Assault 2 ...) go in `keywords` with their number (1 when absent), not in abilities.",
   'Prefixes map to triggers: "Play:" play, "Reap:" reap, "Fight:" fight, "Before Fight:" beforeFight, "Destroyed:" destroyed, "Action:" action, "Omni:" omni, "At the start of your turn:" startOfTurn, "At the end of your turn:" endOfTurn. "After X:" / "Each time X:" bind to the same trigger.',
   'An Ability `target` is the filter of the creature the player chooses; acts that use it say `s: "target"`. "You may" => `optional: true`. <A> is amber, <D> is damage.',
+  'Ignore an "Enhance" sentence (its icons are deck-building bonusIcons, not an ability). "You are overwhelmed" = fewerCreatures. "Otherwise, X" = a second ability with if {"k":"not","c":<the previous condition>}.',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
@@ -103,7 +104,7 @@ export function buildMessages(face: CardFace): ChatMessage[] {
   for (const shot of FEW_SHOTS) {
     messages.push({ role: "user", content: cardPrompt(shot.type, shot.text) }, { role: "assistant", content: JSON.stringify(shot.answer) });
   }
-  messages.push({ role: "user", content: cardPrompt(face.type, face.text ?? "") });
+  messages.push({ role: "user", content: cardPrompt(face.type, readableText(face.text ?? "")) });
   return messages;
 }
 
@@ -170,7 +171,7 @@ type Draft = { ok: true; row: AbilityOverride } | { ok: false; reason: string };
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
 function draftRow(face: CardFace, parts: { abilities: unknown; effects?: unknown; keywords?: unknown }, source: AbilityOverride["source"], model?: string): Draft {
-  const base = { cardId: face.id, textHash: textHash(face.text ?? ""), source, reviewed: source === "manual", generatedAt: Date.now(), ...(model ? { model } : {}) };
+  const base = { cardId: face.id, textHash: textHash(face.text ?? ""), source, reviewed: source === "manual", generatedAt: Date.now(), v: DSL_VERSION, ...(model ? { model } : {}) };
   if (!Array.isArray(parts.abilities)) return { ok: false, reason: "schema: `abilities` must be an array" };
   const effects = parts.effects ?? [];
   const keywords = parts.keywords ?? {};
@@ -260,11 +261,21 @@ const dummy = (id: string, house: string, power: number): CardInstance => ({
   stunned: false,
 });
 
+/** The six zones of a player, in one list (the invariants below walk both). */
+const zones = (player: GameState["players"][number]) => [...player.hand, ...player.board, ...player.discard, ...player.deck, ...player.archives, ...player.purged];
+
+/** Non-token cards across every zone: a card may move, never vanish — only
+    tokens leave the game (2.6 relies on this invariant to catch a lost card). */
+const cardCount = (state: GameState): number => state.players.reduce((total, player) => total + zones(player).filter((card) => !card.isToken).length, 0);
+
 function brokenState(state: GameState): string | null {
+  const seen = new Set<string>();
   for (const player of state.players) {
     if (![player.amber, player.keys, player.chains, player.keyCostMod].every(Number.isFinite)) return "a player counter became NaN";
-    for (const card of [...player.hand, ...player.board, ...player.discard, ...player.deck, ...player.archives, ...player.purged]) {
+    for (const card of zones(player)) {
       if (!card?.face || !Number.isFinite(card.damage)) return "a card lost its face or damage";
+      if (seen.has(card.instanceId)) return "a card instance is in two zones at once";
+      seen.add(card.instanceId);
     }
     for (const card of player.board) if (!Number.isFinite(effectivePower(state, card))) return "a creature's power became NaN";
   }
@@ -272,16 +283,35 @@ function brokenState(state: GameState): string | null {
 }
 
 /** The card in a table with friendly/enemy creatures (one of them too strong to
-    survive, so Destroyed:/Fight: text can fire), either in hand or in play. */
-function scenario(face: CardFace, where: "hand" | "board"): { state: GameState; card: CardInstance } {
+    survive, so Destroyed:/Fight: text can fire), either in hand or in play. The
+    rich table adds a hand of three dummies (one of another house), two archive
+    cards, a full discard, three enemies against two friends and one damaged
+    creature per side. House/trait filters do not exist in this DSL version, so
+    a mix of houses is as far as "cited by the filters" can go. */
+function scenario(face: CardFace, where: "hand" | "board", rich: boolean): { state: GameState; card: CardInstance } {
   const state = createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 7 });
   const card: CardInstance = { instanceId: "dry-card", face, damage: 0, ready: true, stunned: false };
   const [me, rival] = state.players;
+  const foe = rival.houses[0] ?? "Dis";
+  const pack = (prefix: string, house: string, n: number) => Array.from({ length: n }, (_, index) => dummy(`${prefix}${index}`, house, 2));
   const friends = [dummy("dry-f0", face.house, 3), dummy("dry-f1", face.house, 4)];
+  const enemies = [dummy("dry-e0", foe, 3), dummy("dry-e1", foe, 20)];
   me.hand = where === "hand" ? [card] : [];
   me.board = where === "board" ? [friends[0], { ...card, ...(face.type === "Upgrade" ? { attachedTo: "dry-f0" } : {}) }, friends[1]] : friends;
-  rival.board = [dummy("dry-e0", rival.houses[0] ?? "Dis", 3), dummy("dry-e1", rival.houses[0] ?? "Dis", 20)];
+  rival.board = enemies;
   me.discard = [dummy("dry-d0", face.house, 2)];
+  // The rich table: a hand of three dummies (one of another house), two archive
+  // cards, a full discard, three enemies against two friends and one damaged
+  // creature per side. House/trait filters do not exist in this DSL version, so
+  // a mix of houses is as far as "cited by the filters" can go.
+  if (rich) {
+    me.hand.push(...pack("dry-h", face.house, 2), dummy("dry-h2", foe, 2));
+    enemies.push(dummy("dry-e2", foe, 3));
+    me.discard = pack("dry-d", face.house, 11);
+    me.archives = pack("dry-a", face.house, 2);
+    friends[0].damage = 1;
+    enemies[0].damage = 1;
+  }
   me.amber = 3;
   rival.amber = 5;
   state.activeHouse = face.house;
@@ -291,28 +321,35 @@ function scenario(face: CardFace, where: "hand" | "board"): { state: GameState; 
   return { state, card: where === "board" ? me.board.find((item) => item.instanceId === "dry-card")! : card };
 }
 
-function exercise(face: CardFace, where: "hand" | "board"): string | null {
-  const { state, card } = scenario(face, where);
-  if (where === "board" && face.type === "Action") return null;
-  if (where === "board" && face.type === "Upgrade") return null;
+function exerciseTable(face: CardFace, where: "hand" | "board", rich: boolean): string | null {
+  const { state, card } = scenario(face, where, rich);
+  const label = `dry-run (${where}${rich ? ", rich" : ""}, `;
   const moves = getLegalMoves(state, 0, face.house).filter((move) => ("instanceId" in move && move.instanceId === card.instanceId) || ("attackerId" in move && move.attackerId === card.instanceId));
   for (const ability of rulesOf(face).abilities) {
     if (typeof canResolve(state, 0, card, ability) !== "boolean") return "canResolve did not answer a boolean";
   }
+  const baseline = cardCount(state);
   for (const move of moves) {
     if (move.type === "discard") continue;
     const next = applyMove(state, 0, move);
     const again = applyMove(state, 0, move);
     const problem = brokenState(next);
-    if (problem) return `dry-run (${where}, ${move.type}): ${problem}`;
-    if (JSON.stringify(next) !== JSON.stringify(again)) return `dry-run (${where}, ${move.type}): the move is not deterministic`;
+    if (problem) return `${label}${move.type}): ${problem}`;
+    if (cardCount(next) !== baseline) return `${label}${move.type}): non-token cards were not conserved`;
+    if (JSON.stringify(next) !== JSON.stringify(again)) return `${label}${move.type}): the move is not deterministic`;
   }
   if (where === "board") {
     const ended = endTurn(state, 0);
     const problem = brokenState(ended) ?? brokenState(endTurn(ended, 1));
-    if (problem) return `dry-run (turn boundaries): ${problem}`;
+    if (problem) return `${label}turn boundaries): ${problem}`;
   }
   return null;
+}
+
+function exercise(face: CardFace, where: "hand" | "board"): string | null {
+  if (where === "board" && face.type === "Action") return null;
+  if (where === "board" && face.type === "Upgrade") return null;
+  return exerciseTable(face, where, false) ?? exerciseTable(face, where, true);
 }
 
 /** (b): the draft plays inside a synthetic match under a synthetic card id (the
@@ -352,7 +389,7 @@ export function validateDraft(face: CardFace, parts: { abilities: unknown; effec
 
 /** Vanilla + motive: an untrusted row with an empty DSL the queue lists. */
 export function failureRow(face: CardFace, reason: string, model?: string): AbilityOverride {
-  return { cardId: face.id, dsl: [], textHash: textHash(face.text ?? ""), source: "llm", reviewed: false, generatedAt: Date.now(), failure: reason, ...(model ? { model } : {}) };
+  return { cardId: face.id, dsl: [], textHash: textHash(face.text ?? ""), source: "llm", reviewed: false, generatedAt: Date.now(), v: DSL_VERSION, failure: reason, ...(model ? { model } : {}) };
 }
 
 /** Parser output for the parts the model may have left out: the parser's own
@@ -378,11 +415,15 @@ export async function translateCard(face: CardFace, config: LlmConfig, options: 
 }
 
 /** Cards worth a call: the parser does not cover them fully and the store holds
-    no answer yet for this exact text (cache eterno por textHash — failures too). */
+    no answer yet for this exact text. The cache is eternal per textHash, except
+    for a FAILURE written by an older DSL_VERSION — the DSL grows every version
+    and yesterday's "unsupported" may be expressible today, so those retry. */
 export function pendingTranslations(cards: CardFace[], known: (id: string) => AbilityOverride | undefined): CardFace[] {
   return cards.filter((face) => {
     if (!face.text?.trim() || parseCardText(face).coverage === "full") return false;
-    return known(face.id)?.textHash !== textHash(face.text);
+    const row = known(face.id);
+    if (!row || row.textHash !== textHash(face.text)) return true;
+    return !!row.failure && (row.v ?? 1) < DSL_VERSION;
   });
 }
 

@@ -13,7 +13,10 @@ import type { CardFace } from "./game";
     (Interrupt:, Scrap: …) are recognised only to be reported as unsupported
     instead of leaking into the previous ability. "After <event>:" is the
     post-event window and "Each time <event>:" fires on every occurrence. */
-const PREFIX = /\b((?:play|reap|fight|destroyed|omni|action|scrap|interrupt|each time [^:.]{1,90}?|at the (?:start|end) of [^:.]{1,90}?|after [^:.]{1,90}?|before [^:.]{1,90}?)(?:\/(?:play|reap|fight|destroyed))*)\s*:/gi;
+/** `fate` is here to SEGMENT ("Fate: …" must not leak into the ability before
+    it): the trigger table has no entry for it, so the segment is reported as
+    unsupported and the previous ability still counts. */
+const PREFIX = /\b((?:play|reap|fight|destroyed|omni|action|scrap|interrupt|fate|each time [^:.]{1,90}?|at the (?:start|end) of [^:.]{1,90}?|after [^:.]{1,90}?|before [^:.]{1,90}?)(?:\/(?:after )?(?:play|reap|fight|destroyed))*)\s*:/gi;
 
 const TRIGGERS: Record<string, Trigger> = {
   play: "play",
@@ -45,9 +48,29 @@ const num = (word: string) => (word === "a" || word === "an" ? 1 : Number(word))
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 2;
 
-export function normalise(text: string): string {
+/** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
+    and damage as U+F360/F361), the typographic punctuation of the export, the
+    byte-order mark and the `Enhance` line — a deck-building instruction whose
+    icons arrive separately in `bonusIcons`, never an ability. The sentence is
+    anchored at the start of a line so a card title containing "Enhance" is not
+    eaten. Whatever private-use glyph is left is decoration and goes away. */
+export function normalisePre(text: string): string {
+  return (text ?? "")
+    .replace(/\uF360/gi, "<A>")
+    .replace(/\uF361/gi, "<D>")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2011\u2013]/g, "-")
+    .replace(/\uFEFF/g, "")
+    .replace(/(^|[.\n]\s*)enhance\b[^.:]*\./gi, "$1")
+    .replace(/[\uF300-\uF5FF]/g, "");
+}
+
+/** Second pass: exactly the body of the pre-1.1 `normalise`, frozen because
+    `textHash` is taken over it — the stored rows of the ability DB were keyed
+    by this text and a change here would orphan all of them. */
+function legacy(text: string): string {
   return text
     .replace(/\u000b/g, "\n")
     .replace(/\([^)]*\)/g, " ")
@@ -61,14 +84,39 @@ export function normalise(text: string): string {
     .trim();
 }
 
+/** Third pass: the glyphs legacy does not read because no number precedes them
+    ("any <A> you would gain"). */
+function normalisePost(text: string): string {
+  return text
+    .replace(/<a>/g, " amber")
+    .replace(/<d>/g, " damage")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalise(text: string): string {
+  return normalisePost(legacy(normalisePre(text)));
+}
+
+/** The printed text as the LLM prompt should carry it: glyphs readable as
+    <A>/<D>, no parenthetical reminders and no Enhance line. Case is kept (the
+    model reads the card, it does not run the grammar). */
+export function readableText(text: string): string {
+  return normalisePre(text ?? "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Identity of a card's printed text (DB v4 `cards.textHash`, plano §3): the
     hash decides whether the ability store still matches the text — an entry
     written for a different text is ignored, exactly like the parser would be
-    re-run. FNV-1a over the normalised text, so whitespace/reminder/icon-glyph
-    variants of the same print do not invalidate a stored DSL. */
+    re-run. FNV-1a over the frozen `legacy` form, so whitespace/reminder/icon
+    variants of the same print do not invalidate a stored DSL and the rows
+    written before the three-pass normalisation keep their key. */
 export function textHash(text: string): string {
   let hash = 0x811c9dc5;
-  const source = normalise(text ?? "");
+  const source = legacy(text ?? "");
   for (let index = 0; index < source.length; index += 1) {
     hash ^= source.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193);
@@ -85,7 +133,7 @@ function parseObject(phrase: string, upgrade: boolean): { s: Selection; target?:
   const top = phrase.match(/^the (\d+) most powerful creatures$/);
   if (top) return { s: { each: { type: "Creature", top: Number(top[1]) } } };
   const m = phrase.match(
-    /^(a|an|each)( other)?( friendly| enemy)?( damaged| undamaged| ready)? (creature|artifact)s?( that is not on a flank| on a flank)?$/,
+    /^(a|an|each)( other)?( friendly| enemy)?( damaged| undamaged| ready| flank)? (creature|artifact)s?( that is not on a flank| not on a flank| on a flank)?$/,
   );
   if (!m) return null;
   const filter: Filter = { type: m[5] === "artifact" ? "Artifact" : "Creature" };
@@ -93,7 +141,8 @@ function parseObject(phrase: string, upgrade: boolean): { s: Selection; target?:
   if (m[3]) filter.side = m[3] === " friendly" ? "friendly" : "enemy";
   if (m[4] === " damaged" || m[4] === " undamaged") filter.damaged = m[4] === " damaged";
   if (m[4] === " ready") filter.ready = true;
-  if (m[6]) filter.flank = m[6] === " on a flank";
+  if (m[4] === " flank") filter.flank = true;
+  if (m[6]) filter.flank = !m[6].includes("not");
   return m[1] === "each" ? { s: { each: filter } } : { s: "target", target: filter };
 }
 
@@ -104,6 +153,8 @@ function parseCondition(clause: string): Condition | null {
   }
   if (clause === "you control more creatures than your opponent") return { k: "moreCreatures" };
   if (clause === "your opponent controls more creatures than you") return { k: "fewerCreatures" };
+  // "Overwhelmed" is the printed word for "the opponent has more creatures".
+  if (clause === "you are overwhelmed") return { k: "fewerCreatures" };
   return null;
 }
 
@@ -116,11 +167,13 @@ interface Sentence {
 
 const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^gain (\d+) amber$/, (m) => ({ k: "gainAmber", n: +m[1] })],
+  [/^your opponent gains (\d+) amber$/, (m) => ({ k: "gainAmber", n: +m[1], opp: true })],
   [/^your opponent loses (\d+) amber$/, (m) => ({ k: "loseAmber", n: +m[1], opp: true })],
   [/^lose (\d+) amber$/, (m) => ({ k: "loseAmber", n: +m[1] })],
   [/^steal (\d+) amber$/, (m) => ({ k: "steal", n: +m[1] })],
   [/^gain (a|\d+) chains?$/, (m) => ({ k: "gainChains", n: num(m[1]) })],
   [/^draw (a|\d+) cards?$/, (m) => ({ k: "draw", n: num(m[1]) })],
+  [/^your opponent draws (a|\d+) cards?$/, (m) => ({ k: "draw", n: num(m[1]), opp: true })],
   [/^your opponent discards (a|\d+) random cards?(?: from their hand)?$/, (m) => ({ k: "discardRandom", n: num(m[1]), opp: true })],
   [/^keys cost \+(\d+) (?:amber )?during your opponent's next turn$/, (m) => ({ k: "keyCost", n: +m[1], opp: true })],
   [/^archive the top card of your deck$/, () => ({ k: "archiveTop" })],
@@ -151,6 +204,7 @@ const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number; obj: n
   [/^heal (\d+) damage from (.+)$/, (m) => ({ k: "heal", n: +m[1], obj: 2 })],
   [/^fully heal (.+)$/, () => ({ k: "heal", n: 99, obj: 1 })],
   [/^return (.+?) to (?:its|their) owners?'s? hands?$/, () => ({ k: "returnToHand", obj: 1 })],
+  [/^return (.+?) to your hand$/, () => ({ k: "returnToHand", obj: 1 })],
   [/^put (.+) on top of your deck$/, () => ({ k: "returnToDeck", obj: 1 })],
   [/^archive (.+)$/, () => ({ k: "archive", obj: 1 })],
   [/^use (.+)$/, () => ({ k: "use", obj: 1 })],
@@ -207,6 +261,9 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
 
   const capture = sentence.match(/^capture (\d+) amber$/);
   if (capture) return creature || upgrade ? { acts: [{ k: "capture", n: +capture[1], s: upgrade ? "host" : "self" }] } : null;
+  // "Each player gains N" is two acts on the same side of the table (me first).
+  const eachGains = sentence.match(/^each player gains (\d+) amber$/);
+  if (eachGains) return { acts: [{ k: "gainAmber", n: +eachGains[1] }, { k: "gainAmber", n: +eachGains[1], opp: true }] };
   const chooseCapture = sentence.match(/^choose (a friendly creature) to capture (\d+) amber$/);
   if (chooseCapture) return { acts: [{ k: "capture", n: +chooseCapture[2], s: "target" }], target: { type: "Creature", side: "friendly" } };
 
@@ -229,14 +286,39 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
   return null;
 }
 
-function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[]): Ability | null {
-  const ability: Ability = { on: triggers, acts: [] };
+/** The abilities of one printed segment. One segment can hold TWO abilities:
+    "If you are overwhelmed, steal 2A. Otherwise, steal 1A." closes the first
+    one and opens a twin with the negated condition. The negation is the whole
+    point — a second `if:{k:"not"}` can never be expressed as one ability. */
+function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[]): Ability[] | null {
+  const done: Ability[] = [];
+  let ability: Ability = { on: triggers, acts: [] };
+  const close = (): boolean => {
+    if (!ability.acts.length) return false;
+    // Every act optional and the whole ability is a single "You may" clause.
+    if (ability.acts.every((act) => act.optional)) ability.optional = true;
+    // "Sacrifice X. Destroy an artifact." — the sacrifice consumed the source, so
+    // the printed target cannot be the source itself (BUG-10).
+    if (ability.target && ability.acts.some((act) => (act.k === "destroy" || act.k === "sacrifice") && "s" in act && act.s === "self")) {
+      ability.target = { ...ability.target, other: true };
+    }
+    done.push(ability);
+    return true;
+  };
   for (const sentence of body.split(/\.\s*/).map((part) => part.trim()).filter(Boolean)) {
-    const parsed = parseSentence(sentence, upgrade, creature, quoted);
+    // The branch of an "Otherwise" is only legal right after a conditional
+    // clause, and it negates the condition printed BEFORE it.
+    const otherwise = sentence.match(/^otherwise,? (.+)$/);
+    if (otherwise) {
+      const condition = ability.if;
+      if (!condition || !close()) return null;
+      ability = { on: triggers, if: { k: "not", c: condition }, acts: [] };
+    }
+    const parsed = parseSentence(otherwise ? otherwise[1] : sentence, upgrade, creature, quoted);
     if (!parsed) return null;
     // "You may X. If you do, Y.": declining X declines Y too, so the dependent
     // clause inherits the optional flag of the clause before it.
-    if (/^if you do,? /.test(sentence) && ability.acts.length && ability.acts.every((act) => act.optional)) {
+    if (!otherwise && /^if you do,? /.test(sentence) && ability.acts.length && ability.acts.every((act) => act.optional)) {
       for (const act of parsed.acts) act.optional = true;
     }
     if (parsed.target) {
@@ -251,28 +333,23 @@ function parseAbility(triggers: Trigger[], body: string, upgrade: boolean, creat
     }
     ability.acts.push(...parsed.acts);
   }
-  if (!ability.acts.length) return null;
-  // Every act optional and the whole ability is a single "You may" clause.
-  if (ability.acts.every((act) => act.optional)) ability.optional = true;
-  // "Sacrifice X. Destroy an artifact." — the sacrifice consumed the source, so
-  // the printed target cannot be the source itself (BUG-10).
-  if (ability.target && ability.acts.some((act) => (act.k === "destroy" || act.k === "sacrifice") && "s" in act && act.s === "self")) {
-    ability.target = { ...ability.target, other: true };
-  }
-  return ability;
+  return close() ? done : null;
 }
 
 // ---------- persistent text (constant effects and lasting grants) ----------
 
 /** Quoted ability inside a persistent sentence. The body is masked before the
     trigger-prefix scan, so a "Reap:" inside quotes cannot split the sentence;
-    the quoted text is re-parsed with the same grammar when the grant is read. */
-const QUOTED_ABILITY = /(['"])((?:play|reap|fight|destroyed|omni|action|scrap|before|after)[^'"]{2,300})\1/gi;
+    the quoted text is re-parsed with the same grammar when the grant is read.
+    A double-quoted ability may contain apostrophes ("its owner's") — the
+    typographic quotes were already mapped to `"` by the first pass. */
+const QUOTED_ABILITY =
+  /"((?:play|reap|fight|destroyed|omni|action|scrap|before|after|at the)[^"]{2,300})"|'((?:play|reap|fight|destroyed|omni|action|scrap|before|after|at the)[^']{2,300})'/gi;
 
 function maskQuotes(text: string): { text: string; quoted: string[] } {
   const quoted: string[] = [];
-  const masked = text.replace(QUOTED_ABILITY, (_match, _quote, inner: string) => {
-    quoted.push(inner);
+  const masked = text.replace(QUOTED_ABILITY, (_match, double: string, single: string) => {
+    quoted.push(double ?? single);
     return `\u0001${quoted.length - 1}\u0001`;
   });
   return { text: masked, quoted };
@@ -313,8 +390,9 @@ function parseGrant(sentence: string, upgrade: boolean, creature: boolean, quote
   const grant = sentence.match(/^(.+?) gains?,? \u0001(\d+)\u0001$/);
   if (grant) {
     const target = parseSubject(grant[1], upgrade);
-    const ability = target && parseQuoted(quoted[Number(grant[2])], upgrade, creature, quoted);
-    return ability ? { target, abilities: [ability] } : null;
+    if (!target) return null;
+    const abilities = parseQuoted(quoted[Number(grant[2])], upgrade, creature, quoted);
+    return abilities ? { target, abilities } : null;
   }
   const keyword = sentence.match(/^(.+?) gains? ([a-z-]+(?: \d+)?)$/);
   if (!keyword) return null;
@@ -324,14 +402,14 @@ function parseGrant(sentence: string, upgrade: boolean, creature: boolean, quote
 }
 
 /** Body of a quoted grant ("Reap: Gain 1A.") through the same parser. */
-function parseQuoted(inner: string, upgrade: boolean, creature: boolean, quoted: string[]): Ability | null {
+function parseQuoted(inner: string, upgrade: boolean, creature: boolean, quoted: string[]): Ability[] | null {
   const match = inner.match(
-    /^((?:play|reap|fight|destroyed|omni|action|scrap|before [^:.]{1,90}|after [^:.]{1,90})(?:\/(?:play|reap|fight|destroyed))*)\s*:\s*(.+)$/i,
+    /^((?:play|reap|fight|destroyed|omni|action|scrap|before [^:.]{1,90}|after [^:.]{1,90}|at the [^:.]{1,90})(?:\/(?:after )?(?:play|reap|fight|destroyed))*)\s*:\s*(.+)$/i,
   );
   if (!match) return null;
   const triggers = match[1].split("/").map((part) => triggerFor(part));
   return triggers.every((trigger): trigger is Trigger => trigger !== undefined)
-    ? parseAbility(triggers, match[2], upgrade, creature, quoted)
+    ? parseAbilities(triggers, match[2], upgrade, creature, quoted)
     : null;
 }
 
@@ -464,11 +542,11 @@ function parseCardBody(face: CardFace): CardRules {
 
   for (const { prefix: raw, body } of segments.slice(1)) {
     const triggers = raw!.split("/").map((part) => triggerFor(part));
-    const ability = triggers.every((trigger): trigger is Trigger => trigger !== undefined)
-      ? parseAbility(triggers, body.replace(self, "this card"), upgrade, creature, quoted)
+    const parsed = triggers.every((trigger): trigger is Trigger => trigger !== undefined)
+      ? parseAbilities(triggers, body.replace(self, "this card"), upgrade, creature, quoted)
       : null;
-    if (ability) {
-      abilities.push(ability);
+    if (parsed) {
+      abilities.push(...parsed);
       understood += 1;
     } else {
       unknown += 1;

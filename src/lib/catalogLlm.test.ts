@@ -3,7 +3,7 @@
 // validação tripla, redaction da chave e o schema gerado do abilities.ts.
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normaliseAbilityOverride, rulesOf, setAbilityOverrides, type AbilityOverride } from "./abilities";
+import { normaliseAbilityOverride, DSL_VERSION, rulesOf, setAbilityOverrides, type AbilityOverride } from "./abilities";
 import { buildMessages, callProvider, dryRunProblem, extractJson, FEW_SHOTS, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, validateDraft } from "./catalogLlm";
 import { parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
@@ -53,6 +53,17 @@ describe("prompt", () => {
     expect(messages.length).toBe(1 + FEW_SHOTS.length * 2 + 1);
     expect(messages.at(-1)?.content).toContain("Reap: Gain 1<A>.");
     expect(messages.some((message) => message.role === "assistant" && message.content.includes('"unsupported":true'))).toBe(true);
+  });
+
+  it("sends the clean printed text: glyphs as <A>/<D>, no reminders, no Enhance line", () => {
+    const messages = buildMessages(face("Enhance \uF362\uF362. (These icons were added to your deck.)\nPlay: Steal 1\uF360."));
+    const prompt = messages.at(-1)!.content;
+    expect(prompt).toContain("Play: Steal 1<A>.");
+    expect(prompt).not.toContain("Enhance");
+    expect(prompt).not.toContain("(");
+    expect(messages[0].content).toContain("Ignore an \"Enhance\"");
+    expect(messages[0].content).toContain("fewerCreatures");
+    expect(messages[0].content).toContain("Otherwise");
   });
 
   it("few-shot answers are exactly what the parser produces (no drift from the engine)", () => {
@@ -127,7 +138,7 @@ describe("translateCard — validacao tripla", () => {
 
   it("a valid answer becomes an unreviewed llm row with the model", async () => {
     const row = await translateCard(reapCard, config, { fetcher: stub(reply("```json\n" + JSON.stringify(VALID) + "\n```")) });
-    expect(row).toMatchObject({ cardId: "c-1", source: "llm", reviewed: false, model: "tiny", textHash: textHash(reapCard.text) });
+    expect(row).toMatchObject({ cardId: "c-1", source: "llm", reviewed: false, model: "tiny", textHash: textHash(reapCard.text), v: DSL_VERSION });
     expect(row.failure).toBeUndefined();
     expect(row.dsl).toEqual(VALID.abilities);
     expect(normaliseAbilityOverride(row)).not.toBeNull();
@@ -135,7 +146,7 @@ describe("translateCard — validacao tripla", () => {
 
   it("unsupported -> vanilla row with the reason", async () => {
     const row = await translateCard(reapCard, config, { fetcher: stub(reply({ unsupported: true, reason: "global watcher" })) });
-    expect(row).toMatchObject({ dsl: [], reviewed: false, failure: "unsupported: global watcher" });
+    expect(row).toMatchObject({ dsl: [], reviewed: false, failure: "unsupported: global watcher", v: DSL_VERSION });
   });
 
   it("(a) schema: junk, unknown act and bad keyword fail with a motive", async () => {
@@ -196,6 +207,16 @@ describe("translateCard — validacao tripla", () => {
     expect(dryRunProblem(reapCard, poisoned)).not.toBeNull();
   });
 
+  it("(b) dry-run: the rich table exercises the same draft (overwhelmed + Otherwise)", () => {
+    const card = face("After Reap: If you are overwhelmed, steal 2<A>. Otherwise, steal 1<A>.");
+    const result = validateDraft(card, { abilities: parseCardText(card).abilities }, "llm");
+    expect(result.reason).toBeUndefined();
+    expect(result.ok).toBe(true);
+    // Both tables run the creature in hand and on the board: the base one has
+    // even counts, the rich one 3 enemies against 2 friends.
+    expect(dryRunProblem(card, result.row!)).toBeNull();
+  });
+
   it("dry-run leaves the live overrides and the real card alone", async () => {
     await translateCard(reapCard, config, { fetcher: stub(reply(VALID)) });
     expect(rulesOf(reapCard).abilities).toEqual(parseCardText(reapCard).abilities);
@@ -221,6 +242,28 @@ describe("queue run", () => {
     const answered = face("Play: Shuffle things around in a strange way.", { id: "done" });
     const known = (id: string): AbilityOverride | undefined => (id === "done" ? ({ textHash: textHash(answered.text) } as AbilityOverride) : undefined);
     expect(pendingTranslations([covered, unread, answered], known).map((item) => item.id)).toEqual(["gap"]);
+  });
+
+  it("re-enqueues a failure from an older DSL_VERSION; a current answer stays cached", () => {
+    const gap = "Play: Shuffle things around in a strange way.";
+    const stored = (id: string, patch: Partial<AbilityOverride>): AbilityOverride => ({
+      cardId: id,
+      dsl: [],
+      textHash: textHash(gap),
+      source: "llm",
+      reviewed: false,
+      generatedAt: 1,
+      ...patch,
+    });
+    const rows = new Map<string, AbilityOverride>([
+      ["old", stored("old", { failure: "unsupported: no", v: DSL_VERSION - 1 })],
+      ["implicit", stored("implicit", { failure: "unsupported: no" })],
+      ["current", stored("current", { failure: "unsupported: no", v: DSL_VERSION })],
+      ["newer", stored("newer", { failure: "unsupported: no", v: DSL_VERSION + 1 })],
+      ["draft", stored("draft", { dsl: [{ on: ["reap"], acts: [{ k: "gainAmber", n: 1 }] }], v: DSL_VERSION })],
+    ]);
+    const cards = [...rows.keys()].map((id) => face(gap, { id }));
+    expect(pendingTranslations(cards, (id) => rows.get(id)).map((item) => item.id)).toEqual(["old", "implicit"]);
   });
 
   it("stores each answer, honours the limit and reports progress", async () => {
