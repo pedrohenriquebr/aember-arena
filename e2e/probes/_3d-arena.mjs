@@ -64,6 +64,8 @@ const FIXTURE = (spec) => `(async () => {
       cr[1].stunned = true;
       cr[2].ready = false;
       cr[0].amber = 2;
+      cr[2].damage = 2;
+      cr[2].amber = 1;
     }
     return [...cr, ...art, ...up];
   };
@@ -324,6 +326,53 @@ try {
         const list = await page.getByRole("list", { name: /artifacts and upgrades/i }).count();
         check(`${t} H3D-15: lista "anexos" na arvore de acessibilidade`, list >= 2, `${list} listas`);
       }
+      // ---- H3D-18: indicadores de estado (o contexto roda com reduced-motion: arco estatico) ----
+      if (spec.tag === "states" && vp.w >= 701) {
+        const ind = await page.evaluate(() => {
+          const rect = (el) => {
+            const r = el.getBoundingClientRect();
+            return { l: r.left, r: r.right, t: r.top, b: r.bottom };
+          };
+          return [...document.querySelectorAll(".table-plane .board-lane > .board-piece")].map((p) => {
+            const cs = getComputedStyle(p, "::after");
+            const tile = p.querySelector(".card-tile");
+            const art = tile.querySelector(".card-art");
+            const amber = tile.querySelector(".amber-label");
+            const tileR = rect(tile);
+            const dmg = tile.querySelector(".damage-label");
+            return {
+              iid: tile.dataset.iid,
+              ready: p.classList.contains("board-piece--ready"),
+              stunned: p.classList.contains("board-piece--stunned"),
+              hasAfter: cs.content !== "none" && cs.content !== "normal",
+              arc: (cs.clipPath ?? "").startsWith("polygon"),
+              chip: (cs.maskImage ?? "").startsWith("url") || (cs.webkitMaskImage ?? "").startsWith("url"),
+              gap: parseFloat(cs.bottom) - p.offsetHeight,
+              corner: (art.offsetWidth / 2) * Math.sin((Math.abs(parseFloat(p.style.getPropertyValue("--jr"))) * Math.PI) / 180),
+              opacity: cs.opacity,
+              anim: cs.animationName,
+              artTransition: getComputedStyle(art).transitionDuration + "/" + getComputedStyle(art).transitionProperty,
+              art: rect(art),
+              tile: tileR,
+              amber: amber ? rect(amber) : null,
+              dmg: dmg ? rect(dmg) : null,
+              dmgFont: dmg ? parseFloat(getComputedStyle(dmg).fontSize) * (dmg.getBoundingClientRect().width / dmg.offsetWidth) : 99,
+              amberFont: amber ? parseFloat(getComputedStyle(amber).fontSize) * (amber.getBoundingClientRect().width / amber.offsetWidth) : 99,
+            };
+          });
+        });
+        const readyP = ind.filter((c) => c.ready);
+        const stunP = ind.filter((c) => c.stunned);
+        check(`${t} H3D-18: arco so em canUse (${readyP.length} prontas)`, readyP.length > 0 && ind.every((c) => c.arc === (c.hasAfter && c.ready)) && readyP.every((c) => c.arc), ind.map((c) => `${c.iid}:${c.ready ? "R" : ""}${c.stunned ? "S" : ""}${c.arc ? "^" : ""}`).join(" "));
+        check(`${t} H3D-18: ficha de stun so em atordoada, nunca junto do arco`, stunP.length > 0 && ind.every((c) => c.chip === c.stunned) && ind.every((c) => !(c.arc && c.chip)), ind.map((c) => `${c.iid}:${c.chip ? "chip" : "-"}`).join(" "));
+        check(`${t} H3D-18: base do arco >= 4px acima do topo da arte`, readyP.every((c) => c.gap - c.corner >= 4), readyP.map((c) => `${r1(c.gap)}-${r1(c.corner)}`).join(" "));
+        check(`${t} H3D-18: reduce-motion deixa o arco estatico a 0,85 e a exausta em 1 quadro`, readyP.every((c) => parseFloat(c.opacity) === 0.85) && ind.every((c) => parseFloat(c.artTransition) <= 0.001), readyP.map((c) => c.opacity).join(",") + " " + ind[0].artTransition);
+        const amberC = ind.filter((c) => c.amber);
+        check(`${t} H3D-18: ambar capturado acima do topo da arte`, amberC.length > 0 && amberC.every((c) => c.amber.b <= c.art.t + 1), amberC.map((c) => `b=${r1(c.amber.b)} topo=${r1(c.art.t)}`).join(" "));
+        check(`${t} H3D-18: texto do ambar e do dano >= 11px visuais (piso 3D)`, ind.every((c) => c.dmgFont >= 10.95 && c.amberFont >= 10.95), ind.filter((c) => c.dmg || c.amber).map((c) => `${r1(c.amberFont)}/${r1(c.dmgFont)}`).join(" "));
+        const dmgC = ind.filter((c) => c.dmg);
+        check(`${t} H3D-18: dano no canto superior direito`, dmgC.length > 0 && dmgC.every((c) => c.dmg.r >= c.tile.r - 4 && c.dmg.b <= c.tile.t + (c.tile.b - c.tile.t) * 0.25), dmgC.map((c) => `r=${r1(c.dmg.r)}/${r1(c.tile.r)} b=${r1(c.dmg.b)}/${r1(c.tile.t)}`).join(" "));
+      }
       if (spec.tag === "ups" && vp.w >= 701) {
         for (const [name, list, dir] of [["jogador", m.player, 1], ["oponente", m.opp, -1]]) {
           const host = list.find((c) => c.role === "cr");
@@ -362,6 +411,8 @@ try {
         const host = m.player.find((c) => c.role === "cr");
         const lastUp = m.player.filter((c) => c.role === "up").pop();
         const clip = { x: Math.max(0, host.art.l - 4), y: Math.max(0, host.art.t), width: host.art.w + 8, height: Math.max(40, lastUp.art.b - host.art.t + 4) };
+        await page.waitForTimeout(300);
+        await page.screenshot({ clip });
         const shots = [];
         for (let i = 0; i < 3; i += 1) {
           shots.push(await page.screenshot({ clip }));
@@ -388,6 +439,40 @@ try {
         check(`${t} H3D-15: clique nos artefatos seleciona o proprio (${targets.length})`, wrong.length === 0, wrong.join(" "));
       }
     }
+    await context.close();
+  }
+  // H3D-18 com movimento: o arco respira (1 animacao infinita por carta pronta, so opacity),
+  // a ficha de stun faz o pop e nada no plano anima box-shadow/filter.
+  {
+    const vp = VIEWPORTS[0];
+    const context = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, reducedMotion: "no-preference" });
+    const motionSeed = SEED.replace("animations: false", "animations: true");
+    await context.addInitScript(motionSeed);
+    const page = await context.newPage();
+    await page.goto(server.url, { waitUntil: "domcontentloaded" });
+    await page.evaluate(motionSeed);
+    await page.evaluate(FIXTURE(SEEDS.find((s) => s.tag === "states")));
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".home-screen", { timeout: 30000 });
+    await page.locator(".resume-bar").first().click();
+    await page.waitForSelector(".game-screen", { timeout: 20000 });
+    await page.waitForTimeout(900);
+    const mo = await page.evaluate(() => {
+      const plane = document.querySelector(".table-plane");
+      const all = plane.getAnimations({ subtree: true });
+      const onPiece = (a) => a.effect?.target?.closest?.(".board-piece");
+      const infinite = all.filter((a) => a.effect?.getComputedTiming().iterations === Infinity && onPiece(a));
+      const arc = document.querySelector(".board-piece--ready");
+      return {
+        ready: plane.querySelectorAll(".board-piece--ready").length,
+        infinite: infinite.length,
+        costly: all.filter((a) => a.effect?.getKeyframes().some((k) => "boxShadow" in k || "filter" in k)).length,
+        arcAnim: arc ? getComputedStyle(arc, "::after").animationName : "none",
+        arcDur: arc ? getComputedStyle(arc, "::after").animationDuration : "",
+        stunAnim: getComputedStyle(document.querySelector(".board-piece--stunned"), "::after").animationName,
+      };
+    });
+    check(`${vp.w}x${vp.h} H3D-18 (com movimento): arco respira em 1,6s, ficha faz o pop, 0 box-shadow/filter, infinitas <= prontas`, mo.ready > 0 && mo.arcAnim === "ready-arc" && mo.arcDur === "1.6s" && mo.stunAnim === "stun-pop" && mo.costly === 0 && mo.infinite <= mo.ready, JSON.stringify(mo));
     await context.close();
   }
   await browser.close();

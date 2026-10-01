@@ -7341,6 +7341,46 @@ html .spin {
     rotate: none;
   }
 
+  /* H3D-18: indicadores de estado da peca (so decorativos — o estado segue no
+     aria-label). O ::after da peca e o arco "pronta" (so canUse) OU a ficha de
+     atordoada, nunca os dois (canUse exige !stunned). Versao 2.5D a 0,8x e DENTRO
+     do topo da carta: a lane do celular rola e cortaria o que passasse da caixa.
+     O 3D (>= 701px, abaixo) flutua acima do topo. So animam opacity/scale. */
+  :is(.game-board--3d, .game-board--lite) .board-piece--ready::after,
+  :is(.game-board--3d, .game-board--lite) .board-piece--stunned::after {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+    transition: translate 150ms var(--ease-out);
+  }
+
+  :is(.game-board--3d, .game-board--lite) .board-piece--ready::after {
+    top: 2px;
+    left: 50%;
+    width: 60%;
+    height: 11px;
+    translate: -50% 0 0;
+    background: radial-gradient(ellipse 60% 130% at 50% 100%, rgb(255 176 70), rgb(255 176 70 / 0));
+    clip-path: polygon(0 100%, 50% 0, 100% 100%, 84% 100%, 50% 34%, 16% 100%);
+    opacity: 0.85;
+  }
+
+  :is(.game-board--3d, .game-board--lite) .board-piece--stunned::after {
+    top: 2px;
+    left: 2px;
+    width: 19px;
+    height: 19px;
+    background: #d9743a;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 0a12 12 0 1 0 0 24A12 12 0 0 0 12 0Zm1.5 5L7 13h4l-1 6 6.5-8h-4z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  }
+
+  /* Exausta: a arte gira em 200ms (reduce-motion/animacoes off: a regra global
+     de 0,01ms troca em 1 quadro). */
+  :is(.game-board--3d, .game-board--lite) .board-piece .card-art {
+    transition: rotate 200ms var(--ease-out);
+  }
+
   /* Sombra estatica no tapete: separa a carta do plano sem lift. */
   :is(.game-board--3d, .game-board--lite) .table-plane .board-piece::before {
     content: "";
@@ -7833,6 +7873,15 @@ html .spin {
     html:not(.reduce-motion) .game-board--3d .table-plane .board-piece:hover {
       --lift-n: 1;
     }
+
+    /* H3D-18: o indicador de estado sobe junto com a carta erguida. */
+    html:not(.reduce-motion) .game-board--3d .table-plane .board-piece--ready:hover::after {
+      translate: -50% -4px var(--raise);
+    }
+
+    html:not(.reduce-motion) .game-board--3d .table-plane .board-piece--stunned:hover::after {
+      translate: 0 -4px var(--raise);
+    }
   }
 
   /* O ready-breathe (2D) anima box-shadow — no 3D isso re-rasteriza a camada a
@@ -7841,24 +7890,99 @@ html .spin {
      arte perde a animação e o brilho vira um ::after do tile com opacity
      animada: mesma leitura, custo de compositor. */
   @media (min-width: 701px) {
-    .game-board--3d .board-piece--ready .card-art {
+    .game-board--3d:not(.no-anim) .board-piece--ready .card-art {
       animation: none;
     }
 
-    .game-board--3d .board-piece--ready > .card-tile:not(.card-tile--hint)::after {
-      content: "";
-      position: absolute;
-      inset: 0 0 auto;
-      aspect-ratio: 0.714;
-      border-radius: var(--radius-sm);
-      box-shadow: 0 5px 14px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(190, 202, 155, 0.35), 0 0 12px rgba(150, 190, 120, 0.14);
-      pointer-events: none;
-      opacity: 0;
-      animation: ready-glow 2.6s ease-in-out infinite;
+    /* H3D-18: o ready-glow do tile saiu — o arco "pronta" (::after da peca) o
+       substitui, com uma animacao a menos por carta. */
+    .game-board--3d .board-piece--ready::after {
+      top: auto;
+      bottom: calc(100% + 6px);
+      height: 14px;
     }
 
-    @keyframes ready-glow {
+    .game-board--3d .board-piece--stunned::after {
+      top: auto;
+      left: -6px;
+      bottom: calc(100% + 8px);
+      width: 24px;
+      height: 24px;
+    }
+
+    /* A peca erguida (selecao/hover) leva o indicador junto. */
+    .game-board--3d .table-plane .board-piece:has(> .card-tile.is-selected)::after,
+    .game-board--3d .table-plane .board-piece:has(> .card-tile[data-fx="acting"])::after {
+      translate: -50% -4px var(--raise);
+    }
+
+    .game-board--3d .table-plane .board-piece--stunned:has(> .card-tile.is-selected)::after,
+    .game-board--3d .table-plane .board-piece--stunned:has(> .card-tile[data-fx="acting"])::after {
+      translate: 0 -4px var(--raise);
+    }
+
+    .game-board--3d .board-piece--stunned::after {
+      translate: 0 0 0;
+    }
+
+    /* Respiro do arco (1,6s, so opacity) e pop da ficha (240ms). Sem movimento o
+       arco fica estatico a 0,85 (a regra global encurta para 0,01ms e 1 volta). */
+    @media (prefers-reduced-motion: no-preference) {
+      html:not(.reduce-motion) .game-board--3d .board-piece--ready::after {
+        animation: ready-arc 1.6s ease-in-out infinite;
+      }
+
+      html:not(.reduce-motion) .game-board--3d .board-piece--stunned::after {
+        animation: stun-pop 240ms var(--ease-out) backwards;
+      }
+    }
+
+    @keyframes ready-arc {
+      0%, 100% { opacity: 0.55; }
       50% { opacity: 1; }
+    }
+
+    @keyframes stun-pop {
+      0% { scale: 0.4; }
+      60% { scale: 1.15; }
+    }
+
+    /* Ambar capturado: pilula acima do topo (sobe acima do arco quando a carta
+       esta pronta); dano: contador no canto superior direito, metade fora. */
+    .game-board--3d .board-lane .amber-label {
+      top: -22px;
+      left: 50%;
+      translate: -50% 0;
+      padding: 3px 7px;
+      border-radius: 999px;
+      box-shadow: 0 0 10px rgb(255 190 80 / 0.45);
+    }
+
+    .game-board--3d .board-piece--ready .amber-label {
+      top: -42px;
+    }
+
+    /* A exausta gira 20°: o canto da arte sobe ~14px acima da caixa. */
+    .game-board--3d .board-piece--resting .amber-label {
+      top: -38px;
+    }
+
+    .game-board--3d .board-lane .damage-label {
+      top: -11px;
+      right: -11px;
+      display: inline-flex;
+      min-width: 22px;
+      height: 22px;
+      box-sizing: border-box;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      border-radius: 11px;
+    }
+
+    .game-board--3d .battle-zone--opponent .amber-label,
+    .game-board--3d .battle-zone--opponent .damage-label {
+      font-size: max(calc(var(--fs-2xs) * var(--depth-k, 1)), 7cqi);
     }
 
     /* Mesma conversão para a aura da seleção (sel-breathe) e para o pulso do

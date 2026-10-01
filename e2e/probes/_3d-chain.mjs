@@ -696,12 +696,42 @@ try {
     const tile = piece?.querySelector(".card-tile");
     if (!tile) return null;
     tile.classList.add("is-selected");
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 260));
     const rot = getComputedStyle(tile.querySelector(".card-art")).rotate;
     tile.classList.remove("is-selected");
     return rot;
   });
-  check("H3D-16: carta selecionada tem rotate z = 0 na arte", jrSel === "none" || parseFloat(jrSel) === 0, String(jrSel));
+  check("H3D-16: carta selecionada tem rotate z = 0 na arte", jrSel === "none" || Math.abs(parseFloat(jrSel)) < 0.01, String(jrSel));
+  // H3D-18: custo de animacao no plano (so opacity/scale; infinitas <= cartas prontas) e
+  // a troca pronta -> exausta em 200ms.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(250);
+  const anim = await page.evaluate(() => {
+    const plane = document.querySelector(".table-plane");
+    const all = plane.getAnimations({ subtree: true });
+    // So as das pecas: o pulso do round-dot do console (1 fixo) fica fora da conta.
+    const infinite = all.filter((a) => a.effect?.getComputedTiming().iterations === Infinity && a.effect.target?.closest?.(".board-piece"));
+    const costly = all.filter((a) => a.effect?.getKeyframes().some((k) => "boxShadow" in k || "filter" in k));
+    return {
+      ready: plane.querySelectorAll(".board-piece--ready").length,
+      infinite: infinite.length,
+      names: infinite.map((a) => a.animationName ?? a.transitionProperty),
+      costly: costly.length,
+      arcAnim: plane.querySelector(".board-piece--ready") ? getComputedStyle(plane.querySelector(".board-piece--ready"), "::after").animationName : "none",
+    };
+  });
+  check("H3D-18: plano sem animacao de box-shadow/filter e infinitas <= cartas prontas", anim.costly === 0 && anim.infinite <= anim.ready && (anim.ready === 0 || anim.arcAnim === "ready-arc"), JSON.stringify(anim));
+  const swap = await page.evaluate(async () => {
+    const piece = document.querySelector(".table-plane .board-lane > .board-piece:not(.board-piece--resting):not(.board-piece--stunned)");
+    const art = piece?.querySelector(".card-art");
+    if (!art) return null;
+    piece.classList.add("board-piece--resting");
+    const t = art.getAnimations().find((a) => a.transitionProperty === "rotate");
+    const out = t ? t.effect.getComputedTiming().duration : null;
+    piece.classList.remove("board-piece--resting");
+    return out;
+  });
+  check("H3D-18: troca pronta -> exausta leva 200ms (+-20)", swap !== null && Math.abs(swap - 200) <= 20, String(swap));
   check("H3D-16: reload mantem o --jr de cada carta e a arte aplica o giro", jrIds.length > 0 && jrSame && jrApplied, JSON.stringify({ ids: jrIds.length, jrSame, jrApplied }));
 
   // ---- 8. H3D-10: a transicao entre modos (partida retomada esta em 3D)
