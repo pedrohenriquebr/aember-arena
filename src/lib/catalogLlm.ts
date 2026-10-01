@@ -16,7 +16,9 @@ import { VaultError, withTimeout } from "./keyforgeApi";
 import { ENGINE_KEYWORDS, type Keywords } from "./keywords";
 import { llmReady, redactSecret, type LlmConfig } from "./settings";
 
-export const LLM_TIMEOUT_MS = 60000;
+/** Teto por requisição ao provedor. 180s: provedores locais (ex. opencode-cli-proxy) têm
+ * cold start acima de 60s no primeiro spawn do CLI; provedores remotos respondem bem antes. */
+export const LLM_TIMEOUT_MS = 180000;
 /** Teto de cartas por rodada da fila (o gasto do BYOK é do usuário — plano §6). */
 export const LLM_RUN_LIMIT = 25;
 
