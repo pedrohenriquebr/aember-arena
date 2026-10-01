@@ -6,14 +6,18 @@ Shipped as **one self-contained `index.html`** (JS + CSS inlined by
 `vite-plugin-singlefile`), so it can be opened from disk, emailed, or dropped on any
 static host with no server.
 
-**Estado atual (30/09, ~260 commits):** Mobile-first + palco de viewport (UX-FIT
+**Estado atual (30/09, ~264 commits):** Mobile-first + palco de viewport (UX-FIT
 FIT-01..08), animações estilo Arena (3 ondas), áudio procedural (14 timbres),
-tutorial, modo 3D da mesa (12 histórias + punch list) e **motor de abilities
+tutorial, modo 3D da mesa (12 histórias + punch list), **motor de abilities
 declarativas (ondas 1-4)** — efeitos persistentes, "you may", reações,
 purge/sacrifice/tokens/exalt, ward/enrage/enhanced/take-control/forja/instead
-(cobertura do catálogo: full 200/2.603, crashes 0). Specs: 222+. Este arquivo
+(cobertura do catálogo: full 200/2.603, crashes 0) — e a **onda 1 do catálogo
+dinâmico** (DB v4: stores `cards`/`abilities`, sync incremental do Master Vault,
+`rulesOf` lendo o store antes do parser, chip de catálogo; onda 2 = LLM/BYOK
+pendente). Specs: 239+. Este arquivo
 descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
-MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*).
+MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*,
+DYNAMIC_CATALOG_PLAN).
 
 ## Stack
 
@@ -212,6 +216,18 @@ ações, cobertura por set, pendências).
    (`_dead-css`): 0 removível (os nomes "sem uso" continuam dinâmicos:
    `card-art--${size}`, `house-icon--${size}`, `coverage-note--*`,
    `toast-message--${kind}`).)
+   → **155** (onda 1 do catálogo dinâmico, `docs/DYNAMIC_CATALOG_PLAN.md`
+   §1/§2/§3/§5: DB v4 com os stores `cards` (face + `textHash` + `syncedAt`) e
+   `abilities` (DSL por carta com `source`/`reviewed`, pronto para a onda 2),
+   sync incremental paginado com cursor persistido e cancelamento (só cartas
+   novas ou com texto mudado entram), `rulesOf` lendo o store antes do parser
+   (mapa carregado no boot, memo WeakMap invalidado quando os overrides chegam)
+   e o chip "catálogo: N cartas" na Home/Vault + seção Catálogo no card do Review
+   (um 7º pill não cabia com rótulo no stepper). Só
+   TS/CSS, zero dependência; baseline real 152,26 kB e o fechamento mediu
+   **153,80 kB** gz — teto revisado de 153 para 155, a ÚNICA revisão autorizada
+   pelo pedido da onda. Varredura de identificadores CSS novos: 0 removível
+   (`.catalog-row` e `.deck-list-meta` são usados; o resto é classe existente).)
    → **153** (lote A3 "o espetáculo", `docs/VIEW3D_ARENA_LAYOUT.md` §4 H3D-19..21:
    avatares centrais + dorsos do Warden, investida/impacto e mesa-ambiente. Só
    CSS/TS, zero dependência; baseline real 150,79 kB (o 148,39 citado no pedido era

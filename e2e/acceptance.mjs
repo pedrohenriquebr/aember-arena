@@ -3,7 +3,15 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 153 kB (lote A3 "o espetaculo", docs/VIEW3D_ARENA_LAYOUT.md §4 H3D-19..21:
+//      Default 155 kB (onda 1 do catalogo dinamico, docs/DYNAMIC_CATALOG_PLAN.md
+//      §1/§2/§3/§5: DB v4 com os stores `cards` (textHash/syncedAt) e `abilities`,
+//      sync incremental paginado com cursor e cancelamento, rulesOf lendo o store
+//      antes do parser (mapa no boot, memo invalidado) e o chip "catalogo: N
+//      cartas" na Home/Vault + secao Catalogo no card do Review em Ajustes; so
+//      TS/CSS, zero dependencia — baseline real 152,26 kB e o fechamento mediu
+//      153,80 kB gz;
+//      revisao UNICA autorizada pelo pedido da onda (153 -> 155); ver CLAUDE.md §7).
+//      Antes: 153 (lote A3 "o espetaculo", docs/VIEW3D_ARENA_LAYOUT.md §4 H3D-19..21:
 //      avatares centrais + dorsos, investida/impacto e mesa-ambiente; so CSS/TS, zero
 //      dependencia — baseline real 150,79 kB; varredura de mortos `_dead-css`: 0
 //      removivel; ver CLAUDE.md §7).
@@ -83,7 +91,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 153);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 155);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const skipFloor3d = hasFlag("--skip-floor3d");
