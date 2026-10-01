@@ -153,6 +153,23 @@ const scripts: Record<string, Ability[] | null> = {
   "ancient bear": null,
 };
 
+/** One persisted DSL entry — the DB v4 `abilities` store row (plano §2). Plain
+    JSON data: the store round-trips through IndexedDB unchanged. `source` tells
+    who wrote it: the deterministic `parser` (wave 1), an `llm` draft that only
+    counts once a human `reviewed` it, or a `manual` curation (wave 2 fills the
+    two latter; `model` records the provider for the review queue). */
+export interface AbilityOverride {
+  /** Store key: the Master Vault card id the DSL was written for. */
+  cardId: string;
+  dsl: Ability[];
+  /** card_text identity (cardText.textHash) the DSL was written for. */
+  textHash: string;
+  source: "parser" | "llm" | "manual";
+  reviewed: boolean;
+  generatedAt: number;
+  model?: string;
+}
+
 const cache = new WeakMap<CardFace, CardRules>();
 
 /** Abilities, keywords and honest coverage for a card face (memoised per face). */

@@ -55,6 +55,21 @@ export function normalise(text: string): string {
     .trim();
 }
 
+/** Identity of a card's printed text (DB v4 `cards.textHash`, plano §3): the
+    hash decides whether the ability store still matches the text — an entry
+    written for a different text is ignored, exactly like the parser would be
+    re-run. FNV-1a over the normalised text, so whitespace/reminder/icon-glyph
+    variants of the same print do not invalidate a stored DSL. */
+export function textHash(text: string): string {
+  let hash = 0x811c9dc5;
+  const source = normalise(text ?? "");
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 function parseObject(phrase: string, upgrade: boolean): { s: Selection; target?: Filter } | null {
   if (/^(this card|this creature|itself|it)$/.test(phrase)) return { s: upgrade && phrase === "this creature" ? "host" : "self" };
   if (phrase === "a creature and each of its neighbors") return { s: "targetAndNeighbors", target: { type: "Creature" } };
