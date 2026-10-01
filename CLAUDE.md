@@ -233,6 +233,13 @@ ações, cobertura por set, pendências).
    CSS/TS, zero dependência; baseline real 150,79 kB (o 148,39 citado no pedido era
    anterior ao ritmo da IA). Teto ÚNICO deste lote — acima de 153: parar. Varredura
    de mortos pré-revisão (`_dead-css`): 0 removível (só nomes dinâmicos).)
+   → **157** (onda 2 do catálogo dinâmico, `docs/DYNAMIC_CATALOG_PLAN.md` §4/§5:
+   parserVersion + overrides só entre partidas, BYOK na Config, pipeline LLM
+   (`catalogLlm.ts`, schema gerado em `generated/dslSchema.ts`) e harvest. Baseline
+   154,63; mediu **156,31 kB** (BYOK +1,26; o pipeline só entra no bundle quando a UI
+   o importa). A fila de revisão (UI) NÃO coube: com ela o bundle vai a 163,61 kB
+   (+7,3) e ficou na branch `wip/catalog-queue-ui`. Teto 157, a ÚNICA revisão desta
+   onda — acima: parar.)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
