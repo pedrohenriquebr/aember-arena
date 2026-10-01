@@ -20,7 +20,7 @@ const SHOTS = join(ROOT, "e2e", "clips", "frames");
 const SEED = `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
     difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: true,
-    hoverZoom: false, hints: false, language: "en", tableView: "3d", opponentMode: "mirror", gameMode: "solo", aiSpeed: "normal",
+    hoverZoom: false, hints: false, language: "en", tableView: "3d", opponentMode: "mirror", gameMode: "solo", aiSpeed: "normal", aiDelayMs: 400,
   }));
   localStorage.setItem("aember-arena-language", "en");
   localStorage.setItem("aember-arena-tutorial-seen", "1");
@@ -253,7 +253,8 @@ try {
       await page.screenshot({ path: join(SHOTS, "probe-3d-fx-ai-landing.png") });
     } else check("H3D-08: voo do Warden pousa no slot do fundo", false, JSON.stringify(aiLanding));
   } else check("H3D-08: voo do Warden (ghost avistado)", false, "nenhum ghost no turno da IA");
-  check("H3D-08: hold do Warden inalterado (420ms)", aiHold === "420ms", `hold=${aiHold}`);
+  // FIT-08: hold = 420ms * k, k = aiDelayMs/400 (seed 400 -> k=1.0 -> 420ms).
+  check("H3D-08: hold do Warden escalado pelo aiDelayMs (420ms com seed 400)", aiHold === "420ms", `hold=${aiHold}`);
   await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 90000 }).catch(() => {});
   await page.waitForTimeout(600);
 
