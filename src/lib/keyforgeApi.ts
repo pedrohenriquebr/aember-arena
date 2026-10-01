@@ -273,7 +273,8 @@ export async function loadDeckOrCache(input: string): Promise<{ deck: DeckInfo; 
 export interface CardPage {
   /** Unique card rows of this page (the payload inlines every card of its decks). */
   cards: CardFace[];
-  /** Registered decks in the Vault for this ordering — the page cursor bound. */
+  /** Registered decks in the Vault for this ordering — the page cursor bound.
+      0 when the payload omits it (unknown size: the sync must not wrap). */
   count: number;
   page: number;
   pageSize: number;
@@ -307,7 +308,9 @@ export async function fetchCardPage(options: { page: number; pageSize?: number; 
     const cards = [...sharedCardsMap(payload).values()];
     // An empty page is the end of the list, not a failure: syncCatalog stops on
     // it without an error (the browse page has its own vault.noResults state).
-    return { cards, count: valueAsNumber(payload.count) || cards.length, page, pageSize };
+    // No `|| cards.length` fallback: unique cards of a page are not decks, and
+    // the wrong bound makes the cursor wrap far too early (count absent = 0).
+    return { cards, count: valueAsNumber(payload.count), page, pageSize };
   } catch (error) {
     throw describeFailure(error);
   } finally {
@@ -364,7 +367,10 @@ export async function syncCatalog(
 ): Promise<CatalogSummary> {
   const total = Math.max(1, options.pages ?? CATALOG_PAGES_PER_SYNC);
   const known = await listCatalogCardHashes();
-  let page = readCatalogCursor();
+  // Cursor (localStorage) × cards (IndexedDB) podem divergir quando o usuário
+  // limpa um dos dois: sem nenhuma carta em disco a página N não tem base —
+  // recomeça do topo em vez de retomar no vazio.
+  let page = known.size ? readCatalogCursor() : 1;
   let added = 0;
   let pages = 0;
   let cancelled = false;
@@ -376,14 +382,24 @@ export async function syncCatalog(
         break;
       }
       const result = await fetchCardPage({ page, signal: options.signal });
-      if (!result.cards.length) break;
+      if (!result.cards.length) {
+        // Página vazia = fim da lista (o Vault encolheu/reordenou): volta ao
+        // topo, senão todo sync futuro para aqui para sempre.
+        page = 1;
+        break;
+      }
       const fresh = result.cards.filter((card) => known.get(card.id) !== textHash(card.text ?? ""));
-      added += await putCatalogCards(fresh);
+      const written = await putCatalogCards(fresh);
+      // Escrita falhou (storage indisponível): não marca known nem avança a
+      // página — o próximo sync reprocessa esta página em vez de perdê-la.
+      if (written < fresh.length) break;
+      added += written;
       for (const card of fresh) known.set(card.id, textHash(card.text ?? ""));
       pages += 1;
       options.onProgress?.({ done: pages, total, cards: known.size });
-      const lastPage = Math.max(1, Math.ceil(result.count / result.pageSize));
-      page = page >= lastPage ? 1 : page + 1;
+      // count ausente = tamanho da lista desconhecido: pagina adiante, sem wrap.
+      const lastPage = result.count > 0 ? Math.max(1, Math.ceil(result.count / result.pageSize)) : 0;
+      page = lastPage && page >= lastPage ? 1 : page + 1;
     }
   } catch (error) {
     // Cancel rejects like a timeout (describeFailure); only a real failure throws.
