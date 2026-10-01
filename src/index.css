@@ -4416,6 +4416,55 @@ button:disabled {
   margin-top: 14px;
 }
 
+/* BYOK do catálogo dinâmico: campos empilhados; inputs/select a 16px (iOS). */
+.llm-form {
+  display: grid;
+  gap: 10px;
+}
+
+.llm-form label {
+  display: grid;
+  gap: 4px;
+  color: #a58e5a;
+  font-size: var(--fs-2xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.llm-form input,
+.llm-form select {
+  min-width: 0;
+  height: 44px;
+  padding: 0 11px;
+  border: 1px solid rgba(224, 214, 191, 0.17);
+  border-radius: var(--radius-sm);
+  color: #eee9dc;
+  background: rgba(5, 7, 5, 0.32);
+  font-size: var(--fs-input);
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.llm-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  color: #edd28a;
+  font-size: var(--fs-xs);
+}
+
+.llm-status {
+  margin: 0;
+  color: #92938a;
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+
+.llm-status--paused {
+  color: #e0a86a;
+}
+
 /* T6 — default = mobile (1 coluna); desktop ao lado. */
 .home-shortcuts {
   display: grid;

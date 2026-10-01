@@ -99,3 +99,71 @@ export function saveSettings(settings: AppSettings): void {
     // Settings remain active for the session.
   }
 }
+
+// ---------- BYOK do pipeline de abilities (catálogo dinâmico, onda 2) ----------
+// A chave é do usuário e fica SÓ no localStorage, numa entrada separada das
+// settings (que são lidas/serializadas em mais lugares): nunca vai para o bundle,
+// para o save de partida, nem para mensagens de erro (redactSecret).
+
+export type LlmPreset = "openai" | "anthropic" | "openrouter" | "custom";
+
+export interface LlmConfig {
+  preset: LlmPreset;
+  /** Base OpenAI-compatible (sem `/chat/completions`). */
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export const LLM_PRESETS: Record<Exclude<LlmPreset, "custom">, { baseUrl: string; model: string; keyUrl: string }> = {
+  openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini", keyUrl: "https://platform.openai.com/api-keys" },
+  anthropic: { baseUrl: "https://api.anthropic.com/v1", model: "claude-haiku-4-5-20251001", keyUrl: "https://console.anthropic.com/settings/keys" },
+  openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini", keyUrl: "https://openrouter.ai/keys" },
+};
+
+export const DEFAULT_LLM: LlmConfig = { preset: "openai", baseUrl: LLM_PRESETS.openai.baseUrl, model: LLM_PRESETS.openai.model, apiKey: "" };
+
+const LLM_KEY = "aember-arena-llm";
+const LLM_PRESET_IDS: LlmPreset[] = ["openai", "anthropic", "openrouter", "custom"];
+
+/** Preset change: fills base URL + model; "custom" keeps what the user typed. */
+export function applyLlmPreset(config: LlmConfig, preset: LlmPreset): LlmConfig {
+  if (preset === "custom") return { ...config, preset };
+  return { ...config, preset, baseUrl: LLM_PRESETS[preset].baseUrl, model: LLM_PRESETS[preset].model };
+}
+
+/** The queue runs only with a key, a base URL and a model. */
+export function llmReady(config: LlmConfig): boolean {
+  return Boolean(config.apiKey.trim() && config.baseUrl.trim() && config.model.trim());
+}
+
+/** Removes the key (and its bearer form) from any text bound for a message/log. */
+export function redactSecret(text: string, secret: string): string {
+  const key = secret.trim();
+  return key.length >= 4 ? text.split(key).join("[redacted]") : text;
+}
+
+export function readLlmConfig(): LlmConfig {
+  try {
+    const saved = localStorage.getItem(LLM_KEY);
+    if (!saved) return DEFAULT_LLM;
+    const parsed = JSON.parse(saved) as Partial<LlmConfig>;
+    const str = (value: unknown, fallback: string) => (typeof value === "string" ? value : fallback);
+    return {
+      preset: LLM_PRESET_IDS.includes(parsed.preset as LlmPreset) ? (parsed.preset as LlmPreset) : DEFAULT_LLM.preset,
+      baseUrl: str(parsed.baseUrl, DEFAULT_LLM.baseUrl),
+      apiKey: str(parsed.apiKey, ""),
+      model: str(parsed.model, DEFAULT_LLM.model),
+    };
+  } catch {
+    return DEFAULT_LLM;
+  }
+}
+
+export function saveLlmConfig(config: LlmConfig): void {
+  try {
+    localStorage.setItem(LLM_KEY, JSON.stringify(config));
+  } catch {
+    // The key stays active for the session.
+  }
+}

@@ -69,12 +69,13 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, syncCatalog, vaultErrorText, type CatalogProgress } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
-import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
+import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
 import { CoverageBadge, DeckCoverageChip } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
+import { LlmSettings } from "./components/LlmSettings";
 import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser, type BrowseState } from "./components/DeckBrowser";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -640,6 +641,8 @@ function ConfigScreen({
   catalogSync,
   onSyncCatalog,
   onCancelCatalog,
+  llm,
+  onLlmChange,
   onChange,
   onLanguage,
   onBack,
@@ -658,6 +661,9 @@ function ConfigScreen({
   catalogSync: CatalogProgress | null;
   onSyncCatalog: () => void;
   onCancelCatalog: () => void;
+  /** BYOK do pipeline de abilities (settings.readLlmConfig). */
+  llm: LlmConfig;
+  onLlmChange: (next: LlmConfig) => void;
   onChange: (settings: AppSettings) => void;
   onLanguage: (language: Language) => void;
   onBack: () => void;
@@ -1055,6 +1061,10 @@ function ConfigScreen({
                     </button>
                   )}
                 </div>
+              </div>
+              <div className="review-card">
+                <span className="review-label">{t("config.llm.title")}</span>
+                <LlmSettings config={llm} onChange={onLlmChange} t={t} />
               </div>
             </div>
           </section>
@@ -2060,6 +2070,7 @@ function App() {
   /** DB v4 (plano §5): cards in the local catalog and the running sync, or null. */
   const [catalogCount, setCatalogCount] = useState(0);
   const [catalogSync, setCatalogSync] = useState<CatalogProgress | null>(null);
+  const [llm, setLlm] = useState<LlmConfig>(readLlmConfig);
 
   const [deckModalOpen, setDeckModalOpen] = useState(false);
   const [deckInput, setDeckInput] = useState(DEMO_DECK_ID);
@@ -2385,6 +2396,8 @@ function App() {
     saveSettings(settings);
     sound.setPrefs({ sfx: settings.sfx, music: settings.music && screen === "game" });
   }, [settings, screen]);
+
+  useEffect(() => { saveLlmConfig(llm); }, [llm]);
 
   useEffect(() => {
     saveLanguage(language);
@@ -3379,6 +3392,8 @@ function App() {
             catalogSync={catalogSync}
             onSyncCatalog={() => { sound.play("click"); void syncCatalogNow(); }}
             onCancelCatalog={() => { sound.play("click"); catalogAbortRef.current?.abort(); }}
+            llm={llm}
+            onLlmChange={setLlm}
             onChange={setSettings}
             onLanguage={setLanguage}
             onOpenTutorial={() => { sound.play("click"); setTutorialOpen(true); }}
