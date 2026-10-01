@@ -91,6 +91,10 @@ export type FxPlan = {
   hits?: { id: string; amount: number }[];
   /** Correntes ganhas: o elo cai no contador do lado (plano §4.4). */
   chains?: { side: FxSide; delta: number };
+  /** H3D-20 (só no 3D): a investida da luta, medida ANTES do commit. `dx`/`dy` já são o
+      avanço em px de layout do plano (72% do caminho) e `at` o ponto de impacto (35% da
+      altura do defensor) em coordenadas de viewport. */
+  lunge?: { attackerId: string; defenderId: string; dx: number; dy: number; at: { x: number; y: number } };
 };
 
 /** Diretor imperativo do portal de FX (FxLayer). */

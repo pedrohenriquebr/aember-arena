@@ -261,6 +261,10 @@ ações, cobertura por set, pendências).
       `overflow: visible`; Æmber (`--fs-2xl`) e `.hand-backs` ancoram nele. `.hand-backs` existe
       no DOM sempre (`display: none` fora do 3D) e o `captureFx` mede o último dorso quando
       visível. No band do jogador o selo da casa e o título "YOUR HAND" saem no 3D (largura).
+    - **Investida (H3D-20):** só com `.game-board--3d` + movimento: `captureLunge` (FxLayer) mede
+      ANTES do commit; o diretor anima a `translate` individual da `.board-piece` (WAAPI 460ms,
+      nunca `rotate`), o `.fx-burst` nasce a 45% e o `fx-dmg` do defensor 60ms depois, a 35% da
+      altura. Timers/WAAPI vivem no `Run` e morrem no `cancelAll`. Probe: `_3d-lunge.mjs`.
 
 ## Verification gates (rode antes de commitar mudança relevante)
 

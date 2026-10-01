@@ -8255,3 +8255,43 @@ html .spin {
     50% { opacity: 0.3; }
   }
 }
+
+/* ---------- Investida e impacto (H3D-20, VIEW3D_ARENA_LAYOUT §3.6) ---------- */
+/* Só existe no portal do FX (screen-space) e só nasce quando o 3D luta com movimento
+   ligado: anel âmbar + 8 faíscas num único elemento, cada um num pseudo. */
+.fx-burst {
+  position: fixed;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+  translate: -50% -50%;
+}
+
+.fx-burst::before,
+.fx-burst::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.fx-burst::before {
+  background: radial-gradient(circle, rgb(255 214 120 / 0.95) 0 30%, rgb(255 160 60 / 0.55) 52%, transparent 70%);
+  animation: fx-burst-ring 320ms var(--ease-out) forwards;
+}
+
+.fx-burst::after {
+  background: repeating-conic-gradient(rgb(255 226 150) 0 5deg, transparent 5deg 45deg);
+  mask: radial-gradient(circle, transparent 26%, #000 30% 52%, transparent 58%);
+  animation: fx-burst-sparks 320ms var(--ease-out) forwards;
+}
+
+@keyframes fx-burst-ring {
+  from { opacity: 1; scale: 0.3; }
+  to { opacity: 0; scale: 1.6; }
+}
+
+@keyframes fx-burst-sparks {
+  from { opacity: 1; rotate: 0deg; scale: 0.5; }
+  to { opacity: 0; rotate: 25deg; scale: 1.4; }
+}

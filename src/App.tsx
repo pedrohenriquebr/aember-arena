@@ -78,7 +78,7 @@ import { HouseIcon } from "./components/HouseIcon";
 import { DeckBrowser, type BrowseState } from "./components/DeckBrowser";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DeckInspector } from "./components/DeckInspector";
-import { FxLayer, captureFx, captureGone } from "./components/FxLayer";
+import { FxLayer, captureFx, captureGone, captureLunge } from "./components/FxLayer";
 import { Pagination } from "./components/Pagination";
 import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
@@ -2220,8 +2220,10 @@ function App() {
           const chains = chainEvent?.kind === "chains" && chainEvent.delta > 0 ? chainEvent : undefined;
           // O evento de dano já tem o formato que o diretor usa ({ id, amount }).
           const hits = events.filter((event) => event.kind === "damage") as { id: string; amount: number }[];
+          // H3D-20: só no 3D real (o 2D e o 2.5D não ganham animação nova).
+          const lunge = move.type === "fight" ? captureLunge(move.attackerId, move.targetId) : undefined;
           const actor = move.type === "fight" ? move.attackerId : "instanceId" in move ? move.instanceId : undefined;
-          if (flight || gone.length || gained || chains || hits.length) {
+          if (flight || gone.length || gained || chains || hits.length || lunge) {
             plan = {
               from: source,
               destId: flight,
@@ -2236,6 +2238,7 @@ function App() {
               amber: gained ? { side: gained.side, delta: gained.delta } : undefined,
               chains: chains ? { side: chains.side, delta: chains.delta } : undefined,
               hits,
+              lunge,
               // A jogada do Warden leva legenda: o jogador sabe o que entrou na
               // mesa sem caçar a linha no log (UX review #1).
               caption: flight ? playCaption : undefined,

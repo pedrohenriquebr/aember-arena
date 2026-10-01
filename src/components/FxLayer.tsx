@@ -108,8 +108,40 @@ export function captureGone(ids: string[]): FxSource[] {
   return sources;
 }
 
-/** A revelação em andamento: nós a remover, a marca a limpar, timer e o wake. */
-type Run = { nodes: HTMLElement[]; marks: HTMLElement[]; mark: HTMLElement | null; timer: number; wake: (() => void) | null };
+/** H3D-20: investida de 460ms; o impacto cai a 45% dela (o anel nasce nesse instante
+    e o "-N" 60ms depois). */
+const LUNGE_MS = 460;
+const IMPACT_MS = Math.round(LUNGE_MS * 0.45);
+/** Investida + estouro + "-N" cabem aqui, um pouco acima do beat de 620. */
+const LUNGE_HOLD_MS = 760;
+
+/** PRE-commit (só no 3D): quanto o atacante avança e onde o golpe acerta. Os
+    deslocamentos são de LAYOUT (offset*, sem a projeção): a `translate` da peça age no
+    espaço do plano, então o avanço segue a profundidade da mesa. 72% do caminho: para
+    antes de cobrir o alvo. */
+export function captureLunge(attackerId: string, defenderId: string): FxPlan["lunge"] {
+  const plane = document.querySelector<HTMLElement>(".game-board--3d .table-plane");
+  const attacker = byIid(attackerId)?.closest<HTMLElement>(".board-piece");
+  const defender = byIid(defenderId)?.closest<HTMLElement>(".board-piece");
+  const art = defender?.querySelector(".card-art");
+  if (!plane || !attacker || !defender || !art) return undefined;
+  const origin = (el: HTMLElement) => {
+    let x = el.offsetWidth / 2;
+    let y = 0;
+    for (let node: HTMLElement | null = el; node && node !== plane; node = node.offsetParent as HTMLElement | null) {
+      x += node.offsetLeft;
+      y += node.offsetTop;
+    }
+    return { x, y };
+  };
+  const a = origin(attacker);
+  const d = origin(defender);
+  const box = art.getBoundingClientRect();
+  return { attackerId, defenderId, dx: (d.x - a.x) * 0.72, dy: (d.y - a.y) * 0.72, at: { x: box.left + box.width / 2, y: box.top + box.height * 0.35 } };
+}
+
+/** A revelação em andamento: nós a remover, a marca a limpar, timers, WAAPI e o wake. */
+type Run = { nodes: HTMLElement[]; marks: HTMLElement[]; mark: HTMLElement | null; timer: number; late: number[]; anims: Animation[]; wake: (() => void) | null };
 
 export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -121,6 +153,8 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     runRef.current = null;
     if (!run) return;
     window.clearTimeout(run.timer);
+    for (const id of run.late) window.clearTimeout(id);
+    for (const anim of run.anims) anim.cancel();
     // Acorda o await do reveal: ele volta e percebe que não é mais o run atual.
     run.wake?.();
     for (const node of run.nodes) node.remove();
@@ -268,18 +302,60 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
 
       // Dano (onda 3): "-N" flutua sobre cada criatura atingida e o tile leva a
       // marca `hit` (tremida + flash de um quadro) — tudo aria-hidden no portal.
+      const lunge = plan.lunge;
+      const later = (ms: number, fn: () => void) => {
+        run.late.push(window.setTimeout(() => alive() && fn(), ms));
+      };
       for (const hit of plan.hits ?? []) {
         const tile = byIid(hit.id);
-        if (!tile) continue;
-        tile.setAttribute("data-fx", "hit");
-        run.marks.push(tile);
-        const box = tile.getBoundingClientRect();
-        const node = document.createElement("b");
-        node.className = "fx-dmg";
-        node.textContent = `-${hit.amount}`;
-        node.style.cssText = `left:${box.left + box.width / 2}px;top:${box.top + box.height / 3}px`;
-        host.appendChild(node);
-        run.nodes.push(node);
+        const struck = lunge?.defenderId === hit.id;
+        if (!tile && !struck) continue;
+        const show = () => {
+          const box = tile?.getBoundingClientRect();
+          const node = document.createElement("b");
+          node.className = "fx-dmg";
+          node.textContent = `-${hit.amount}`;
+          // H3D-20: o defensor leva o número no ponto do golpe (35% da altura).
+          node.style.cssText = struck && lunge ? `left:${lunge.at.x}px;top:${lunge.at.y}px` : box ? `left:${box.left + box.width / 2}px;top:${box.top + box.height / 3}px` : "";
+          host.appendChild(node);
+          run.nodes.push(node);
+        };
+        const mark = () => {
+          if (!tile) return;
+          tile.setAttribute("data-fx", "hit");
+          run.marks.push(tile);
+        };
+        if (struck) {
+          later(IMPACT_MS, mark);
+          later(IMPACT_MS + 60, show);
+        } else {
+          mark();
+          show();
+        }
+      }
+
+      // H3D-20: a investida (WAAPI na `translate` individual da peça — `rotate` e a pose
+      // não são tocados) e o estouro no impacto. Depois do commit o atacante pode já
+      // não existir (morreu na luta): o estouro e o número saem do mesmo jeito.
+      if (lunge) {
+        const piece = byIid(lunge.attackerId)?.closest<HTMLElement>(".board-piece");
+        if (piece) {
+          const current = getComputedStyle(piece).translate;
+          const [x = "0px", y = "0px", z = "0px"] = (current === "none" ? "0px 0px 0px" : current).split(" ");
+          const base = `${x} ${y} ${z}`;
+          const reach = `${parseFloat(x) + lunge.dx}px ${parseFloat(y) + lunge.dy}px 34px`;
+          run.anims.push(piece.animate(
+            [{ translate: base }, { translate: reach, offset: 0.45 }, { translate: reach, offset: 0.6 }, { translate: base }],
+            { duration: LUNGE_MS, easing: "cubic-bezier(0.3, 0.7, 0.2, 1)" },
+          ));
+        }
+        later(IMPACT_MS, () => {
+          const burst = document.createElement("div");
+          burst.className = "fx-burst";
+          burst.style.cssText = `left:${lunge.at.x}px;top:${lunge.at.y}px`;
+          host.appendChild(burst);
+          run.nodes.push(burst);
+        });
       }
 
       // Âmbar ganho (colheita/captura): o número nasce no card que gerou e voa
@@ -325,12 +401,14 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
         if (to) plan.onSlam?.();
         await step(to ? SLAM_MS : DISSOLVE_MS);
       } else if (plan.gone?.length || plan.actorId) {
-        await step(ACTION_MS);
+        await step(lunge ? LUNGE_HOLD_MS : ACTION_MS);
       }
     } finally {
       window.removeEventListener("scroll", onScroll, { capture: true });
       window.removeEventListener("resize", onResize);
       if (alive()) {
+        for (const id of run.late) window.clearTimeout(id);
+        for (const anim of run.anims) anim.cancel();
         for (const node of run.nodes) node.remove();
         run.mark?.removeAttribute("data-fx");
         for (const mark of run.marks) mark.removeAttribute("data-fx");
@@ -345,7 +423,7 @@ export const FxLayer = forwardRef<FxDirector>(function FxLayer(_props, ref) {
     cancelAll();
     const host = hostRef.current;
     if (!host) return Promise.resolve();
-    const current: Run = { nodes: [], marks: [], mark: null, timer: 0, wake: null };
+    const current: Run = { nodes: [], marks: [], mark: null, timer: 0, late: [], anims: [], wake: null };
     runRef.current = current;
     return reveal(plan, host, current);
   }
