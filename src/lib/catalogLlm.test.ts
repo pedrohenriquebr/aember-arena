@@ -163,6 +163,27 @@ describe("translateCard — validacao tripla", () => {
     expect(reason([])).toContain("empty translation");
   });
 
+  it("(c) sanity: Play exige nomeacao; inflexoes contam; sem exencao fora de Action", () => {
+    const reason = (abilities: unknown, card = reapCard) => validateDraft(card, { abilities }, "llm").reason;
+    // "when played" e inflexao do gatilho Play.
+    expect(reason([{ on: ["play"], acts: [{ k: "gainAmber", n: 2 }] }], face("Gains 2 amber when played."))).toBeUndefined();
+    // Action e isenta de nomear o gatilho ("Gain 3 amber." e o texto tipico).
+    expect(reason([{ on: ["play"], acts: [{ k: "gainAmber", n: 3 }] }], face("Gain 3 amber.", { type: "Action" }))).toBeUndefined();
+    // Fora de Action nao ha Play implicito: sem gatilho nomeado, o rascunho cai
+    // (habilidade constante e gatilhos fora da tabela nao viram Play).
+    for (const type of ["Creature", "Artifact", "Upgrade"] as const) {
+      expect(reason([{ on: ["play"], acts: [{ k: "gainAmber", n: 3 }] }], face("Gain 3 amber.", { type }))).toContain('"play" is not named');
+    }
+    expect(reason([{ on: ["play"], acts: [{ k: "draw", n: 1 }] }], face("Fate: Archive a card."))).toContain('"play" is not named');
+    expect(reason([{ on: ["play"], acts: [{ k: "gainAmber", n: 1 }] }], face("Each friendly Mars creature gets +1 power."))).toContain('"play" is not named');
+    // Se a linha nomeia outro gatilho, o Play tambem exige nomeacao.
+    expect(reason([{ on: ["play"], acts: [{ k: "gainAmber", n: 2 }] }], face("After Fight: Deal 2 to a creature."))).toContain('"play" is not named');
+    // "play" dentro de outra palavra nao conta ("displayed"/"replay").
+    expect(reason([{ on: ["play"], acts: [{ k: "gainAmber", n: 2 }] }], face("After Fight: Replay a displayed creature."))).toContain('"play" is not named');
+    // Gatilho nao nomeado continua rejeitado (sem regressao).
+    expect(reason([{ on: ["reap"], acts: [{ k: "gainAmber", n: 1 }] }], face("Gain 1 amber."))).toContain('"reap" is not named');
+  });
+
   it("(b) dry-run: a draft that breaks the engine is rejected, a sane one passes", () => {
     const sane = validateDraft(reapCard, { abilities: VALID.abilities, effects: [], keywords: {} }, "llm");
     expect(sane.ok).toBe(true);

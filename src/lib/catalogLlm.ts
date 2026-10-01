@@ -187,7 +187,8 @@ function draftRow(face: CardFace, parts: { abilities: unknown; effects?: unknown
 // ---------- validation (c): semantic sanity ----------
 
 const TRIGGER_WORDS: Record<string, RegExp> = {
-  play: /\bplay\b/,
+  // Inflexões contam ("when played"); word boundary impede "displayed"/"replay".
+  play: /\bplay(s|ed|ing)?\b/,
   reap: /\breap\b/,
   fight: /\bfight\b/,
   beforeFight: /\bbefore fight\b/,
@@ -222,6 +223,10 @@ export function sanityProblem(face: CardFace, row: AbilityOverride): string | nu
       } else if (face.type === "Artifact" && (trigger === "reap" || trigger === "fight" || trigger === "beforeFight")) {
         return `trigger "${trigger}" cannot happen on an Artifact`;
       }
+      // Fora de Action não existe Play implícito: em Creature/Artifact/Upgrade o
+      // texto sem gatilho conhecido costuma ser habilidade constante ou um gatilho
+      // que a tabela não cobre (Fate:, Scrap:). Exigir a nomeação erra para o lado
+      // conservador — o rascunho errado vira falha, nunca regra.
       if (!(trigger === "play" && face.type === "Action") && !TRIGGER_WORDS[trigger].test(text)) return `trigger "${trigger}" is not named by the card text`;
     }
     for (const act of ability.acts) {
