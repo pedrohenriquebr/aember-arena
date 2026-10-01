@@ -240,7 +240,17 @@ ações, cobertura por set, pendências).
       é `display: contents` (a lista "anexos" segue na árvore a11y do Chromium).
       Artefatos/upgrades vão para a fileira externa (abaixo no jogador, acima no
       oponente), a 0,6× da criatura, lean 24°, parando antes do notch central de
-      200px. Sem anexo a fileira mede 0. Upgrade embaixo do hospedeiro é a H3D-17.
+      200px. Sem anexo a fileira mede 0.
+    - **Upgrades (H3D-17):** ocupam a célula do hospedeiro (`--col`, `--up` = k-ésimo), tile
+      deslocada para a borda externa (`top`, 44px jogador / 52 oponente) e recortada na
+      faixa externa por `clip-path` NA TILE (folha — entre plano e peça continua proibido):
+      a ordem de profundidade de planos paralelos varia com o viewport. O clique no centro
+      cai no hospedeiro (por desenho); o probe mira a tira. Órfão = artefato.
+    - **Pose (H3D-16) e indicadores (H3D-18):** `cardJitter(id)` puro em `lib/fx.ts` →
+      `--jr` (giro, aplicado na `.card-art`, NUNCA no tile: rotate z no tile quebra o
+      hit-test) e `--jy` (na translate da PEÇA, não do tile). O `::after` da peça é o arco
+      "pronta" OU a ficha de stun; só opacity/scale animam (`ready-breathe` tem de ficar
+      `animation: none` no 3D, também com animações ligadas).
 
 ## Verification gates (rode antes de commitar mudança relevante)
 
