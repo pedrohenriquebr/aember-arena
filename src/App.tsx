@@ -68,7 +68,7 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, vaultErrorText } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
-import { AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
+import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, readSettings, saveSettings, type AppSettings, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
@@ -945,7 +945,7 @@ function ConfigScreen({
                     />
                     <output>{t("config.speed.value", { s: delaySeconds(settings.aiDelayMs, settings.language) })}</output>
                     <div className="filter-chips" role="group" aria-label={t("config.experience.speed")}>
-                      {([["fast", 300], ["normal", 700], ["slow", 1200]] as const).map(([id, ms]) => (
+                      {([["fast", 400], ["normal", 1200], ["slow", 2400]] as const).map(([id, ms]) => (
                         <button
                           key={id}
                           type="button"
@@ -2218,7 +2218,7 @@ function App() {
               face: source && !source.node ? played?.face : undefined,
               // Sem slot (Ação) a carta fica mais tempo no centro; o Warden, mais
               // ainda — é a jogada que o jogador precisa ler.
-              holdMs: Math.round((ai ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : ai ? Math.min(1.6, Math.max(0.45, delayK(settingsRef.current.aiDelayMs))) : 1)),
+              holdMs: Math.round((ai ? (flight ? 420 : 600) : flight ? 140 : 260) * (rush ? 0.45 : ai ? aiHoldScale(settingsRef.current.aiDelayMs) : 1)),
               gone,
               actorId: actor,
               amber: gained ? { side: gained.side, delta: gained.delta } : undefined,

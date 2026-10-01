@@ -8,11 +8,14 @@ export type OpponentMode = "mirror" | "deck" | "random";
 /** FEAT-13: solo against the local AI, or two humans sharing the device. */
 export type GameMode = "solo" | "passAndPlay";
 
-/** FIT-08: pausa de leitura entre ações do Warden (ms) — 200..2000, passo 100. */
+/** FIT-08: pausa de leitura entre ações do Warden (ms) — 200..4000, passo 100. */
 export const AI_DELAY_MIN = 200;
-export const AI_DELAY_MAX = 2000;
-export const AI_DELAY_DEFAULT = 700;
+export const AI_DELAY_MAX = 4000;
+export const AI_DELAY_DEFAULT = 1200;
 export const clampAiDelay = (value: number) => Math.min(AI_DELAY_MAX, Math.max(AI_DELAY_MIN, Math.round(value / 100) * 100));
+
+/** Fator do hold do voo do Warden: ms/400 entre 0,45 e 3,0 (default 1200 -> 3,0). */
+export const aiHoldScale = (delayMs: number) => Math.min(3, Math.max(0.45, delayMs / 400));
 
 /** H3D-01 (VIEW3D_PLAN §2.11): visão da mesa — 2D (padrão, o board de sempre)
     ou 3D (a camada CSS inclinada, ligada pela classe `.game-board--3d`). */
@@ -63,7 +66,7 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
   try {
     const saved = localStorage.getItem("aember-arena-settings");
     if (!saved) return base;
-    // `aiSpeed` é o formato antigo do ritmo: "fast" lê 300, o resto o padrão.
+    // `aiSpeed` é o formato antigo do ritmo: "fast" lê 400, o resto o padrão.
     const parsed = JSON.parse(saved) as Partial<AppSettings> & { aiSpeed?: string };
     return {
       difficulty: DIFFICULTIES.includes(parsed.difficulty as Difficulty) ? (parsed.difficulty as Difficulty) : base.difficulty,
@@ -79,7 +82,7 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
       gameMode: parsed.gameMode === "passAndPlay" ? "passAndPlay" : base.gameMode,
       aiDelayMs: Number.isFinite(Number(parsed.aiDelayMs)) && parsed.aiDelayMs !== null && parsed.aiDelayMs !== undefined
         ? clampAiDelay(Number(parsed.aiDelayMs))
-        : parsed.aiSpeed === "fast" ? 300 : base.aiDelayMs,
+        : parsed.aiSpeed === "fast" ? 400 : base.aiDelayMs,
       tableView: parsed.tableView === "3d" ? "3d" : base.tableView,
       deckP1Id: typeof parsed.deckP1Id === "string" ? parsed.deckP1Id : base.deckP1Id,
       deckP2Id: typeof parsed.deckP2Id === "string" ? parsed.deckP2Id : base.deckP2Id,
