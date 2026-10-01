@@ -240,6 +240,10 @@ ações, cobertura por set, pendências).
    o importa). A fila de revisão (UI) NÃO coube: com ela o bundle vai a 163,61 kB
    (+7,3) e ficou na branch `wip/catalog-queue-ui`. Teto 157, a ÚNICA revisão desta
    onda — acima: parar.)
+   → **162** (CAT-3, `npm run harvest`/docs do proxy: a fila de tradução in-game +
+   revisão entrou pela primeira vez e traz o pipeline `catalogLlm` inteiro para o
+   bundle. Baseline 156,31; mediu **161,76 kB** (+5,45: pipeline/schema/few-shots
+   ~+4, UI/i18n/CSS ~+1,5). Teto 162, revisão ÚNICA do CAT-3 — acima: parar.)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
