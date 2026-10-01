@@ -7,7 +7,7 @@
 // abilities are plain data interpreted by game.ts, so the same objects feed the
 // rules engine, the AI's move pruning and the coverage badge in the UI.
 import { parseCardText, textHash } from "./cardText";
-import type { Keywords } from "./keywords";
+import { ENGINE_KEYWORDS, type Keywords } from "./keywords";
 import type { CardFace } from "./game";
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
@@ -162,6 +162,11 @@ export interface AbilityOverride {
   /** Store key: the Master Vault card id the DSL was written for. */
   cardId: string;
   dsl: Ability[];
+  /** Constant text the DSL covers. Absent = the entry only corrects the
+      triggered abilities and the parser's effects/keywords remain — in that
+      case rulesOf never claims "full" coverage for the card. */
+  effects?: PersistentEffect[];
+  keywords?: Keywords;
   /** card_text identity (cardText.textHash) the DSL was written for. */
   textHash: string;
   source: "parser" | "llm" | "manual";
@@ -176,9 +181,9 @@ export interface AbilityOverride {
 let overrides = new Map<string, AbilityOverride>();
 
 /** Boot/reload hook: swaps the override map and drops the memo (faces already
-    answered keep the parser result otherwise). Overrides that arrive later —
-    a wave-2 review approval, a re-sync — go through here again, so the next
-    rulesOf call re-reads the card. */
+    answered keep the parser result otherwise). A late override — a wave-2
+    review approval, a re-sync — goes through the same hook, so the next rulesOf
+    call re-reads the card. */
 export function setAbilityOverrides(next: Map<string, AbilityOverride>): void {
   overrides = next;
   cache = new WeakMap();
@@ -187,34 +192,240 @@ export function setAbilityOverrides(next: Map<string, AbilityOverride>): void {
 /** Memo per face; replaced (not mutated) when the overrides map changes. */
 let cache = new WeakMap<CardFace, CardRules>();
 
-/** The stored DSL for this exact face, when it can be trusted: `manual`
-    (human-authored), `parser` (deterministic output for the same text) or an
-    `llm` entry a human reviewed. An unreviewed LLM draft never reaches the
-    table — plano §4: nunca meio-resolver. The text hash must match, so a card
-    whose text changed falls back to the live parser. */
+/** The stored DSL for this exact face, when it can be trusted. Trust is a
+    whitelist: `manual` (human-authored), `parser` (deterministic output for the
+    same text) or an `llm` entry a human reviewed. An absent/unknown source
+    (corrupted disk, schema from another version) and an unreviewed LLM draft
+    never reach the table — plano §4: nunca meio-resolver. The text hash must
+    match, so a card whose text changed falls back to the live parser. */
 function storedAbility(face: CardFace): AbilityOverride | null {
   const entry = overrides.get(face.id);
   if (!entry || entry.textHash !== textHash(face.text ?? "")) return null;
-  if (entry.source === "llm" && !entry.reviewed) return null;
-  return entry;
+  const trusted = entry.source === "manual" || entry.source === "parser" || (entry.source === "llm" && entry.reviewed === true);
+  return trusted ? entry : null;
+}
+
+/** Merge a trusted stored entry over the parsed rules. `effects`/`keywords`
+    are replaced only when the entry carries them; coverage claims "full" only
+    when the entry covers all three parts of the printed text — a dsl-only row
+    keeps the parser's tally instead of lying about text it never covered. A
+    `parser` entry never raises coverage: it is the parser's own output. */
+function mergeStored(parsed: CardRules, stored: AbilityOverride): CardRules {
+  const coversText = stored.effects !== undefined && stored.keywords !== undefined;
+  return {
+    ...parsed,
+    abilities: stored.dsl,
+    effects: stored.effects ?? parsed.effects,
+    keywords: stored.keywords ?? parsed.keywords,
+    coverage: stored.source !== "parser" && coversText ? "full" : parsed.coverage,
+  };
 }
 
 /** Abilities, keywords and honest coverage for a card face (memoised per face).
-    Order: store `abilities` (trusted entry, plano §1/§4) → hand-written script →
-    text parser. A reviewed/manual stored DSL covers the card fully; a parser
-    entry keeps the parser's own tally. */
+    Order: `manual` store entry → hand-written script → reviewed `llm` entry →
+    stored `parser` output → live text parser. A `parser`-sourced row must never
+    precede a script, otherwise a frozen parser output would regress a curated
+    card ("ancient bear" and friends). */
 export function rulesOf(face: CardFace): CardRules {
   let rules = cache.get(face);
   if (!rules) {
     const parsed = parseCardText(face);
     const stored = storedAbility(face);
     const title = face.title.toLowerCase();
-    if (stored) {
-      rules = { ...parsed, abilities: stored.dsl, coverage: stored.source === "parser" ? parsed.coverage : "full" };
-    } else {
-      rules = title in scripts ? { ...parsed, abilities: scripts[title] ?? [], coverage: "full" } : parsed;
-    }
+    if (stored?.source === "manual") rules = mergeStored(parsed, stored);
+    else if (title in scripts) rules = { ...parsed, abilities: scripts[title] ?? [], coverage: "full" };
+    else if (stored) rules = mergeStored(parsed, stored);
+    else rules = parsed;
     cache.set(face, rules);
   }
   return rules;
+}
+
+// ---------- stored-row shape gate (DB v4) ----------
+// A row written by another version (or corrupted storage) must be discarded at
+// load, never handed to the engine. The gate checks structure only — when the
+// Act/Condition unions grow, their key lists below must grow too; new keys are
+// rejected (and the row ignored) until then, which is the safe direction.
+
+const ABILITY_TRIGGERS: ReadonlySet<string> = new Set<Trigger>([
+  "play",
+  "reap",
+  "fight",
+  "beforeFight",
+  "destroyed",
+  "action",
+  "omni",
+  "startOfTurn",
+  "endOfTurn",
+]);
+
+const ACT_KEYS: ReadonlySet<string> = new Set([
+  "gainAmber",
+  "loseAmber",
+  "steal",
+  "gainChains",
+  "draw",
+  "discardRandom",
+  "keyCost",
+  "capture",
+  "damage",
+  "heal",
+  "exalt",
+  "destroy",
+  "purge",
+  "sacrifice",
+  "stun",
+  "exhaust",
+  "ready",
+  "unstun",
+  "returnToHand",
+  "returnToDeck",
+  "archive",
+  "use",
+  "ward",
+  "removeWard",
+  "enrage",
+  "removeEnrage",
+  "takeControl",
+  "makeToken",
+  "forgeKey",
+  "unforgeKey",
+  "fromDiscard",
+  "archiveTop",
+  "lasting",
+]);
+
+/** Acts whose `n` is mandatory (a missing count would become NaN in the engine). */
+const NUMERIC_ACTS: ReadonlySet<string> = new Set([
+  "gainAmber",
+  "loseAmber",
+  "steal",
+  "gainChains",
+  "draw",
+  "discardRandom",
+  "keyCost",
+  "capture",
+  "damage",
+  "heal",
+  "exalt",
+  "makeToken",
+  "forgeKey",
+  "unforgeKey",
+]);
+
+/** Acts whose `s` selection is mandatory. */
+const SELECTED_ACTS: ReadonlySet<string> = new Set([
+  "capture",
+  "damage",
+  "heal",
+  "exalt",
+  "destroy",
+  "purge",
+  "sacrifice",
+  "stun",
+  "exhaust",
+  "ready",
+  "unstun",
+  "returnToHand",
+  "returnToDeck",
+  "archive",
+  "use",
+  "ward",
+  "removeWard",
+  "enrage",
+  "removeEnrage",
+  "takeControl",
+]);
+
+const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "neighborsOfFought"]);
+const CONDITION_KINDS: ReadonlySet<string> = new Set(["amber", "moreCreatures", "fewerCreatures", "not"]);
+const KEYWORD_NAMES: ReadonlySet<string> = new Set(ENGINE_KEYWORDS);
+const OVERRIDE_SOURCES: ReadonlySet<string> = new Set(["parser", "llm", "manual"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function validSelection(value: unknown): boolean {
+  if (typeof value === "string") return SELECTIONS.has(value);
+  return isRecord(value) && isRecord(value.each);
+}
+
+function validCondition(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.k !== "string" || !CONDITION_KINDS.has(value.k)) return false;
+  if (value.k === "amber") return typeof value.opp === "boolean" && (value.op === "eq" || value.op === "gte") && isFiniteNumber(value.n);
+  if (value.k === "not") return validCondition(value.c);
+  return true;
+}
+
+function validAct(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.k !== "string" || !ACT_KEYS.has(value.k)) return false;
+  if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
+  if (NUMERIC_ACTS.has(value.k) && !isFiniteNumber(value.n)) return false;
+  if (SELECTED_ACTS.has(value.k) && !validSelection(value.s)) return false;
+  if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target);
+  return true;
+}
+
+function validAbility(value: unknown): value is Ability {
+  if (!isRecord(value)) return false;
+  if (!Array.isArray(value.on) || !value.on.length || !value.on.every((trigger) => typeof trigger === "string" && ABILITY_TRIGGERS.has(trigger))) return false;
+  if (!Array.isArray(value.acts) || !value.acts.length || !value.acts.every(validAct)) return false;
+  if (value.if !== undefined && !validCondition(value.if)) return false;
+  if (value.target !== undefined && !isRecord(value.target)) return false;
+  if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
+  return true;
+}
+
+function validKeywords(value: unknown): value is Keywords {
+  return isRecord(value) && Object.entries(value).every(([name, amount]) => KEYWORD_NAMES.has(name) && isFiniteNumber(amount));
+}
+
+function validEffects(value: unknown): value is PersistentEffect[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (effect) =>
+        isRecord(effect) &&
+        isRecord(effect.target) &&
+        (effect.power === undefined || isFiniteNumber(effect.power)) &&
+        (effect.armor === undefined || isFiniteNumber(effect.armor)) &&
+        (effect.keywords === undefined || validKeywords(effect.keywords)) &&
+        (effect.abilities === undefined || (Array.isArray(effect.abilities) && effect.abilities.every(validAbility))),
+    )
+  );
+}
+
+/** Shape gate for rows coming off the `abilities` store. A malformed row is
+    discarded with a console warning by the loader; the row is rebuilt from the
+    known fields only, so junk properties never ride into the rules. Required:
+    `cardId`, a DSL of structurally valid abilities, `textHash` and a source in
+    the whitelist. `reviewed` defaults to false (an llm row without it is simply
+    untrusted) and a missing `generatedAt` becomes 0. */
+export function normaliseAbilityOverride(value: unknown): AbilityOverride | null {
+  if (!isRecord(value)) return null;
+  const { cardId, dsl, textHash: hash, source, model } = value;
+  if (typeof cardId !== "string" || !cardId) return null;
+  if (!Array.isArray(dsl) || !dsl.every(validAbility)) return null;
+  if (typeof hash !== "string" || !hash) return null;
+  if (typeof source !== "string" || !OVERRIDE_SOURCES.has(source)) return null;
+  if (value.effects !== undefined && !validEffects(value.effects)) return null;
+  if (value.keywords !== undefined && !validKeywords(value.keywords)) return null;
+
+  const record: AbilityOverride = {
+    cardId,
+    dsl,
+    textHash: hash,
+    source: source as AbilityOverride["source"],
+    reviewed: value.reviewed === true,
+    generatedAt: isFiniteNumber(value.generatedAt) ? value.generatedAt : 0,
+  };
+  if (typeof model === "string") record.model = model;
+  if (value.effects !== undefined) record.effects = value.effects;
+  if (value.keywords !== undefined) record.keywords = value.keywords;
+  return record;
 }

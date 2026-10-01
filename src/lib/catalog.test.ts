@@ -159,6 +159,10 @@ const ability: Ability = { on: ["play"], acts: [{ k: "draw", n: 1 }] };
 const overrideFor = (card: CardFace, patch: Partial<AbilityOverride> = {}): AbilityOverride => ({
   cardId: card.id,
   dsl: [ability],
+  // A manual row covers the whole text (abilities + effects + keywords), which
+  // is what makes rulesOf claim "full"; a dsl-only row must NOT claim it.
+  effects: [],
+  keywords: {},
   textHash: textHash(card.text),
   source: "manual",
   reviewed: true,

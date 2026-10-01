@@ -1,5 +1,5 @@
 import { textHash } from "./cardText";
-import type { AbilityOverride } from "./abilities";
+import { normaliseAbilityOverride, type AbilityOverride } from "./abilities";
 import { normalizeSavedState, type CardFace, type DeckInfo, type GameState } from "./game";
 
 const DATABASE_NAME = "keyforge-arena-cache";
@@ -431,7 +431,14 @@ export async function loadAbilityOverrides(): Promise<Map<string, AbilityOverrid
       request.onsuccess = () => resolve((request.result ?? []) as AbilityOverride[]);
       request.onerror = () => reject(request.error ?? new Error("Could not read the ability store."));
     });
-    for (const row of rows) if (row?.cardId && Array.isArray(row.dsl)) overrides.set(row.cardId, row);
+    for (const row of rows) {
+      // Shape gate (abilities.normaliseAbilityOverride): a malformed row from a
+      // corrupted/foreign store is discarded here with a warning, never handed
+      // to the engine. An unknown/absent source ends up untrusted in rulesOf.
+      const record = normaliseAbilityOverride(row);
+      if (record) overrides.set(record.cardId, record);
+      else console.warn("[catalog] ability override descartado: forma invalida", row);
+    }
   } catch {
     // Storage unavailable: the parser answers every card.
   }
