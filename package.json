@@ -22,7 +22,8 @@
     "e2e:arena": "node e2e/probes/_3d-arena.mjs",
     "e2e:bundle": "node e2e/bundle-size.mjs",
     "e2e:acceptance": "node e2e/acceptance.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gen:schema": "node scripts/gen-dsl-schema.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",

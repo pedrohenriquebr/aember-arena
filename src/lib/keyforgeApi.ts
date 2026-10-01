@@ -160,7 +160,7 @@ function describeFailure(error: unknown): Error {
   return error;
 }
 
-function withTimeout(milliseconds: number, external?: AbortSignal): { signal: AbortSignal; clear: () => void } {
+export function withTimeout(milliseconds: number, external?: AbortSignal): { signal: AbortSignal; clear: () => void } {
   const controller = new AbortController();
   const abort = () => controller.abort();
   // Catalog sync passes its cancel signal in: an aborted run rejects exactly like

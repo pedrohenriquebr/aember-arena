@@ -247,6 +247,26 @@ export function mergeAbilityOverrides(loaded: Map<string, AbilityOverride>): voi
   if (changed) cache = new WeakMap();
 }
 
+/** Rows currently known (live + staged), newest wins — the review queue's list. */
+export function listAbilityOverrides(): AbilityOverride[] {
+  return [...new Map([...overrides, ...pending]).values()];
+}
+
+/** Runs `run` with `record` visible to rulesOf, then restores. For the dry-run
+    of a draft in a SYNTHETIC match only: the record must carry a synthetic
+    cardId (never a live card's), so a real match and its memo are untouched
+    and the between-matches rule above is not bypassed for real cards. */
+export function withTrialOverride<T>(record: AbilityOverride, run: () => T): T {
+  const previous = overrides.get(record.cardId);
+  overrides.set(record.cardId, record);
+  try {
+    return run();
+  } finally {
+    if (previous) overrides.set(record.cardId, previous);
+    else overrides.delete(record.cardId);
+  }
+}
+
 /** Live override of a card (what the engine would read once trusted) — the
     review queue lists from this plus the staged rows. */
 export function abilityOverrideOf(cardId: string): AbilityOverride | undefined {

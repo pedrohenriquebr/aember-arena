@@ -390,6 +390,39 @@ export async function putCatalogCards(cards: CardFace[]): Promise<number> {
   }
 }
 
+/** One catalog card by id (the review queue retries a failed translation from
+    the stored face). Null when absent or storage is unavailable. */
+export async function getCatalogCard(id: string): Promise<CardFace | null> {
+  try {
+    const database = await openDatabase();
+    const request = database.transaction(CARD_STORE, "readonly").objectStore(CARD_STORE).get(id);
+    const row = await new Promise<CatalogCard | undefined>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result as CatalogCard | undefined);
+      request.onerror = () => reject(request.error ?? new Error("Could not read the catalog card."));
+    });
+    if (!row) return null;
+    const { textHash: _hash, syncedAt: _synced, ...face } = row;
+    return face;
+  } catch {
+    return null;
+  }
+}
+
+/** Every catalog face — the translation run picks what the parser cannot read. */
+export async function listCatalogCards(): Promise<CardFace[]> {
+  try {
+    const database = await openDatabase();
+    const request = database.transaction(CARD_STORE, "readonly").objectStore(CARD_STORE).getAll();
+    const rows = await new Promise<CatalogCard[]>((resolve, reject) => {
+      request.onsuccess = () => resolve((request.result ?? []) as CatalogCard[]);
+      request.onerror = () => reject(request.error ?? new Error("Could not read the card catalog."));
+    });
+    return rows.filter((row) => row?.id).map(({ textHash: _hash, syncedAt: _synced, ...face }) => face);
+  } catch {
+    return [];
+  }
+}
+
 /** Cards in the catalog store — the Home/Vault "catálogo: N cartas" chip (§5). */
 export async function countCatalogCards(): Promise<number> {
   try {
