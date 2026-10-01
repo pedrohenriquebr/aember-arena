@@ -244,6 +244,11 @@ ações, cobertura por set, pendências).
    revisão entrou pela primeira vez e traz o pipeline `catalogLlm` inteiro para o
    bundle. Baseline 156,31; mediu **161,76 kB** (+5,45: pipeline/schema/few-shots
    ~+4, UI/i18n/CSS ~+1,5). Teto 162, revisão ÚNICA do CAT-3 — acima: parar.)
+   → **164** (DSL lote 1, `docs/DSL_EXPANSION_PLAN.md` §Lote 1: normalise dos glifos
+   do MV com `textHash` congelado, `DSL_VERSION 2` com whitelists, grafias novas,
+   snapshot dos `if` no `fire()`, dry-run rico. Baseline 161,77; mediu **162,67**
+   (+0,90; a troca Sets→tabela `ACTS` do plano CUSTOU +78 — gzip comprime repetição
+   de graça). Teto 164, revisão ÚNICA do lote — acima: parar.)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
