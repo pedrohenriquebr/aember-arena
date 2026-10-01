@@ -40,6 +40,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
+import { vendoredOverrides } from "./lib/vendored";
 import { flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides } from "./lib/abilities";
 import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadAbilityOverrides, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
@@ -2475,7 +2476,7 @@ function App() {
   // O mesmo efeito lê a contagem do catálogo para o chip da Home/Vault.
   useEffect(() => {
     let disposed = false;
-    void loadAbilityOverrides().then((overrides) => { if (!disposed) mergeAbilityOverrides(overrides); });
+    void loadAbilityOverrides().then((overrides) => { if (disposed) return; mergeAbilityOverrides(overrides); mergeAbilityOverrides(vendoredOverrides()); });
     void countCatalogCards().then((count) => { if (!disposed) setCatalogCount(count); });
     return () => { disposed = true; };
   }, []);

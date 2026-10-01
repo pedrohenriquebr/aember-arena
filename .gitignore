@@ -7,3 +7,4 @@ e2e/clips/
 docs/advisor/*.log
 e2e/probes/shots/
 .kfdata-tmp/
+scripts/harvest/
