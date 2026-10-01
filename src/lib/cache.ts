@@ -422,7 +422,7 @@ export async function putAbilityOverride(record: AbilityOverride): Promise<void>
 }
 
 /** Boot load of the `abilities` store (plano §3): rulesOf is synchronous, so
-    App hands this map to abilities.setAbilityOverrides() instead of hitting
+    App hands this map to abilities.mergeAbilityOverrides() instead of hitting
     IndexedDB per card. An unavailable store reads as "no overrides". */
 export async function loadAbilityOverrides(): Promise<Map<string, AbilityOverride>> {
   const overrides = new Map<string, AbilityOverride>();
