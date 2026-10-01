@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Onda 2, entrada: parserVersion na linha `parser` e overrides só entre partidas.
+import { afterEach, describe, expect, it } from "vitest";
+import { abilityOverrideOf, applyAbilityOverride, flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides, normaliseAbilityOverride, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
+import { PARSER_VERSION, textHash } from "./cardText";
+import type { CardFace } from "./game";
+
+const card: CardFace = { id: "ov-1", title: "Ov One", house: "Logos", type: "Action", image: "", text: "Play: Look at the top card of your deck.", amber: 0, power: 0, armor: 0 };
+const ability: Ability = { on: ["play"], acts: [{ k: "draw", n: 1 }] };
+const row = (patch: Partial<AbilityOverride> = {}): AbilityOverride => ({
+  cardId: card.id,
+  dsl: [ability],
+  effects: [],
+  keywords: {},
+  textHash: textHash(card.text),
+  source: "manual",
+  reviewed: true,
+  generatedAt: 1,
+  ...patch,
+});
+
+afterEach(() => {
+  holdAbilityOverrides(false);
+  setAbilityOverrides(new Map());
+});
+
+describe("parserVersion", () => {
+  it("a parser row only counts with the running parser version", () => {
+    setAbilityOverrides(new Map([[card.id, row({ source: "parser", parserVersion: PARSER_VERSION })]]));
+    expect(rulesOf(card).abilities).toEqual([ability]);
+    setAbilityOverrides(new Map([[card.id, row({ source: "parser", parserVersion: PARSER_VERSION + 1 })]]));
+    expect(rulesOf(card).abilities).toEqual([]);
+    setAbilityOverrides(new Map([[card.id, row({ source: "parser" })]]));
+    expect(rulesOf(card).abilities).toEqual([]);
+  });
+
+  it("round-trips through the shape gate; manual rows ignore it", () => {
+    expect(normaliseAbilityOverride({ ...row({ source: "parser" }), parserVersion: 7 })?.parserVersion).toBe(7);
+    setAbilityOverrides(new Map([[card.id, row()]]));
+    expect(rulesOf(card).abilities).toEqual([ability]);
+  });
+});
+
+describe("overrides apply only between matches", () => {
+  it("stages writes during a match and flushes at the boundary", () => {
+    expect(rulesOf(card).abilities).toEqual([]);
+    holdAbilityOverrides(true);
+    applyAbilityOverride(row());
+    expect(rulesOf(card).abilities).toEqual([]);
+    expect(abilityOverrideOf(card.id)).toBeDefined();
+    flushAbilityOverrides();
+    expect(rulesOf(card).abilities).toEqual([ability]);
+  });
+
+  it("stages the boot merge too, and a staged entry beats the disk snapshot", () => {
+    holdAbilityOverrides(true);
+    applyAbilityOverride(row({ dsl: [] }));
+    mergeAbilityOverrides(new Map([[card.id, row()]]));
+    flushAbilityOverrides();
+    expect(rulesOf(card).abilities).toEqual([]);
+    const other = { ...card, id: "ov-2" };
+    holdAbilityOverrides(true);
+    mergeAbilityOverrides(new Map([[other.id, row({ cardId: other.id })]]));
+    expect(rulesOf(other).abilities).toEqual([]);
+    flushAbilityOverrides();
+    expect(rulesOf(other).abilities).toEqual([ability]);
+  });
+
+  it("applies immediately when no match is held", () => {
+    applyAbilityOverride(row());
+    expect(rulesOf(card).abilities).toEqual([ability]);
+  });
+});

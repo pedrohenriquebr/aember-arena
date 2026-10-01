@@ -7,7 +7,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyAbilityOverride, mergeAbilityOverrides, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
 import { countCatalogCards, listCatalogCardHashes, loadAbilityOverrides, putAbilityOverride, putCatalogCards } from "./cache";
-import { parseCardText, textHash } from "./cardText";
+import { PARSER_VERSION, parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
 import { syncCatalog } from "./keyforgeApi";
 import { coverageCounts } from "../components/CoverageBadge";
@@ -462,7 +462,7 @@ describe("rulesOf reads the ability store before the parser", () => {
   it("keeps the parser tally for a parser-sourced entry", () => {
     const card = face("parser-1", "Reap: Gain 1 amber.");
     expect(rulesOf(card).coverage).toBe("full");
-    setAbilityOverrides(new Map([[card.id, overrideFor(card, { source: "parser" })]]));
+    setAbilityOverrides(new Map([[card.id, overrideFor(card, { source: "parser", parserVersion: PARSER_VERSION })]]));
     expect(rulesOf(card).coverage).toBe("full");
     expect(rulesOf(card).abilities).toEqual([ability]);
   });
@@ -478,7 +478,7 @@ describe("rulesOf reads the ability store before the parser", () => {
     const parserCard = { ...face("script-parser", "Play: Draw a card."), title: "Ancient Bear" };
     const parsed = parseCardText(parserCard);
     setAbilityOverrides(
-      new Map([[parserCard.id, overrideFor(parserCard, { source: "parser", dsl: parsed.abilities, effects: parsed.effects, keywords: parsed.keywords })]]),
+      new Map([[parserCard.id, overrideFor(parserCard, { source: "parser", parserVersion: PARSER_VERSION, dsl: parsed.abilities, effects: parsed.effects, keywords: parsed.keywords })]]),
     );
     // scripts["ancient bear"] = null (texto de lembrete): nenhuma habilidade, e
     // o parser congelado nao pode regredir a carta curada.
@@ -514,7 +514,7 @@ describe("rulesOf reads the ability store before the parser", () => {
     const parsed = parseCardText(card);
     expect(parsed.abilities).toEqual([{ on: ["reap"], acts: [{ k: "gainAmber", n: 1 }] }]);
     setAbilityOverrides(
-      new Map([[card.id, overrideFor(card, { source: "parser", dsl: parsed.abilities, effects: parsed.effects, keywords: parsed.keywords })]]),
+      new Map([[card.id, overrideFor(card, { source: "parser", parserVersion: PARSER_VERSION, dsl: parsed.abilities, effects: parsed.effects, keywords: parsed.keywords })]]),
     );
     expect(rulesOf(card).abilities).toEqual(parsed.abilities);
     expect(rulesOf(card).coverage).toBe(parsed.coverage);

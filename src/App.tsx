@@ -40,7 +40,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
-import { mergeAbilityOverrides } from "./lib/abilities";
+import { flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides } from "./lib/abilities";
 import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadAbilityOverrides, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
@@ -2467,6 +2467,15 @@ function App() {
     return () => { disposed = true; };
   }, []);
 
+  // Overrides só valem ENTRE partidas (plano §4 / recheck da onda 1): com uma
+  // partida em curso o abilities.ts segura as escritas e este efeito as libera
+  // na vitória; launch/retomada liberam antes de criar o estado.
+  const matchLive = game !== null && game.winner === null;
+  useEffect(() => {
+    holdAbilityOverrides(matchLive);
+    if (!matchLive) flushAbilityOverrides();
+  }, [matchLive]);
+
   // Restore every deck cached in IndexedDB, plus the last one the player chose.
   useEffect(() => {
     let disposed = false;
@@ -2818,6 +2827,7 @@ function App() {
     // vira "mirror" quando o deck pedido caiu no espelho (removido/igual).
     matchSetupRef.current = { difficulty: settingsRef.current.difficulty, opponentMode: rival === deck ? "mirror" : settingsRef.current.opponentMode };
     // FEAT-13: a 2P match renames the sides at creation (no AI is coming).
+    flushAbilityOverrides();
     const next = mode === "passAndPlay" ? createPassAndPlayMatch(deck, rival, { seed }) : createMatch(deck, rival, { seed });
     opponentRef.current = rival;
     // FEAT-12a: a new match starts a fresh undo history.
@@ -3286,6 +3296,7 @@ function App() {
               };
               // FEAT-12a: a resumed match has no in-memory history to undo; its
               // step list stays null so replay stays off (BUG2-03).
+              flushAbilityOverrides();
               historyRef.current = [];
               stepsRef.current = null;
               gameRef.current = saved;

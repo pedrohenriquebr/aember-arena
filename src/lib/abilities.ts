@@ -6,7 +6,7 @@
 // Copyright (C) keyteki contributors. Rewritten in TypeScript for Aember Arena:
 // abilities are plain data interpreted by game.ts, so the same objects feed the
 // rules engine, the AI's move pruning and the coverage badge in the UI.
-import { parseCardText, textHash } from "./cardText";
+import { PARSER_VERSION, parseCardText, textHash } from "./cardText";
 import { ENGINE_KEYWORDS, type Keywords } from "./keywords";
 import type { CardFace } from "./game";
 
@@ -173,6 +173,12 @@ export interface AbilityOverride {
   reviewed: boolean;
   generatedAt: number;
   model?: string;
+  /** `parser` rows only: the cardText.PARSER_VERSION that produced the DSL. A row
+      from another version (or without one) is stale and ignored. */
+  parserVersion?: number;
+  /** `llm` rows that failed validation are not stored as rules; the queue keeps
+      the motive so the owner sees why the card stayed vanilla (catalogLlm). */
+  failure?: string;
 }
 
 /** Cards with a DSL stored on disk, keyed by card id (DB v4 `abilities`). The
@@ -180,35 +186,71 @@ export interface AbilityOverride {
     rulesOf is synchronous — the store is read into memory, never per card. */
 let overrides = new Map<string, AbilityOverride>();
 
-/** Boot/reload hook: swaps the override map and drops the memo (faces already
-    answered keep the parser result otherwise). A late override — a wave-2
-    review approval, a re-sync — goes through applyAbilityOverride, so the next
-    rulesOf call re-reads the card. */
-export function setAbilityOverrides(next: Map<string, AbilityOverride>): void {
-  overrides = next;
+/** Overrides apply only BETWEEN matches: swapping rules under a live match would
+    change cards already in play (and reset the memo mid-turn). While a match is
+    held, writes wait in `pending` and the App flushes them at launch, resume or
+    victory. */
+let held = false;
+const pending = new Map<string, AbilityOverride>();
+
+/** App flips this with the match lifecycle (a match in progress = held). */
+export function holdAbilityOverrides(next: boolean): void {
+  held = next;
+}
+
+/** Applies what waited during a match. Idempotent; called at launch/resume/win. */
+export function flushAbilityOverrides(): void {
+  if (!pending.size) return;
+  for (const [cardId, record] of pending) overrides.set(cardId, record);
+  pending.clear();
   cache = new WeakMap();
 }
 
-/** Wave-2 path: one DSL row comes back from the store (or a review queue) and
-    joins the live map without a full reload; the memo is dropped so even the
-    exact face already consulted picks the new rules up. */
+/** Boot/reload hook: swaps the override map and drops the memo (faces already
+    answered keep the parser result otherwise). A late override — a review
+    approval, a re-sync — goes through applyAbilityOverride, so the next
+    rulesOf call re-reads the card. */
+export function setAbilityOverrides(next: Map<string, AbilityOverride>): void {
+  overrides = next;
+  pending.clear();
+  cache = new WeakMap();
+}
+
+/** One DSL row comes back from the store (or a review queue) and joins the live
+    map without a full reload; the memo is dropped so even the exact face
+    already consulted picks the new rules up — unless a match is in progress,
+    then it is staged for the next boundary. */
 export function applyAbilityOverride(record: AbilityOverride): void {
+  if (held) {
+    pending.set(record.cardId, record);
+    return;
+  }
+  pending.delete(record.cardId);
   overrides.set(record.cardId, record);
   cache = new WeakMap();
 }
 
 /** Boot load merge. The snapshot read from disk must not overwrite an entry
     already applied during this session (a write landing between getAll() and
-    the boot callback would be lost otherwise); the session entry wins. Only a
-    real change drops the memo. */
+    the boot callback would be lost otherwise); the session entry wins, staged
+    ones included. Only a real change drops the memo. */
 export function mergeAbilityOverrides(loaded: Map<string, AbilityOverride>): void {
   let changed = false;
   for (const [cardId, record] of loaded) {
-    if (overrides.has(cardId)) continue;
-    overrides.set(cardId, record);
-    changed = true;
+    if (overrides.has(cardId) || pending.has(cardId)) continue;
+    if (held) pending.set(cardId, record);
+    else {
+      overrides.set(cardId, record);
+      changed = true;
+    }
   }
   if (changed) cache = new WeakMap();
+}
+
+/** Live override of a card (what the engine would read once trusted) — the
+    review queue lists from this plus the staged rows. */
+export function abilityOverrideOf(cardId: string): AbilityOverride | undefined {
+  return pending.get(cardId) ?? overrides.get(cardId);
 }
 
 /** Memo per face; replaced (not mutated) when the overrides map changes. */
@@ -223,6 +265,8 @@ let cache = new WeakMap<CardFace, CardRules>();
 function storedAbility(face: CardFace): AbilityOverride | null {
   const entry = overrides.get(face.id);
   if (!entry || entry.textHash !== textHash(face.text ?? "")) return null;
+  // A frozen parser output is only valid for the grammar that wrote it.
+  if (entry.source === "parser" && entry.parserVersion !== PARSER_VERSION) return null;
   const trusted = entry.source === "manual" || entry.source === "parser" || (entry.source === "llm" && entry.reviewed === true);
   return trusted ? entry : null;
 }
@@ -447,6 +491,8 @@ export function normaliseAbilityOverride(value: unknown): AbilityOverride | null
     generatedAt: isFiniteNumber(value.generatedAt) ? value.generatedAt : 0,
   };
   if (typeof model === "string") record.model = model;
+  if (isFiniteNumber(value.parserVersion)) record.parserVersion = value.parserVersion;
+  if (typeof value.failure === "string") record.failure = value.failure;
   if (value.effects !== undefined) record.effects = value.effects;
   if (value.keywords !== undefined) record.keywords = value.keywords;
   return record;

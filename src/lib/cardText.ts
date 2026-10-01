@@ -41,6 +41,12 @@ function triggerFor(raw: string): Trigger | undefined {
 
 const num = (word: string) => (word === "a" || word === "an" ? 1 : Number(word));
 
+/** Version of the deterministic grammar. A stored `parser` row is the parser's
+    own output frozen on disk, so it only counts while the parser that wrote it
+    is the running one (abilities.storedAbility): bump this whenever the grammar
+    changes what a text parses to. */
+export const PARSER_VERSION = 1;
+
 export function normalise(text: string): string {
   return text
     .replace(/\u000b/g, "\n")
