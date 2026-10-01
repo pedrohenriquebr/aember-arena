@@ -373,6 +373,54 @@ try {
         const dmgC = ind.filter((c) => c.dmg);
         check(`${t} H3D-18: dano no canto superior direito`, dmgC.length > 0 && dmgC.every((c) => c.dmg.r >= c.tile.r - 4 && c.dmg.b <= c.tile.t + (c.tile.b - c.tile.t) * 0.25), dmgC.map((c) => `r=${r1(c.dmg.r)}/${r1(c.tile.r)} b=${r1(c.dmg.b)}/${r1(c.tile.t)}`).join(" "));
       }
+      // ---- H3D-19: avatares centrais e dorsos do Warden ----
+      if (vp.w >= 701) {
+        const av = await page.evaluate(() => {
+          const rect = (el) => {
+            const r = el.getBoundingClientRect();
+            return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height };
+          };
+          const board = document.querySelector(".game-board").getBoundingClientRect();
+          const bands = [...document.querySelectorAll(".board-content > .player-band")].map((band) => {
+            const a = band.querySelector(".player-avatar");
+            const amber = band.querySelector(".amber-counter");
+            const value = band.querySelector(".amber-value");
+            const backs = band.querySelector(".hand-backs");
+            const br = rect(band);
+            const ar = rect(a);
+            return {
+              side: band.dataset.side,
+              band: br,
+              avatar: ar,
+              amberRect: rect(amber),
+              amberFont: parseFloat(getComputedStyle(value).fontSize),
+              backs: backs ? { n: backs.querySelectorAll("i").length, plus: backs.querySelector("b")?.textContent ?? "", aria: backs.getAttribute("aria-label"), display: getComputedStyle(backs).display, rect: backs.offsetWidth ? rect(backs) : null } : null,
+              copy: rect(band.querySelector(".player-copy")),
+              resources: rect(band.querySelector(".player-resources")),
+              info: band.querySelector(".hand-bar-info") ? rect(band.querySelector(".hand-bar-info")) : null,
+              bandOverflow: getComputedStyle(band).overflow,
+            };
+          });
+          const arts = [...document.querySelectorAll(".table-plane .card-art")].map((el) => ({ ...rect(el), iid: el.closest("[data-iid]")?.dataset.iid ?? "" }));
+          return { center: (board.left + board.right) / 2, bands, arts, handLen: window.__hand ?? null };
+        });
+        const [top, bot] = av.bands;
+        check(`${t} H3D-19: centro do avatar a <= 4px do centro do board`, av.bands.every((b) => Math.abs(b.avatar.l + b.avatar.w / 2 - av.center) <= 4), av.bands.map((b) => r1(b.avatar.l + b.avatar.w / 2 - av.center)).join(","));
+        check(`${t} H3D-19: avatar invade 12px a mesa (Warden p/ baixo, jogador p/ cima), 56-64px`, Math.abs(top.avatar.b - top.band.b - 12) <= 1 && Math.abs(bot.band.t - bot.avatar.t - 12) <= 1 && top.avatar.w >= 55 && top.avatar.w <= 65, `${r1(top.avatar.b - top.band.b)}/${r1(bot.band.t - bot.avatar.t)} d=${r1(top.avatar.w)}`);
+        check(`${t} H3D-19: Aember >= 22px visuais`, av.bands.every((b) => b.amberFont >= 22), av.bands.map((b) => r1(b.amberFont)).join(","));
+        const hit2 = (p, q) => p.l < q.r - 1 && q.l < p.r - 1 && p.t < q.b - 1 && q.t < p.b - 1;
+        const touching = av.arts.filter((a) => av.bands.some((b) => hit2(b.avatar, a)));
+        check(`${t} H3D-19: retangulo do avatar nao intersecta nenhuma .card-art`, touching.length === 0, touching.slice(0, 3).map((a) => a.iid).join(","));
+        const warden = av.bands[0];
+        const expected = Math.min(warden.backs?.n ?? -1, 7);
+        const handN = await page.evaluate(() => Number(document.querySelector(".hand-backs")?.getAttribute("aria-label")?.match(/\d+/)?.[0] ?? -1));
+        check(`${t} H3D-19: dorsos = min(mao,7) + "+N" e aria-label`, warden.backs && warden.backs.n === Math.min(handN, 7) && (handN > 7 ? warden.backs.plus === `+${handN - 7}` : warden.backs.plus === "") && /^Opponent's hand: \d+ cards$/.test(warden.backs.aria) && expected >= 0, `${warden.backs?.n} dorsos "${warden.backs?.plus}" aria="${warden.backs?.aria}"`);
+        check(`${t} H3D-19: dorsos visiveis a direita do avatar, sem tocar o resto do band`, Boolean(warden.backs?.rect) && warden.backs.rect.l >= warden.avatar.r && (!warden.resources.w || warden.backs.rect.r <= warden.resources.l + 1), warden.backs?.rect ? `dorsos ${r1(warden.backs.rect.l)}..${r1(warden.backs.rect.r)} recursos desde ${r1(warden.resources.l)}` : "sem rect");
+        const clash = av.bands.flatMap((b) => [["copy", b.copy], ["resources", b.resources], ["info", b.info]].filter(([, r]) => r && r.w && (hit2(r, b.avatar) || hit2(r, b.amberRect) || (b.backs?.rect && hit2(r, b.backs.rect)))).map(([n]) => `${b.side}:${n}`));
+        check(`${t} H3D-19: nenhum texto do band sob avatar/Aember/dorsos`, clash.length === 0, clash.join(" "));
+        check(`${t} H3D-19: band sem overflow cortando a invasao`, av.bands.every((b) => b.bandOverflow === "visible"), av.bands.map((b) => b.bandOverflow).join(","));
+      }
+
       if (spec.tag === "ups" && vp.w >= 701) {
         for (const [name, list, dir] of [["jogador", m.player, 1], ["oponente", m.opp, -1]]) {
           const host = list.find((c) => c.role === "cr");

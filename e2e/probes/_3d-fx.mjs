@@ -230,12 +230,34 @@ try {
   await page.waitForTimeout(900);
 
   // ---- 2. Hold do Warden (420ms) e voo dele ate o slot do fundo.
+  // H3D-19: historico do centro do ULTIMO dorso (o captureFx mede ANTES do commit; o
+  // commit encolhe a mao, entao o dorso medido so existe no historico).
+  await page.evaluate(() => {
+    window.__backs = [];
+    const rec = () => {
+      const i = document.querySelector(".hand-backs i:last-of-type");
+      if (!i) return;
+      const r = i.getBoundingClientRect();
+      window.__backs.push({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+    };
+    rec();
+    new MutationObserver(rec).observe(document.querySelector(".hand-backs"), { childList: true, subtree: true });
+  });
   await page.locator(".end-turn-button").click();
   const aiGhost = await page.waitForFunction(() => Boolean(document.querySelector(".fx-ghost")), null, { timeout: 30000 }).then(() => true).catch(() => false);
   let aiHold = null;
   let aiFrames = null;
   if (aiGhost) {
     aiHold = await page.evaluate(() => document.querySelector(".fx-layer")?.style.getPropertyValue("--fx-hold") ?? null);
+    const aiStart = await page.evaluate(AT, "start");
+    if (aiStart.error) console.log(`SKIP H3D-19: ghost do Warden no quadro 0 (${aiStart.error}: jogada sem slot)`);
+    else {
+      const hist = await page.evaluate(() => window.__backs);
+      const gx = aiStart.ghost.left + aiStart.ghost.w / 2;
+      const gy = aiStart.ghost.top + aiStart.ghost.h / 2;
+      const best = Math.min(...hist.map((h) => Math.hypot(h.x - gx, h.y - gy)));
+      check("H3D-19: ghost do Warden no quadro 0 a <= 6px do ultimo dorso", best <= 6, `delta=${best.toFixed(1)}px (${hist.length} amostras)`);
+    }
     const aiLanding = await page.evaluate(AT, "landing");
     if (!aiLanding.error) {
       aiFrames = {

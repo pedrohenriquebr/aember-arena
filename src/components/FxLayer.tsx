@@ -75,8 +75,10 @@ function faceEl(face: CardFace): HTMLElement {
 export function captureFx(id: string | undefined, side: FxSide): FxSource | undefined {
   const tile = id ? byIid(id) : null;
   const art = tile?.querySelector(".card-art") ?? null;
-  // A mão do Warden não está no DOM: a origem é o avatar do band dele.
-  const el = art ?? tile ?? document.querySelector(`[data-side="${side}"] .player-avatar`);
+  // A mão do Warden não está no DOM: a origem é o último dorso do band dele (H3D-19;
+  // oculto fora do 3D >= 701px, onde offsetWidth é 0) ou, sem ele, o avatar.
+  const back = document.querySelector<HTMLElement>(`[data-side="${side}"] .hand-backs i:last-of-type`);
+  const el = art ?? tile ?? (back?.offsetWidth ? back : document.querySelector(`[data-side="${side}"] .player-avatar`));
   if (!(el instanceof HTMLElement)) return undefined;
   const rect = el.getBoundingClientRect();
   const owner = tile ?? el;

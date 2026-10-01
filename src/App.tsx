@@ -1088,6 +1088,8 @@ type PlayerBandProps = {
   handCount?: number;
   deckCount?: number;
   hint?: boolean;
+  /** H3D-19: cartas na mão do oponente (pública no KeyForge) — dorsos no band do 3D. */
+  backs?: number;
   t: Translator;
 };
 
@@ -1103,6 +1105,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     (a.house ?? "") === (b.house ?? "") &&
     (a.avatarLabel ?? "") === (b.avatarLabel ?? "") &&
     a.handCount === b.handCount &&
+    a.backs === b.backs &&
     a.deckCount === b.deckCount &&
     (a.hint ?? false) === (b.hint ?? false) &&
     a.t === b.t &&
@@ -1130,14 +1133,22 @@ const PlayerBand = memo(function PlayerBand({
   handCount,
   deckCount,
   hint = false,
+  backs,
   t,
 }: PlayerBandProps) {
   return (
-    <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}`} data-side={side}>
+    <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}${thinking ? " player-band--thinking" : ""}`} data-side={side}>
       <div className={`player-avatar${isAi ? " player-avatar--ai" : ""}`}>
         {isAi ? <Cpu size={18} strokeWidth={1.6} /> : <span>{avatarLabel ?? t("common.you")}</span>}
         {active && <span className="avatar-live-dot" />}
       </div>
+      {/* H3D-19: dorsos da mão do oponente — `display: none` fora do 3D >= 701px. */}
+      {backs !== undefined && (
+        <span className="hand-backs" role="img" aria-label={t("game.opponentHand", { count: backs })}>
+          {Array.from({ length: Math.min(backs, 7) }, (_, i) => <i key={i} />)}
+          {backs > 7 && <b>+{backs - 7}</b>}
+        </span>
+      )}
       <div className="player-copy">
         <div className="player-name-row">
           <strong>{localizeName(player.name, t)}</strong>
@@ -1477,6 +1488,7 @@ function GameBoard({
           chains={enemy.chains}
           side={enemySide}
           avatarLabel={passAndPlay ? String(enemySide + 1) : undefined}
+          backs={enemy.hand.length}
           t={t}
         />
 

@@ -256,6 +256,11 @@ ações, cobertura por set, pendências).
       hit-test) e `--jy` (na translate da PEÇA, não do tile). O `::after` da peça é o arco
       "pronta" OU a ficha de stun; só opacity/scale animam (`ready-breathe` tem de ficar
       `animation: none` no 3D, também com animações ligadas).
+    - **Avatares e dorsos (H3D-19, >= 701px):** o `.player-avatar` é ABSOLUTO no eixo (50%)
+      do band (flex preservado), 56/64px = altura da faixa + 12px de invasão, e o band fica
+      `overflow: visible`; Æmber (`--fs-2xl`) e `.hand-backs` ancoram nele. `.hand-backs` existe
+      no DOM sempre (`display: none` fora do 3D) e o `captureFx` mede o último dorso quando
+      visível. No band do jogador o selo da casa e o título "YOUR HAND" saem no 3D (largura).
 
 ## Verification gates (rode antes de commitar mudança relevante)
 

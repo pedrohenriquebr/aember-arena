@@ -8129,3 +8129,129 @@ html .spin {
   }
 
 }
+/* ---------- Avatares centrais + dorsos do Warden (H3D-19, VIEW3D_ARENA_LAYOUT §3.7) ---------- */
+/* Os dorsos existem no DOM em todo modo; só o 3D real (>= 701px) os mostra. */
+.hand-backs {
+  display: none;
+}
+
+@supports (transform-style: preserve-3d) {
+  @media (min-width: 701px) {
+    /* O avatar é absoluto no eixo do band (flex preservado: nenhuma informação sai
+       do lugar) e invade 12px a mesa: para baixo no Warden, para cima no jogador —
+       o notch central que a fileira de artefatos deixa livre (§3.2). O overflow do
+       palco (hidden) cortaria a invasão. Âmbar e dorsos ancoram nele pelo 50%. */
+    .game-board--3d .board-content > .player-band {
+      --avatar-d: calc(var(--hand-bar-h) + 12px);
+      overflow: visible;
+    }
+
+    .game-board--3d .board-content > .player-band:first-child {
+      --avatar-d: calc(var(--band-h) + 12px);
+    }
+
+    .game-board--3d .player-band .player-avatar {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      width: var(--avatar-d);
+      height: var(--avatar-d);
+      translate: -50% 0;
+      font-size: var(--fs-xs);
+    }
+
+    .game-board--3d .board-content > .player-band:first-child .player-avatar {
+      top: 0;
+      bottom: auto;
+    }
+
+    .game-board--3d .player-band .player-avatar svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    .game-board--3d .player-band--active .player-avatar {
+      background: radial-gradient(circle, rgba(161, 192, 152, 0.24), rgba(222, 213, 188, 0.06) 72%);
+      box-shadow: 0 0 0 3px rgba(211, 173, 93, 0.12), 0 0 22px rgba(149, 205, 145, 0.28);
+    }
+
+    .game-board--3d .player-band--thinking .avatar-live-dot {
+      animation: avatar-think 1.2s ease-in-out infinite;
+    }
+
+    .game-board--3d .player-band .player-copy {
+      max-width: calc(50% - var(--avatar-d) / 2 - 150px);
+    }
+
+    /* O Æmber vira o número grande, colado ao avatar pela esquerda. */
+    .game-board--3d .player-band .amber-counter {
+      position: absolute;
+      top: 50%;
+      right: calc(50% + var(--avatar-d) / 2 + 12px);
+      translate: 0 -50%;
+      font-size: var(--fs-2xl);
+    }
+
+    .game-board--3d .player-band .amber-counter svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .game-board--3d .player-band .key-counter + .resource-divider {
+      display: none;
+    }
+
+    /* A faixa do jogador dividiria a largura com o avatar: o selo da casa dele já
+       está marcado no seletor do console e o título "YOUR HAND" é a própria mão
+       logo abaixo (a contagem fica). O Warden tem o selo (única marca da casa dele). */
+    .game-board--3d .board-content > .player-band:not(:first-child) .filter-chip,
+    .game-board--3d .board-content > .player-band:not(:first-child) .hand-title {
+      display: none;
+    }
+
+    .game-board--3d .player-band .key-pip {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Dorsos do Warden: leque de ±4° e sobreposição de 10px, à direita do avatar. */
+    .game-board--3d .player-band .hand-backs {
+      position: absolute;
+      top: 50%;
+      left: calc(50% + var(--avatar-d) / 2 + 12px);
+      display: flex;
+      align-items: center;
+      translate: 0 -50%;
+    }
+
+    .game-board--3d .hand-backs i {
+      width: 22px;
+      height: 31px;
+      margin-left: -10px;
+      border: 1px solid rgba(214, 188, 128, 0.5);
+      border-radius: 3px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(214, 188, 128, 0.35) 0 22%, transparent 24%),
+        linear-gradient(135deg, #3a4a3f, #1b2620);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+
+    .game-board--3d .hand-backs i:first-child {
+      margin-left: 0;
+    }
+
+    .game-board--3d .hand-backs i:nth-child(3n + 1) { rotate: -4deg; }
+    .game-board--3d .hand-backs i:nth-child(3n) { rotate: 4deg; }
+
+    .game-board--3d .hand-backs b {
+      margin-left: 8px;
+      color: #d6bd7a;
+      font-size: var(--fs-2xs);
+      font-weight: 800;
+    }
+  }
+
+  @keyframes avatar-think {
+    50% { opacity: 0.3; }
+  }
+}

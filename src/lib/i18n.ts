@@ -160,6 +160,7 @@ const DICT: Record<string, [string, string]> = {
   "error.back": ["Back to start", "Voltar ao início"],
   "home.resumeMatch": ["Resume match · round {round}", "Retomar partida · rodada {round}"],
   "game.attachments": ["Artifacts and upgrades in play", "Artefatos e upgrades em jogo"],
+  "game.opponentHand": ["Opponent's hand: {count} cards", "Mão do oponente: {count} cartas"],
   "game.chainsAria": ["{count} chains — each 6 chains make the refill one card smaller", "{count} correntes — a cada 6 correntes a reposição encolhe 1 carta"],
   "game.active": ["ACTIVE", "ATIVO"],
   "game.thinkingTag": ["THINKING", "PENSANDO"],
