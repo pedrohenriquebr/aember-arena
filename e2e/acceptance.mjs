@@ -3,7 +3,9 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 155 kB (onda 1 do catalogo dinamico, docs/DYNAMIC_CATALOG_PLAN.md
+//      Default 157 kB (onda 2 do catalogo dinamico: parserVersion/entre partidas, BYOK, pipeline,
+//      harvest; mediu 156,31 kB; revisao UNICA 155 -> 157, ver CLAUDE.md §7).
+//      Antes: 155 kB (onda 1 do catalogo dinamico, docs/DYNAMIC_CATALOG_PLAN.md
 //      §1/§2/§3/§5: DB v4 com os stores `cards` (textHash/syncedAt) e `abilities`,
 //      sync incremental paginado com cursor e cancelamento, rulesOf lendo o store
 //      antes do parser (mapa no boot, memo invalidado) e o chip "catalogo: N
@@ -91,7 +93,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 155);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 157);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const skipFloor3d = hasFlag("--skip-floor3d");
