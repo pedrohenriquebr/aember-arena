@@ -7420,7 +7420,10 @@ html .spin {
       background:
         radial-gradient(ellipse 58% 54% at 50% 47%, rgba(128, 176, 142, 0.34), transparent 72%),
         radial-gradient(ellipse 116% 94% at 50% 50%, transparent 48%, rgba(3, 6, 5, 0.7) 100%),
-        linear-gradient(180deg, rgba(4, 7, 6, 0.36), rgba(4, 7, 6, 0.02) 26%, rgba(4, 7, 6, 0.02) 74%, rgba(4, 7, 6, 0.38));
+        linear-gradient(180deg, rgba(4, 7, 6, 0.36), rgba(4, 7, 6, 0.02) 26%, rgba(4, 7, 6, 0.02) 74%, rgba(4, 7, 6, 0.38)),
+        /* H3D-21: terreno do turno (cor da casa a 10%) e gravura fina; troca seca, sem filter. */
+        radial-gradient(ellipse 60% 44% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 10%, transparent), transparent 72%),
+        repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 38px);
       /* VA-05: borda do tapete iluminada (o trapézio da perspectiva precisa de um contorno
          claro contra o fundo escuro, como no Arena) + brilho interno no aro. */
       box-shadow: inset 0 0 0 2px rgba(214, 188, 128, 0.3), inset 0 0 28px rgba(150, 196, 160, 0.16);
@@ -8294,4 +8297,17 @@ html .spin {
 @keyframes fx-burst-sparks {
   from { opacity: 1; rotate: 0deg; scale: 0.5; }
   to { opacity: 0; rotate: 25deg; scale: 1.4; }
+}
+
+/* H3D-21: o detalhe da carta entra deslizando na mesa 3D (rail >= 1041px). `backwards`: o
+   fill `both` deixaria transform residual e quebraria filhos `fixed`. Reduce-motion: a regra
+   global de duração derruba para 1 quadro. */
+@media (min-width: 1041px) {
+  body:has(.game-board--3d) .selected-card-content {
+    animation: inspector-in 200ms var(--ease-out) backwards;
+  }
+}
+
+@keyframes inspector-in {
+  from { opacity: 0; translate: 16px 0; }
 }

@@ -1474,6 +1474,8 @@ function GameBoard({
     <section
       className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
+      // H3D-21: a cor do tapete segue a casa do turno e a metade de quem joga.
+      style={view3d ? ({ "--turn-house": game.activeHouse ? houseColor(game.activeHouse) : "transparent", "--turn-y": game.activePlayer === humanSide ? "72%" : "28%" } as CSSProperties) : undefined}
       aria-label={t("game.board")}
     >
       <div className="felt-etching" aria-hidden="true" />
@@ -1755,7 +1757,7 @@ function SelectedCardPanel({
         {selection && <button className="quiet-icon-button" type="button" onClick={onClear} aria-label={t("common.close")}><X size={14} /></button>}
       </div>
       {selection && card ? (
-        <div className="selected-card-content">
+        <div className="selected-card-content" key={id}>
           <div className="selected-card-main">
             <CardArt face={card.face} size="preview" hoverZoom={settings.hoverZoom} />
             <div className="selected-card-heading">
