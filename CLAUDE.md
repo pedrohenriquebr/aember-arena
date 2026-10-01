@@ -125,7 +125,7 @@ ações, cobertura por set, pendências).
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **151 kB**. Histórico de
+7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **153 kB**. Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
@@ -212,6 +212,11 @@ ações, cobertura por set, pendências).
    (`_dead-css`): 0 removível (os nomes "sem uso" continuam dinâmicos:
    `card-art--${size}`, `house-icon--${size}`, `coverage-note--*`,
    `toast-message--${kind}`).)
+   → **153** (lote A3 "o espetáculo", `docs/VIEW3D_ARENA_LAYOUT.md` §4 H3D-19..21:
+   avatares centrais + dorsos do Warden, investida/impacto e mesa-ambiente. Só
+   CSS/TS, zero dependência; baseline real 150,79 kB (o 148,39 citado no pedido era
+   anterior ao ritmo da IA). Teto ÚNICO deste lote — acima de 153: parar. Varredura
+   de mortos pré-revisão (`_dead-css`): 0 removível (só nomes dinâmicos).)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.

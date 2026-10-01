@@ -3,7 +3,11 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 151 kB (onda 4 "estado de set", docs/ROADMAP_REVIEW.md §3: ward/
+//      Default 153 kB (lote A3 "o espetaculo", docs/VIEW3D_ARENA_LAYOUT.md §4 H3D-19..21:
+//      avatares centrais + dorsos, investida/impacto e mesa-ambiente; so CSS/TS, zero
+//      dependencia — baseline real 150,79 kB; varredura de mortos `_dead-css`: 0
+//      removivel; ver CLAUDE.md §7).
+//      Antes: 151 (onda 4 "estado de set", docs/ROADMAP_REVIEW.md §3: ward/
 //      enrage como tokens na instancia (warded/enraged), bonusIcons +
 //      enhancements do Master Vault, take control com controlledBy, forge/
 //      unforge fora do passo de chave e as substituicoes "instead"; so TS, zero
@@ -79,7 +83,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 151);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 153);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const skipFloor3d = hasFlag("--skip-floor3d");
