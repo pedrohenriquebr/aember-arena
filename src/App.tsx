@@ -40,7 +40,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
-import { setAbilityOverrides } from "./lib/abilities";
+import { mergeAbilityOverrides } from "./lib/abilities";
 import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCachedDecks, loadAbilityOverrides, loadSavedMatch, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
@@ -2457,11 +2457,12 @@ function App() {
   }, []);
 
   // DB v4 (plano §2/§3): rulesOf é síncrono, então o store `abilities` sobe para
-  // um mapa em memória no boot (chegando depois, setAbilityOverrides limpa o memo).
+  // um mapa em memória no boot. MERGE, não troca: um override gravado entre o
+  // getAll() e este callback não pode ser perdido (a entrada da sessão vence).
   // O mesmo efeito lê a contagem do catálogo para o chip da Home/Vault.
   useEffect(() => {
     let disposed = false;
-    void loadAbilityOverrides().then((overrides) => { if (!disposed) setAbilityOverrides(overrides); });
+    void loadAbilityOverrides().then((overrides) => { if (!disposed) mergeAbilityOverrides(overrides); });
     void countCatalogCards().then((count) => { if (!disposed) setCatalogCount(count); });
     return () => { disposed = true; };
   }, []);

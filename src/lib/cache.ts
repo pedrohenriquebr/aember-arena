@@ -1,5 +1,5 @@
 import { textHash } from "./cardText";
-import { normaliseAbilityOverride, type AbilityOverride } from "./abilities";
+import { applyAbilityOverride, normaliseAbilityOverride, type AbilityOverride } from "./abilities";
 import { normalizeSavedState, type CardFace, type DeckInfo, type GameState } from "./game";
 
 const DATABASE_NAME = "keyforge-arena-cache";
@@ -406,7 +406,9 @@ export async function countCatalogCards(): Promise<number> {
 }
 
 /** Wave 2 writes reviewed DSL rows through this; the row keeps `source` so the
-    engine knows who wrote it (abilities.rulesOf). */
+    engine knows who wrote it (abilities.rulesOf). The row is applied to the
+    in-memory map right away, so rulesOf sees it before the next boot; storage
+    failures stay swallowed and the DSL remains session-only. */
 export async function putAbilityOverride(record: AbilityOverride): Promise<void> {
   try {
     const database = await openDatabase();
@@ -416,6 +418,7 @@ export async function putAbilityOverride(record: AbilityOverride): Promise<void>
   } catch {
     // Storage unavailable: the DSL stays session-only, like every cache row.
   }
+  applyAbilityOverride(record);
 }
 
 /** Boot load of the `abilities` store (plano §3): rulesOf is synchronous, so

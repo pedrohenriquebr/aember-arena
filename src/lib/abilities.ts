@@ -182,11 +182,33 @@ let overrides = new Map<string, AbilityOverride>();
 
 /** Boot/reload hook: swaps the override map and drops the memo (faces already
     answered keep the parser result otherwise). A late override — a wave-2
-    review approval, a re-sync — goes through the same hook, so the next rulesOf
-    call re-reads the card. */
+    review approval, a re-sync — goes through applyAbilityOverride, so the next
+    rulesOf call re-reads the card. */
 export function setAbilityOverrides(next: Map<string, AbilityOverride>): void {
   overrides = next;
   cache = new WeakMap();
+}
+
+/** Wave-2 path: one DSL row comes back from the store (or a review queue) and
+    joins the live map without a full reload; the memo is dropped so even the
+    exact face already consulted picks the new rules up. */
+export function applyAbilityOverride(record: AbilityOverride): void {
+  overrides.set(record.cardId, record);
+  cache = new WeakMap();
+}
+
+/** Boot load merge. The snapshot read from disk must not overwrite an entry
+    already applied during this session (a write landing between getAll() and
+    the boot callback would be lost otherwise); the session entry wins. Only a
+    real change drops the memo. */
+export function mergeAbilityOverrides(loaded: Map<string, AbilityOverride>): void {
+  let changed = false;
+  for (const [cardId, record] of loaded) {
+    if (overrides.has(cardId)) continue;
+    overrides.set(cardId, record);
+    changed = true;
+  }
+  if (changed) cache = new WeakMap();
 }
 
 /** Memo per face; replaced (not mutated) when the overrides map changes. */
