@@ -456,9 +456,21 @@ try {
         }
         check(`${t} H3D-17: clique no centro da tira abre o upgrade`, wrong.length === 0, wrong.join(" "));
         // Zero z-fighting: 3 capturas seguidas da regiao da pilha, byte a byte iguais.
+        // H3D-18 adicionou indicadores com pulso de opacity — capturas em instantes
+        // diferentes de um pulso infinito NUNCA sao byte-identicas por design. Congelar
+        // animacoes/transicoes durante a janela de captura: z-fighting real (instabilidade
+        // de compositing) continua sendo detectado.
         const host = m.player.find((c) => c.role === "cr");
         const lastUp = m.player.filter((c) => c.role === "up").pop();
         const clip = { x: Math.max(0, host.art.l - 4), y: Math.max(0, host.art.t), width: host.art.w + 8, height: Math.max(40, lastUp.art.b - host.art.t + 4) };
+        await page.addStyleTag({ content: "*, *::before, *::after { animation: none !important; transition: none !important; }" });
+        // A arte do upgrade vem do S3 (~2 MB): captura antes de carregar = falso
+        // z-fighting. Espera toda <img> da regiao completa antes da janela.
+        await page.waitForFunction(
+          () => [...document.images].every((img) => img.complete && img.naturalWidth > 0),
+          null,
+          { timeout: 20000 },
+        ).catch(() => {});
         await page.waitForTimeout(300);
         await page.screenshot({ clip });
         const shots = [];
