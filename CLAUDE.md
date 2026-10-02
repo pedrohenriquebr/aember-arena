@@ -249,6 +249,12 @@ ações, cobertura por set, pendências).
    snapshot dos `if` no `fire()`, dry-run rico. Baseline 161,77; mediu **162,67**
    (+0,90; a troca Sets→tabela `ACTS` do plano CUSTOU +78 — gzip comprime repetição
    de graça). Teto 164, revisão ÚNICA do lote — acima: parar.)
+   → **167** (DSL lote 2, `docs/DSL_EXPANSION_PLAN.md` §Lote 2: `per`/`Count`,
+   `act.if` (did/gone), filtros casa/traço/exausta, `keyCost` com guarda
+   anti-recursão, `Selection.pick`/`"fought"`, act `move`, gatilho `scrap`.
+   Baseline 162,67; mediu **166,44** (+3,77, o dobro do estimado; cortar os
+   few-shots só chegaria a 166,03 — corte destrói entregável). Teto 167,
+   revisão ÚNICA do lote — acima: parar.)
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.

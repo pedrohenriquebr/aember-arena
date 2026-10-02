@@ -3,9 +3,10 @@
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
 //   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 164 kB (DSL lote 1: normalise dos glifos do MV + versionamento + grafias;
-//      mediu 162,67 kB (+0,90 sobre 161,77 — gzip favorece Sets, a troca por tabela
-//      ACTS custou +78); revisoes: 155 -> 157 -> 162 -> 164, ver CLAUDE.md §7).
+//      Default 167 kB (DSL lote 2: per/Count, act.if, filtros casa/traco/exausta, keyCost,
+//      pick/fought, act move, gatilho scrap; mediu 166,44 kB (+3,77 — o dobro do
+//      estimado; cortar few-shots so chegaría a 166,03, nao vale); revisoes:
+//      155 -> 157 -> 162 -> 164 -> 167, ver CLAUDE.md §7).
 //      Antes: 155 kB (onda 1 do catalogo dinamico, docs/DYNAMIC_CATALOG_PLAN.md
 //      §1/§2/§3/§5: DB v4 com os stores `cards` (textHash/syncedAt) e `abilities`,
 //      sync incremental paginado com cursor e cancelamento, rulesOf lendo o store
@@ -94,7 +95,7 @@ function hasFlag(name) {
   return process.argv.includes(name);
 }
 
-const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 164);
+const maxGzipKb = Number(argValue("--max-gzip-kb") ?? 167);
 const blockMaxLines = Number(argValue("--block-max-lines") ?? 99);
 const skipFloor = hasFlag("--skip-floor");
 const skipFloor3d = hasFlag("--skip-floor3d");
