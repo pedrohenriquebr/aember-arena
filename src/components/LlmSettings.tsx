@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalLink, LoaderCircle, X } from "lucide-react";
 import { mergeAbilityOverrides, type AbilityOverride } from "../lib/abilities";
 import { deleteAbilityOverride, listCatalogCards, loadAbilityOverrides, putAbilityOverride } from "../lib/cache";
-import { reviewQueue, type RunProgress } from "../lib/catalogLlm";
+import { reviewQueue, validateQueueRows, type RunProgress } from "../lib/catalogLlm";
 import { applyLlmPreset, LLM_PRESETS, llmReady, type LlmConfig, type LlmPreset } from "../lib/settings";
 import type { Translator } from "../lib/i18n";
 
@@ -27,6 +27,8 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
   const keyUrl = config.preset === "custom" ? null : LLM_PRESETS[config.preset].keyUrl;
   const [drafts, setDrafts] = useState<AbilityOverride[]>([]);
   const [titles, setTitles] = useState<Map<string, string>>(new Map());
+  const [importNote, setImportNote] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // A fila vem do store (rascunhos e falhas não revisados); o título, do
   // catálogo. Recarrega ao montar e quando a rodada termina.
@@ -54,6 +56,29 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
   /** Rejeitar: some do store — a próxima rodada pode tentar de novo. */
   async function reject(row: AbilityOverride) {
     await deleteAbilityOverride(row.cardId);
+    refresh();
+  }
+
+  /** Importar a fila do harvest: valida tudo antes de gravar; reviewed:true entra
+      como regra (mesmo gating de sempre, o mapa vivo só vale na próxima partida). */
+  async function importQueue(file: File) {
+    let rows: unknown;
+    try {
+      rows = JSON.parse(await file.text());
+    } catch {
+      rows = null;
+    }
+    if (!Array.isArray(rows)) { setImportNote(t("config.llm.importBad")); return; }
+    try {
+      const [cards, existing] = await Promise.all([listCatalogCards(), loadAbilityOverrides()]);
+      const { valid, rejected } = validateQueueRows(rows, cards, existing);
+      for (const row of valid) await putAbilityOverride(row);
+      mergeAbilityOverrides(new Map(valid.filter((row) => row.reviewed).map((row) => [row.cardId, row])));
+      const reasons = [...new Set(rejected.map((item) => t(`config.llm.importReason.${item.reason}`)))].join(", ");
+      setImportNote(t("config.llm.importDone", { ok: valid.length, skipped: rejected.length }) + (reasons ? t("config.llm.importReasons", { reasons }) : ""));
+    } catch {
+      setImportNote(t("config.llm.importError"));
+    }
     refresh();
   }
 
@@ -97,6 +122,13 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
       </div>
       <div className="llm-review">
         <span className="review-label">{t("config.llm.review", { count: drafts.length })}</span>
+        <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void importQueue(file);
+        }} />
+        <button type="button" className="ghost-button" onClick={() => fileInput.current?.click()}>{t("config.llm.import")}</button>
+        {importNote && <p className="deck-input-hint" role="status">{importNote}</p>}
         {drafts.length === 0 ? (
           <p className="deck-input-hint">{t("config.llm.reviewEmpty")}</p>
         ) : (

@@ -5,6 +5,7 @@
 //   npm run harvest -- --cards cards.json            # só mede: cobertura da gramática
 //   npm run harvest -- --cards cards.json --llm      # + rascunhos via LLM (chave no env)
 //   npm run harvest -- --vendor                      # grava só o que o dono APROVOU
+//   npm run harvest -- --export-queue                # drafts.json -> queue-export.json (importar no app)
 //
 // --cards: JSON com um array de CardFace (o catálogo sincronizado exportado do
 //   navegador); sem ele, usa as cartas dos dois decks demo.
@@ -26,6 +27,7 @@ import { DEMO_DECK_2 } from "../src/lib/demoDeck2";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DRAFTS = resolve(ROOT, "scripts/harvest/drafts.json");
+const QUEUE_EXPORT = resolve(ROOT, "scripts/harvest/queue-export.json");
 const APPROVED = resolve(ROOT, "src/lib/generated/approved.json");
 
 const args = process.argv.slice(2);
@@ -113,7 +115,16 @@ function vendor() {
   console.log(`vendorizadas ${kept.length} linhas aprovadas em src/lib/generated/approved.json`);
 }
 
-if (flag("--vendor")) {
+/** Exporta a fila atual para o app importar (Config > Revisão). Idempotente. */
+function exportQueue() {
+  const rows = readDrafts();
+  writeJson(QUEUE_EXPORT, rows);
+  console.log(`exportadas ${rows.length} linhas em ${QUEUE_EXPORT} — importe pela Config do app.`);
+}
+
+if (flag("--export-queue")) {
+  exportQueue();
+} else if (flag("--vendor")) {
   vendor();
 } else {
   const cards = loadCards();

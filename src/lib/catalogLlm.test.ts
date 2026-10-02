@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normaliseAbilityOverride, DSL_VERSION, rulesOf, setAbilityOverrides, type AbilityOverride } from "./abilities";
-import { buildMessages, callProvider, dryRunProblem, extractJson, FEW_SHOTS, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, validateDraft } from "./catalogLlm";
+import { buildMessages, callProvider, dryRunProblem, extractJson, FEW_SHOTS, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, validateDraft, validateQueueRows } from "./catalogLlm";
 import { parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
 import { DSL_SCHEMA } from "./generated/dslSchema";
@@ -326,6 +326,54 @@ describe("review queue", () => {
       row({ cardId: "failed", failure: "unsupported: no", generatedAt: 3 }),
     ];
     expect(reviewQueue(rows).map((item) => item.cardId)).toEqual(["failed", "draft"]);
+  });
+});
+
+describe("harvest queue import", () => {
+  const card = face("Play: Gain 1<A>.", { id: "q-1" });
+  const row = (patch: Record<string, unknown> = {}) => ({
+    cardId: "q-1",
+    dsl: [{ on: ["reap"], acts: [{ k: "gainAmber", n: 1 }] }],
+    textHash: textHash(card.text),
+    source: "llm",
+    reviewed: false,
+    generatedAt: 1,
+    v: DSL_VERSION,
+    ...patch,
+  });
+
+  it("imports a valid row (reviewed:true stays a rule candidate)", () => {
+    const other = face("Play: Gain 1<A>.", { id: "q-2" });
+    const out = validateQueueRows([row(), row({ cardId: "q-2", reviewed: true })], [card, other]);
+    expect(out.rejected).toEqual([]);
+    expect(out.valid.map((item) => item.reviewed)).toEqual([false, true]);
+  });
+
+  it("keeps only the last row per cardId and counts it once", () => {
+    const out = validateQueueRows([row({ reviewed: false }), row({ reviewed: true })], [card]);
+    expect(out.rejected).toEqual([]);
+    expect(out.valid.map((item) => item.reviewed)).toEqual([true]);
+  });
+
+  it("does not throw on a deeply nested hostile row (guard lives in validateQueueRows)", () => {
+    let nested: unknown = { c: "x" };
+    for (let i = 0; i < 20000; i++) nested = { not: nested };
+    const hostile = row({ dsl: [{ on: ["reap"], if: nested, acts: [{ k: "gainAmber", n: 1 }] }] });
+    const out = validateQueueRows([hostile], [card]);
+    expect(out.valid).toEqual([]);
+    expect(out.rejected.map((item) => item.reason)).toEqual(["shape"]);
+  });
+
+  it("rejects a row from a newer DSL, a divergent hash and a bad shape", () => {
+    const out = validateQueueRows([row({ v: DSL_VERSION + 1 }), row({ textHash: "other" }), row({ dsl: "nope" }), row({ source: "manual" }), row({ cardId: "gone" })].map((item, index) => (item.cardId === "gone" ? item : { ...item, cardId: `q-${index + 1}` })), [card, ...[2, 3, 4, 5].map((n) => ({ ...card, id: `q-${n}` }))]);
+    expect(out.valid).toEqual([]);
+    expect(out.rejected.map((item) => item.reason)).toEqual(["version", "hash", "shape", "source", "unknownCard"]);
+  });
+
+  it("does not trample a decision already taken", () => {
+    const stored = normaliseAbilityOverride(row({ reviewed: true }))!;
+    expect(validateQueueRows([row()], [card], new Map([["q-1", stored]])).rejected[0].reason).toBe("protected");
+    expect(validateQueueRows("not an array", [card]).valid).toEqual([]);
   });
 });
 

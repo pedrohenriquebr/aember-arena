@@ -600,6 +600,51 @@ export function reviewQueue(rows: AbilityOverride[]): AbilityOverride[] {
   return rows.filter((row) => row.source === "llm" && !row.reviewed).sort((a, b) => b.generatedAt - a.generatedAt);
 }
 
+export type QueueRejection = "shape" | "version" | "source" | "unknownCard" | "hash" | "protected";
+
+/** Porta de entrada da fila do harvest (CAT-3.5): cada linha do JSON exportado só
+    é gravada se (a) passa na porta de forma, (b) não vem de uma DSL mais nova que
+    a do motor, (c) é `llm`, (d) a carta existe no catálogo e (e) o textHash ainda
+    bate com o texto dela. `existing` protege o que o dono já decidiu: uma linha
+    manual/parser, ou uma aprovada, não é pisada por um rascunho. Linhas com o mesmo
+    cardId: só a ÚLTIMA vale (é a que persistiria) e só ela é contada. JSON hostil
+    (aninhamento que estoura a pilha do normalise) vira "shape", não exceção.
+    Pura: a persistência real depende do storage; falhas de gravação são engolidas
+    por design do cache. */
+export function validateQueueRows(
+  rows: unknown,
+  cards: CardFace[],
+  existing: ReadonlyMap<string, AbilityOverride> = new Map(),
+): { valid: AbilityOverride[]; rejected: { cardId: string; reason: QueueRejection }[] } {
+  const valid: AbilityOverride[] = [];
+  const rejected: { cardId: string; reason: QueueRejection }[] = [];
+  const byId = new Map(cards.map((face) => [face.id, face]));
+  const list: any[] = Array.isArray(rows) ? rows : [];
+  const lastOf = new Map<string, number>();
+  list.forEach((raw, index) => { if (typeof raw?.cardId === "string") lastOf.set(raw.cardId, index); });
+  for (const [index, raw] of list.entries()) {
+    const id = typeof raw?.cardId === "string" ? raw.cardId : "?";
+    if (id !== "?" && lastOf.get(id) !== index) continue;
+    const reject = (reason: QueueRejection) => rejected.push({ cardId: id, reason });
+    if (typeof raw?.v === "number" && raw.v > DSL_VERSION) { reject("version"); continue; }
+    let row: AbilityOverride | null;
+    try {
+      row = normaliseAbilityOverride(raw);
+    } catch {
+      row = null;
+    }
+    if (!row) { reject("shape"); continue; }
+    if (row.source !== "llm") { reject("source"); continue; }
+    const face = byId.get(row.cardId);
+    if (!face) { reject("unknownCard"); continue; }
+    if (row.textHash !== textHash(face.text ?? "")) { reject("hash"); continue; }
+    const current = existing.get(row.cardId);
+    if (current && (current.source !== "llm" || (current.reviewed && !row.reviewed))) { reject("protected"); continue; }
+    valid.push(row);
+  }
+  return { valid, rejected };
+}
+
 export interface RunProgress {
   done: number;
   total: number;
