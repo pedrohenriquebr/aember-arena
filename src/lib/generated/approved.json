@@ -1,1 +1,400 @@
-[]
+[
+ {
+  "cardId": "a425fa37-4a99-4e3e-9fc2-c61a4166d800",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 2,
+      "s": {
+       "each": {
+        "type": "Creature",
+        "house": "Sanctum",
+        "flank": true
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "91a68a60",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790906168633,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "fda708d7-5229-49e5-b2ce-e68c0fbecae7",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "of": {
+     "type": "Creature",
+     "side": "friendly",
+     "trait": "Geistoid"
+    },
+    "acts": [
+     {
+      "k": "move",
+      "n": 2,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top"
+     },
+     {
+      "k": "move",
+      "n": 2,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top",
+      "opp": true
+     }
+    ]
+   },
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "fromDiscard",
+      "type": "Creature"
+     }
+    ]
+   }
+  ],
+  "textHash": "d81589ac",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790907520322,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "0c6f1fd7-2323-4227-bcde-6de5d2f20943",
+  "dsl": [
+   {
+    "on": [
+     "endOfTurn"
+    ],
+    "acts": [
+     {
+      "k": "heal",
+      "n": 1,
+      "s": "self"
+     },
+     {
+      "k": "gainAmber",
+      "n": 1,
+      "if": {
+       "k": "count",
+       "of": "did",
+       "op": "gte",
+       "n": 1
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "14a8f5ac",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790907755186,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "da4ae547-9a42-44ec-a869-ac744bd84cf7",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "exhausted": true
+    }
+   }
+  ],
+  "textHash": "c2b14997",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790907767795,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "92cd70f9-e2f4-45bb-b447-25e4761120a7",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "p": "discard"
+     },
+     "op": "gte",
+     "n": 10
+    },
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "discard",
+      "to": "purged"
+     }
+    ]
+   }
+  ],
+  "textHash": "58a43883",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790908104738,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "9c376e19-69ed-45f6-ad60-25a7792faad7",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "returnToHand",
+      "s": "target"
+     },
+     {
+      "k": "move",
+      "n": 1,
+      "from": "hand",
+      "to": "archives"
+     }
+    ],
+    "target": {
+     "type": "Creature"
+    }
+   },
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "fewerCreatures"
+    },
+    "acts": [
+     {
+      "k": "returnToHand",
+      "s": "target"
+     },
+     {
+      "k": "move",
+      "n": 1,
+      "from": "hand",
+      "to": "archives"
+     }
+    ],
+    "target": {
+     "type": "Creature"
+    }
+   }
+  ],
+  "textHash": "576474c2",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790908257125,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "5ea7215d-f298-4f0b-a8b6-4d9fb3cd9047",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "destroy",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": {
+       "pick": {
+        "type": "Creature",
+        "side": "enemy"
+       }
+      }
+     }
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    }
+   }
+  ],
+  "textHash": "e786cec3",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790908283595,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "f176005a-0a1e-43fc-9b30-ba53eeacb6b1",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "destroy",
+      "s": {
+       "pick": {
+        "type": "Artifact"
+       }
+      }
+     },
+     {
+      "k": "destroy",
+      "s": {
+       "pick": {
+        "type": "Creature"
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "4cd27745",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790908771010,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "8af69ac7-998e-4eec-8ef4-d849b6ef674f",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "if": {
+     "k": "fewerCreatures"
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "s": "target"
+     }
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "enemy"
+    }
+   },
+   {
+    "on": [
+     "fight"
+    ],
+    "if": {
+     "k": "not",
+     "c": {
+      "k": "fewerCreatures"
+     }
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "588b8d5d",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790908801842,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "12ddbc04-b3e7-4ab7-bc3f-f09fa440e123",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 5,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top"
+     },
+     {
+      "k": "move",
+      "n": 5,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top",
+      "opp": true
+     }
+    ]
+   }
+  ],
+  "textHash": "69c62384",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1790908954318,
+  "v": 4,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ }
+]
