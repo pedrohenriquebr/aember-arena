@@ -92,6 +92,9 @@ export interface CardInstance {
       preference, not a move — it never counts in `acted`/Alpha and is reset
       when the card leaves play. */
   hold?: boolean;
+  /** House an effect gave this card ("belongs to house X", Lote 5 §5.3): wins
+      over the printed one while the card is in play, zeroed on leaving. */
+  houseAs?: string;
 }
 
 export interface GamePlayer {
@@ -112,6 +115,14 @@ export interface GamePlayer {
   keyCostMod: number;
   /** FEAT-10: this side already used its one mulligan. */
   mulliganed?: boolean;
+  /** turnStamp of the turn this side last forged a key ("forged on your previous
+      turn", Lote 5 §5.4). Absent on saves from before the lote. */
+  forgedAt?: number;
+  /** The forge stamp before `forgedAt` (a second forge in a later turn). */
+  forgedBeforeAt?: number;
+  /** An effect obliges this side's next active house choice ("must choose that
+      house", Lote 5 §5.1); chooseHouse respects it and clears it. */
+  mustChoose?: string;
   /** FEAT-06: per-side match tallies for the post-match panel. Plain numbers, so
       the state stays JSON-safe (matches saved before the feature read as 0). */
   amberGained: number;
@@ -161,14 +172,16 @@ export interface GameState {
 /** `target` optionally names the card chosen for the triggered ability (or the
     creature an upgrade attaches to); without it the engine picks like keyteki's
     auto-target would for the controller. `slot` places a Deploy creature.
-    `decline` resolves the move but skips its "You may" clauses (wave 2). */
+    `decline` resolves the move but skips its "You may" clauses (wave 2). `house`
+    is the answer to a "Choose a house" the card's text asks (Lote 5 §5.1): only
+    cards whose DSL cites `"chosen"` get one variant per house in play. */
 export type GameMove =
-  | { type: "play"; instanceId: string; target?: string; slot?: number; flank?: "left" | "right"; decline?: boolean }
-  | { type: "reap"; instanceId: string; target?: string; decline?: boolean }
-  | { type: "fight"; attackerId: string; targetId: string; target?: string; decline?: boolean }
-  | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action"; decline?: boolean }
+  | { type: "play"; instanceId: string; target?: string; slot?: number; flank?: "left" | "right"; decline?: boolean; house?: string }
+  | { type: "reap"; instanceId: string; target?: string; decline?: boolean; house?: string }
+  | { type: "fight"; attackerId: string; targetId: string; target?: string; decline?: boolean; house?: string }
+  | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action"; decline?: boolean; house?: string }
   | { type: "unstun"; instanceId: string }
-  | { type: "discard"; instanceId: string; target?: string; decline?: boolean }
+  | { type: "discard"; instanceId: string; target?: string; decline?: boolean; house?: string }
   /** Picking the archives up is optional ("may"), so it is a move of its own. */
   | { type: "takeArchives" };
 
@@ -483,6 +496,42 @@ function replacementFor(state: GameState, card: CardInstance, on: Replacement["o
   return allEffects(state).find((owner) => owner.effect.replace?.on === on && effectHits(state, owner, card));
 }
 
+/** "Cannot be dealt damage" (Lote 5 §5.6): a live `prevent` replacement cancels
+    the damage instance before redirect, ward and armor. */
+const damagePrevented = (state: GameState, card: CardInstance): boolean =>
+  allEffects(state).some((owner) => owner.effect.replace?.on === "damage" && owner.effect.replace.prevent === true && effectHits(state, owner, card));
+
+/** "Your amber cannot be stolen": does `victim` project a live noSteal? */
+const stealBlocked = (state: GameState, victim: Side): boolean =>
+  activeEffects(state, victim).some((owner) => owner.effect.noSteal === true && (!owner.effect.if || holds(owner.effect.if, state, victim, owner.source)));
+
+/** The house a card counts as right now (Lote 5 §5.3): an effect-given
+    `houseAs`, then a live `house` effect, then the printed one. "all" belongs to
+    every house. The gate forbids house effects that filter by house, and the
+    depth guard keeps a hand-written one from recursing forever. */
+let houseDepth = 0;
+export function houseOf(state: GameState, card: CardInstance): string {
+  if (card.houseAs) return card.houseAs;
+  if (houseDepth > 0) return card.face.house;
+  houseDepth += 1;
+  try {
+    for (const side of [0, 1] as const) {
+      for (const source of state.players[side].board) {
+        for (const effect of rulesOf(source.face).effects) {
+          if (effect.house && effectHits(state, { side, source, effect }, card)) return effect.house;
+        }
+      }
+    }
+    const stamp = turnStamp(state);
+    for (const effect of state.lasting ?? []) {
+      if (effect.house && effect.side !== undefined && (effect.until ?? 0) > stamp && effectHits(state, { side: effect.side, effect }, card)) return effect.house;
+    }
+  } finally {
+    houseDepth -= 1;
+  }
+  return card.face.house;
+}
+
 /** Live damage redirect for `card` (Shadow Self): the effect's source takes the
     damage instead. A source that already left play does not redirect. */
 function redirectFor(state: GameState, card: CardInstance): CardInstance | undefined {
@@ -586,13 +635,26 @@ export function keyCost(state: GameState, side: Side): number {
     player.forgeKey): pays the (modified) cost from the pool and forges one key.
     Returns false when the side cannot forge (three keys already forged, or not
     enough amber). */
-function forge(state: GameState, side: Side, options: { free?: boolean; mod?: number } = {}): boolean {
+interface ForgeOptions {
+  free?: boolean;
+  /** "+N cost". */
+  mod?: number;
+  /** "reduced by …": the amount already counted (Lote 5 §5.4). */
+  less?: number;
+  /** Floor of the reduced cost. */
+  min?: number;
+}
+
+function forge(state: GameState, side: Side, options: ForgeOptions = {}): boolean {
   const player = state.players[side];
   if (player.keys >= 3) return false;
-  const cost = options.free ? 0 : Math.max(0, keyCost(state, side) + (options.mod ?? 0));
+  const cost = options.free ? 0 : Math.max(0, options.min ?? 0, keyCost(state, side) + (options.mod ?? 0) - (options.less ?? 0));
   if (player.amber < cost) return false;
   player.amber -= cost;
   player.keys += 1;
+  // Keep the earlier forge stamp: forging again this turn must not erase "forged last turn".
+  if (player.forgedAt !== undefined && player.forgedAt !== turnStamp(state)) player.forgedBeforeAt = player.forgedAt;
+  player.forgedAt = turnStamp(state);
   record(state, "log.forge", { name: player.name });
   if (player.keys >= 3) {
     state.winner = side;
@@ -603,7 +665,7 @@ function forge(state: GameState, side: Side, options: { free?: boolean; mod?: nu
 
 /** Pure wrapper for abilities: "forge a key at current/no cost" outside the key
     step (Onda 4, docs/ROADMAP_REVIEW.md §3). */
-export function forgeKey(current: GameState, side: Side, n = 1, options: { free?: boolean; mod?: number } = {}): GameState {
+export function forgeKey(current: GameState, side: Side, n = 1, options: ForgeOptions = {}): GameState {
   const state = cloneGame(current);
   for (let count = 0; count < n; count += 1) if (!forge(state, side, options)) break;
   return state;
@@ -623,12 +685,23 @@ export function conditionHolds(
 ): boolean {
   if (condition.k === "not") return !holds(condition.c, state, me, source, previous);
   if (condition.k === "myTurn") return state.activePlayer === me;
+  if (condition.k === "forged") {
+    // Stamps: during side X's turn its previous turn is stamp-2, otherwise the
+    // other side's turn right before is stamp-1 (turnStamp = round*2 + side).
+    const side = condition.opp ? other(me) : me;
+    const target = turnStamp(state) - (side === state.activePlayer ? 2 : 1);
+    const { forgedAt, forgedBeforeAt } = state.players[side];
+    return forgedAt === target || forgedBeforeAt === target;
+  }
   if (condition.k === "amber") {
     const amber = state.players[condition.opp ? other(me) : me].amber;
     return condition.op === "eq" ? amber === condition.n : amber >= condition.n;
   }
   if (condition.k === "count") {
     const value = countOf({ state, me, source, deterministic: true, did: previous?.did, gone: previous?.gone }, condition.of);
+    // even/odd read the count alone (Lote 5 §5.5): `n` is ignored.
+    if (condition.op === "even") return value % 2 === 0;
+    if (condition.op === "odd") return value % 2 === 1;
     return condition.op === "eq" ? value === condition.n : condition.op === "gte" ? value >= condition.n : value <= condition.n;
   }
   const mine = battleline(state.players[me]).length;
@@ -639,9 +712,36 @@ export function conditionHolds(
 /** A house filter reads `state.activeHouse` when it says "active"; both sides
     compare case-insensitively (the printed text is lowercased by normalise). */
 function houseMatches(state: GameState, card: CardInstance, wanted: string): boolean {
-  const house = card.face.house?.toLowerCase() ?? "";
+  const house = houseOf(state, card).toLowerCase();
+  // A card of "all" houses is of every house (Experimental Therapy).
+  if (house === "all") return true;
+  if (wanted === "chosen") return chosenHouse !== undefined && house === chosenHouse.toLowerCase();
   return wanted === "active" ? house === (state.activeHouse ?? "").toLowerCase() : house === wanted.toLowerCase();
 }
+
+/** The house the move in resolution chose ("Choose a house", Lote 5 §5.1). A
+    transient module value like the ability budgets — moves resolve
+    synchronously — set only while the chooser card's own abilities resolve (and
+    by the legality queries for a given variant). Absent, a `chosen` filter
+    matches nothing, negated or not. */
+let chosenHouse: string | undefined;
+
+function withChosen<T>(house: string | undefined, run: () => T): T {
+  const saved = chosenHouse;
+  chosenHouse = house;
+  try {
+    return run();
+  } finally {
+    chosenHouse = saved;
+  }
+}
+
+/** The chooser card of the move being applied and its house: fire() hands the
+    house only to that card's own abilities, never to a nested dispatch. */
+let pendingChoice: { card: CardInstance; house: string } | null = null;
+
+/** A `house` filter value that cannot hold: "chosen" with no choice made. */
+const unchosen = (value: string) => positive(value) === "chosen" && chosenHouse === undefined;
 
 /** One trait token of face.traits ("Knight • Beast" prints two). */
 function traitMatches(card: CardInstance, wanted: string): boolean {
@@ -664,7 +764,7 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     (!filter.self || card === source) &&
     (!filter.host || card.instanceId === source?.attachedTo) &&
     (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card))) &&
-    (filter.house === undefined || houseMatches(state, card, positive(filter.house)) !== negated(filter.house)) &&
+    (filter.house === undefined || (!unchosen(filter.house) && houseMatches(state, card, positive(filter.house)) !== negated(filter.house))) &&
     (filter.trait === undefined || traitMatches(card, positive(filter.trait)) !== negated(filter.trait)) &&
     (filter.exhausted === undefined || !card.ready === filter.exhausted) &&
     (filter.amber === undefined || ((card.amber ?? 0) > 0) === filter.amber) &&
@@ -779,6 +879,10 @@ function countOf(scope: Ctx, spec: Count): number {
   if (spec === "did") return scope.did ?? 0;
   if (spec === "gone") return scope.gone ?? 0;
   if ("c" in spec) return everyMatch(scope.state, scope.me, scope.source, spec.c).length;
+  if ("sub" in spec) {
+    const [from, less] = spec.sub;
+    return Math.max(0, countOf(scope, from) - (typeof less === "number" ? less : countOf(scope, less)));
+  }
   if ("p" in spec) {
     const player = scope.state.players[spec.opp ? other(scope.me) : scope.me];
     if (spec.p === "keys" || spec.p === "amber") return player[spec.p];
@@ -842,6 +946,7 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
     controlledBy: undefined,
     counters: undefined,
     hold: undefined,
+    houseAs: undefined,
   });
   // A token creature has no card behind it (isToken): it is removed from the
   // game instead of entering hand/discard/deck, so it can never be drawn or
@@ -865,6 +970,10 @@ function leaveByEffect(state: GameState, card: CardInstance, destination: "hand"
 // Cards whose "Destroyed:" abilities are resolving: still in play, but already
 // on their way out, so sweep() must not destroy them a second time.
 const dying = new WeakSet<CardInstance>();
+
+// Actions whose own text purged them ("If you do, purge ~"): applyMove sends
+// them to the purged zone instead of the discard pile (Lote 5 §5.4).
+const purgeSelf = new WeakSet<CardInstance>();
 
 function destroy(state: GameState, card: CardInstance, deterministic: boolean, by?: Side): boolean {
   const side = controllerOf(state, card);
@@ -933,6 +1042,9 @@ function makeToken(state: GameState, side: Side, house: string): void {
     (Onda 4); `allowRedirect` stops a redirected packet from bouncing again. */
 function dealDamage(state: GameState, card: CardInstance, amount: number, poison = false, allowRedirect = true): void {
   if (!isCreature(card) || amount <= 0) return;
+  // "Cannot be dealt damage": no damage instance exists, so there is nothing to
+  // redirect, absorb or ward (Lote 5 §5.6).
+  if (damagePrevented(state, card)) return;
   // A redirect is an interrupt on the damage-applied event (keyteki Shadow
   // Self), so it runs before armor and before the target's own ward: a warded
   // neighbor still sends the damage to the redirecting creature.
@@ -1094,7 +1206,8 @@ function run(context: Context, act: Act): void {
       player.amber = Math.max(0, player.amber - amount);
       break;
     case "steal": {
-      const stolen = Math.min(amount, state.players[other(me)].amber);
+      // "Your amber cannot be stolen" zeroes the steal against that side.
+      const stolen = stealBlocked(state, other(me)) ? 0 : Math.min(amount, state.players[other(me)].amber);
       state.players[other(me)].amber -= stolen;
       state.players[me].amber += stolen;
       tally(state.players[me], "amberStolen", stolen);
@@ -1137,6 +1250,10 @@ function run(context: Context, act: Act): void {
       // A leave-play destination of its own (keyteki PurgeAction): the card is
       // out of the game and cannot come back through a reshuffle.
       for (const card of cards) leaveByEffect(state, card, "purged");
+      // "Purge ~" on an Action still being played: it is not in play yet, so
+      // mark the source and applyMove sends it to purged instead of the
+      // discard pile (Lote 5 §5.4).
+      if (act.s === "self" && controllerOf(state, source) === undefined) purgeSelf.add(source);
       break;
     case "sacrifice":
       for (const card of cards) sacrifice(state, card, deterministic, me);
@@ -1221,7 +1338,22 @@ function run(context: Context, act: Act): void {
     case "forgeKey":
       // keyteki ForgeAction: the cost comes out of the pool unless the text
       // says "at no cost"; `mod` is the printed "+N cost".
-      for (let count = 0; count < amount; count += 1) if (!forge(state, me, act)) break;
+      // `less` is read again for every key: the pool it counts changes.
+      for (let count = 0; count < amount; count += 1) {
+        const less = act.less ? countOf(context, act.less) : undefined;
+        if (!forge(state, me, { free: act.free, mod: act.mod, less, min: act.min })) break;
+      }
+      break;
+    case "setHouse":
+      // The card counts as that house until it leaves play (leavePlay zeroes it).
+      for (const card of cards) {
+        const house = act.house === "chosen" ? chosenHouse : act.house;
+        if (house) card.houseAs = house;
+      }
+      break;
+    case "forceHouse":
+      // The opponent's next active house is the chosen one (chooseHouse reads it).
+      if (chosenHouse) state.players[other(me)].mustChoose = chosenHouse;
       break;
     case "unforgeKey":
       // keyteki UnforgeAction: every printed "unforge" takes an opponent's key.
@@ -1343,7 +1475,13 @@ function run(context: Context, act: Act): void {
       // A triggered effect with a duration: stored as plain data (like keyteki's
       // lasting effects) and pruned when the stamp it expires on is reached.
       const until = turnStamp(state) + (act.e.duration === "next" ? 2 : 1);
-      state.lasting = [...(state.lasting ?? []), { ...act.e, side: me, until }];
+      // A "chosen" house is only known now: freeze it into the stored copy.
+      const stored = structuredClone(act.e);
+      if (stored.target.house !== undefined && positive(stored.target.house) === "chosen") {
+        if (!chosenHouse) break;
+        stored.target.house = (negated(stored.target.house) ? "!" : "") + chosenHouse;
+      }
+      state.lasting = [...(state.lasting ?? []), { ...stored, side: me, until }];
       break;
     }
   }
@@ -1371,6 +1509,19 @@ function fire(
   // observer at all: the per-move fire budget stops it (GAP 3 review).
   if (fireBudget <= 0) return;
   fireBudget -= 1;
+  // Only the chooser card's own abilities see the house its move chose; a
+  // nested dispatch (a Destroyed: of another card) has no choice of its own.
+  withChosen(pendingChoice?.card === source ? pendingChoice.house : undefined, () => fireOwn(state, me, source, trigger, options));
+  fireObservers(state, source, trigger, options.deterministic);
+}
+
+function fireOwn(
+  state: GameState,
+  me: Side,
+  source: CardInstance,
+  trigger: Trigger,
+  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean },
+): void {
   const firing: Ability[] = [];
   for (const ability of abilitiesOf(state, source)) {
     if (ability.of || !ability.on.includes(trigger) || (options.decline && ability.optional)) continue;
@@ -1397,7 +1548,6 @@ function fire(
     }
     for (const act of ability.acts) run(context, act);
   }
-  fireObservers(state, source, trigger, options.deterministic);
 }
 
 /** Ability budgets for one move (Lote 3 §3.2 review). OBSERVER_DEPTH bounds how
@@ -1433,6 +1583,9 @@ function resetAbilityBudgets(): void {
 function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, deterministic: boolean): void {
   if (observerDepth >= OBSERVER_DEPTH || observerBudget <= 0) return;
   observerDepth += 1;
+  // A watcher resolves with no house of its own choosing.
+  const savedChoice = chosenHouse;
+  chosenHouse = undefined;
   try {
     for (const side of [0, 1] as const) {
       for (const watcher of state.players[side].board) {
@@ -1461,6 +1614,7 @@ function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, 
     }
   } finally {
     observerDepth -= 1;
+    chosenHouse = savedChoice;
   }
 }
 
@@ -1516,8 +1670,11 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
 
 /** May `card` be played/used with `house` active? Versatile (printed or granted)
     lifts the house restriction (docs/DSL_EXPANSION_PLAN.md §3.5). */
-const houseAllows = (state: GameState, card: CardInstance, house: string | null) =>
-  !house || card.face.house === house || keyword(state, card, "versatile") > 0;
+const houseAllows = (state: GameState, card: CardInstance, house: string | null) => {
+  if (!house) return true;
+  const own = houseOf(state, card);
+  return own === house || own === "all" || keyword(state, card, "versatile") > 0;
+};
 const hasPrinted = (card: CardInstance, prefix: "Action" | "Omni") => new RegExp(`(^|[\\s/.])${prefix}:`, "i").test(card.face.text);
 
 /** Does the card have an Action (or Omni) ability right now — printed or granted?
@@ -1564,6 +1721,74 @@ export function fightTargets(state: GameState, side: Side, attacker: CardInstanc
 function canUseCard(state: GameState, side: Side, card: CardInstance, house: string | null): boolean {
   if (restricted(state, side, "use", card)) return false;
   return card.ready && !card.stunned && ((houseAllows(state, card, house) && hasAbility(state, card, "action")) || hasAbility(state, card, "omni"));
+}
+
+// ---------- "Choose a house" (Lote 5 §5.1) ----------
+
+/** Does an ability read the house its move chose? `forceHouse` reads it too. */
+const citesCache = new WeakMap<Ability, boolean>();
+function citesChosen(ability: Ability): boolean {
+  let cites = citesCache.get(ability);
+  if (cites === undefined) {
+    const text = JSON.stringify(ability);
+    cites = text.includes('"chosen"') || text.includes('"!chosen"') || text.includes('"forceHouse"');
+    citesCache.set(ability, cites);
+  }
+  return cites;
+}
+
+/** The abilities of the move's source that the move resolves and that read the
+    chosen house (a declined move waives its optional ones). */
+function choosingAbilities(state: GameState, side: Side, move: GameMove): Ability[] {
+  if (move.type === "unstun" || move.type === "takeArchives") return [];
+  const source = moveSource(state, side, move);
+  if (!source) return [];
+  const triggers = triggersFor(move);
+  const declined = declines(move);
+  return abilitiesOf(state, source).filter(
+    (ability) => !ability.of && ability.on.some((trigger) => triggers.includes(trigger)) && !(declined && ability.optional) && citesChosen(ability),
+  );
+}
+
+/** Houses present on either board, in first-seen order ("all" is not a house). */
+export function housesInPlay(state: GameState): string[] {
+  const houses: string[] = [];
+  for (const card of state.players.flatMap((player) => player.board)) {
+    const house = houseOf(state, card);
+    if (house && house !== "all" && !houses.includes(house)) houses.push(house);
+  }
+  return houses;
+}
+
+/** The houses the player must pick from before this move can resolve: empty when
+    the card's text asks for no house, or the move already carries one. The UI
+    shows them with the house picker. */
+export function houseChoices(state: GameState, side: Side, move: GameMove): string[] {
+  if ("house" in move && move.house !== undefined) return [];
+  const choosing = choosingAbilities(state, side, move);
+  return choosing.length ? housesOffered(state, side, choosing) : [];
+}
+
+/** The houses a chooser may name: those in play, or — for a text that forces the
+    opponent's next house ("on your opponent's identity card") — the houses of the
+    opponent's deck, the only ones the obligation can bite. */
+function housesOffered(state: GameState, side: Side, abilities: Ability[]): string[] {
+  return abilities.some((ability) => JSON.stringify(ability).includes('"forceHouse"')) ? [...state.players[other(side)].houses] : housesInPlay(state);
+}
+
+/** Engine/AI fallback when a chooser move arrives with no (valid) house: the
+    most numerous house among the opponent's cards for a harmful text, among the
+    side's own otherwise. */
+function defaultHouse(state: GameState, side: Side, abilities: Ability[]): string | undefined {
+  const offered = housesOffered(state, side, abilities);
+  if (offered !== housesInPlay(state) && abilities.some((ability) => JSON.stringify(ability).includes('"forceHouse"'))) return offered[0];
+  const harmful = abilities.some(isHarmful);
+  const pool = state.players[harmful ? other(side) : side].board;
+  const counts = new Map<string, number>();
+  for (const card of pool) counts.set(houseOf(state, card), (counts.get(houseOf(state, card)) ?? 0) + 1);
+  counts.delete("all");
+  const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return best ?? housesInPlay(state)[0];
 }
 
 function triggersFor(move: GameMove): Trigger[] {
@@ -1617,7 +1842,9 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
       // A declined "You may" is waived: no target prompt for it.
       !(declines(move) && item.optional),
   );
-  return ability?.target ? everyMatch(view, side, card, ability.target).map((item) => item.instanceId) : [];
+  // A target filtered by the chosen house reads the move's own choice.
+  const house = "house" in move ? move.house : undefined;
+  return ability?.target ? withChosen(house, () => everyMatch(view, side, card, ability.target!).map((item) => item.instanceId)) : [];
 }
 
 /** Every legal move before target expansion: the single legality specification
@@ -1697,9 +1924,14 @@ function hasOptionalTrigger(state: GameState, side: Side, source: CardInstance, 
     Fight moves expand too: the ability target of Fight:/Before Fight: is the
     controller's choice (BUG-06), separate from the defender. */
 export function getLegalMoves(state: GameState, playerIndex: Side, house: string | null = null): GameMove[] {
-  return baseMoves(state, playerIndex, house).flatMap((move) => {
-    const choices = targetChoices(state, playerIndex, move);
-    return choices.length > 1 ? choices.map((target) => ({ ...move, target }) as GameMove) : [move];
+  return baseMoves(state, playerIndex, house).flatMap((base) => {
+    // One variant per house in play, only for texts that read "chosen" (§5.1).
+    const houses = houseChoices(state, playerIndex, base);
+    const variants = houses.length ? houses.map((choice) => ({ ...base, house: choice }) as GameMove) : [base];
+    return variants.flatMap((move) => {
+      const choices = targetChoices(state, playerIndex, move);
+      return choices.length > 1 ? choices.map((target) => ({ ...move, target }) as GameMove) : [move];
+    });
   });
 }
 
@@ -1723,16 +1955,20 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   if (move.type === "play" && (source.face.type !== "Action" || printedAmber(source.face) > 0 || icons?.capture || icons?.damage || icons?.draw)) return true;
   const triggers = triggersFor(move);
   const declined = declines(move);
-  return abilitiesOf(state, source).some(
-    (ability) =>
-      // An observer is not the source's own reap/fight/action/omni value.
-      !ability.of &&
-      ability.on.some((trigger) => triggers.includes(trigger)) &&
-      (!declined || !ability.optional) &&
-      canResolve(state, side, source, ability),
+  const house = "house" in move ? move.house : undefined;
+  return withChosen(house, () =>
+    abilitiesOf(state, source).some(
+      (ability) =>
+        // An observer is not the source's own reap/fight/action/omni value.
+        !ability.of &&
+        ability.on.some((trigger) => triggers.includes(trigger)) &&
+        (!declined || !ability.optional) &&
+        canResolve(state, side, source, ability),
+    ),
   );
 }
 
+/** Identity of a move for legality: the chosen house is a variant, not another move. */
 const moveKey = (move: GameMove) =>
   `${move.type === "fight" ? `${move.attackerId}>${move.targetId}` : move.type === "takeArchives" ? "takeArchives" : move.instanceId}${declines(move) ? "!" : ""}`;
 
@@ -1768,11 +2004,27 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     record(state, "log.archives", { name: player.name }, silent);
     return state;
   }
+  const choice: Choice = { id: "target" in move ? move.target : undefined };
+  const source = moveSource(state, playerIndex, move)!;
+  // "Choose a house": a move without a valid house still resolves, with the
+  // engine's default pick, so replays and old callers never stall.
+  const choosing = choosingAbilities(state, playerIndex, move);
+  const wanted = "house" in move ? move.house : undefined;
+  const chosen = choosing.length ? (wanted && housesOffered(state, playerIndex, choosing).includes(wanted) ? wanted : defaultHouse(state, playerIndex, choosing)) : undefined;
+  pendingChoice = chosen ? { card: source, house: chosen } : null;
+  try {
+    return resolveMove(state, playerIndex, move as Exclude<GameMove, { type: "takeArchives" }>, options, source, choice);
+  } finally {
+    pendingChoice = null;
+  }
+}
+
+function resolveMove(state: GameState, playerIndex: Side, move: Exclude<GameMove, { type: "takeArchives" }>, options: MoveOptions, source: CardInstance, choice: Choice): GameState {
+  const player = state.players[playerIndex];
+  const silent = options.silent === true;
   const enemyIndex = other(playerIndex);
   const deterministic = options.deterministic === true;
   const decline = declines(move);
-  const choice: Choice = { id: "target" in move ? move.target : undefined };
-  const source = moveSource(state, playerIndex, move)!;
   const params = { name: player.name, card: source.face.title };
   if (playerIndex === state.activePlayer) state.acted += 1;
 
@@ -1820,7 +2072,11 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     // The extra bonus icons resolve after the card is played (keyteki
     // BasePlayAction: the bonus sub-event follows the Play: ability).
     if (source.face.bonusIcons) resolveBonusIcons(state, playerIndex, source.face.bonusIcons);
-    if (source.face.type !== "Creature" && source.face.type !== "Artifact" && source.face.type !== "Upgrade") player.discard.push(source);
+    if (source.face.type !== "Creature" && source.face.type !== "Artifact" && source.face.type !== "Upgrade") {
+      // An Action that purged itself ("If you do, purge ~") leaves the game, not for the discard pile.
+      if (purgeSelf.delete(source)) player.purged.push(source);
+      else player.discard.push(source);
+    }
     if (keyword(state, source, "omega") && playerIndex === state.activePlayer) state.omega = true;
   } else if (move.type === "unstun") {
     // A stunned creature's use only removes the stun (keyteki RemoveStunAction on use).
@@ -1852,15 +2108,35 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   return state;
 }
 
+/** Houses `side` may pick right now: an effect's `mustChoose` narrows the choice
+    to that house — unless the deck does not hold it (Lote 5 §5.1). */
+export function housesFor(state: GameState, side: Side): string[] {
+  const player = state.players[side];
+  const forced = player.mustChoose?.toLowerCase();
+  const match = forced ? player.houses.find((house) => house.toLowerCase() === forced) : undefined;
+  return match ? [match] : player.houses;
+}
+
 export function chooseHouse(state: GameState, playerIndex: Side, house: string): GameState {
   const next = cloneGame(state);
   const player = next.players[playerIndex];
-  if (playerIndex !== next.activePlayer || next.activeHouse !== null || mulliganPending(next) || !player.houses.includes(house)) return next;
+  if (playerIndex !== next.activePlayer || next.activeHouse !== null || mulliganPending(next) || !housesFor(next, playerIndex).includes(house)) return next;
+  resetAbilityBudgets();
   next.activeHouse = house;
+  delete player.mustChoose;
   // Picking the archives up is optional ("may", docs/ROADMAP_REVIEW.md §1.2):
   // the takeArchives move is offered from the house choice on instead of
   // handing the cards over for free here.
   record(next, "log.house", { name: player.name, house });
+  // "After a player chooses an active house" (Lote 5 §5.2): every card in play of
+  // BOTH sides with a `house` ability fires, the chooser's side first, each with
+  // its own controller as `me`; fire() wakes the observers under the usual budgets.
+  for (const side of [next.activePlayer, other(next.activePlayer)]) {
+    for (const card of [...next.players[side].board]) {
+      if (controllerOf(next, card) !== side) continue;
+      if (abilitiesOf(next, card).some((ability) => !ability.of && ability.on.includes("house"))) fire(next, side, card, "house", { deterministic: false });
+    }
+  }
   return next;
 }
 

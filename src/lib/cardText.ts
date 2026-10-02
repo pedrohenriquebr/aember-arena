@@ -30,7 +30,9 @@ const PREFIX = new RegExp(
     // sentence into the constant-text pass.
     "|\\b(at the (?:start|end) of your turn)(?=\\s*,)" +
     "|\\b((?:after|each time) (?:(?:a|an) (?:friendly |enemy )?creatures? (?:reaps?|fights?|is destroyed)" +
-    "|(?:you|your opponent) plays? a creature|you (?:use|uses) an artifact))(?=\\s*,)",
+    "|(?:you|your opponent) plays? a creature|you (?:use|uses) an artifact))(?=\\s*,)" +
+    // Lote 5 §5.2: "After a player chooses an active house, …" (a comma, no colon).
+    "|\\b(after (?:a player|you|your opponent) chooses? (?:an active house|[^,:.]{1,60}? as (?:your|their) active house))(?=\\s*,)",
   "gi",
 );
 
@@ -78,9 +80,29 @@ function observerFor(raw: string): { triggers: Trigger[]; of: Filter } | null {
   return null;
 }
 
+/** Lote 5 §5.2: the `house` trigger. "After you choose" only counts on the
+    chooser's own turn (`myTurn`), "your opponent" on the other's; a named house
+    is only readable as the card's own printed house ("choose Dis" on a Dis card
+    = the card's house is the active one). */
+function houseHeader(raw: string): { triggers: Trigger[]; cond?: Condition } | null {
+  const part = raw.trim();
+  const plain = part.match(/^after (a player|you|your opponent) chooses? an active house$/);
+  if (plain) {
+    const cond: Condition | undefined = plain[1] === "you" ? { k: "myTurn" } : plain[1] === "your opponent" ? { k: "not", c: { k: "myTurn" } } : undefined;
+    return { triggers: ["house"], ...(cond ? { cond } : {}) };
+  }
+  const named = part.match(/^after a player chooses? (.+?) as (?:your|their) active house$/);
+  if (named && (named[1] === "this card's house" || named[1] === cardHouse)) {
+    return { triggers: ["house"], cond: { k: "count", of: { c: { self: true, house: "active" } }, op: "gte", n: 1 } };
+  }
+  return null;
+}
+
 /** Header of one printed segment: its trigger group, plus the watched filter
     when the prefix names an observer event. Null when it is outside the grammar. */
-function abilityHeader(raw: string): { triggers: Trigger[]; of?: Filter } | null {
+function abilityHeader(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Condition } | null {
+  const house = houseHeader(raw);
+  if (house) return house;
   const observer = observerFor(raw);
   if (observer) return observer;
   const triggers = raw.split("/").map((part) => triggerFor(part));
@@ -97,7 +119,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 5;
+export const PARSER_VERSION = 6;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -204,6 +226,13 @@ const HOUSES: Record<string, string> = {
     capitalised words are collected once per card, before parsing. */
 let properNouns: ReadonlySet<string> = new Set();
 
+/** Lowercased printed house of the card being parsed (houseHeader reads it). */
+let cardHouse = "";
+
+/** What "that house" means inside the ability being parsed: the house its own
+    "Choose a house" picked, or the active one under a `house` trigger (Lote 5). */
+let thatHouse: "chosen" | "active" | null = null;
+
 const collectProperNouns = (text: string): ReadonlySet<string> =>
   new Set(text.match(/\b[A-Z][a-zA-Z'\u2019-]*/g)?.map((word) => word.toLowerCase()));
 
@@ -266,7 +295,16 @@ function applyModifier(filter: Filter, token: string): boolean {
     clause may follow) and every other word must be a known modifier. */
 function parseFilterWords(phrase: string): Filter | null {
   // "creature of the active house" reads state.activeHouse at query time.
-  const rest = phrase.replace(/ of the active house$/, "");
+  let rest = phrase.replace(/ of the active house$/, "");
+  let houseClause = rest !== phrase ? "active" : undefined;
+  // "… of that house": only readable inside an ability that says which house
+  // that is (Lote 5 §5.1/§5.2).
+  const that = rest.replace(/ of (?:that|the chosen) house$/, "");
+  if (that !== rest) {
+    if (!thatHouse) return null;
+    rest = that;
+    houseClause = thatHouse;
+  }
   let words = rest;
   let flankClause: boolean | undefined;
   const tail = words.match(/^(.*?) (?:that is )?(not )?on a flank$/);
@@ -291,7 +329,7 @@ function parseFilterWords(phrase: string): Filter | null {
   if (flankClause !== undefined) filter.flank = flankClause;
   if (amberClause !== undefined) filter.amber = amberClause;
   if (counterClause !== undefined) filter.counters = counterClause;
-  if (rest !== phrase) filter.house = "active";
+  if (houseClause) filter.house = houseClause;
   for (let index = 0; index < tokens.length; index += 1) {
     const pair = tokens[index + 1] ? HOUSES[`${tokens[index]} ${tokens[index + 1]}`] : undefined;
     if (pair) {
@@ -336,7 +374,7 @@ function parseObject(phrase: string, upgrade: boolean, observer = false): { s: S
 }
 
 /** A `count` condition: a dynamic amount compared to a printed number. */
-const count = (of: Count, op: "eq" | "gte" | "lte", n: number): Condition => ({ k: "count", of, op, n });
+const count = (of: Count, op: "eq" | "gte" | "lte" | "even" | "odd", n: number): Condition => ({ k: "count", of, op, n });
 
 /** "Haunted" prints no number: it is the rulebook's 10+ cards in a discard pile. */
 const HAUNTED = 10;
@@ -346,6 +384,12 @@ function parseCondition(clause: string): Condition | null {
   if (amber) {
     return { k: "amber", opp: amber[1] === "your opponent has", op: amber[2] === "no" ? "eq" : "gte", n: amber[2] === "no" ? 0 : Number(amber[2]) };
   }
+  // Lote 5 §5.5: parity of an amber pool; `n` is ignored by the engine.
+  const parity = clause.match(/^(your opponent has|you have) an? (even|odd) (?:amount|number) of amber$/);
+  if (parity) return count({ p: "amber", ...(parity[1] === "you have" ? {} : { opp: true }) }, parity[2] as "even" | "odd", 0);
+  // Lote 5 §5.4: the turn stamp of the last forge (game.forge records it).
+  const forged = clause.match(/^(you|your opponent) forged a key (?:(?:on|during) (?:your|their) )?(?:previous|last) turn$/);
+  if (forged) return forged[1] === "you" ? { k: "forged" } : { k: "forged", opp: true };
   if (clause === "you control more creatures than your opponent") return { k: "moreCreatures" };
   if (clause === "your opponent controls more creatures than you") return { k: "fewerCreatures" };
   // "Overwhelmed" is the printed word for "the opponent has more creatures".
@@ -375,6 +419,9 @@ function parsePer(phrase: string): Count | null {
   const zone = phrase.match(/^cards? in your (hand|deck|discard(?: pile)?|archives|purged)$/);
   if (zone) return { p: (zone[1] === "discard pile" ? "discard" : zone[1]) as Zone };
   if (/^(?:forged )?keys? your opponent has$/.test(phrase)) return { p: "keys", opp: true };
+  // Lote 5 §5.4: "for each amber in your opponent's pool" (forgeKey.less).
+  const pool = phrase.match(/^amber in (your|your opponent's) pool$/);
+  if (pool) return { p: "amber", ...(pool[1] === "your" ? {} : { opp: true }) };
   if (/^amber on (?:it|this card|this creature)$/.test(phrase)) return { of: "amber", s: "self" };
   if (/^damage on (?:it|this card|this creature)$/.test(phrase)) return { of: "damage", s: "self" };
   // Lote 4 §4.10: "for each +1 power counter on X" sums the counters.
@@ -403,6 +450,8 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^your opponent loses (\d+) amber$/, (m) => ({ k: "loseAmber", n: +m[1], opp: true })],
   [/^lose (\d+) amber$/, (m) => ({ k: "loseAmber", n: +m[1] })],
   [/^steal (\d+) amber$/, (m) => ({ k: "steal", n: +m[1] })],
+  // Lote 5 §5.5: "all but N" = the pool minus N, floored at 0 (Count.sub).
+  [/^steal all but (\d+)(?: amber)? of your opponent's amber$/, (m) => ({ k: "steal", n: 1, per: { sub: [{ p: "amber", opp: true }, +m[1]] } })],
   [/^gain (a|\d+) chains?$/, (m) => ({ k: "gainChains", n: num(m[1]) })],
   [/^draw (a|\d+) cards?$/, (m) => ({ k: "draw", n: num(m[1]) })],
   [/^your opponent draws (a|\d+) cards?$/, (m) => ({ k: "draw", n: num(m[1]), opp: true })],
@@ -416,7 +465,7 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^forge (?:another )?a? ?key at current cost$/, () => ({ k: "forgeKey", n: 1 })],
   [/^forge (?:another )?a? ?key at no cost$/, () => ({ k: "forgeKey", n: 1, free: true })],
   [/^forge (?:another )?a? ?key at \+(\d+)(?: amber)?(?: current)?(?: cost)?$/, (m) => ({ k: "forgeKey", n: 1, mod: Number(m[1]) })],
-  [/^unforge (?:your )?(?:an? )?(?:opponent's|opponents'?|enemy) keys?$/, () => ({ k: "unforgeKey", n: 1 })],
+  [/^unforge (?:it|(?:your )?(?:an? )?(?:opponent's|opponents'?|enemy) keys?)$/, () => ({ k: "unforgeKey", n: 1 })],
   [/^return a card from your discard pile to your hand$/, () => ({ k: "fromDiscard" })],
   [/^return a creature from your discard pile to your hand$/, () => ({ k: "fromDiscard", type: "Creature" })],
   // Lote 2 (§2.6): the zone moves of the player, one act for mill, discard,
@@ -508,6 +557,22 @@ const VERBS: [
 function parseSentence(sentence: string, upgrade: boolean, creature: boolean, quoted: string[], observer = false): Sentence | null {
   const may = sentence.match(/^you may:? (.+)$/);
   let body = may ? may[1] : sentence;
+  // Lote 5 §5.4: "Forge a key at +N current cost, reduced by 1 for each X" is ONE
+  // act (`less`), so it is read before the generic "for each" split.
+  const reduced = body.match(/^(forge (?:another )?a? ?key at (?:current cost|\+\d+ amber(?: current cost)?)), reduced by 1 amber for each (.+?)(?:, to a minimum of (\d+) amber)?$/);
+  if (reduced) {
+    const less = parsePer(reduced[2]);
+    const head = less ? parseSentenceBody(reduced[1], upgrade, creature, quoted, observer) : null;
+    const forge = head?.acts[0];
+    if (!less || !head || forge?.k !== "forgeKey") return null;
+    forge.less = less;
+    if (reduced[3]) forge.min = Number(reduced[3]);
+    if (may) {
+      head.optional = true;
+      forge.optional = true;
+    }
+    return head;
+  }
   // "… for each <count>" (either side of the clause): the dynamic amount of
   // every act of the sentence (docs/DSL_EXPANSION_PLAN.md §2.1).
   let per: Count | null = null;
@@ -545,6 +610,19 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
     const cond = parseCondition(condText);
     const body = cond && parseSentence(rest, upgrade, creature, quoted, observer);
     return body && !body.cond ? { ...body, cond } : null;
+  }
+
+  // Lote 5 §5.1: "Choose a house" resolves no act itself — the move carries the
+  // house and later sentences read it as "that house". Choosing among the houses
+  // of the opponent's identity card is the same sentence (the engine offers the
+  // opponent's houses to a card that forces the choice).
+  if (/^choose a house(?: on your opponent's identity card)?$/.test(sentence)) {
+    choseHouse = true;
+    thatHouse = "chosen";
+    return { acts: [] };
+  }
+  if (/^your opponent must choose that house(?: as their active house)?(?: (?:on|during))?(?: their)? next turn$/.test(sentence)) {
+    return thatHouse === "chosen" ? { acts: [{ k: "forceHouse" }] } : null;
   }
 
   // A sentence that sets a lasting effect ("… on their next turn") rather than
@@ -668,10 +746,32 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
     "If you are overwhelmed, steal 2A. Otherwise, steal 1A." closes the first
     one and opens a twin with the negated condition. The negation is the whole
     point — a second `if:{k:"not"}` can never be expressed as one ability. */
-function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter): Ability[] | null {
+function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition): Ability[] | null {
+  // "That house" is the active one under a `house` trigger, the chosen one after
+  // the ability's own "Choose a house" (Lote 5); a quoted grant parsed inside
+  // this ability starts clean and hands the state back.
+  const savedThat = thatHouse;
+  const savedChose = choseHouse;
+  thatHouse = triggers.includes("house") ? "active" : null;
+  choseHouse = false;
+  try {
+    const done = parseAbilityBody(triggers, body, upgrade, creature, quoted, of, headerIf);
+    // "Choose a house" and a `chosen` reader must come together: one without the
+    // other would claim full coverage for a text the engine cannot resolve.
+    return done && choseHouse === /"(?:chosen|!chosen|forceHouse)"/.test(JSON.stringify(done)) ? done : null;
+  } finally {
+    thatHouse = savedThat;
+    choseHouse = savedChose;
+  }
+}
+
+/** The ability had its own "Choose a house" sentence (Lote 5 §5.1). */
+let choseHouse = false;
+
+function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition): Ability[] | null {
   const done: Ability[] = [];
   const watching = of ? { of } : {};
-  let ability: Ability = { on: triggers, acts: [], ...watching };
+  let ability: Ability = { on: triggers, ...(headerIf ? { if: headerIf } : {}), acts: [], ...watching };
   const close = (): boolean => {
     if (!ability.acts.length) return false;
     // Every act optional and the whole ability is a single "You may" clause.
@@ -915,6 +1015,23 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
     if (!target) return null;
     return [{ target, noReady: body.endsWith("step") ? "step" : true, duration, ...gate }];
   }
+  // Lote 5 §5.6: only the unqualified immunities ("by Mutant creatures" and
+  // "unless" stay out of the grammar).
+  const immune = body.match(/^(.+?) cannot be dealt damage$/);
+  if (immune) {
+    const target = parseSubject(immune[1], upgrade) ?? parseFilterWords(immune[1]);
+    return target ? [{ target, replace: { on: "damage", prevent: true }, duration, ...gate }] : null;
+  }
+  if (body === "your amber cannot be stolen") return [{ target: {}, noSteal: true, duration, ...gate }];
+  // Lote 5 §5.3: "This creature belongs to all houses" / to a named house. A
+  // target that filters by house would recurse in game.houseOf (the gate rejects
+  // it too), so the grammar never produces one.
+  const belongs = body.match(/^(.+?) belongs? to (all houses|(?:house )?([a-z ]+?)(?: house)?)$/);
+  if (belongs) {
+    const house = belongs[2] === "all houses" ? "all" : HOUSES[belongs[3]];
+    const target = house ? (parseSubject(belongs[1], upgrade) ?? parseFilterWords(belongs[1])) : null;
+    return target && target.house === undefined ? [{ target, house, duration, ...gate }] : null;
+  }
   const restrict = parseRestriction(body);
   if (restrict) return [{ target: {}, restrict, duration, ...gate }];
   const replacement = parseReplacement(body);
@@ -944,6 +1061,7 @@ export function parseCardText(face: CardFace): CardRules {
 
 function parseCardBody(face: CardFace): CardRules {
   properNouns = collectProperNouns(face.text ?? "");
+  cardHouse = (face.house ?? "").toLowerCase();
   const { text, quoted } = maskQuotes(normalise(face.text ?? ""));
   // Self references only inside ability text, so a card named like a keyword keeps its keywords.
   const self = new RegExp(`\\b${normalise(face.title).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
@@ -954,7 +1072,7 @@ function parseCardBody(face: CardFace): CardRules {
   let prefix: string | null = null;
   for (const match of text.matchAll(PREFIX)) {
     segments.push({ prefix, body: text.slice(last, match.index) });
-    prefix = match[1] ?? match[2] ?? match[3] ?? null;
+    prefix = match[1] ?? match[2] ?? match[3] ?? match[4] ?? null;
     last = (match.index ?? 0) + match[0].length;
   }
   segments.push({ prefix, body: text.slice(last) });
@@ -981,7 +1099,7 @@ function parseCardBody(face: CardFace): CardRules {
   for (const { prefix: raw, body } of segments.slice(1)) {
     const header = abilityHeader(raw!);
     const parsed = header
-      ? parseAbilities(header.triggers, body.replace(self, "this card"), upgrade, creature, quoted, header.of)
+      ? parseAbilities(header.triggers, body.replace(self, "this card"), upgrade, creature, quoted, header.of, header.cond)
       : null;
     if (parsed) {
       abilities.push(...parsed);

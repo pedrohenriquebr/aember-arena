@@ -15,15 +15,17 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 5; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 6; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
     engine calls fire() once per occurrence, so no per-turn counter is needed.
     Global watchers ("Each time you play another creature") stay out: they
     would need an event bus across sources, not a card-bound trigger.
-    `scrap` is the printed "Scrap:" of a card going to its discard pile. */
-export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni" | "startOfTurn" | "endOfTurn" | "scrap";
+    `scrap` is the printed "Scrap:" of a card going to its discard pile; `house`
+    wakes every card in play of BOTH sides when a player chooses the active house
+    (Lote 5 §5.2). */
+export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni" | "startOfTurn" | "endOfTurn" | "scrap" | "house";
 
 /** A player's card zones an act can read or move cards out of. */
 export type Zone = "hand" | "deck" | "discard" | "archives" | "purged";
@@ -50,7 +52,8 @@ export interface Filter {
   host?: boolean;
   /** The source's neighbors ("Each of ~'s neighbors gets +2 armor"). */
   neighborsOfSource?: boolean;
-  /** "each Mars creature" (prefix `!` negates): a printed house name or `active`. */
+  /** "each Mars creature" (prefix `!` negates): a printed house name, `active` or
+      `chosen` — the house picked by the move's "Choose a house" (Lote 5 §5.1). */
   house?: string;
   /** "each Knight creature" (prefix `!` negates): a token of face.traits. */
   trait?: string;
@@ -81,7 +84,9 @@ export type Count =
   | "gone"
   | { c: Filter }
   | { p: Zone | "keys" | "amber" | "plays"; opp?: boolean }
-  | { of: "damage" | "amber" | "power" | "counters"; s: Selection };
+  | { of: "damage" | "amber" | "power" | "counters"; s: Selection }
+  /** max(0, a - b): "all but 6" (Lote 5 §5.5). */
+  | { sub: [Count, Count | number] };
 
 export type Act = (
   /** `who` (Lote 4 §4.6) resolves the player from the reference card of the
@@ -121,7 +126,11 @@ export type Act = (
   | { k: "makeToken"; n: number }
   /** Forging/unforging outside the key step (keyteki ForgeAction/UnforgeAction):
       `free` is "at no cost", `mod` a "+N cost" modifier. */
-  | { k: "forgeKey"; n: number; free?: boolean; mod?: number }
+  | { k: "forgeKey"; n: number; free?: boolean; mod?: number; less?: Count; min?: number }
+  /** "Choose a house" side effects (Lote 5): the chosen house becomes the card's
+      until it leaves play, or the opponent's mandatory next active house. */
+  | { k: "setHouse"; s: Selection; house: string }
+  | { k: "forceHouse" }
   | { k: "unforgeKey"; n: number }
   | { k: "fromDiscard"; type?: "Creature" }
   | { k: "archiveTop" }
@@ -143,7 +152,9 @@ export type Condition =
   | { k: "amber"; opp: boolean; op: "eq" | "gte"; n: number }
   | { k: "moreCreatures" }
   | { k: "fewerCreatures" }
-  | { k: "count"; of: Count; op: "eq" | "gte" | "lte"; n: number }
+  | { k: "count"; of: Count; op: "eq" | "gte" | "lte" | "even" | "odd"; n: number }
+  /** "If you forged a key on your previous turn" (`opp`: the opponent did). */
+  | { k: "forged"; opp?: boolean }
   /** "If it is not your turn": the active player is the other side. */
   | { k: "myTurn" }
   | { k: "not"; c: Condition };
@@ -186,6 +197,8 @@ export interface Replacement {
   to?: "archives" | "hand" | "deck" | "purged";
   /** The damage is dealt to the effect's source instead (Shadow Self). */
   redirect?: boolean;
+  /** The damage is cancelled ("cannot be dealt damage", Lote 5 §5.6). */
+  prevent?: boolean;
 }
 
 /** A persistent effect: stat deltas, granted keywords/abilities and prohibitions
@@ -206,6 +219,10 @@ export interface PersistentEffect {
   /** "This creature cannot ready" — `true` blocks effect-readies too, "step"
       only the printed "ready cards" step (Lote 4 §4.2). */
   noReady?: true | "step";
+  /** "This creature belongs to all houses" / to a named house (Lote 5 §5.3). */
+  house?: string;
+  /** "Your amber cannot be stolen": steals against the effect's side do nothing. */
+  noSteal?: boolean;
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
   when?: "flank";
   /** Clause gating the whole effect ("While you are haunted, …"). */
@@ -459,6 +476,7 @@ const ABILITY_TRIGGERS: ReadonlySet<string> = new Set<Trigger>([
   "startOfTurn",
   "endOfTurn",
   "scrap",
+  "house",
 ]);
 
 /** Every stored act, and which of its fields the engine needs: `n` (a finite
@@ -499,6 +517,8 @@ const ACTS: Record<string, string> = {
   takeControl: "s",
   makeToken: "n",
   forgeKey: "n",
+  setHouse: "s",
+  forceHouse: "",
   unforgeKey: "n",
   fromDiscard: "",
   archiveTop: "",
@@ -536,9 +556,11 @@ const CONDITION_FIELDS: Record<string, string> = {
   moreCreatures: "k",
   fewerCreatures: "k",
   count: "k,of,op,n",
+  forged: "k,opp",
   myTurn: "k",
   not: "k,c",
 };
+const COUNT_OPS: ReadonlySet<string> = new Set(["eq", "gte", "lte", "even", "odd"]);
 const KEYWORD_NAMES: ReadonlySet<string> = new Set(ENGINE_KEYWORDS);
 const OVERRIDE_SOURCES: ReadonlySet<string> = new Set(["parser", "llm", "manual"]);
 /** `from`/`to` of a stored `move` act, and the `p` of a `{p}` count. */
@@ -579,6 +601,15 @@ function validCount(value: unknown): boolean {
   if (value === "did" || value === "gone") return true;
   if (!isRecord(value)) return false;
   if (value.c !== undefined) return Object.keys(value).every((key) => key === "c") && validFilter(value.c);
+  if (value.sub !== undefined) {
+    return (
+      Object.keys(value).every((key) => key === "sub") &&
+      Array.isArray(value.sub) &&
+      value.sub.length === 2 &&
+      validCount(value.sub[0]) &&
+      (isFiniteNumber(value.sub[1]) || validCount(value.sub[1]))
+    );
+  }
   if (value.p !== undefined) {
     return (
       Object.keys(value).every((key) => key === "p" || key === "opp") &&
@@ -600,8 +631,9 @@ function validCondition(value: unknown): boolean {
   if (!Object.keys(value).every((key) => `,${fields},`.includes(`,${key},`))) return false;
   if (value.k === "amber") return typeof value.opp === "boolean" && (value.op === "eq" || value.op === "gte") && isFiniteNumber(value.n);
   if (value.k === "not") return validCondition(value.c);
+  if (value.k === "forged") return value.opp === undefined || typeof value.opp === "boolean";
   if (value.k === "count") {
-    return validCount(value.of) && (value.op === "eq" || value.op === "gte" || value.op === "lte") && isFiniteNumber(value.n);
+    return validCount(value.of) && COUNT_OPS.has(value.op as string) && isFiniteNumber(value.n);
   }
   return true;
 }
@@ -613,6 +645,25 @@ function validCondition(value: unknown): boolean {
 function readsPower(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   return Object.entries(value).some(([key, inner]) => key === "top" || key === "least" || (key === "of" && inner === "power") || readsPower(inner));
+}
+
+/** Does this key appear anywhere inside `value`? */
+function mentionsKey(value: unknown, name: string): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  return Object.entries(value).some(([key, inner]) => key === name || mentionsKey(inner, name));
+}
+
+/** An effect that grants a house and filters (or gates itself) by house would
+    ask the house of the very cards it is deciding the house of: infinite
+    recursion in houseOf, so the gate rejects it like readsPower (Lote 5 §5.3). */
+function houseEffectLoops(effect: Record<string, unknown>): boolean {
+  return effect.house !== undefined && (mentionsKey(effect.target, "house") || mentionsKey(effect.if, "house") || mentionsKey(effect.per, "house"));
+}
+
+function validReplacement(value: unknown): boolean {
+  if (!isRecord(value) || (value.on !== "destroy" && value.on !== "damage")) return false;
+  if (value.to !== undefined && !["archives", "hand", "deck", "purged"].includes(value.to as string)) return false;
+  return (value.redirect === undefined || typeof value.redirect === "boolean") && (value.prevent === undefined || typeof value.prevent === "boolean");
 }
 
 function validAct(value: unknown): boolean {
@@ -633,7 +684,14 @@ function validAct(value: unknown): boolean {
     if (value.opp === true) return false;
     if (value.k !== "gainAmber" && value.k !== "loseAmber" && value.k !== "draw" && value.k !== "gainChains") return false;
   }
-  if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target);
+  if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target) && !houseEffectLoops(value.e);
+  if (value.k === "setHouse") return typeof value.house === "string" && value.house.length > 0;
+  if (value.k === "forgeKey") {
+    if (value.less !== undefined && !validCount(value.less)) return false;
+    if (value.min !== undefined && !isFiniteNumber(value.min)) return false;
+    if (value.mod !== undefined && !isFiniteNumber(value.mod)) return false;
+    if (value.free !== undefined && typeof value.free !== "boolean") return false;
+  }
   if (value.k === "use" && value.via !== undefined && value.via !== "fight" && value.via !== "reap") return false;
   if (value.at !== undefined && value.at !== "top" && value.at !== "bottom" && value.at !== "shuffle") return false;
   if (value.k === "move") {
@@ -680,6 +738,10 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.keyCost === undefined || isFiniteNumber(effect.keyCost)) &&
         (effect.opp === undefined || typeof effect.opp === "boolean") &&
         (effect.noReady === undefined || effect.noReady === true || effect.noReady === "step") &&
+        (effect.house === undefined || (typeof effect.house === "string" && effect.house.length > 0)) &&
+        (effect.noSteal === undefined || typeof effect.noSteal === "boolean") &&
+        (effect.replace === undefined || validReplacement(effect.replace)) &&
+        !houseEffectLoops(effect) &&
         !readsPower(effect.if) &&
         !readsPower(effect.per),
     )

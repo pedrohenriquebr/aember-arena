@@ -56,6 +56,9 @@ import {
   endTurn,
   fightTargets,
   getLegalMoves,
+  houseChoices,
+  houseOf,
+  housesFor,
   isLegalMove,
   keepHand,
   keyCost,
@@ -94,7 +97,7 @@ type Screen = "home" | "config" | "game" | "browse" | "inspect";
 type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanceId: string };
 /** Board pick in progress: a fight defender (`targetId` still empty) or the
     target of the move's ability / an upgrade's host. `ids` are the legal cards. */
-type Pick = { move: GameMove; ids: string[] };
+type Pick = { move: GameMove; ids: string[]; /** The move's card asks "Choose a house" (Lote 5 §5.1): the picker offers these first. */ houses?: string[] };
 type Toast = {
   message: string;
   kind: "success" | "error";
@@ -1268,6 +1271,8 @@ type BoardLaneProps = {
   /** FEAT-13: the lane owner whose pieces may look usable right now. */
   humanSide: 0 | 1;
   activeHouse: string | null;
+  /** "|id|id|" of the cards whose effective house (houseOf, "all" included) is the active one. */
+  houseKey?: string;
   selectedId?: string;
   /** FEAT-04: ids com movimento legal (só a lane do jogador). */
   hintIds?: Set<string> | null;
@@ -1287,6 +1292,7 @@ function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
     a.owner !== b.owner ||
     a.humanSide !== b.humanSide ||
     a.activeHouse !== b.activeHouse ||
+    a.houseKey !== b.houseKey ||
     a.selectedId !== b.selectedId ||
     a.targetIds !== b.targetIds ||
     a.hintIds !== b.hintIds ||
@@ -1311,6 +1317,7 @@ const BoardLane = memo(function BoardLane({
   owner,
   humanSide,
   activeHouse,
+  houseKey,
   selectedId,
   targetIds,
   hintIds,
@@ -1363,7 +1370,7 @@ const BoardLane = memo(function BoardLane({
       {/* H3D-15: --col/--acol posicionam as peças na grade do 3D (criaturas numa
           fileira, artefatos/upgrades na fileira externa); inertes no 2D. */}
       {creatures.map((card, index) => {
-        const canUse = owner === humanSide && card.ready && !card.stunned && (!activeHouse || card.face.house === activeHouse);
+        const canUse = owner === humanSide && card.ready && !card.stunned && (!activeHouse || Boolean(houseKey?.includes(`|${card.instanceId}|`)));
         // T4: o estado da peça é indicador visual (borda/opacidade, index.css) +
         // aria-label via t(); não existe mais label de texto sob a carta.
         const stateLabel = card.stunned ? t("game.stunned") : card.ready ? t("game.ready") : t("game.resting");
@@ -1445,6 +1452,7 @@ function GameBoard({
   settings,
   t,
   onHouse,
+  onPickHouse = NOOP,
   onSelectHand,
   onSelectBoard,
   onEndTurn,
@@ -1492,6 +1500,8 @@ function GameBoard({
       no console enquanto o move e legal (docs/ROADMAP_REVIEW.md §1.2). */
   archivesAction?: ReactNode;
   onHouse: (house: string) => void;
+  /** Lote 5: the house answering the pending move's "Choose a house". */
+  onPickHouse?: (house: string) => void;
   onSelectHand: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
   onEndTurn: () => void;
@@ -1598,17 +1608,17 @@ function GameBoard({
               <span className="sr-only" aria-live="polite">{narration}</span>
               <span>{aiSummary ?? (game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse"))}</span>
             </div>
-            <div className="house-picker" role="group" aria-label={t("game.chooseHouse")}>
-              {player.houses.map((house) => {
-                const chosen = game.activeHouse === house;
+            <div className="house-picker" role="group" aria-label={pick?.houses ? t("game.chooseMoveHouse") : t("game.chooseHouse")}>
+              {(pick?.houses ?? player.houses).map((house) => {
+                const chosen = !pick?.houses && game.activeHouse === house;
                 return (
                   <button
                     key={house}
                     type="button"
-                    className={`house-choice${chosen ? " is-chosen" : ""}${game.activeHouse && !chosen ? " is-locked" : ""}`}
+                    className={`house-choice${chosen ? " is-chosen" : ""}${game.activeHouse && !chosen && !pick?.houses ? " is-locked" : ""}`}
                     style={{ "--house-color": houseColor(house) } as CSSProperties}
-                    onClick={() => onHouse(house)}
-                    disabled={!isHumanTurn || Boolean(game.activeHouse)}
+                    onClick={() => (pick?.houses ? onPickHouse(house) : onHouse(house))}
+                    disabled={pick?.houses ? !isHumanTurn : !isHumanTurn || Boolean(game.activeHouse) || !housesFor(game, humanSide).includes(house)}
                     aria-pressed={chosen}
                     aria-label={houseLabel(house, t)}
                     title={houseLabel(house, t)}
@@ -1635,7 +1645,7 @@ function GameBoard({
             </div>
             {pick && (
               <div className="fight-instruction" role="status">
-                {pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
+                {pick.houses ? <><Crosshair size={15} /> {t("game.chooseMoveHouse")}</> : pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
               </div>
             )}
             <BoardLane
@@ -1644,6 +1654,7 @@ function GameBoard({
               humanSide={humanSide}
               hintIds={hintIds}
               activeHouse={game.activeHouse}
+              houseKey={`|${player.board.filter((card) => houseOf(game, card) === "all" || houseOf(game, card) === game.activeHouse).map((card) => card.instanceId).join("|")}|`}
               selectedId={selected?.zone === "board" ? selected.instanceId : undefined}
               targetIds={pick?.ids}
               settings={settings}
@@ -1676,7 +1687,7 @@ function GameBoard({
             style={{ "--n": Math.max(1, player.hand.length) } as CSSProperties}
           >
             {!handHidden && player.hand.map((card) => {
-              const playable = Boolean(game.activeHouse && card.face.house === game.activeHouse);
+              const playable = Boolean(game.activeHouse && houseOf(game, card) === game.activeHouse);
               return (
                 <CardTile
                   key={card.instanceId}
@@ -1806,7 +1817,7 @@ function SelectedCardPanel({
   onClear: () => void;
 }) {
   const isHumanTurn = game.activePlayer === humanSide && game.winner === null && !inMulligan(game);
-  const activeForHouse = Boolean(card && game.activeHouse && card.face.house === game.activeHouse);
+  const activeForHouse = Boolean(card && game.activeHouse && (houseOf(game, card) === "all" || houseOf(game, card) === game.activeHouse));
   // Legality comes from the engine (house, first-turn rule, Alpha/Omega, taunt…).
   const legal = (move: GameMove) => isHumanTurn && isLegalMove(game, humanSide, move);
   const id = card?.instanceId ?? "";
@@ -1824,7 +1835,7 @@ function SelectedCardPanel({
   const declineLabel = t("inspector.withoutEffect");
 
   return (
-    <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}`} aria-live="polite">
+    <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}${pick?.houses ? " inspector-section--yield" : ""}`} aria-live="polite">
       <div className="section-label-row">
         <span className="section-label">{t("inspector.title")}</span>
         {selection && <button className="quiet-icon-button" type="button" onClick={onClear} aria-label={t("common.close")}><X size={14} /></button>}
@@ -2925,6 +2936,14 @@ function App() {
     const side = humanSideOf(prev, matchModeRef.current);
     // The player chooses targets the way keyteki prompts: only when there is a
     // real choice left (a fight's second pick is the ability target, BUG-06).
+    // "Choose a house" comes first (Lote 5 §5.1): the console picker offers the
+    // houses and the move resumes here with `house` set.
+    const houses = houseChoices(prev, side, move);
+    if (houses.length) {
+      sound.play("select");
+      setPick({ move, ids: [], houses });
+      return;
+    }
     const choices = "target" in move && move.target ? [] : targetChoices(prev, side, move);
     if (choices.length > 1) {
       sound.play("select");
@@ -2959,6 +2978,13 @@ function App() {
       }
       sound.play("select");
       setSelected({ zone: own ? "board" : "enemy", playerIndex: owner, instanceId: card.instanceId });
+    },
+    [pick, performHumanMove],
+  );
+
+  const pickMoveHouse = useCallback(
+    (house: string) => {
+      if (pick?.houses) performHumanMove({ ...pick.move, house } as GameMove);
     },
     [pick, performHumanMove],
   );
@@ -3522,6 +3548,7 @@ function App() {
                   settings={settings}
                   t={t}
                   onHouse={choosePlayerHouse}
+                  onPickHouse={pickMoveHouse}
                   onSelectHand={selectHandCard}
                   onSelectBoard={pickBoardCard}
                   onEndTurn={endHumanTurn}

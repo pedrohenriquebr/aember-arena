@@ -201,7 +201,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(5);
+    expect(PARSER_VERSION).toBe(6);
   });
 });
 
@@ -537,11 +537,14 @@ describe("starter decks", () => {
     // Discard a card.").
     // 42 -> 43 with the Lote 3 observer wording (Veylan Analyst: "Each time you
     // use an artifact, gain 1 amber.").
+    // 43 -> 46 with the Lote 5 house wording (Blinding Light and Control the
+    // Weak read "Choose a house"; Experimental Therapy "belongs to all houses").
+    // 46 -> 47 with "forged a key last turn" + "unforge it" (Key Hammer).
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 43,
-        "partial": 1,
-        "vanilla": 14,
+        "full": 47,
+        "partial": 0,
+        "vanilla": 11,
       }
     `);
   });

@@ -2525,7 +2525,15 @@ button:disabled {
   }
 }
 
+/* Durante a escolha de casa (move.house) o sheet fixo cobriria o seletor do console. */
+.inspector-section--docked.inspector-section--yield {
+  display: none;
+}
+
 @media (min-width: 1041px) {
+  .inspector-section--docked.inspector-section--yield {
+    display: block;
+  }
   .inspector-section--docked {
     position: static;
     max-height: none;

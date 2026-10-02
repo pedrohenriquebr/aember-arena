@@ -334,6 +334,49 @@ export const FEW_SHOTS: {
       keywords: {},
     },
   },
+  // Lote 5 (docs/DSL_EXPANSION_PLAN_WAVE2.md §3): "Choose a house", o gatilho
+  // `house`, forgeKey.less + purgar a própria Action e a aritmética de contagem.
+  {
+    type: "Action",
+    text: "Play: Choose a house. Stun each creature of that house.",
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "stun", s: { each: { type: "Creature", house: "chosen" } } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Artifact",
+    text: "After a player chooses an active house, destroy each artifact of that house.",
+    answer: { abilities: [{ on: ["house"], acts: [{ k: "destroy", s: { each: { type: "Artifact", house: "active" } } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Action",
+    text: "Play: Forge a key at +8<A> current cost, reduced by 1<A> for each <A> in your opponent's pool. If you do, purge this card.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [
+            { k: "forgeKey", n: 1, mod: 8, less: { p: "amber", opp: true } },
+            { k: "purge", s: "self", if: { k: "count", of: "did", op: "gte", n: 1 } },
+          ],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Steal all but 6 of your opponent's <A>.",
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "steal", n: 1, per: { sub: [{ p: "amber", opp: true }, 6] } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Artifact",
+    text: "Action: If your opponent has an even amount of <A>, steal 1<A>.",
+    answer: {
+      abilities: [{ on: ["action"], acts: [{ k: "steal", n: 1 }], if: { k: "count", of: { p: "amber", opp: true }, op: "even", n: 0 } }],
+      effects: [],
+      keywords: {},
+    },
+  },
   // O formato `unsupported` continua ensinado: nem toda carta é representável.
   {
     type: "Action",
@@ -385,6 +428,9 @@ const SYSTEM_RULES = [
   '"If <condition>, repeat the preceding effect" = duplicate the acts of the preceding effect with that condition in the duplicated acts\' `if` (the repeated target becomes a {pick} of the same filter). "Repeat this effect" as a loop stays unsupported.',
   '"May be used as if it belonged to the active house" (Versatile\'s reminder) = keyword versatile; granted through effects when another card grants it. "May be played as if it belonged to the active house" is the same permission ONLY in that bare form — "as if it was in your hand/discard pile" stays unsupported.',
   '"The creature ~ fights" / "the attacked enemy" = s:"fought" (the defender of the fight in progress).',
+  '"Choose a house" resolves no act: the NEXT sentences read it as {"house":"chosen"} ("of that house"). "Your opponent must choose that house next turn" = {"k":"forceHouse"}. "After a player chooses an active house, X" = on ["house"], and "that house" there is {"house":"active"}; "After you choose" adds if {"k":"myTurn"}.',
+  '"Forge a key at +N cost, reduced by 1 for each X" = forgeKey with mod N and less = the count of X; "If you do, purge ~" on an Action = {"k":"purge","s":"self","if":<did gte 1>}. "Steal all but N of your opponent\'s <A>" = steal n 1 per {"sub":[{"p":"amber","opp":true},N]}. "an even/odd amount of <A>" = count op "even"/"odd" (n ignored). "If you forged a key on your previous turn" = {"k":"forged"} (opp:true for the opponent).',
+  '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. Qualified forms ("by Mutant creatures", "unless") are unsupported.',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
@@ -507,6 +553,8 @@ const TRIGGER_WORDS: Record<string, RegExp> = {
   startOfTurn: /\bstart of your turn\b/,
   endOfTurn: /\bend of your turn\b/,
   scrap: /\bscrap\b/,
+  // "After a player chooses an active house" (Lote 5 §5.2).
+  house: /\bchooses?\b[^.]*\bactive house\b/,
 };
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const TARGETED = new Set(["target", "targetAndNeighbors", "targetNeighbors"]);
@@ -525,6 +573,17 @@ function actProblem(act: Ability["acts"][number], ability: Ability, face: CardFa
     return `use: "self" on a ${ability.on.join("/")} trigger would re-run the ability forever`;
   }
   if (act.k === "lasting" && !act.e.duration) return "lasting: the effect has no duration";
+  // Lote 5: the numbers of a forge/sub must come from the text, and a house
+  // reader needs the sentence that makes the choice.
+  if (act.k === "forgeKey") {
+    for (const value of [act.mod, act.min]) {
+      if (value !== undefined && (!Number.isInteger(value) || value < 0 || value > 20)) return `forgeKey: ${value} is out of range`;
+      if (value !== undefined && value > 1 && !new RegExp(`\\b(${value}|${NUMBER_WORDS[value] ?? "$^"})\\b`).test(text)) return `forgeKey: the number ${value} is not in the card text`;
+    }
+  }
+  if (act.k === "forceHouse" && !/\bchoose a house\b/.test(text)) return 'forceHouse: the card text never says "choose a house"';
+  if (act.k === "setHouse" && act.house !== "chosen" && !new RegExp(`\\b${act.house.toLowerCase()}\\b`).test(text)) return `setHouse: the house ${act.house} is not in the card text`;
+  if (JSON.stringify(act).includes('"chosen"') && !/\bchoose a house\b/.test(text)) return 'a "chosen" house is read but the card text never says "choose a house"';
   return null;
 }
 

@@ -183,6 +183,7 @@ const DICT: Record<string, [string, string]> = {
   "game.undoBlocked": ["Undo unavailable: this turn already drew or shuffled cards.", "Desfazer indisponível: este turno já comprou ou embaralhou cartas."],
   "game.chooseFight": ["Choose an enemy creature to fight", "Escolha uma criatura inimiga para lutar"],
   "game.chooseTarget": ["Choose a highlighted card as the target", "Escolha uma das cartas destacadas como alvo"],
+  "game.chooseMoveHouse": ["Choose a house for this card", "Escolha uma casa para esta carta"],
   "game.opponentLine": ["OPPONENT BATTLELINE", "LINHA DO OPONENTE"],
   "game.yourLine": ["YOUR BATTLELINE", "SUA LINHA DE BATALHA"],
   "game.onTable": ["ON TABLE", "NA MESA"],

@@ -7,6 +7,7 @@ import {
   effectivePower,
   endTurn,
   getLegalMoves,
+  housesFor,
   keyCost,
   keyword,
   moveHasEffect,
@@ -107,7 +108,7 @@ function replyValue(state: GameState, aiIndex: 0 | 1, budget: Budget, profile: P
   if (next.winner !== null) return evaluatePosition(next, aiIndex, profile.abilityAware);
   const rival = next.activePlayer;
   let worst = Infinity;
-  for (const house of next.players[rival].houses) {
+  for (const house of housesFor(next, rival)) {
     const turn = chooseHouse(next, rival, house);
     worst = Math.min(worst, evaluatePosition(turn, aiIndex, profile.abilityAware));
     for (const move of candidateMoves(turn, rival, profile.effectAware)) {
@@ -183,7 +184,9 @@ export function shouldTakeArchives(state: GameState, side: 0 | 1): boolean {
 
 export function chooseAiHouse(state: GameState, aiIndex: 0 | 1): string {
   const player = state.players[aiIndex];
-  const houses = player.houses.length ? player.houses : [...new Set(player.hand.map((card) => card.face.house))];
+  // An effect may force the house (Lote 5 §5.1): the AI picks only what is legal.
+  const allowed = housesFor(state, aiIndex);
+  const houses = allowed.length ? allowed : [...new Set(player.hand.map((card) => card.face.house))];
   if (!houses.length) return "Logos";
 
   return houses
