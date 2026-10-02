@@ -620,6 +620,12 @@ export async function runTranslation(
   const save = options.save ?? putAbilityOverride;
   const progress: RunProgress = { done: 0, total: queue.length, drafted: 0, failed: 0 };
   options.onProgress?.({ ...progress });
+  // Erro de transporte (timeout/rede/provedor) numa carta não derruba a rodada:
+  // vira failureRow — o contrato de versão re-enfileira depois — e a fila segue.
+  // Só N falhas de transporte CONSECUTIVAS param, pois isso indica provedor fora,
+  // não carta difícil (falha honesta zera o contador).
+  const TRANSPORT = new Set(["llm.timeout", "llm.http", "llm.rateLimit", "llm.unreachable", "llm.badBody"]);
+  let consecutiveTransport = 0;
   for (const face of queue) {
     if (options.signal?.aborted) break;
     let row: AbilityOverride;
@@ -628,8 +634,12 @@ export async function runTranslation(
     } catch (error) {
       // An abort (Cancel button) is a stop, not a failure.
       if (options.signal?.aborted) break;
-      throw error;
+      const key = error instanceof VaultError && TRANSPORT.has(error.key) ? error.key : null;
+      if (!key || consecutiveTransport >= 3) throw error;
+      consecutiveTransport += 1;
+      row = failureRow(face, key, config.model);
     }
+    if (!row.failure || !TRANSPORT.has(row.failure)) consecutiveTransport = 0;
     await save(row);
     progress.done += 1;
     if (row.failure) progress.failed += 1;
