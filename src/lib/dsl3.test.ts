@@ -191,6 +191,52 @@ describe("3.2 observers — Ability.of + \"event\"", () => {
     expect(next.players[0].amber).toBe(9);
     expect(board(next, 0, "Runner").ready).toBe(false);
   });
+
+  it("four self-feeding watchers stay inside the per-move dispatch budget", () => {
+    const loop = (): [string, Ability[]] => [
+      "Loop",
+      [{ on: ["reap"], of: { type: "Creature" }, acts: [{ k: "ready", s: "event" }, { k: "use", s: "event", via: "reap" }] }],
+    ];
+    const watchers = script([loop(), loop(), loop(), loop()]);
+    const runner = creature("Runner", 2, "", { house: "Brobnar" });
+    const state = setupTest({ inPlay: [...watchers, runner] });
+    const next = reap(state, 0, runner);
+    // Width, not depth: depth-first nesting spends the fire budget first, so the
+    // chain ends after 80 dispatches (initial reap + 80) — inside the
+    // OBSERVER_BUDGET bound of 1 + 100, with no N^8 blow-up.
+    expect(next.players[0].amber).toBe(81);
+  });
+
+  it("a watcher destroyed mid-pass does not fire (board snapshot recheck)", () => {
+    const [killer, late] = script([
+      [
+        "Killer",
+        [
+          {
+            on: ["destroyed"],
+            of: { type: "Creature", side: "enemy" },
+            acts: [{ k: "gainAmber", n: 1 }, { k: "destroy", s: { each: { type: "Creature", side: "friendly", other: true } } }],
+          },
+        ],
+      ],
+      ["Late", [{ on: ["destroyed"], of: { type: "Creature", side: "enemy" }, acts: [{ k: "gainAmber", n: 5 }] }]],
+    ]);
+    const wipe = card("Wipe", { type: "Action", house: "Brobnar", text: "Play: Destroy each enemy creature." });
+    const state = setupTest({ hand: [wipe], inPlay: [killer, late] }, { inPlay: [creature("Doomed", 2, "", { house: "Dis" })] });
+    const next = play(state, 0, "Wipe");
+    // Killer's dispatch destroyed Late during the same pass: Late must not see
+    // the event (the board loop holds the pre-pass snapshot, so it is rechecked).
+    expect(next.players[0].amber).toBe(1);
+    expect(titles(next.players[0].discard)).toContain("Late");
+  });
+
+  it("a self-feeding 'use self via reap' chain ends without RangeError (fire budget)", () => {
+    const [loop] = script([["Loop", [{ on: ["reap"], acts: [{ k: "ready", s: "self" }, { k: "use", s: "self", via: "reap" }] }]]]);
+    const state = setupTest({ inPlay: [loop] });
+    const next = reap(state, 0, loop);
+    // Initial reap + one reap per FIRE_BUDGET slot, then fire() stops dispatching.
+    expect(next.players[0].amber).toBe(65);
+  });
 });
 
 describe("3.3 +1 power counters", () => {

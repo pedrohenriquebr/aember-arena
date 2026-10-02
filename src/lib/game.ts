@@ -1250,6 +1250,10 @@ function fire(
   trigger: Trigger,
   options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean },
 ): void {
+  // A self-re-triggering chain ("Reap: ready and use ~ via reap") has no
+  // observer at all: the per-move fire budget stops it (GAP 3 review).
+  if (fireBudget <= 0) return;
+  fireBudget -= 1;
   const firing: Ability[] = [];
   for (const ability of abilitiesOf(state, source)) {
     if (ability.of || !ability.on.includes(trigger) || (options.decline && ability.optional)) continue;
@@ -1271,13 +1275,28 @@ function fire(
   fireObservers(state, source, trigger, options.deterministic);
 }
 
-/** Recursion brake for observer chains (Lote 3 §3.2): an observer's acts can
-    cause the very event it watches ("After a creature reaps, ready and reap
-    with it"), so nested observer passes stop at this depth. The state stays
-    pure — the counter is a transient module value every move resets in its
-    `finally` (moves resolve synchronously, so no two matches interleave). */
+/** Ability budgets for one move (Lote 3 §3.2 review). OBSERVER_DEPTH bounds how
+    deep observer passes nest (restored by fireObservers' own `finally`);
+    OBSERVER_BUDGET bounds the TOTAL observer dispatches of a move (N
+    self-feeding watchers would otherwise cost N^depth, not depth) and
+    FIRE_BUDGET bounds plain fire() dispatches (a "Reap: ready and use ~ via
+    reap" chain has no observer at all). The counters are transient module
+    values — moves resolve synchronously, so no two matches interleave — and
+    resetAbilityBudgets() refills them at every applyMove/endTurn; a spent budget
+    silently stops dispatching until the move ends. */
 const OBSERVER_DEPTH = 8;
+const OBSERVER_BUDGET = 100;
+const FIRE_BUDGET = 64;
 let observerDepth = 0;
+let observerBudget = OBSERVER_BUDGET;
+let fireBudget = FIRE_BUDGET;
+
+/** Fresh budgets for the move about to resolve. */
+function resetAbilityBudgets(): void {
+  observerDepth = 0;
+  observerBudget = OBSERVER_BUDGET;
+  fireBudget = FIRE_BUDGET;
+}
 
 /** Observer abilities (docs/DSL_EXPANSION_PLAN.md §3.2): cards that watch an
     event another card caused ("After an enemy creature reaps, stun it."). Every
@@ -1287,12 +1306,15 @@ let observerDepth = 0;
     card as `s:"event"`. Targets are auto-picked: the player only chooses the
     targets of their own move, and a watcher is never a "You may" decision. */
 function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, deterministic: boolean): void {
-  if (observerDepth >= OBSERVER_DEPTH) return;
+  if (observerDepth >= OBSERVER_DEPTH || observerBudget <= 0) return;
   observerDepth += 1;
   try {
     for (const side of [0, 1] as const) {
       for (const watcher of state.players[side].board) {
         for (const ability of rulesOf(watcher.face).abilities) {
+          // The board loop iterates the pre-pass snapshot: a watcher an earlier
+          // dispatch of this same pass destroyed (or took control of) is out.
+          if (controllerOf(state, watcher) !== side) break;
           if (!ability.of || !ability.on.includes(trigger) || !matches(state, side, watcher, event, ability.of)) continue;
           if (ability.if && !holds(ability.if, state, side, watcher)) continue;
           const context: Context = { state, me: side, source: watcher, event, deterministic };
@@ -1300,6 +1322,8 @@ function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, 
             context.target = autoPick(state, side, everyMatch(state, side, watcher, ability.target), isHarmful(ability));
             if (!context.target) continue;
           }
+          if (observerBudget <= 0) return;
+          observerBudget -= 1;
           for (const act of ability.acts) run(context, act);
         }
       }
@@ -1603,6 +1627,7 @@ function placeCreature(state: GameState, player: GamePlayer, card: CardInstance,
 
 export function applyMove(current: GameState, playerIndex: Side, move: GameMove, options: MoveOptions = {}): GameState {
   const state = cloneGame(current);
+  resetAbilityBudgets();
   if (!isLegalMove(state, playerIndex, move)) return state;
   const player = state.players[playerIndex];
   const silent = options.silent === true;
@@ -1713,6 +1738,7 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   if (playerIndex !== state.activePlayer || state.winner !== null || mulliganPending(state)) return state;
   // The turn cannot end before the mandatory house choice (BUG-02).
   if (state.activeHouse === null) return state;
+  resetAbilityBudgets();
 
   const endingPlayer = state.players[playerIndex];
   // Ready step, then draw step (keyteki ReadyPhase + DrawPhase).
