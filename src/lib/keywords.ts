@@ -25,6 +25,9 @@ export const ENGINE_KEYWORDS = [
   // Versatile has no printed value: it lets the card be played/used outside the
   // active house (game.houseAllows reads it through keyword()).
   "versatile",
+  // Entrench resolves in the ready step: a held, exhausted entrenched creature
+  // may stay exhausted (game.canReady reads it through keyword()).
+  "entrench",
 ] as const;
 
 export type Keyword = (typeof ENGINE_KEYWORDS)[number];

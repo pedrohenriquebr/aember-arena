@@ -83,6 +83,8 @@ async function harvestLlm(cards) {
   try {
     await runTranslation(waiting, config, {
       limit,
+      // `reply:` é re-tentado: a linha carrega quantas tentativas já gastou (§4.0).
+      previous: (id) => rows.get(id)?.tries,
       save: async (row) => {
         rows.set(row.cardId, row);
         writeJson(DRAFTS, [...rows.values()]);
@@ -115,11 +117,19 @@ function vendor() {
   console.log(`vendorizadas ${kept.length} linhas aprovadas em src/lib/generated/approved.json`);
 }
 
-/** Exporta a fila atual para o app importar (Config > Revisão). Idempotente. */
+/** Exporta a fila atual para o app importar (Config > Revisão). Idempotente.
+    Uma falha cujo texto o parser cobre hoje é linha-zumbi e não vai junto
+    (higiene do pipeline, §4.0). */
 function exportQueue() {
-  const rows = readDrafts();
+  const drafts = readDrafts();
+  const byId = new Map(loadCards().map((card) => [card.id, card]));
+  const rows = drafts.filter((row) => {
+    const face = byId.get(row.cardId);
+    return !(row.failure && face && parseCardText(face).coverage === "full");
+  });
+  const pruned = drafts.length - rows.length;
   writeJson(QUEUE_EXPORT, rows);
-  console.log(`exportadas ${rows.length} linhas em ${QUEUE_EXPORT} — importe pela Config do app.`);
+  console.log(`exportadas ${rows.length} linhas em ${QUEUE_EXPORT}${pruned ? ` (${pruned} zumbis podados)` : ""} — importe pela Config do app.`);
 }
 
 if (flag("--export-queue")) {

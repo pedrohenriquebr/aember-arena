@@ -1738,6 +1738,29 @@ button:disabled {
   filter: grayscale(0.55);
 }
 
+/* Entrench (Lote 4 §4.2): a carta segurada fica com a borda âncora e o selo; a
+   escolha em si vive no inspetor (toggle). */
+.board-piece--hold .card-tile:not(:disabled) .card-art {
+  border-color: rgba(120, 165, 191, 0.62);
+}
+
+.hold-badge {
+  position: absolute;
+  z-index: 2;
+  bottom: 3px;
+  left: -4px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid rgba(141, 180, 202, 0.65);
+  border-radius: 50%;
+  color: #d6e8f2;
+  background: #22333d;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
 /* VA-07: selo de "girada/já usada" no canto da carta exausta. */
 .rest-badge {
   position: absolute;

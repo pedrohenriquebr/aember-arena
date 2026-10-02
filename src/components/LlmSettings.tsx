@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ExternalLink, LoaderCircle, X } from "lucide-react";
 import { mergeAbilityOverrides, type AbilityOverride } from "../lib/abilities";
 import { deleteAbilityOverride, listCatalogCards, loadAbilityOverrides, putAbilityOverride } from "../lib/cache";
+import { parseCardText } from "../lib/cardText";
 import { reviewQueue, validateQueueRows, type RunProgress } from "../lib/catalogLlm";
 import { applyLlmPreset, LLM_PRESETS, llmReady, type LlmConfig, type LlmPreset } from "../lib/settings";
 import type { Translator } from "../lib/i18n";
@@ -31,9 +32,14 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
   const fileInput = useRef<HTMLInputElement>(null);
 
   // A fila vem do store (rascunhos e falhas não revisados); o título, do
-  // catálogo. Recarrega ao montar e quando a rodada termina.
+  // catálogo. Recarrega ao montar e quando a rodada termina. Uma falha que o
+  // parser cobre hoje é zumbi: o catálogo diz quais, e reviewQueue as poda
+  // (higiene do pipeline, §4.0).
   const refresh = useCallback(() => {
-    void loadAbilityOverrides().then((rows) => setDrafts(reviewQueue([...rows.values()])));
+    void Promise.all([loadAbilityOverrides(), listCatalogCards()]).then(([rows, cards]) => {
+      const covered = new Set(cards.filter((card) => parseCardText(card).coverage === "full").map((card) => card.id));
+      setDrafts(reviewQueue([...rows.values()], (id) => covered.has(id)));
+    });
   }, []);
   useEffect(() => {
     refresh();

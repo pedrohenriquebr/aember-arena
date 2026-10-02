@@ -87,6 +87,11 @@ export interface CardInstance {
   /** +1 power counters (Onda 5): each counter adds 1 power and they are reset
       when the card leaves play (keyteki Card.powerCounters). */
   counters?: number;
+  /** Entrench (Lote 4 §4.2): the controller's choice to leave this exhausted
+      creature exhausted during its "ready cards" step. A controller
+      preference, not a move — it never counts in `acted`/Alpha and is reset
+      when the card leaves play. */
+  hold?: boolean;
 }
 
 export interface GamePlayer {
@@ -338,6 +343,19 @@ export function mulligan(current: GameState, side: Side): GameState {
   return state;
 }
 
+/** Entrench preference (Lote 4 §4.2): toggles `hold` on a card of `side`'s
+    board. Pure and OUTSIDE the GameMove model on purpose — it is not an action
+    (no `acted`/Alpha cost) and the AI search never branches on it, it only
+    changes what the next ready step does. */
+export function setHold(current: GameState, side: Side, instanceId: string, hold: boolean): GameState {
+  const state = cloneGame(current);
+  const card = findOnBoard(state, side, instanceId);
+  if (!card) return state;
+  if (hold) card.hold = true;
+  else delete card.hold;
+  return state;
+}
+
 export function cloneGame(state: GameState): GameState {
   const copyPlayer = (player: GamePlayer): GamePlayer => ({
     ...player,
@@ -490,6 +508,18 @@ export function effectiveArmor(state: GameState, card: CardInstance): number {
   return Math.max(0, armor);
 }
 
+/** May this card become ready? (Lote 4 §4.2) A `noReady` effect blocks always
+    when `true` and only during the printed ready step when "step"; an
+    exhausted entrenched creature the controller held blocks the ready step
+    alone — an effect that readies it still works. */
+export function canReady(state: GameState, card: CardInstance, step: boolean): boolean {
+  for (const owner of allEffects(state)) {
+    const noReady = owner.effect.noReady;
+    if (noReady && effectHits(state, owner, card) && (noReady === true || step)) return false;
+  }
+  return !(step && card.hold === true && keyword(state, card, "entrench") > 0);
+}
+
 /** Keyword value including the granted ones ("Each friendly creature gains Taunt"). */
 export function keyword(state: GameState, card: CardInstance, name: Keyword): number {
   let value = rulesOf(card.face).keywords[name] ?? 0;
@@ -592,6 +622,7 @@ export function conditionHolds(
   previous?: { did?: number; gone?: number },
 ): boolean {
   if (condition.k === "not") return !holds(condition.c, state, me, source, previous);
+  if (condition.k === "myTurn") return state.activePlayer === me;
   if (condition.k === "amber") {
     const amber = state.players[condition.opp ? other(me) : me].amber;
     return condition.op === "eq" ? amber === condition.n : amber >= condition.n;
@@ -635,7 +666,9 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card))) &&
     (filter.house === undefined || houseMatches(state, card, positive(filter.house)) !== negated(filter.house)) &&
     (filter.trait === undefined || traitMatches(card, positive(filter.trait)) !== negated(filter.trait)) &&
-    (filter.exhausted === undefined || !card.ready === filter.exhausted)
+    (filter.exhausted === undefined || !card.ready === filter.exhausted) &&
+    (filter.amber === undefined || ((card.amber ?? 0) > 0) === filter.amber) &&
+    (filter.counters === undefined || ((card.counters ?? 0) > 0) === filter.counters)
   );
 }
 
@@ -643,21 +676,32 @@ function everyMatch(state: GameState, me: Side, source: CardInstance | undefined
   const found = [...state.players[me].board, ...state.players[other(me)].board].filter((card) =>
     matches(state, me, source, card, filter),
   );
-  return filter.top ? found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top) : found;
+  if (filter.top) return found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top);
+  // `least` is the mirror of `top`: ties (no printed power difference) keep the
+  // board order, exactly like the `top` sort does.
+  if (filter.least) return found.sort((a, b) => effectivePower(state, a) - effectivePower(state, b)).slice(0, filter.least);
+  return found;
 }
 
 const HARMFUL = new Set<Act["k"]>(["destroy", "purge", "damage", "stun", "exhaust", "enrage", "returnToHand", "returnToDeck", "archive"]);
 const isHarmful = (ability: Ability) => ability.acts.some((act) => HARMFUL.has(act.k));
+/** "Give control … to your opponent" (Lote 4 §4.7): takeControl is not in
+    HARMFUL, and with `opp` the auto-pick must take the weakest FRIENDLY card. */
+const givesControl = (ability: Ability) => ability.acts.some((act) => act.k === "takeControl" && act.opp === true);
 
 /** Default choice for a targeted ability: harmful effects hit the strongest
     enemy (then the weakest friendly), helpful ones the strongest friendly. */
-function autoPick(state: GameState, me: Side, candidates: CardInstance[], harmful: boolean): CardInstance | undefined {
+function autoPick(state: GameState, me: Side, candidates: CardInstance[], harmful: boolean, give = false): CardInstance | undefined {
   const strongest = (cards: CardInstance[]) =>
     [...cards].sort((a, b) => effectivePower(state, b) - effectivePower(state, a) || b.damage - a.damage)[0];
+  const weakest = (cards: CardInstance[]) =>
+    [...cards].sort((a, b) => effectivePower(state, a) - effectivePower(state, b) || a.damage - b.damage)[0];
   const friendly = candidates.filter((card) => controllerOf(state, card) === me);
   const enemy = candidates.filter((card) => !friendly.includes(card));
+  // "Give control … to your opponent" wants the cheapest creature (Lote 4 §4.7).
+  if (give) return weakest(friendly) ?? weakest(enemy);
   if (!harmful) return strongest(friendly) ?? strongest(enemy);
-  return strongest(enemy) ?? [...friendly].sort((a, b) => effectivePower(state, a) - effectivePower(state, b))[0];
+  return strongest(enemy) ?? weakest(friendly);
 }
 
 /** What a selection (and a dynamic count) is resolved against. */
@@ -672,6 +716,12 @@ interface Ctx {
       creature reaps, stun it." — the reaper). */
   event?: CardInstance;
   target?: CardInstance;
+  /** `who` acts (Lote 4 §4.6): the owner/controller of the reference card
+      (target ?? event ?? fought) as captured when the ability started —
+      after a destroy the card is already gone and controllerOf answers
+      undefined. */
+  whoOwner?: Side;
+  whoController?: Side;
   deterministic: boolean;
   /** How a "use a creature" action resolves the creature (BUG-11). */
   useVia?: "reap" | "action";
@@ -736,7 +786,15 @@ function countOf(scope: Ctx, spec: Count): number {
     return player[spec.p].length;
   }
   return select(scope, spec.s).reduce(
-    (sum, card) => sum + (spec.of === "damage" ? card.damage : spec.of === "amber" ? (card.amber ?? 0) : effectivePower(scope.state, card)),
+    (sum, card) =>
+      sum +
+      (spec.of === "damage"
+        ? card.damage
+        : spec.of === "amber"
+          ? (card.amber ?? 0)
+          : spec.of === "counters"
+            ? (card.counters ?? 0)
+            : effectivePower(scope.state, card)),
     0,
   );
 }
@@ -783,6 +841,7 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
     enraged: undefined,
     controlledBy: undefined,
     counters: undefined,
+    hold: undefined,
   });
   // A token creature has no card behind it (isToken): it is removed from the
   // game instead of entering hand/discard/deck, so it can never be drawn or
@@ -1003,15 +1062,29 @@ function run(context: Context, act: Act): void {
     return;
   }
   const { state, me, source, deterministic } = context;
+  // `who` (Lote 4 §4.6) names the actor dynamically from the reference card
+  // captured when the ability started; with no reference the act is skipped.
+  const who = "who" in act ? act.who : undefined;
+  const whoSide = who === "owner" ? context.whoOwner : who === "controller" ? context.whoController : undefined;
+  if (who && whoSide === undefined) {
+    context.did = 0;
+    context.gone = 0;
+    return;
+  }
   // `opp` flips the actor of the act (and the player whose zones it reads).
-  const side = "opp" in act && act.opp ? other(me) : me;
+  const side: Side = whoSide ?? ("opp" in act && act.opp ? other(me) : me);
   const player = state.players[side];
   const cards = "s" in act ? select(context, act.s, act.k) : [];
+  // Acts whose `did` is a total rather than a card count (moveAmber,
+  // removeCounter) record it themselves after the sweep.
+  let explicitDid: number | undefined;
   const before: Snapshot = "s" in act
     ? { counters: [], cards: cards.map((card) => ({ card, signature: signature(state, card), inPlay: controllerOf(state, card) !== undefined })) }
     : { counters: countersOf(state) };
-  // "for each …": the count is read from the state the act starts in.
-  const amount = "n" in act ? act.n * (act.per ? countOf(context, act.per) : 1) : 0;
+  // "for each …": the count is read from the state the act starts in. Absent
+  // `n` (moveAmber/removeCounter = "all") counts as 0 here; those acts read the
+  // cards themselves.
+  const amount = "n" in act && act.n !== undefined ? act.n * (act.per ? countOf(context, act.per) : 1) : 0;
   switch (act.k) {
     case "gainAmber":
       player.amber += amount;
@@ -1041,11 +1114,14 @@ function run(context: Context, act: Act): void {
       break;
     case "capture":
       for (const card of cards.filter(isCreature)) {
-        const side = controllerOf(state, card) as Side;
-        const taken = Math.min(amount, state.players[other(side)].amber);
-        state.players[other(side)].amber -= taken;
+        const controller = controllerOf(state, card) as Side;
+        // "from its own side" captures out of the creature's controller's pool
+        // instead of that controller's opponent (Lote 4 §4.4).
+        const from = act.own ? controller : other(controller);
+        const taken = Math.min(amount, state.players[from].amber);
+        state.players[from].amber -= taken;
         card.amber = (card.amber ?? 0) + taken;
-        tally(state.players[side], "amberCaptured", taken);
+        tally(state.players[controller], "amberCaptured", taken);
       }
       break;
     case "damage":
@@ -1091,22 +1167,57 @@ function run(context: Context, act: Act): void {
     case "removeEnrage":
       for (const card of cards.filter(isCreature)) card.enraged = 0;
       break;
-    case "takeControl":
+    case "takeControl": {
       // keyteki game.takeControl: the card leaves its controller's battleline
       // and joins the new controller's on a flank (the left one unless a
       // "takeControlOn…" effect says otherwise) — this engine always takes the
-      // left flank, as the automated keyteki prompt does by default.
+      // left flank, as the automated keyteki prompt does by default. With
+      // `opp` the destination is the other side ("Give control … to your
+      // opponent", Lote 4 §4.7).
+      const to: Side = act.opp ? other(me) : me;
       for (const card of cards) {
         const from = controllerOf(state, card);
-        if (from === undefined || from === me) continue;
+        if (from === undefined || from === to) continue;
         // Control given back to the owner is not foreign control any more.
-        const returning = ownerOf(state, card) === me;
+        const returning = ownerOf(state, card) === to;
         state.players[from].board = state.players[from].board.filter((item) => item !== card);
-        state.players[me].board.unshift(card);
-        card.controlledBy = returning ? undefined : me;
-        record(state, "log.takeControl", { name: state.players[me].name, card: card.face.title });
+        state.players[to].board.unshift(card);
+        card.controlledBy = returning ? undefined : to;
+        record(state, "log.takeControl", { name: state.players[to].name, card: card.face.title });
       }
       break;
+    }
+    case "moveAmber": {
+      // Takes `n` (absent = all) from each selected card; "pool" pays the
+      // resolving side (`opp` the other one), "supply" discards it. `did` is
+      // the total amber moved (Lote 4 §4.9).
+      let moved = 0;
+      for (const card of cards) {
+        const have = card.amber ?? 0;
+        const taken = Math.min(act.n ?? have, have);
+        if (taken <= 0) continue;
+        card.amber = have - taken;
+        moved += taken;
+      }
+      if (act.to === "pool" && moved > 0) state.players[act.opp ? other(me) : me].amber += moved;
+      explicitDid = moved;
+      break;
+    }
+    case "removeCounter": {
+      // Removes `n` +1 power counters (absent = all) from each selected card;
+      // `did` is the total removed (Lote 4 §4.10).
+      let removed = 0;
+      for (const card of cards) {
+        const have = card.counters ?? 0;
+        const taken = Math.min(act.n ?? have, have);
+        if (taken <= 0) continue;
+        const left = have - taken;
+        card.counters = left > 0 ? left : undefined;
+        removed += taken;
+      }
+      explicitDid = removed;
+      break;
+    }
     case "forgeKey":
       // keyteki ForgeAction: the cost comes out of the pool unless the text
       // says "at no cost"; `mod` is the printed "+N cost".
@@ -1131,7 +1242,8 @@ function run(context: Context, act: Act): void {
       for (const card of cards) card.ready = false;
       break;
     case "ready":
-      for (const card of cards) card.ready = true;
+      // An effect-readied creature ignores Entrench/hold but not `noReady: true`.
+      for (const card of cards) if (canReady(state, card, false)) card.ready = true;
       break;
     case "unstun":
       for (const card of cards) card.stunned = false;
@@ -1141,18 +1253,20 @@ function run(context: Context, act: Act): void {
       break;
     case "returnToDeck":
       // `at` repositions the card after the leave-play move: the deck's top is
-      // the array's end, so "bottom" is the front and "shuffle" re-shuffles.
+      // the array's end (where leavePlay already pushes), so the absent `at`
+      // and the explicit "top" are the same, "bottom" is the front and
+      // "shuffle" re-shuffles.
       for (const card of cards) {
         const owner = ownerOf(state, card) ?? me;
         leaveByEffect(state, card, "deck");
         // A ward (or a token leaving the game) cancels the move: only a card
         // that really landed in the deck is repositioned.
         const deck = state.players[owner].deck;
-        if (!act.at || deck.lastIndexOf(card) < 0) continue;
+        if (deck.lastIndexOf(card) < 0) continue;
         if (act.at === "bottom") {
           deck.splice(deck.lastIndexOf(card), 1);
           deck.unshift(card);
-        } else state.players[owner].deck = shuffle(deck, state);
+        } else if (act.at === "shuffle") state.players[owner].deck = shuffle(deck, state);
       }
       break;
     case "move": {
@@ -1165,9 +1279,11 @@ function run(context: Context, act: Act): void {
       const choose = () =>
         act.pick === "random"
           ? candidates[Math.floor(roll(state) * candidates.length)]
-          : act.pick === undefined && act.from === "hand"
-            ? (candidates.find((card) => card.face.house !== state.activeHouse) ?? candidates[candidates.length - 1])
-            : candidates[candidates.length - 1];
+          : act.pick === "bottom"
+            ? candidates[0]
+            : act.pick === undefined && act.from === "hand"
+              ? (candidates.find((card) => card.face.house !== state.activeHouse) ?? candidates[candidates.length - 1])
+              : candidates[candidates.length - 1];
       const moved: CardInstance[] = [];
       // `all` takes the whole zone, so the bound is read before the picks.
       const take = act.pick === "all" ? candidates.length : Math.min(amount, candidates.length);
@@ -1235,6 +1351,7 @@ function run(context: Context, act: Act): void {
   // "did"/"gone" describe what THIS act did: they are read after the sweep, so
   // a creature destroyed by the damage just dealt already counts as gone.
   Object.assign(context, measured(state, before));
+  if (explicitDid !== undefined) context.did = explicitDid;
 }
 
 /** Resolves every ability of `source` bound to `trigger` (keyteki TriggeredAbility).
@@ -1267,8 +1384,16 @@ function fire(
       const legal = everyMatch(state, me, source, ability.target);
       const chosen = legal.find((card) => card.instanceId === options.choice?.id);
       if (options.choice) options.choice.id = undefined;
-      context.target = chosen ?? autoPick(state, me, legal, isHarmful(ability));
+      context.target = chosen ?? autoPick(state, me, legal, isHarmful(ability), givesControl(ability));
       if (!context.target) continue;
+    }
+    // `who` (Lote 4 §4.6) captures the reference card's owner/controller BEFORE
+    // the acts run: "Destroy a creature. Its controller gains 1" would read a
+    // card already out of play otherwise.
+    const reference = context.target ?? context.event ?? context.fought;
+    if (reference) {
+      context.whoController = controllerOf(state, reference);
+      context.whoOwner = ownerOf(state, reference);
     }
     for (const act of ability.acts) run(context, act);
   }
@@ -1319,8 +1444,14 @@ function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, 
           if (ability.if && !holds(ability.if, state, side, watcher)) continue;
           const context: Context = { state, me: side, source: watcher, event, deterministic };
           if (ability.target) {
-            context.target = autoPick(state, side, everyMatch(state, side, watcher, ability.target), isHarmful(ability));
+            context.target = autoPick(state, side, everyMatch(state, side, watcher, ability.target), isHarmful(ability), givesControl(ability));
             if (!context.target) continue;
+          }
+          // Same pre-act capture as fire(): the event card may leave play.
+          const reference = context.target ?? context.event;
+          if (reference) {
+            context.whoController = controllerOf(state, reference);
+            context.whoOwner = ownerOf(state, reference);
           }
           if (observerBudget <= 0) return;
           observerBudget -= 1;
@@ -1741,8 +1872,9 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   resetAbilityBudgets();
 
   const endingPlayer = state.players[playerIndex];
-  // Ready step, then draw step (keyteki ReadyPhase + DrawPhase).
-  for (const card of endingPlayer.board) card.ready = true;
+  // Ready step, then draw step (keyteki ReadyPhase + DrawPhase). Entrench
+  // (Lote 4 §4.2): a held creature with the keyword stays exhausted.
+  for (const card of endingPlayer.board) if (canReady(state, card, true)) card.ready = true;
   refill(endingPlayer, state);
   endingPlayer.keyCostMod = 0;
   for (const card of state.players.flatMap((player) => player.board)) {

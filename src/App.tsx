@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
+  Anchor,
   ArrowLeft,
   ArrowRight,
   BookOpen,
@@ -39,7 +40,7 @@ import {
   Zap,
   ZoomIn,
 } from "lucide-react";
-import { chooseAiHouse, chooseAiMove, describeAiThinking, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
+import { chooseAiHouse, chooseAiMove, describeAiThinking, holdEntrench, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
 import { vendoredOverrides } from "./lib/vendored";
 import { flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides } from "./lib/abilities";
 import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCatalogCards, listCachedDecks, loadAbilityOverrides, loadSavedMatch, putAbilityOverride, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
@@ -58,8 +59,10 @@ import {
   isLegalMove,
   keepHand,
   keyCost,
+  keyword,
   mulligan,
   revealsHiddenInfo,
+  setHold,
   targetChoices,
   type CardInstance,
   type DeckInfo,
@@ -278,6 +281,7 @@ function sameCardInstance(a: CardInstance, b: CardInstance): boolean {
       a.ready === b.ready &&
       a.stunned === b.stunned &&
       (a.amber ?? 0) === (b.amber ?? 0) &&
+      (a.hold ?? false) === (b.hold ?? false) &&
       (a.attachedTo ?? "") === (b.attachedTo ?? ""))
   );
 }
@@ -1365,8 +1369,11 @@ const BoardLane = memo(function BoardLane({
         const stateLabel = card.stunned ? t("game.stunned") : card.ready ? t("game.ready") : t("game.resting");
         const stateClass = card.stunned ? " board-piece--stunned" : card.ready ? "" : " board-piece--resting";
         const hinted = Boolean(hintIds?.has(card.instanceId));
+        // Entrench (§4.2): o hold é indicador visual (classe na peça + fita com
+        // aria-label) — a escolha em si vive no inspetor.
+        const holdClass = card.hold ? " board-piece--hold" : "";
         return (
-          <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}`} key={card.instanceId} style={{ "--col": index + 1, ...jitterVars(card.instanceId) } as CSSProperties}>
+          <div className={`board-piece${canUse ? " board-piece--ready" : ""}${stateClass}${holdClass}`} key={card.instanceId} style={{ "--col": index + 1, ...jitterVars(card.instanceId) } as CSSProperties}>
             <CardTile
               card={card}
               size="board"
@@ -1384,6 +1391,12 @@ const BoardLane = memo(function BoardLane({
             {!card.ready && !card.stunned && (
               <span className="rest-badge" role="img" aria-label={t("game.resting")}>
                 <RotateCw size={12} strokeWidth={2.4} />
+              </span>
+            )}
+            {/* Entrench: fica exausta no próximo ready step (escolha do dono). */}
+            {card.hold && (
+              <span className="hold-badge" role="img" aria-label={t("game.entrenched")}>
+                <Anchor size={12} strokeWidth={2.4} />
               </span>
             )}
           </div>
@@ -1771,6 +1784,7 @@ function SelectedCardPanel({
   t,
   humanSide,
   onMove,
+  onToggleHold,
   onFight,
   onCancelPick,
   onClear,
@@ -1784,6 +1798,8 @@ function SelectedCardPanel({
   /** FEAT-13: side whose cards the actions apply to (the active side in 2P). */
   humanSide: 0 | 1;
   onMove: (move: GameMove) => void;
+  /** Entrench (Lote 4 §4.2): alterna o hold da criatura selecionada. */
+  onToggleHold: (card: CardInstance) => void;
   /** `decline` starts the fight pick resolving it without its "You may" clauses. */
   onFight: (decline?: boolean) => void;
   onCancelPick: () => void;
@@ -1895,12 +1911,26 @@ function SelectedCardPanel({
                     )}
                   </>
                 )}
+                {/* Entrench (§4.2): a escolha de ficar exausta no ready step é do
+                    controlador, por carta — o toggle vive no inspetor. */}
+                {selection.zone === "board" && card.face.type === "Creature" && keyword(game, card, "entrench") > 0 && (
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    aria-pressed={card.hold === true}
+                    title={t("inspector.entrenchHint")}
+                    onClick={() => onToggleHold(card)}
+                  >
+                    <Anchor size={15} /> {card.hold ? t("inspector.holdRelease") : t("inspector.holdKeep")}
+                  </button>
+                )}
               </>
             )}
             {selection.zone === "enemy" && <div className="inspector-hint"><Shield size={14} /> {t("inspector.enemyCard")}</div>}
             {selection.zone === "hand" && isHumanTurn && game.activeHouse && !activeForHouse && <div className="inspector-hint"><Shield size={14} /> {t("inspector.onlyHouse", { house: houseLabel(game.activeHouse, t) })}</div>}
             {selection.zone === "board" && !card.ready && card.face.type === "Creature" && <div className="inspector-hint"><Clock3 size={14} /> {t("inspector.resting")}</div>}
             {selection.zone === "board" && card.stunned && <div className="inspector-hint"><CircleHelp size={14} /> {t("inspector.stunned")}</div>}
+            {selection.zone === "board" && card.hold && <div className="inspector-hint"><Anchor size={14} /> {t("inspector.entrenchHint")}</div>}
           </div>
         </div>
       ) : (
@@ -2713,7 +2743,9 @@ function App() {
       if (!cancelled && next.winner === null) {
         await beat(AI_END_MS);
         if (cancelled) return;
-        const ended = endTurn(next, 1);
+        // Entrench (§4.2): o Warden segura toda criatura Entrench exausta antes
+        // do ready step (16/16 impressões pagam por isso).
+        const ended = endTurn(holdEntrench(next, 1), 1);
         // The Warden handing over is the player's turn starting.
         sound.play("turn");
         commitGame(next, ended, { kind: "end", side: 1 });
@@ -2945,6 +2977,21 @@ function App() {
     if (matchModeRef.current === "passAndPlay" && next.winner === null) setPassPending(next.activePlayer);
   }, [commitGame]);
 
+  /** Entrench (Lote 4 §4.2): alterna o hold de uma criatura do lado humano.
+      Fora do GameMove de propósito — não gasta `acted`/Alpha; o undo cobre a
+      mudança porque o estado anterior entra na pilha. */
+  const toggleHoldCard = useCallback(
+    (card: CardInstance) => {
+      const live = gameRef.current;
+      if (!live) return;
+      const side = humanSideOf(live, matchModeRef.current);
+      if (!live.players[side].board.includes(card)) return;
+      sound.play("click");
+      commitGame(live, setHold(live, side, card.instanceId, card.hold !== true));
+    },
+    [commitGame],
+  );
+
   // FEAT-10/13: the opening-hand decision of the side holding the device.
   const decideOpeningHand = useCallback((take: boolean) => {
     const prev = gameRef.current;
@@ -3115,6 +3162,8 @@ function App() {
       const [cards, overrides] = await Promise.all([listCatalogCards(), loadAbilityOverrides()]);
       const progress = await runTranslation(pendingTranslations(cards, (id) => overrides.get(id)), llm, {
         limit: LLM_RUN_LIMIT,
+        // `reply:` re-tentado: a tentativa anterior conta (§4.0).
+        previous: (id) => overrides.get(id)?.tries,
         save: putAbilityOverride,
         onProgress: setLlmRun,
         signal: controller.signal,
@@ -3543,6 +3592,7 @@ function App() {
                   t={t}
                   humanSide={humanSide}
                   onMove={performHumanMove}
+                  onToggleHold={toggleHoldCard}
                   onFight={(decline) => {
                     const live = gameRef.current;
                     if (!selectedCard || !live) return;

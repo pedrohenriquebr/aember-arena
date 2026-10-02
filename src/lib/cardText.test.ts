@@ -201,7 +201,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(4);
+    expect(PARSER_VERSION).toBe(5);
   });
 });
 

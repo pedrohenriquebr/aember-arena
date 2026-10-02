@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 4; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 5; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -38,6 +38,12 @@ export interface Filter {
   ready?: boolean;
   /** Only the N most powerful matching creatures. */
   top?: number;
+  /** Only the N least powerful matching creatures (mirror of `top`). */
+  least?: number;
+  /** "creature with amber on it": worn amber (exalt/capture) present/absent. */
+  amber?: boolean;
+  /** "creature with a +1 power counter on it": counters present/absent. */
+  counters?: boolean;
   /** The source card itself ("This creature gets +1 power"). */
   self?: boolean;
   /** The creature an upgrade is attached to ("This creature gets +2 armor" on an upgrade). */
@@ -75,11 +81,17 @@ export type Count =
   | "gone"
   | { c: Filter }
   | { p: Zone | "keys" | "amber" | "plays"; opp?: boolean }
-  | { of: "damage" | "amber" | "power"; s: Selection };
+  | { of: "damage" | "amber" | "power" | "counters"; s: Selection };
 
 export type Act = (
-  | { k: "gainAmber" | "loseAmber" | "steal" | "gainChains" | "draw" | "discardRandom" | "keyCost"; n: number; opp?: boolean }
-  | { k: "capture"; n: number; s: Selection }
+  /** `who` (Lote 4 §4.6) resolves the player from the reference card of the
+      ability (its target, the watched event or the fought defender) as it was
+      when the ability started — "Destroy a creature. Its controller gains 1" —
+      and is mutually exclusive with `opp`. */
+  | { k: "gainAmber" | "loseAmber" | "steal" | "gainChains" | "draw" | "discardRandom" | "keyCost"; n: number; opp?: boolean; who?: "owner" | "controller" }
+  /** `own` takes the captured amber from the creature's controller instead of
+      its opponent ("captures N from its own side"). */
+  | { k: "capture"; n: number; s: Selection; own?: boolean }
   | { k: "damage" | "heal" | "exalt"; n: number; s: Selection }
   | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "archive"; s: Selection }
   /** Use a creature now ("Ready and fight/reap with X"): `via` forces how the
@@ -87,15 +99,23 @@ export type Act = (
   | { k: "use"; s: Selection; via?: "fight" | "reap" }
   /** +1 power counters ("Give X two +1 power counters"). */
   | { k: "counter"; n: number; s: Selection }
-  /** "Put X on the bottom of its owner's deck" / "shuffle X into its owner's deck". */
-  | { k: "returnToDeck"; s: Selection; at?: "bottom" | "shuffle" }
+  /** "Put X on the bottom of its owner's deck" / "shuffle X into its owner's
+      deck"; `top` is the literal of the default landing (the array's end). */
+  | { k: "returnToDeck"; s: Selection; at?: "top" | "bottom" | "shuffle" }
   /** One act for the player zones: mill, discard/archive from hand, purge from a
       zone, shuffle the discard into the deck. `pick` is how the cards are
       chosen (absent = the controller's choice) and `at` where they land. */
-  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; pick?: "top" | "random" | "all"; at?: "bottom" | "shuffle"; type?: string }
+  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; pick?: "top" | "bottom" | "random" | "all"; at?: "top" | "bottom" | "shuffle"; type?: string }
   /** Set tokens of the set layer (keyteki WardAction/EnrageAction/RemoveWardAction)
       and control changes (game.takeControl). */
-  | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection }
+  | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection; opp?: boolean }
+  /** Move amber off cards ("Move 1 from X to the common supply"): `n` absent
+      takes everything, `to:"pool"` adds to the resolving side's pool (`opp`
+      flips it, "supply" discards it). */
+  | { k: "moveAmber"; s: Selection; n?: number; to: "pool" | "supply"; opp?: boolean }
+  /** Remove +1 power counters ("remove each +1 power counter from X"): `n`
+      absent removes them all. */
+  | { k: "removeCounter"; s: Selection; n?: number }
   /** "Make a token creature": the token is born on the battleline (keyteki
       MakeTokenCreatureAction), never in the deck. */
   | { k: "makeToken"; n: number }
@@ -124,6 +144,8 @@ export type Condition =
   | { k: "moreCreatures" }
   | { k: "fewerCreatures" }
   | { k: "count"; of: Count; op: "eq" | "gte" | "lte"; n: number }
+  /** "If it is not your turn": the active player is the other side. */
+  | { k: "myTurn" }
   | { k: "not"; c: Condition };
 
 export interface Ability {
@@ -181,6 +203,9 @@ export interface PersistentEffect {
   restrict?: Restrict;
   /** "Instead" replacement of the engine default for the target cards. */
   replace?: Replacement;
+  /** "This creature cannot ready" — `true` blocks effect-readies too, "step"
+      only the printed "ready cards" step (Lote 4 §4.2). */
+  noReady?: true | "step";
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
   when?: "flank";
   /** Clause gating the whole effect ("While you are haunted, …"). */
@@ -224,6 +249,13 @@ const scripts: Record<string, Ability[] | null> = {
   "ancient bear": null,
 };
 
+/** Does this card have a hand-written script? A scripted card never goes to the
+    LLM: the script wins over any draft (rulesOf), so asking would burn a call
+    (pipeline hygiene, Lote 4 §4.0). */
+export function hasScript(face: CardFace): boolean {
+  return face.title.toLowerCase() in scripts;
+}
+
 /** One persisted DSL entry — the DB v4 `abilities` store row (plano §2). Plain
     JSON data: the store round-trips through IndexedDB unchanged. `source` tells
     who wrote it: the deterministic `parser` (wave 1), an `llm` draft that only
@@ -254,6 +286,12 @@ export interface AbilityOverride {
   /** `llm` rows that failed validation are not stored as rules; the queue keeps
       the motive so the owner sees why the card stayed vanilla (catalogLlm). */
   failure?: string;
+  /** The draft deliberately left the `Fate:` sentence out (Lote 4 §4.1): the
+      rest of the card plays and coverage reports "partial", never "full". */
+  partial?: boolean;
+  /** `reply:` failures only: attempts spent, so a transient bad format is
+      retried but never forever (Lote 4 §4.0). */
+  tries?: number;
 }
 
 /** Cards with a DSL stored on disk, keyed by card id (DB v4 `abilities`). The
@@ -370,7 +408,9 @@ function storedAbility(face: CardFace): AbilityOverride | null {
     are replaced only when the entry carries them; coverage claims "full" only
     when the entry covers all three parts of the printed text — a dsl-only row
     keeps the parser's tally instead of lying about text it never covered. A
-    `parser` entry never raises coverage: it is the parser's own output. */
+    `parser` entry never raises coverage: it is the parser's own output. A row
+    marked `partial` deliberately left the `Fate:` sentence out and can never
+    claim better than "partial". */
 function mergeStored(parsed: CardRules, stored: AbilityOverride): CardRules {
   const coversText = stored.effects !== undefined && stored.keywords !== undefined;
   return {
@@ -378,7 +418,7 @@ function mergeStored(parsed: CardRules, stored: AbilityOverride): CardRules {
     abilities: stored.dsl,
     effects: stored.effects ?? parsed.effects,
     keywords: stored.keywords ?? parsed.keywords,
-    coverage: stored.source !== "parser" && coversText ? "full" : parsed.coverage,
+    coverage: stored.partial ? "partial" : stored.source !== "parser" && coversText ? "full" : parsed.coverage,
   };
 }
 
@@ -450,6 +490,8 @@ const ACTS: Record<string, string> = {
   use: "s",
   counter: "ns",
   move: "n",
+  moveAmber: "s",
+  removeCounter: "s",
   ward: "s",
   removeWard: "s",
   enrage: "s",
@@ -478,6 +520,9 @@ const FILTER_FIELDS: Record<string, 0> = {
   other: 0,
   ready: 0,
   top: 0,
+  least: 0,
+  amber: 0,
+  counters: 0,
   self: 0,
   host: 0,
   neighborsOfSource: 0,
@@ -491,6 +536,7 @@ const CONDITION_FIELDS: Record<string, string> = {
   moreCreatures: "k",
   fewerCreatures: "k",
   count: "k,of,op,n",
+  myTurn: "k",
   not: "k,c",
 };
 const KEYWORD_NAMES: ReadonlySet<string> = new Set(ENGINE_KEYWORDS);
@@ -542,7 +588,7 @@ function validCount(value: unknown): boolean {
     );
   }
   return (
-    value.of === "damage" || value.of === "amber" || value.of === "power"
+    value.of === "damage" || value.of === "amber" || value.of === "power" || value.of === "counters"
       ? Object.keys(value).every((key) => key === "of" || key === "s") && validSelection(value.s)
       : false
   );
@@ -566,7 +612,7 @@ function validCondition(value: unknown): boolean {
     rejects them (docs/DSL_EXPANSION_PLAN.md §2.4). */
 function readsPower(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
-  return Object.entries(value).some(([key, inner]) => key === "top" || (key === "of" && inner === "power") || readsPower(inner));
+  return Object.entries(value).some(([key, inner]) => key === "top" || key === "least" || (key === "of" && inner === "power") || readsPower(inner));
 }
 
 function validAct(value: unknown): boolean {
@@ -575,19 +621,28 @@ function validAct(value: unknown): boolean {
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
   if (value.if !== undefined && !validCondition(value.if)) return false;
   if (value.per !== undefined && !validCount(value.per)) return false;
+  if (value.n !== undefined && !isFiniteNumber(value.n)) return false;
   if (need.includes("n") && !isFiniteNumber(value.n)) return false;
   if (need.includes("s") && !validSelection(value.s)) return false;
+  if (value.opp !== undefined && typeof value.opp !== "boolean") return false;
+  if (value.own !== undefined && (typeof value.own !== "boolean" || value.k !== "capture")) return false;
+  // `who` resolves a player from the ability's reference card; with `opp` it
+  // would have two actors at once (Lote 4 §4.6).
+  if (value.who !== undefined) {
+    if (value.who !== "owner" && value.who !== "controller") return false;
+    if (value.opp === true) return false;
+    if (value.k !== "gainAmber" && value.k !== "loseAmber" && value.k !== "draw" && value.k !== "gainChains") return false;
+  }
   if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target);
   if (value.k === "use" && value.via !== undefined && value.via !== "fight" && value.via !== "reap") return false;
-  if (value.at !== undefined && value.at !== "bottom" && value.at !== "shuffle") return false;
+  if (value.at !== undefined && value.at !== "top" && value.at !== "bottom" && value.at !== "shuffle") return false;
   if (value.k === "move") {
     return (
       typeof value.from === "string" &&
       typeof value.to === "string" &&
       ZONES.has(value.from) &&
       ZONES.has(value.to) &&
-      (value.opp === undefined || typeof value.opp === "boolean") &&
-      (value.pick === undefined || value.pick === "top" || value.pick === "random" || value.pick === "all") &&
+      (value.pick === undefined || value.pick === "top" || value.pick === "bottom" || value.pick === "random" || value.pick === "all") &&
       (value.type === undefined || typeof value.type === "string")
     );
   }
@@ -624,6 +679,7 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.per === undefined || validCount(effect.per)) &&
         (effect.keyCost === undefined || isFiniteNumber(effect.keyCost)) &&
         (effect.opp === undefined || typeof effect.opp === "boolean") &&
+        (effect.noReady === undefined || effect.noReady === true || effect.noReady === "step") &&
         !readsPower(effect.if) &&
         !readsPower(effect.per),
     )
@@ -661,6 +717,8 @@ export function normaliseAbilityOverride(value: unknown): AbilityOverride | null
   if (typeof model === "string") record.model = model;
   if (isFiniteNumber(value.parserVersion)) record.parserVersion = value.parserVersion;
   if (typeof value.failure === "string") record.failure = value.failure;
+  if (value.partial === true) record.partial = true;
+  if (isFiniteNumber(value.tries)) record.tries = value.tries;
   if (value.effects !== undefined) record.effects = value.effects;
   if (value.keywords !== undefined) record.keywords = value.keywords;
   return record;

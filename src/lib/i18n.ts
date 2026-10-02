@@ -194,6 +194,8 @@ const DICT: Record<string, [string, string]> = {
   "game.ready": ["READY", "PRONTA"],
   "game.resting": ["RESTING", "DESCANSANDO"],
   "game.stunned": ["STUNNED", "ATORDOADA"],
+  // Entrench (Lote 4 §4.2): a criatura fica exausta no passo de ready.
+  "game.entrenched": ["Entrench: stays exhausted in the ready step", "Entrench: permanece exausta no passo de ready"],
   "game.dmg": ["DMG", "DANO"],
   "game.keys": ["KEYS", "CHAVES"],
   "game.aember": ["AEMBER", "ÂMBAR"],
@@ -258,6 +260,10 @@ const DICT: Record<string, [string, string]> = {
   "inspector.resting": ["This card is resting until your next turn.", "Esta carta descansa até seu próximo turno."],
   "inspector.stunned": ["Stunned: using this creature only removes the stun and exhausts it.", "Atordoada: usar esta criatura só remove o atordoamento e a exaure."],
   "inspector.unstun": ["Remove stun", "Remover atordoamento"],
+  // Entrench (Lote 4 §4.2): toggle do inspetor, por carta.
+  "inspector.holdKeep": ["Stay exhausted next ready step", "Ficar exausta no próximo ready step"],
+  "inspector.holdRelease": ["Ready it next ready step", "Preparar no próximo ready step"],
+  "inspector.entrenchHint": ["Entrench: while exhausted, you may keep it exhausted during your \"ready cards\" step.", "Entrench: exausta, você pode mantê-la exausta no seu passo de \"ready cards\"."],
   "inspector.discard": ["Discard", "Descartar"],
   // Onda 2 ("You may"): resolve a jogada sem a cláusula opcional da carta.
   "inspector.withoutEffect": ["Without effect", "Sem efeito"],

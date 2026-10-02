@@ -8,7 +8,9 @@ import {
   endTurn,
   getLegalMoves,
   keyCost,
+  keyword,
   moveHasEffect,
+  setHold,
   type CardInstance,
   type GameMove,
   type GameState,
@@ -139,6 +141,19 @@ function search(state: GameState, aiIndex: 0 | 1, depth: number, profile: Profil
     if (budget.nodes >= budget.max) break;
   }
   return best;
+}
+
+/** Entrench (Lote 4 §4.2): all 16 prints pay for staying exhausted, so before
+    ending its turn the AI holds every exhausted entrenched creature. Pure — the
+    App calls it right before endTurn; holds never enter the move search. */
+export function holdEntrench(current: GameState, side: 0 | 1): GameState {
+  return current.players[side].board.reduce(
+    (state, card) =>
+      card.face.type === "Creature" && !card.ready && keyword(state, card, "entrench") > 0
+        ? setHold(state, side, card.instanceId, true)
+        : state,
+    current,
+  );
 }
 
 /** FEAT-10: simple opening heuristic — mulligan when the hand holds no playable

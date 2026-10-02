@@ -5,12 +5,12 @@
 // sintética, (c) sanidade semântica. Reprovou = a carta segue vanilla e a fila
 // guarda o motivo. Nada aqui é meio-resolvido: o rascunho que passa entra como
 // `source: "llm"`, `reviewed: false` e só um humano o torna regra (abilities.ts).
-import { type Ability, type AbilityOverride, DSL_VERSION, type PersistentEffect, normaliseAbilityOverride, rulesOf, withTrialOverride } from "./abilities";
+import { type Ability, type AbilityOverride, DSL_VERSION, hasScript, type PersistentEffect, normaliseAbilityOverride, rulesOf, withTrialOverride } from "./abilities";
 import { putAbilityOverride } from "./cache";
 import { normalise, parseCardText, readableText, textHash } from "./cardText";
 import { DEMO_DECK } from "./demoDeck";
 import { DEMO_DECK_2 } from "./demoDeck2";
-import { applyMove, canResolve, createMatch, effectivePower, endTurn, getLegalMoves, type CardFace, type CardInstance, type GameState } from "./game";
+import { applyMove, canResolve, createMatch, effectivePower, endTurn, getLegalMoves, setHold, type CardFace, type CardInstance, type GameState } from "./game";
 import { DSL_SCHEMA } from "./generated/dslSchema";
 import { VaultError, withTimeout } from "./keyforgeApi";
 import { ENGINE_KEYWORDS, type Keywords } from "./keywords";
@@ -28,12 +28,22 @@ interface DslAnswer {
   abilities: Ability[];
   effects: PersistentEffect[];
   keywords: Keywords;
+  /** The one omission the golden rule allows: the `Fate:` sentence was left
+      out (Prophecy, out of the engine) and coverage reports "partial". */
+  partial?: boolean;
 }
 
 /** Few-shot pairs: card text -> the exact answer. Each one is what the
     deterministic parser produces for that text (a spec asserts it), so the
-    examples cannot drift from the engine. The last one teaches `unsupported`. */
-export const FEW_SHOTS: { type: string; text: string; answer: DslAnswer | { unsupported: true; reason: string } }[] = [
+    examples cannot drift from the engine — `promptOnly` marks the exception: a
+    wording the MODEL must translate but the deterministic parser does not read,
+    so the assertion checks that it stays outside the grammar instead. */
+export const FEW_SHOTS: {
+  type: string;
+  text: string;
+  promptOnly?: boolean;
+  answer: DslAnswer | { unsupported: true; reason: string };
+}[] = [
   {
     type: "Creature",
     text: "Play: Deal 2<D> to a creature. Reap: Gain 1<A>.",
@@ -69,10 +79,12 @@ export const FEW_SHOTS: { type: string; text: string; answer: DslAnswer | { unsu
       keywords: {},
     },
   },
+  // A Fate: sentence is the single omission the golden rule allows: the rest of
+  // the card plays and the answer is marked `partial` (Lote 4 §4.1).
   {
     type: "Creature",
     text: "Play: Gain 1<A>. Fate: Archive a card.",
-    answer: { unsupported: true, reason: "Fate: belongs to the Prophecy subsystem, which the engine does not resolve." },
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "gainAmber", n: 1 }] }], effects: [], keywords: {}, partial: true },
   },
   // Lote 2 (docs/DSL_EXPANSION_PLAN.md §2): dynamic amounts, act conditions,
   // house/trait filters, key costs, picks, player zones and the Scrap trigger.
@@ -227,12 +239,141 @@ export const FEW_SHOTS: { type: string; text: string; answer: DslAnswer | { unsu
       keywords: {},
     },
   },
+  // Lote 4 (docs/DSL_EXPANSION_PLAN_WAVE2.md §2): Entrench/noReady, capture.own +
+  // least, top-of-deck, `who`, takeControl.opp, myTurn, moveAmber e removeCounter.
+  {
+    type: "Creature",
+    text: "Entrench. At the start of your turn, if this creature is exhausted, destroy an enemy creature.",
+    answer: {
+      abilities: [
+        {
+          on: ["startOfTurn"],
+          acts: [{ k: "destroy", s: "target" }],
+          target: { type: "Creature", side: "enemy" },
+          if: { k: "count", of: { c: { self: true, exhausted: true } }, op: "gte", n: 1 },
+        },
+      ],
+      effects: [],
+      keywords: { entrench: 1 },
+    },
+  },
+  {
+    type: "Upgrade",
+    text: "This creature cannot ready.",
+    answer: { abilities: [], effects: [{ target: { host: true }, noReady: true }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "After Reap: The least powerful enemy creature captures 1<A> from its own side.",
+    answer: {
+      abilities: [
+        { on: ["reap"], acts: [{ k: "capture", n: 1, own: true, s: { each: { type: "Creature", side: "enemy", least: 1 } } }] },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Put an enemy creature on top of its owner's deck.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "returnToDeck", s: "target", at: "top" }], target: { type: "Creature", side: "enemy" } }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Play: Destroy a creature. Its controller gains 1<A>.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [{ k: "destroy", s: "target" }, { k: "gainAmber", n: 1, who: "controller" }],
+          target: { type: "Creature" },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Give control of a friendly creature to your opponent.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "takeControl", s: "target", opp: true }], target: { type: "Creature", side: "friendly" } }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Destroyed: If it is not your turn, gain 2<A>.",
+    answer: { abilities: [{ on: ["destroyed"], acts: [{ k: "gainAmber", n: 2 }], if: { k: "not", c: { k: "myTurn" } } }], effects: [], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "After Reap: Return 1<A> from this creature to the common supply.",
+    answer: { abilities: [{ on: ["reap"], acts: [{ k: "moveAmber", n: 1, s: "self", to: "supply" }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "After Reap: You may remove each +1 power counter from a creature. If one or more counters are removed this way, archive a card.",
+    answer: {
+      abilities: [
+        {
+          on: ["reap"],
+          acts: [
+            { k: "removeCounter", s: "target", optional: true },
+            { k: "move", n: 1, from: "hand", to: "archives", if: { k: "count", of: "did", op: "gte", n: 1 } },
+          ],
+          target: { type: "Creature" },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  // O formato `unsupported` continua ensinado: nem toda carta é representável.
+  {
+    type: "Action",
+    text: "Play: Look at your opponent's hand and discard a card from it.",
+    answer: { unsupported: true, reason: "Looking at hidden information is not representable." },
+  },
+  // Só prompt (§4.3): "repeat the preceding effect" = os mesmos atos duplicados
+  // com `if`; o parser determinístico não lê a sentença, então este shot não
+  // carrega a invariante "o parser produz exatamente a resposta".
+  {
+    type: "Creature",
+    promptOnly: true,
+    text: "After Reap: Deal 2<D> to an enemy creature. If that creature has <A> on it, repeat the preceding effect.",
+    answer: {
+      abilities: [
+        {
+          on: ["reap"],
+          acts: [
+            { k: "damage", n: 2, s: "target" },
+            {
+              k: "damage",
+              n: 2,
+              s: { pick: { type: "Creature", side: "enemy" } },
+              if: { k: "count", of: { of: "amber", s: "target" }, op: "gte", n: 1 },
+            },
+          ],
+          target: { type: "Creature", side: "enemy" },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
 ];
 
 const SYSTEM_RULES = [
   "You translate the printed text of a KeyForge card into a JSON DSL for a rules engine.",
-  'Answer with ONLY one JSON object: {"abilities": Ability[], "effects": PersistentEffect[], "keywords": Keywords}, or {"unsupported": true, "reason": "<short>"}.',
+  'Answer with ONLY one JSON object: {"abilities": Ability[], "effects": PersistentEffect[], "keywords": Keywords, "partial"?: true}, or {"unsupported": true, "reason": "<short>"}.',
   "GOLDEN RULE: every sentence of the card text must be representable EXACTLY with the types below. If any sentence is not, answer unsupported. Never approximate, never invent, never drop a sentence.",
+  'The ONE exception: a "Fate:" sentence belongs to the Prophecy subsystem the engine does not resolve. Omit ONLY that sentence and add "partial": true — every other sentence must still be represented. Never answer partial for a card without Fate:.',
   "Keep the order of the text. Printed keywords (Elusive. Skirmish. Taunt. Assault 2 ...) go in `keywords` with their number (1 when absent), not in abilities.",
   'Prefixes map to triggers: "Play:" play, "Reap:" reap, "Fight:" fight, "Before Fight:" beforeFight, "Destroyed:" destroyed, "Action:" action, "Omni:" omni, "At the start of your turn:" startOfTurn, "At the end of your turn:" endOfTurn. "After X:" / "Each time X:" bind to the same trigger.',
   'An Ability `target` is the filter of the creature the player chooses; acts that use it say `s: "target"`. "You may" => `optional: true`. <A> is amber, <D> is damage.',
@@ -241,6 +382,9 @@ const SYSTEM_RULES = [
   '"for each X" = the act\'s per. Filters: {"house":"Mars"}, {"house":"!Mars"}, {"trait":"Knight"}, {"house":"active"}. "keys cost +N" (no possessive) = two effects (owner + opp).',
   'Watchers ("After an enemy creature reaps, stun it.") set `of` to the watched filter; the event card is s:"event". "After your opponent plays a creature" = on ["play"], of {"type":"Creature","side":"enemy"}; "Each time you use an artifact" = on ["action","omni"].',
   '"Ready and fight/reap with X" = [{k:"ready",s:"target"},{k:"use",s:"target",via:"fight"|"reap"}]. "Give X two +1 power counters" = {k:"counter",n:2,s:...}. Splash: "Deal 3<D> to a creature, with 1<D> splash" = [{k:"damage",n:1,s:"targetNeighbors"},{k:"damage",n:3,s:"target"}] — neighbors first, the only exception to the printed order.',
+  '"If <condition>, repeat the preceding effect" = duplicate the acts of the preceding effect with that condition in the duplicated acts\' `if` (the repeated target becomes a {pick} of the same filter). "Repeat this effect" as a loop stays unsupported.',
+  '"May be used as if it belonged to the active house" (Versatile\'s reminder) = keyword versatile; granted through effects when another card grants it. "May be played as if it belonged to the active house" is the same permission ONLY in that bare form — "as if it was in your hand/discard pile" stays unsupported.',
+  '"The creature ~ fights" / "the attacked enemy" = s:"fought" (the defender of the fight in progress).',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
@@ -327,7 +471,12 @@ type Draft = { ok: true; row: AbilityOverride } | { ok: false; reason: string };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 
-function draftRow(face: CardFace, parts: { abilities: unknown; effects?: unknown; keywords?: unknown }, source: AbilityOverride["source"], model?: string): Draft {
+function draftRow(
+  face: CardFace,
+  parts: { abilities: unknown; effects?: unknown; keywords?: unknown; partial?: unknown },
+  source: AbilityOverride["source"],
+  model?: string,
+): Draft {
   const base = { cardId: face.id, textHash: textHash(face.text ?? ""), source, reviewed: source === "manual", generatedAt: Date.now(), v: DSL_VERSION, ...(model ? { model } : {}) };
   if (!Array.isArray(parts.abilities)) return { ok: false, reason: "schema: `abilities` must be an array" };
   const effects = parts.effects ?? [];
@@ -338,7 +487,7 @@ function draftRow(face: CardFace, parts: { abilities: unknown; effects?: unknown
   }
   if (!gate({ effects })) return { ok: false, reason: "schema: `effects` is not a valid PersistentEffect[]" };
   if (!gate({ keywords })) return { ok: false, reason: "schema: `keywords` has an unknown keyword or a non-number value" };
-  const row = normaliseAbilityOverride({ ...base, dsl: parts.abilities, effects, keywords });
+  const row = normaliseAbilityOverride({ ...base, dsl: parts.abilities, effects, keywords, ...(parts.partial === true ? { partial: true } : {}) });
   return row ? { ok: true, row } : { ok: false, reason: "schema: rejected by the engine's row gate" };
 }
 
@@ -363,9 +512,10 @@ const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "sev
 const TARGETED = new Set(["target", "targetAndNeighbors", "targetNeighbors"]);
 
 function actProblem(act: Ability["acts"][number], ability: Ability, face: CardFace, text: string): string | null {
-  if ("n" in act && (!Number.isInteger(act.n) || act.n < 1 || act.n > 20)) return `${act.k}: n=${act.n} is out of range`;
+  // `n` is optional on moveAmber/removeCounter (absent = all).
+  if ("n" in act && act.n !== undefined && (!Number.isInteger(act.n) || act.n < 1 || act.n > 20)) return `${act.k}: n=${act.n} is out of range`;
   // A number the printed text never states is a hallucination ("a"/"an" = 1).
-  if ("n" in act && act.n > 1 && !new RegExp(`\\b(${act.n}|${NUMBER_WORDS[act.n] ?? "$^"})\\b`).test(text)) return `${act.k}: the number ${act.n} is not in the card text`;
+  if ("n" in act && act.n !== undefined && act.n > 1 && !new RegExp(`\\b(${act.n}|${NUMBER_WORDS[act.n] ?? "$^"})\\b`).test(text)) return `${act.k}: the number ${act.n} is not in the card text`;
   if ("s" in act && typeof act.s === "string" && TARGETED.has(act.s) && !ability.target) return `${act.k}: selects a target but the ability has no \`target\` filter`;
   if ("s" in act && act.s === "host" && face.type !== "Upgrade") return `${act.k}: "host" only exists on upgrades`;
   // Observers: "event" only exists when the ability declares what it watches.
@@ -383,20 +533,20 @@ function actProblem(act: Ability["acts"][number], ability: Ability, face: CardFa
     already guaranteed by (a). */
 export function sanityProblem(face: CardFace, row: AbilityOverride): string | null {
   const text = normalise(face.text ?? "");
-  const checkAbility = (ability: Ability): string | null => {
+  const checkAbility = (ability: Ability, type: string = face.type): string | null => {
     for (const trigger of ability.on) {
-      if (face.type === "Action" || face.type === "Upgrade") {
+      if (type === "Action" || type === "Upgrade") {
         // Scrap is a trigger of the card DISCARDED from hand: an Action/Upgrade
         // is the card that reaches the pile (keyteki Scrap: on those types).
-        if (trigger !== "play" && trigger !== "scrap") return `trigger "${trigger}" cannot happen on a ${face.type} card`;
-      } else if (face.type === "Artifact" && (trigger === "reap" || trigger === "fight" || trigger === "beforeFight")) {
+        if (trigger !== "play" && trigger !== "scrap") return `trigger "${trigger}" cannot happen on a ${type} card`;
+      } else if (type === "Artifact" && (trigger === "reap" || trigger === "fight" || trigger === "beforeFight")) {
         return `trigger "${trigger}" cannot happen on an Artifact`;
       }
       // Fora de Action não existe Play implícito: em Creature/Artifact/Upgrade o
       // texto sem gatilho conhecido costuma ser habilidade constante ou um gatilho
       // que a tabela não cobre (Fate:, Scrap:). Exigir a nomeação erra para o lado
       // conservador — o rascunho errado vira falha, nunca regra.
-      if (!(trigger === "play" && face.type === "Action") && !TRIGGER_WORDS[trigger].test(text)) return `trigger "${trigger}" is not named by the card text`;
+      if (!(trigger === "play" && type === "Action") && !TRIGGER_WORDS[trigger].test(text)) return `trigger "${trigger}" is not named by the card text`;
     }
     for (const act of ability.acts) {
       const problem = actProblem(act, ability, face, text);
@@ -409,13 +559,22 @@ export function sanityProblem(face: CardFace, row: AbilityOverride): string | nu
     if (problem) return `sanity: ${problem}`;
   }
   for (const effect of row.effects ?? []) {
+    // A granted ability belongs to the HOST creature, not to the Upgrade that
+    // prints it ("This creature gains, 'At the start of your turn, …'" — case
+    // Starpatch, Lote 4 §4.0): validate it as a Creature.
+    const hostType = face.type === "Upgrade" ? "Creature" : face.type;
     for (const ability of effect.abilities ?? []) {
-      const problem = checkAbility(ability);
+      const problem = checkAbility(ability, hostType);
       if (problem) return `sanity: ${problem}`;
     }
     if (Math.abs(effect.power ?? 0) > 20 || Math.abs(effect.armor ?? 0) > 20) return "sanity: stat modifier out of range";
   }
   if (!row.dsl.length && !row.effects?.length && !Object.keys(row.keywords ?? {}).length) return "sanity: empty translation (the card should have been answered unsupported)";
+  // `partial` is the one licensed omission and exists only for Fate: (Lote 4
+  // §4.1): it can neither skip a sentence on a card without Fate: nor be
+  // silently absent when the Fate: sentence was dropped.
+  if (row.partial === true && !/\bfate\s*:/.test(text)) return "sanity: partial is only allowed when the card prints a Fate: sentence";
+  if (row.partial !== true && /\bfate\s*:/.test(text)) return "sanity: the Fate: sentence may only be omitted with partial: true";
   return null;
 }
 
@@ -506,9 +665,14 @@ function exerciseTable(face: CardFace, where: "hand" | "board", rich: boolean): 
     if (JSON.stringify(next) !== JSON.stringify(again)) return `${label}${move.type}): the move is not deterministic`;
   }
   if (where === "board") {
-    const ended = endTurn(state, 0);
-    const problem = brokenState(ended) ?? brokenState(endTurn(ended, 1));
-    if (problem) return `${label}turn boundaries): ${problem}`;
+    // Entrench (§4.2): the ready step must be exercised with `hold` both ways —
+    // the held branch is where `noReady`/Entrench bugs would hide.
+    for (const hold of [false, true]) {
+      const held = setHold(state, 0, card.instanceId, hold);
+      const ended = endTurn(held, 0);
+      const problem = brokenState(ended) ?? brokenState(endTurn(ended, 1));
+      if (problem) return `${label}turn boundaries): ${problem}`;
+    }
   }
   return null;
 }
@@ -547,57 +711,91 @@ export interface Validation {
 
 /** Triple validation of one candidate (shared by the LLM answer and the review
     queue's manual edit). `source` is what the row will claim. */
-export function validateDraft(face: CardFace, parts: { abilities: unknown; effects?: unknown; keywords?: unknown }, source: AbilityOverride["source"], model?: string): Validation {
+export function validateDraft(
+  face: CardFace,
+  parts: { abilities: unknown; effects?: unknown; keywords?: unknown; partial?: unknown },
+  source: AbilityOverride["source"],
+  model?: string,
+): Validation {
   const draft = draftRow(face, parts, source, model);
   if (!draft.ok) return { ok: false, reason: draft.reason };
   const problem = sanityProblem(face, draft.row) ?? dryRunProblem(face, draft.row);
   return problem ? { ok: false, reason: problem } : { ok: true, row: draft.row };
 }
 
-/** Vanilla + motive: an untrusted row with an empty DSL the queue lists. */
-export function failureRow(face: CardFace, reason: string, model?: string): AbilityOverride {
-  return { cardId: face.id, dsl: [], textHash: textHash(face.text ?? ""), source: "llm", reviewed: false, generatedAt: Date.now(), v: DSL_VERSION, failure: reason, ...(model ? { model } : {}) };
+/** Vanilla + motive: an untrusted row with an empty DSL the queue lists. `tries`
+    counts the `reply:` attempts already spent (Lote 4 §4.0). */
+export function failureRow(face: CardFace, reason: string, model?: string, options: { tries?: number } = {}): AbilityOverride {
+  const row: AbilityOverride = {
+    cardId: face.id,
+    dsl: [],
+    textHash: textHash(face.text ?? ""),
+    source: "llm",
+    reviewed: false,
+    generatedAt: Date.now(),
+    v: DSL_VERSION,
+    failure: reason,
+    ...(model ? { model } : {}),
+  };
+  if (options.tries !== undefined) row.tries = options.tries;
+  return row;
 }
 
 /** Parser output for the parts the model may have left out: the parser's own
-    effects stand in when the model returns none, and printed keywords merge. */
-function withParserParts(face: CardFace, answer: Record<string, unknown>): { abilities: unknown; effects: unknown; keywords: unknown } {
+    effects stand in when the model returns none, and printed keywords merge.
+    `partial` (a dropped Fate: sentence) rides along with the answer. */
+function withParserParts(face: CardFace, answer: Record<string, unknown>): { abilities: unknown; effects: unknown; keywords: unknown; partial: boolean } {
   const parsed = parseCardText(face);
   const effects = Array.isArray(answer.effects) && answer.effects.length ? answer.effects : parsed.effects;
   const keywords = isRecord(answer.keywords) ? { ...parsed.keywords, ...answer.keywords } : parsed.keywords;
-  return { abilities: answer.abilities, effects, keywords };
+  return { abilities: answer.abilities, effects, keywords, partial: answer.partial === true };
 }
 
 /** Translates one card. Resolves with a row ALWAYS — the validated draft or a
     failure row — and rejects only on transport problems (no key, auth, network,
     rate limit) so a run can stop instead of burning every card on the same error. */
-export async function translateCard(face: CardFace, config: LlmConfig, options: { signal?: AbortSignal; fetcher?: Fetcher } = {}): Promise<AbilityOverride> {
+export async function translateCard(
+  face: CardFace,
+  config: LlmConfig,
+  options: { signal?: AbortSignal; fetcher?: Fetcher; tries?: number } = {},
+): Promise<AbilityOverride> {
   const reply = await callProvider(config, buildMessages(face), options);
   const model = config.model.trim();
   const answer = extractJson(reply);
-  if (!isRecord(answer)) return failureRow(face, "reply: not a JSON object", model);
+  if (!isRecord(answer)) return failureRow(face, "reply: not a JSON object", model, { tries: (options.tries ?? 0) + 1 });
   if (answer.unsupported === true) return failureRow(face, `unsupported: ${typeof answer.reason === "string" ? answer.reason.slice(0, 200) : "not representable"}`, model);
   const result = validateDraft(face, withParserParts(face, answer), "llm", model);
   return result.ok ? result.row! : failureRow(face, result.reason ?? "invalid", model);
 }
 
 /** Cards worth a call: the parser does not cover them fully and the store holds
-    no answer yet for this exact text. The cache is eternal per textHash, except
-    for a FAILURE written by an older DSL_VERSION — the DSL grows every version
-    and yesterday's "unsupported" may be expressible today, so those retry. */
+    no answer yet for this exact text. A card with a hand-written script is
+    skipped — the script wins over any draft, so the call would be wasted
+    (§4.0). The cache is eternal per textHash, except for a FAILURE written by an
+    older DSL_VERSION — the DSL grows every version and yesterday's
+    "unsupported" may be expressible today, so those retry. A "reply:" failure
+    is a transient format error: it retries on the current version too, up to
+    three tries. */
 export function pendingTranslations(cards: CardFace[], known: (id: string) => AbilityOverride | undefined): CardFace[] {
   return cards.filter((face) => {
-    if (!face.text?.trim() || parseCardText(face).coverage === "full") return false;
+    if (!face.text?.trim() || hasScript(face) || parseCardText(face).coverage === "full") return false;
     const row = known(face.id);
     if (!row || row.textHash !== textHash(face.text)) return true;
-    return !!row.failure && (row.v ?? 1) < DSL_VERSION;
+    if (!row.failure) return false;
+    if ((row.v ?? 1) < DSL_VERSION) return true;
+    return row.failure.startsWith("reply:") && (row.tries ?? 0) < 3;
   });
 }
 
 /** The review queue's open rows (onda 2): `llm` answers a human has not ruled on
-    yet — valid drafts and failures (vanilla + motive) — newest first. */
-export function reviewQueue(rows: AbilityOverride[]): AbilityOverride[] {
-  return rows.filter((row) => row.source === "llm" && !row.reviewed).sort((a, b) => b.generatedAt - a.generatedAt);
+    yet — valid drafts and failures (vanilla + motive) — newest first. `covered`
+    prunes the zombies (§4.0): a failure whose card the parser reads fully today
+    is stale, so neither the queue nor the export keeps showing it. */
+export function reviewQueue(rows: AbilityOverride[], covered: (cardId: string) => boolean = () => false): AbilityOverride[] {
+  return rows
+    .filter((row) => row.source === "llm" && !row.reviewed)
+    .filter((row) => !(row.failure && covered(row.cardId)))
+    .sort((a, b) => b.generatedAt - a.generatedAt);
 }
 
 export type QueueRejection = "shape" | "version" | "source" | "unknownCard" | "hash" | "protected";
@@ -659,7 +857,16 @@ export interface RunProgress {
 export async function runTranslation(
   faces: CardFace[],
   config: LlmConfig,
-  options: { limit?: number; signal?: AbortSignal; fetcher?: Fetcher; save?: (row: AbilityOverride) => Promise<void>; onProgress?: (progress: RunProgress) => void } = {},
+  options: {
+    limit?: number;
+    signal?: AbortSignal;
+    fetcher?: Fetcher;
+    save?: (row: AbilityOverride) => Promise<void>;
+    onProgress?: (progress: RunProgress) => void;
+    /** Attempts already spent on a `reply:` failure, so the retry can count
+        them (Lote 4 §4.0). */
+    previous?: (cardId: string) => number | undefined;
+  } = {},
 ): Promise<RunProgress> {
   const queue = faces.slice(0, options.limit ?? LLM_RUN_LIMIT);
   const save = options.save ?? putAbilityOverride;
@@ -675,7 +882,7 @@ export async function runTranslation(
     if (options.signal?.aborted) break;
     let row: AbilityOverride;
     try {
-      row = await translateCard(face, config, { signal: options.signal, fetcher: options.fetcher });
+      row = await translateCard(face, config, { signal: options.signal, fetcher: options.fetcher, tries: options.previous?.(face.id) ?? 0 });
     } catch (error) {
       // An abort (Cancel button) is a stop, not a failure.
       if (options.signal?.aborted) break;

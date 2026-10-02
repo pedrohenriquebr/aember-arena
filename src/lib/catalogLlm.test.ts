@@ -3,7 +3,7 @@
 // validação tripla, redaction da chave e o schema gerado do abilities.ts.
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normaliseAbilityOverride, DSL_VERSION, rulesOf, setAbilityOverrides, type AbilityOverride } from "./abilities";
+import { normaliseAbilityOverride, DSL_VERSION, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
 import { buildMessages, callProvider, dryRunProblem, extractJson, FEW_SHOTS, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, validateDraft, validateQueueRows } from "./catalogLlm";
 import { parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
@@ -69,11 +69,17 @@ describe("prompt", () => {
   it("few-shot answers are exactly what the parser produces (no drift from the engine)", () => {
     for (const shot of FEW_SHOTS) {
       const parsed = parseCardText(face(shot.text, { type: shot.type }));
-      if ("unsupported" in shot.answer) {
+      if ("unsupported" in shot.answer || shot.promptOnly) {
+        // `unsupported` (out of the grammar) and `promptOnly` (a wording only
+        // the MODEL translates, §4.3) must stay outside the deterministic parser.
         expect(parsed.coverage).not.toBe("full");
         continue;
       }
-      expect({ abilities: parsed.abilities, effects: parsed.effects, keywords: parsed.keywords }).toEqual(shot.answer);
+      const { partial, ...expected } = shot.answer;
+      // `partial` is metadata of the answer, not a parser part: the parser must
+      // agree on the coverage instead.
+      if (partial) expect(parsed.coverage).toBe("partial");
+      expect({ abilities: parsed.abilities, effects: parsed.effects, keywords: parsed.keywords }).toEqual(expected);
     }
   });
 
@@ -326,6 +332,116 @@ describe("review queue", () => {
       row({ cardId: "failed", failure: "unsupported: no", generatedAt: 3 }),
     ];
     expect(reviewQueue(rows).map((item) => item.cardId)).toEqual(["failed", "draft"]);
+  });
+
+  it("prunes a zombie failure whose card the parser covers fully today (Lote 4 §4.0)", () => {
+    const row = (patch: Partial<AbilityOverride>): AbilityOverride => ({
+      cardId: "x",
+      dsl: [],
+      textHash: "h",
+      source: "llm",
+      reviewed: false,
+      generatedAt: 1,
+      ...patch,
+    });
+    const rows = [
+      row({ cardId: "covered", failure: "unsupported: no", generatedAt: 3 }),
+      row({ cardId: "still-gap", failure: "unsupported: no", generatedAt: 2 }),
+      row({ cardId: "draft", generatedAt: 1 }),
+    ];
+    expect(reviewQueue(rows, (id) => id === "covered").map((item) => item.cardId)).toEqual(["still-gap", "draft"]);
+    // A draft from a now-covered card is not a failure: it still deserves review.
+    expect(reviewQueue([row({ cardId: "covered" })], () => true).map((item) => item.cardId)).toEqual(["covered"]);
+  });
+});
+
+describe("pipeline hygiene (Lote 4 §4.0)", () => {
+  const gapText = "Play: Shuffle things around in a strange way.";
+  const gap = (id: string, patch: Partial<CardFace> = {}) => face(gapText, { id, ...patch });
+  const stored = (id: string, patch: Partial<AbilityOverride>): AbilityOverride => ({
+    cardId: id,
+    dsl: [],
+    textHash: textHash(gapText),
+    source: "llm",
+    reviewed: false,
+    generatedAt: 1,
+    ...patch,
+  });
+
+  it("skips a card with a hand-written script (the script wins over any draft)", () => {
+    // Scripted titles are written for the starter decks; the LLM call would be wasted.
+    const bear = face("Starter text the parser cannot read.", { id: "bear", title: "Ancient Bear" });
+    expect(pendingTranslations([bear, gap("gap")], () => undefined).map((item) => item.id)).toEqual(["gap"]);
+  });
+
+  it("retries a reply: failure on the current version, stopping at 3 tries", () => {
+    const cards = [gap("x")];
+    const pending = (row: AbilityOverride) => pendingTranslations(cards, () => row);
+    expect(pending(stored("x", { failure: "reply: not a JSON object", v: DSL_VERSION }))).toHaveLength(1);
+    expect(pending(stored("x", { failure: "reply: not a JSON object", v: DSL_VERSION, tries: 2 }))).toHaveLength(1);
+    expect(pending(stored("x", { failure: "reply: not a JSON object", v: DSL_VERSION, tries: 3 }))).toHaveLength(0);
+    // A current-version unsupported stays cached: it is not a transient format error.
+    expect(pending(stored("x", { failure: "unsupported: no", v: DSL_VERSION }))).toHaveLength(0);
+  });
+
+  it("counts the retry on the row (translateCard and runTranslation previous)", async () => {
+    const row = await translateCard(face("Reap: Gain 1<A>."), config, { fetcher: stub(reply("not json")), tries: 2 });
+    expect(row).toMatchObject({ failure: "reply: not a JSON object", tries: 3, v: DSL_VERSION });
+    const saved: AbilityOverride[] = [];
+    await runTranslation([face("Reap: Gain 1<A>.", { id: "r" })], config, {
+      fetcher: stub(reply("not json")),
+      previous: () => 1,
+      save: async (item) => void saved.push(item),
+    });
+    expect(saved[0]).toMatchObject({ failure: "reply: not a JSON object", tries: 2 });
+  });
+});
+
+describe("partial (Fate) — Lote 4 §4.1", () => {
+  const fateCard = face("Play: Gain 1<A>. Fate: Archive a card.");
+  const playAbility: Ability[] = [{ on: ["play"], acts: [{ k: "gainAmber", n: 1 }] }];
+
+  it("sanity: partial only with Fate:, and Fate: only with partial", () => {
+    expect(validateDraft(fateCard, { abilities: playAbility }, "llm").reason).toContain("partial: true");
+    expect(validateDraft(fateCard, { abilities: playAbility, partial: true }, "llm").ok).toBe(true);
+    // The exit door cannot skip a sentence on a card without Fate:.
+    expect(validateDraft(face("Play: Gain 1<A>."), { abilities: playAbility, partial: true }, "llm").reason).toContain("Fate:");
+  });
+
+  it("translateCard carries partial into the row; rulesOf reports partial coverage", async () => {
+    const row = await translateCard(fateCard, config, { fetcher: stub(reply({ abilities: playAbility, partial: true })) });
+    expect(row).toMatchObject({ partial: true, v: DSL_VERSION });
+    expect(row.failure).toBeUndefined();
+    setAbilityOverrides(new Map([[row.cardId, { ...row, reviewed: true }]]));
+    expect(rulesOf(fateCard).coverage).toBe("partial");
+    expect(rulesOf(fateCard).abilities).toEqual(playAbility);
+  });
+
+  it("the row shape gate keeps partial and tries", () => {
+    const row: AbilityOverride = {
+      cardId: "p",
+      dsl: playAbility,
+      textHash: textHash(fateCard.text),
+      source: "llm",
+      reviewed: true,
+      generatedAt: 1,
+      partial: true,
+      tries: 2,
+    };
+    expect(normaliseAbilityOverride(row)).toMatchObject({ partial: true, tries: 2 });
+  });
+});
+
+describe("prompt-only rules — Lote 4 §4.3", () => {
+  it("teaches repeat, versatile and fought", () => {
+    const system = buildMessages(face("Reap: Gain 1<A>."))[0].content;
+    expect(system).toContain("repeat the preceding effect");
+    expect(system).toContain("versatile");
+    expect(system).toContain('s:"fought"');
+    expect(system).toContain("Fate:");
+    // The repeat shot is marked promptOnly (the parser must not claim it).
+    const repeat = FEW_SHOTS.find((shot) => shot.text.includes("repeat the preceding effect"));
+    expect(repeat?.promptOnly).toBe(true);
   });
 });
 
