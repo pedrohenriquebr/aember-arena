@@ -220,10 +220,12 @@ export function chooseAiMove(
     .map((move) => {
       const next = applyMove(view, aiIndex, move, SIM);
       // FEAT-03 (Hard+): playing a card whose printed condition is not met yet
-      // spends it for nothing — hold it and let the search find the setup.
+      // spends it for nothing — hold it and let the search find the setup. The
+      // source card is the condition's `{c:{self:true}}` scope (Lote 2).
+      const source = moveSource(view, aiIndex, move)!;
       const heldBack = profile.abilityAware
-        ? -0.45 * abilitiesOf(view, moveSource(view, aiIndex, move)!).filter(
-            (ability) => ability.on.includes("play") && ability.if && !conditionHolds(ability.if, view, aiIndex),
+        ? -0.45 * abilitiesOf(view, source).filter(
+            (ability) => ability.on.includes("play") && ability.if && !conditionHolds(ability.if, view, aiIndex, source),
           ).length
         : 0;
       return { move, value: search(next, aiIndex, depth - 1, profile, budget) + heldBack + (roll() - 0.5) * profile.noise };

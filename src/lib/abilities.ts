@@ -15,14 +15,18 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 2; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 3; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
     engine calls fire() once per occurrence, so no per-turn counter is needed.
     Global watchers ("Each time you play another creature") stay out: they
-    would need an event bus across sources, not a card-bound trigger. */
-export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni" | "startOfTurn" | "endOfTurn";
+    would need an event bus across sources, not a card-bound trigger.
+    `scrap` is the printed "Scrap:" of a card going to its discard pile. */
+export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni" | "startOfTurn" | "endOfTurn" | "scrap";
+
+/** A player's card zones an act can read or move cards out of. */
+export type Zone = "hand" | "deck" | "discard" | "archives" | "purged";
 
 /** Card filter. `side` is relative to the ability's controller. */
 export interface Filter {
@@ -40,16 +44,38 @@ export interface Filter {
   host?: boolean;
   /** The source's neighbors ("Each of ~'s neighbors gets +2 armor"). */
   neighborsOfSource?: boolean;
+  /** "each Mars creature" (prefix `!` negates): a printed house name or `active`. */
+  house?: string;
+  /** "each Knight creature" (prefix `!` negates): a token of face.traits. */
+  trait?: string;
+  /** "each exhausted creature": NOT the same as `ready` (a stunned card is ready). */
+  exhausted?: boolean;
 }
 
 /** Which cards an action affects. */
-export type Selection = "self" | "host" | "target" | "targetAndNeighbors" | "neighborsOfFought" | { each: Filter };
+export type Selection = "self" | "host" | "target" | "targetAndNeighbors" | "neighborsOfFought" | "fought" | { each: Filter } | { pick: Filter; n?: number };
+
+/** How many things a dynamic amount reads: the previous act of the ability
+    ("did"/"gone"), a board filter, a zone/counter of a player or a stat summed
+    over a selection. */
+export type Count =
+  | "did"
+  | "gone"
+  | { c: Filter }
+  | { p: Zone | "keys" | "amber" | "plays"; opp?: boolean }
+  | { of: "damage" | "amber" | "power"; s: Selection };
 
 export type Act = (
   | { k: "gainAmber" | "loseAmber" | "steal" | "gainChains" | "draw" | "discardRandom" | "keyCost"; n: number; opp?: boolean }
   | { k: "capture"; n: number; s: Selection }
   | { k: "damage" | "heal" | "exalt"; n: number; s: Selection }
-  | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "returnToDeck" | "archive" | "use"; s: Selection }
+  | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "archive" | "use"; s: Selection }
+  /** "Put X on the bottom of its owner's deck" / "shuffle X into its owner's deck". */
+  | { k: "returnToDeck"; s: Selection; at?: "bottom" | "shuffle" }
+  /** One act for the player zones: mill, discard/archive from hand, purge from a
+      zone, shuffle the discard into the deck. `pick` is how the cards are
+      chosen (absent = the controller's choice) and `at` where they land. */
+  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; pick?: "top" | "random" | "all"; at?: "bottom" | "shuffle"; type?: string }
   /** Set tokens of the set layer (keyteki WardAction/EnrageAction/RemoveWardAction)
       and control changes (game.takeControl). */
   | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection }
@@ -67,6 +93,11 @@ export type Act = (
 ) & {
   /** "You may <efeito>": the actor decides whether this part resolves. */
   optional?: boolean;
+  /** "If you do, …" / "if this damage destroys that creature": gates THIS act
+      on the state left by the act before it. */
+  if?: Condition;
+  /** "… for each <count>" (dynamic amount: n × count). */
+  per?: Count;
 };
 
 /** Specification: "may this ability resolve now?" — evaluated by the engine and
@@ -75,6 +106,7 @@ export type Condition =
   | { k: "amber"; opp: boolean; op: "eq" | "gte"; n: number }
   | { k: "moreCreatures" }
   | { k: "fewerCreatures" }
+  | { k: "count"; of: Count; op: "eq" | "gte" | "lte"; n: number }
   | { k: "not"; c: Condition };
 
 export interface Ability {
@@ -129,6 +161,16 @@ export interface PersistentEffect {
   replace?: Replacement;
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
   when?: "flank";
+  /** Clause gating the whole effect ("While you are haunted, …"). */
+  if?: Condition;
+  /** A stat/key-cost bonus multiplied by a dynamic count ("… for each card in
+      your archives"). */
+  per?: Count;
+  /** "Keys cost +N": added to the cost the effect's side pays (`opp` → the
+      other side's keys). */
+  keyCost?: number;
+  /** keyCost applies to the opponent of the effect's source instead. */
+  opp?: boolean;
   /** Printed duration of a triggered effect: end of this turn, or of the
       opponent's next turn (keyteki duringOpponentNextTurn). Trap: "next" is
       stamp + 2, correct ONLY for "the opponent's next turn"; a "your next
@@ -354,6 +396,7 @@ const ABILITY_TRIGGERS: ReadonlySet<string> = new Set<Trigger>([
   "omni",
   "startOfTurn",
   "endOfTurn",
+  "scrap",
 ]);
 
 /** Every stored act, and which of its fields the engine needs: `n` (a finite
@@ -383,6 +426,7 @@ const ACTS: Record<string, string> = {
   returnToDeck: "s",
   archive: "s",
   use: "s",
+  move: "n",
   ward: "s",
   removeWard: "s",
   enrage: "s",
@@ -396,7 +440,7 @@ const ACTS: Record<string, string> = {
   lasting: "",
 };
 
-const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "neighborsOfFought"]);
+const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "neighborsOfFought", "fought"]);
 
 /** Fields a stored Filter may carry. A key outside the list means the row was
     written by a NEWER grammar whose narrowing field this engine would silently
@@ -414,11 +458,23 @@ const FILTER_FIELDS: Record<string, 0> = {
   self: 0,
   host: 0,
   neighborsOfSource: 0,
+  house: 0,
+  trait: 0,
+  exhausted: 0,
 };
 
-const CONDITION_FIELDS: Record<string, string> = { amber: "k,opp,op,n", moreCreatures: "k", fewerCreatures: "k", not: "k,c" };
+const CONDITION_FIELDS: Record<string, string> = {
+  amber: "k,opp,op,n",
+  moreCreatures: "k",
+  fewerCreatures: "k",
+  count: "k,of,op,n",
+  not: "k,c",
+};
 const KEYWORD_NAMES: ReadonlySet<string> = new Set(ENGINE_KEYWORDS);
 const OVERRIDE_SOURCES: ReadonlySet<string> = new Set(["parser", "llm", "manual"]);
+/** `from`/`to` of a stored `move` act, and the `p` of a `{p}` count. */
+const ZONES: ReadonlySet<string> = new Set<Zone>(["hand", "deck", "discard", "archives", "purged"]);
+const COUNT_SOURCES: ReadonlySet<string> = new Set(["keys", "amber", "plays"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -436,7 +492,37 @@ function validFilter(value: unknown): boolean {
 
 function validSelection(value: unknown): boolean {
   if (typeof value === "string") return SELECTIONS.has(value);
-  return isRecord(value) && validFilter(value.each);
+  if (!isRecord(value)) return false;
+  if (value.each !== undefined) return Object.keys(value).every((key) => key === "each") && validFilter(value.each);
+  if (value.pick !== undefined) {
+    return (
+      Object.keys(value).every((key) => key === "pick" || key === "n") &&
+      validFilter(value.pick) &&
+      (value.n === undefined || (isFiniteNumber(value.n) && value.n > 0))
+    );
+  }
+  return false;
+}
+
+/** A dynamic amount. Closed record per variant: a key the engine does not read
+    would change the count silently, so it drops the row. */
+function validCount(value: unknown): boolean {
+  if (value === "did" || value === "gone") return true;
+  if (!isRecord(value)) return false;
+  if (value.c !== undefined) return Object.keys(value).every((key) => key === "c") && validFilter(value.c);
+  if (value.p !== undefined) {
+    return (
+      Object.keys(value).every((key) => key === "p" || key === "opp") &&
+      typeof value.p === "string" &&
+      (ZONES.has(value.p) || COUNT_SOURCES.has(value.p)) &&
+      (value.opp === undefined || typeof value.opp === "boolean")
+    );
+  }
+  return (
+    value.of === "damage" || value.of === "amber" || value.of === "power"
+      ? Object.keys(value).every((key) => key === "of" || key === "s") && validSelection(value.s)
+      : false
+  );
 }
 
 function validCondition(value: unknown): boolean {
@@ -445,16 +531,42 @@ function validCondition(value: unknown): boolean {
   if (!Object.keys(value).every((key) => `,${fields},`.includes(`,${key},`))) return false;
   if (value.k === "amber") return typeof value.opp === "boolean" && (value.op === "eq" || value.op === "gte") && isFiniteNumber(value.n);
   if (value.k === "not") return validCondition(value.c);
+  if (value.k === "count") {
+    return validCount(value.of) && (value.op === "eq" || value.op === "gte" || value.op === "lte") && isFiniteNumber(value.n);
+  }
   return true;
+}
+
+/** Does this Count/Condition reach effectivePower (through a `top` filter's
+    sort or the `{of:"power"}` sum)? Inside a persistent effect's `if`/`per`
+    those two would call allEffects again and recurse forever, so the shape gate
+    rejects them (docs/DSL_EXPANSION_PLAN.md §2.4). */
+function readsPower(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  return Object.entries(value).some(([key, inner]) => key === "top" || (key === "of" && inner === "power") || readsPower(inner));
 }
 
 function validAct(value: unknown): boolean {
   if (!isRecord(value) || typeof value.k !== "string" || !Object.hasOwn(ACTS, value.k)) return false;
   const need = ACTS[value.k];
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
+  if (value.if !== undefined && !validCondition(value.if)) return false;
+  if (value.per !== undefined && !validCount(value.per)) return false;
   if (need.includes("n") && !isFiniteNumber(value.n)) return false;
   if (need.includes("s") && !validSelection(value.s)) return false;
   if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target);
+  if (value.at !== undefined && value.at !== "bottom" && value.at !== "shuffle") return false;
+  if (value.k === "move") {
+    return (
+      typeof value.from === "string" &&
+      typeof value.to === "string" &&
+      ZONES.has(value.from) &&
+      ZONES.has(value.to) &&
+      (value.opp === undefined || typeof value.opp === "boolean") &&
+      (value.pick === undefined || value.pick === "top" || value.pick === "random" || value.pick === "all") &&
+      (value.type === undefined || typeof value.type === "string")
+    );
+  }
   return true;
 }
 
@@ -482,7 +594,13 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.power === undefined || isFiniteNumber(effect.power)) &&
         (effect.armor === undefined || isFiniteNumber(effect.armor)) &&
         (effect.keywords === undefined || validKeywords(effect.keywords)) &&
-        (effect.abilities === undefined || (Array.isArray(effect.abilities) && effect.abilities.every(validAbility))),
+        (effect.abilities === undefined || (Array.isArray(effect.abilities) && effect.abilities.every(validAbility))) &&
+        (effect.if === undefined || validCondition(effect.if)) &&
+        (effect.per === undefined || validCount(effect.per)) &&
+        (effect.keyCost === undefined || isFiniteNumber(effect.keyCost)) &&
+        (effect.opp === undefined || typeof effect.opp === "boolean") &&
+        !readsPower(effect.if) &&
+        !readsPower(effect.per),
     )
   );
 }

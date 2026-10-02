@@ -46,7 +46,6 @@ describe("trigger prefixes", () => {
   it.each([
     "After an enemy creature is destroyed fighting this card: Gain 1A.",
     "Interrupt: Gain 1A.",
-    "Scrap: Gain 1A.",
     // Watchers globais ("each time you …") não são gatilhos da fonte: ficam
     // de fora em vez de virarem um gatilho errado da própria carta.
     "Each time you reap, gain 1A.",
@@ -73,7 +72,7 @@ describe("text normalisation", () => {
 
   it("maps the card's own name to itself", () => {
     const rules = parseCardText(face("Omni: Sacrifice Boom Box. Your opponent loses 2A.", "Artifact", "Boom Box"));
-    expect(rules.abilities[0].acts).toEqual([{ k: "sacrifice", n: 0, s: "self" }, { k: "loseAmber", n: 2, opp: true }]);
+    expect(rules.abilities[0].acts).toEqual([{ k: "sacrifice", s: "self" }, { k: "loseAmber", n: 2, opp: true }]);
   });
 
   it("parses conditions in front of and behind the effect", () => {
@@ -120,7 +119,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
     expect(rules.coverage).toBe("full");
     expect(rules.effects[0]).toMatchObject({
       target: { type: "Creature", side: "friendly" },
-      abilities: [{ on: ["reap"], acts: [{ k: "returnToHand", n: 0, s: "target" }], target: { type: "Creature" } }],
+      abilities: [{ on: ["reap"], acts: [{ k: "returnToHand", s: "target" }], target: { type: "Creature" } }],
     });
     // The quoted header accepts "At the …" too, and the tail accepts "/after X".
     const at = parseCardText(face("Each friendly creature gains, \"At the start of your turn: Gain 1<A>.\""));
@@ -189,20 +188,163 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
           { k: "damage", n: 2, s: { each: { type: "Creature", side: "enemy", flank: true } } },
           { k: "gainAmber", n: 1 },
           { k: "gainAmber", n: 1, opp: true },
-          { k: "returnToHand", n: 0, s: "target" },
+          { k: "returnToHand", s: "target" },
         ],
         target: { type: "Creature", side: "friendly" },
       },
     ]);
     expect(parseCardText(face("Play: Destroy each enemy creature not on a flank.")).abilities[0].acts).toEqual([
-      { k: "destroy", n: 0, s: { each: { type: "Creature", side: "enemy", flank: false } } },
+      { k: "destroy", s: { each: { type: "Creature", side: "enemy", flank: false } } },
     ]);
     expect(parseCardText(face("Play: Your opponent gains 2<A>.")).abilities[0].acts).toEqual([{ k: "gainAmber", n: 2, opp: true }]);
     expect(parseCardText(face("Play: Your opponent draws a card.")).abilities[0].acts).toEqual([{ k: "draw", n: 1, opp: true }]);
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(2);
+    expect(PARSER_VERSION).toBe(3);
+  });
+});
+
+describe("Lote 2: quantidades, condições, filtros, zonas e Scrap", () => {
+  const acts = (text: string, type = "Creature", title = "Test Card") => parseCardText(face(text, type, title)).abilities[0]?.acts;
+
+  it("reads 'for each …' as the act's per (did, gone, zones, keys, stats)", () => {
+    expect(acts("Play: Heal 1<D> from each creature. Gain 1<A> for each creature healed this way.")).toEqual([
+      { k: "heal", n: 1, s: { each: { type: "Creature" } } },
+      { k: "gainAmber", n: 1, per: "did" },
+    ]);
+    expect(acts("Play: Destroy each creature. Gain 1<A> for each creature destroyed this way.")).toEqual([
+      { k: "destroy", s: { each: { type: "Creature" } } },
+      { k: "gainAmber", n: 1, per: "gone" },
+    ]);
+    expect(acts("Play: Gain 1<A> for each card in your archives.")).toEqual([{ k: "gainAmber", n: 1, per: { p: "archives" } }]);
+    expect(acts("Reap: Gain 1<A> for each forged key your opponent has.")).toEqual([{ k: "gainAmber", n: 1, per: { p: "keys", opp: true } }]);
+    expect(acts("Reap: Gain 1<A> for each ready friendly creature of the active house.")).toEqual([
+      { k: "gainAmber", n: 1, per: { c: { type: "Creature", side: "friendly", ready: true, house: "active" } } },
+    ]);
+    expect(acts("Play: Deal 1<D> to a creature for each damage on Bulk.", "Creature", "Bulk")).toEqual([
+      { k: "damage", n: 1, s: "target", per: { of: "damage", s: "self" } },
+    ]);
+    expect(acts("After Fight: Gain 1<A> for each of Bulk's Mars neighbors.", "Creature", "Bulk")).toEqual([
+      { k: "gainAmber", n: 1, per: { c: { neighborsOfSource: true, house: "Mars" } } },
+    ]);
+  });
+
+  it("reads the new conditions, in the ability or in the act that prints them", () => {
+    // First sentence: the condition gates the whole ability (AI pruning kept).
+    expect(parseCardText(face("Play: If you are haunted, deal 5<D> to a creature.")).abilities[0].if).toEqual({
+      k: "count",
+      of: { p: "discard" },
+      op: "gte",
+      n: 10,
+    });
+    expect(parseCardText(face("Play: If there are no enemy creatures, gain 2<A>.")).abilities[0].if).toEqual({
+      k: "count",
+      of: { c: { type: "Creature", side: "enemy" } },
+      op: "eq",
+      n: 0,
+    });
+    expect(parseCardText(face("Play: If Bulk is on a flank, gain 2<A>.", "Creature", "Bulk")).abilities[0].if).toEqual({
+      k: "count",
+      of: { c: { self: true, flank: true } },
+      op: "gte",
+      n: 1,
+    });
+    // A later clause gates only its own acts.
+    expect(acts("Play: Lose 1<A>. If you do, gain 2<A>.")).toEqual([{ k: "loseAmber", n: 1 }, { k: "gainAmber", n: 2, if: { k: "count", of: "did", op: "gte", n: 1 } }]);
+    const destroys = parseCardText(face("Play: Deal 3<D> to a creature. If this damage destroys that creature, draw a card."));
+    expect(destroys.abilities[0].acts[1]).toEqual({ k: "draw", n: 1, if: { k: "count", of: "gone", op: "gte", n: 1 } });
+    const survives = parseCardText(face("Play: Deal 3<D> to a creature. If it is not destroyed, draw a card."));
+    expect(survives.abilities[0].acts[1]).toEqual({ k: "draw", n: 1, if: { k: "count", of: "gone", op: "eq", n: 0 } });
+  });
+
+  it("reads house, trait and exhausted filters", () => {
+    expect(acts("Play: Destroy each Mars creature.")).toEqual([{ k: "destroy", s: { each: { type: "Creature", house: "Mars" } } }]);
+    expect(acts("Play: Destroy a non-Mars creature.")).toEqual([{ k: "destroy", s: "target" }]);
+    expect(parseCardText(face("Play: Destroy a non-Mars creature.")).abilities[0].target).toEqual({ type: "Creature", house: "!Mars" });
+    expect(acts("Play: Destroy each Knight creature.")).toEqual([{ k: "destroy", s: { each: { type: "Creature", trait: "Knight" } } }]);
+    expect(acts("Play: Destroy each non-Knight creature.")).toEqual([{ k: "destroy", s: { each: { type: "Creature", trait: "!Knight" } } }]);
+    expect(acts("Play: Destroy each exhausted creature.")).toEqual([{ k: "destroy", s: { each: { type: "Creature", exhausted: true } } }]);
+    // The constant-text subject takes the same modifiers.
+    const banner = parseCardText(face("Each friendly Mars flank creature gets +1 power."));
+    expect(banner.effects[0]).toMatchObject({ target: { type: "Creature", side: "friendly", flank: true, house: "Mars" }, power: 1 });
+    // Words outside the closed lists keep the phrase unparsed.
+    expect(parseCardText(face("Play: Destroy each stunned creature.")).coverage).toBe("vanilla");
+    expect(parseCardText(face("Play: Destroy each creature with power 3 or lower.")).coverage).toBe("vanilla");
+  });
+
+  // A conjunction, a noun, a possessive and a keyword must not turn into a
+  // trait: a filter that matches nothing would mark the card covered for free.
+  it.each([
+    "Play: Destroy a Mars or Logos creature.",
+    "Play: Destroy each creature and artifact.",
+    "Play: Destroy each of your opponent's creatures.",
+    "Play: Destroy an elusive creature.",
+    "Play: Destroy a random creature.",
+  ])("only a capitalised word becomes a trait: %s stays vanilla", (text) => {
+    expect(parseCardText(face(text)).coverage).toBe("vanilla");
+  });
+
+  it("a printed trait is a proper noun and keeps working, negated included", () => {
+    const knight = parseCardText(face("Play: Destroy each Knight creature."));
+    expect(knight.coverage).toBe("full");
+    expect(knight.abilities[0].acts).toEqual([{ k: "destroy", s: { each: { type: "Creature", trait: "Knight" } } }]);
+    const notKnight = parseCardText(face("Play: Destroy each non-Knight creature."));
+    expect(notKnight.coverage).toBe("full");
+    expect(notKnight.abilities[0].acts).toEqual([{ k: "destroy", s: { each: { type: "Creature", trait: "!Knight" } } }]);
+  });
+
+  it("reads persistent if/per and the key costs", () => {
+    const tax = parseCardText(face("Your opponent's keys cost +1<A> for each card in your archives."));
+    expect(tax.coverage).toBe("full");
+    expect(tax.effects).toEqual([{ target: {}, keyCost: 1, opp: true, per: { p: "archives" } }]);
+    expect(parseCardText(face("Keys cost +2<A>.")).effects).toEqual([
+      { target: {}, keyCost: 2 },
+      { target: {}, keyCost: 2, opp: true },
+    ]);
+    const haunted = parseCardText(face("While you are haunted, Bulk gets +2 power.", "Creature", "Bulk"));
+    expect(haunted.effects[0]).toMatchObject({ target: { self: true }, power: 2, if: { k: "count", of: { p: "discard" }, op: "gte", n: 10 } });
+    const tired = parseCardText(face("While Bulk is exhausted, each of its neighbors gets +2 armor.", "Creature", "Bulk"));
+    expect(tired.effects[0]).toMatchObject({ target: { neighborsOfSource: true }, armor: 2, if: { k: "count", of: { c: { self: true, exhausted: true } }, op: "gte", n: 1 } });
+    const overwhelmed = parseCardText(face("If you are overwhelmed, Bulk gains hazardous 2.", "Creature", "Bulk"));
+    expect(overwhelmed.effects[0]).toMatchObject({ target: { self: true }, keywords: { hazardous: 2 }, if: { k: "fewerCreatures" } });
+  });
+
+  it("reads the player-zone moves", () => {
+    expect(acts("Play: Discard the top card of your opponent's deck.", "Action")).toEqual([{ k: "move", n: 1, from: "deck", to: "discard", pick: "top", opp: true }]);
+    expect(acts("Play: Discard the top 6 cards of your deck.", "Action")).toEqual([{ k: "move", n: 6, from: "deck", to: "discard", pick: "top" }]);
+    expect(acts("Play: Archive a card.", "Action")).toEqual([{ k: "move", n: 1, from: "hand", to: "archives" }]);
+    expect(acts("Play: Discard a card.", "Action")).toEqual([{ k: "move", n: 1, from: "hand", to: "discard" }]);
+    expect(acts("Play: Discard your hand.", "Action")).toEqual([{ k: "move", n: 1, from: "hand", to: "discard", pick: "all" }]);
+    expect(acts("Destroyed: Your opponent purges a random card from their hand.")).toEqual([
+      { k: "move", n: 1, from: "hand", to: "purged", opp: true, pick: "random" },
+    ]);
+    expect(acts("Play: Purge a creature from your discard pile.", "Action")).toEqual([{ k: "move", n: 1, from: "discard", to: "purged", type: "Creature" }]);
+    expect(acts("Play: Shuffle your discard pile into your deck.", "Action")).toEqual([{ k: "move", n: 1, from: "discard", to: "deck", pick: "all", at: "shuffle" }]);
+    expect(acts("Action: Put a friendly creature on the bottom of its owner's deck.")).toEqual([{ k: "returnToDeck", s: "target", at: "bottom" }]);
+  });
+
+  it("turns a second target sentence into a pick and reads 'the creature ~ fights'", () => {
+    const scuffle = parseCardText(face("After Reap: Exhaust an enemy creature. If you do, ready a non-Priest creature."));
+    expect(scuffle.abilities[0]).toEqual({
+      on: ["reap"],
+      acts: [
+        { k: "exhaust", s: "target" },
+        { k: "ready", s: { pick: { type: "Creature", trait: "!Priest" } }, if: { k: "count", of: "did", op: "gte", n: 1 } },
+      ],
+      target: { type: "Creature", side: "enemy" },
+    });
+    expect(acts("Play: Exhaust 2 enemy creatures.")).toEqual([{ k: "exhaust", s: { pick: { type: "Creature", side: "enemy" }, n: 2 } }]);
+    expect(acts("Before Fight: Stun the creature this card fights.")).toEqual([{ k: "stun", s: "fought" }]);
+  });
+
+  it("reads Scrap: as a trigger of its own, never leaking into the ability before", () => {
+    const rules = parseCardText(face("Play: Gain 1<A>. Scrap: Archive a card.", "Action"));
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities).toEqual([
+      { on: ["play"], acts: [{ k: "gainAmber", n: 1 }] },
+      { on: ["scrap"], acts: [{ k: "move", n: 1, from: "hand", to: "archives" }] },
+    ]);
   });
 });
 
@@ -212,11 +354,11 @@ describe("zone verbs and tokens (Onda 3)", () => {
     expect(purge.coverage).toBe("full");
     expect(purge.abilities[0]).toMatchObject({
       target: { type: "Creature", side: "enemy" },
-      acts: [{ k: "purge", n: 0, s: "target" }],
+      acts: [{ k: "purge", s: "target" }],
     });
 
     const sacrifice = parseCardText(face("Play: Sacrifice a friendly creature."));
-    expect(sacrifice.abilities[0]).toMatchObject({ acts: [{ k: "sacrifice", n: 0, s: "target" }] });
+    expect(sacrifice.abilities[0]).toMatchObject({ acts: [{ k: "sacrifice", s: "target" }] });
 
     const exalt = parseCardText(face("Play: Exalt a friendly creature."));
     expect(exalt.abilities[0]).toMatchObject({
@@ -335,11 +477,13 @@ describe("starter decks", () => {
     // Knight, Ember Imp and Scrambler Storm now read their constant text).
     // 40 -> 41 with the Onda 4 "if you do" continuation (Key Charge: lose 1A,
     // then may forge a key at the current cost).
+    // 41 -> 42 with the Lote 2 zone moves (Sloppy Labwork: "Archive a card.
+    // Discard a card.").
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 41,
+        "full": 42,
         "partial": 1,
-        "vanilla": 16,
+        "vanilla": 15,
       }
     `);
   });

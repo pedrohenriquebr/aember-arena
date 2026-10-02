@@ -43,7 +43,7 @@ describe("parserVersion", () => {
 
 describe("DSL_VERSION (versioning contract)", () => {
   it("rejects a row written by a newer grammar and copies the version", () => {
-    expect(DSL_VERSION).toBe(2);
+    expect(DSL_VERSION).toBe(3);
     expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION })?.v).toBe(DSL_VERSION);
     expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION + 1 })).toBeNull();
     expect(normaliseAbilityOverride({ ...row(), v: "2" })).toBeNull();
@@ -52,16 +52,31 @@ describe("DSL_VERSION (versioning contract)", () => {
   });
 
   it("drops a row carrying a key the running grammar would silently ignore", () => {
-    const filterKey = { ...row(), dsl: [{ on: ["play"], target: { type: "Creature", house: "Mars" }, acts: [{ k: "destroy", s: "target" }] }] };
-    expect(normaliseAbilityOverride(filterKey)).toBeNull();
-    const eachFilter = { ...row(), dsl: [{ on: ["play"], acts: [{ k: "destroy", s: { each: { type: "Creature", trait: "Knight" } } }] }] };
+    const unknownFilter = { ...row(), dsl: [{ on: ["play"], target: { type: "Creature", stunned: true }, acts: [{ k: "destroy", s: "target" }] }] };
+    expect(normaliseAbilityOverride(unknownFilter)).toBeNull();
+    const eachFilter = { ...row(), dsl: [{ on: ["play"], acts: [{ k: "destroy", s: { each: { type: "Creature", power: 3 } } }] }] };
     expect(normaliseAbilityOverride(eachFilter)).toBeNull();
     const conditionKey = { ...row(), dsl: [{ on: ["play"], if: { k: "amber", opp: true, op: "gte", n: 1, house: "Mars" }, acts: [{ k: "gainAmber", n: 1 }] }] };
     expect(normaliseAbilityOverride(conditionKey)).toBeNull();
+    // A count/act from a newer grammar is dropped the same way.
+    expect(normaliseAbilityOverride({ ...row(), dsl: [{ on: ["play"], acts: [{ k: "gainAmber", n: 1, per: { p: "hand", zone: "deck" } }] }] })).toBeNull();
+    expect(normaliseAbilityOverride({ ...row(), dsl: [{ on: ["play"], acts: [{ k: "move", n: 1, from: "board", to: "discard" }] }] })).toBeNull();
     // `constructor` is inherited, not owned: the act table must not accept it.
     expect(normaliseAbilityOverride({ ...row(), dsl: [{ on: ["play"], acts: [{ k: "constructor", n: 1 }] }] })).toBeNull();
     // The whitelist is not stricter than the current DSL: known keys still pass.
     expect(normaliseAbilityOverride({ ...row(), dsl: [{ on: ["play"], target: { type: "Creature", flank: false }, acts: [{ k: "destroy", s: "target" }] }] })).not.toBeNull();
+    const lote2 = {
+      ...row(),
+      dsl: [
+        {
+          on: ["play"],
+          target: { type: "Creature", house: "!Mars", trait: "Knight", exhausted: true },
+          acts: [{ k: "destroy", s: "target", per: { p: "discard" } }, { k: "move", n: 1, from: "deck", to: "discard", pick: "top" }],
+        },
+        { on: ["scrap"], acts: [{ k: "returnToDeck", s: { pick: { type: "Creature" }, n: 2 }, at: "bottom", if: { k: "count", of: "gone", op: "gte", n: 1 } }] },
+      ],
+    };
+    expect(normaliseAbilityOverride(lote2)).not.toBeNull();
   });
 });
 

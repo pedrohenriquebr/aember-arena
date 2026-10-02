@@ -74,6 +74,109 @@ export const FEW_SHOTS: { type: string; text: string; answer: DslAnswer | { unsu
     text: "Each time a creature is destroyed, gain 1<A>.",
     answer: { unsupported: true, reason: "Global watcher: the DSL only has triggers bound to the card itself." },
   },
+  // Lote 2 (docs/DSL_EXPANSION_PLAN.md §2): dynamic amounts, act conditions,
+  // house/trait filters, key costs, picks, player zones and the Scrap trigger.
+  {
+    type: "Creature",
+    text: "Play: Heal 1<D> from each creature. Gain 1<A> for each creature healed this way.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "heal", n: 1, s: { each: { type: "Creature" } } }, { k: "gainAmber", n: 1, per: "did" }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Play: Exhaust a friendly creature. If you do, steal 2<A>.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [{ k: "exhaust", s: "target" }, { k: "steal", n: 2, if: { k: "count", of: "did", op: "gte", n: 1 } }],
+          target: { type: "Creature", side: "friendly" },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Play: If you are haunted, deal 5<D> to a creature. Otherwise, return a creature to its owner's hand.",
+    answer: {
+      abilities: [
+        { on: ["play"], acts: [{ k: "damage", n: 5, s: "target" }], target: { type: "Creature" }, if: { k: "count", of: { p: "discard" }, op: "gte", n: 10 } },
+        {
+          on: ["play"],
+          acts: [{ k: "returnToHand", s: "target" }],
+          target: { type: "Creature" },
+          if: { k: "not", c: { k: "count", of: { p: "discard" }, op: "gte", n: 10 } },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Play: Destroy each non-Mars creature.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "destroy", s: { each: { type: "Creature", house: "!Mars" } } }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Each friendly Knight creature gets +1 power.",
+    answer: { abilities: [], effects: [{ target: { type: "Creature", side: "friendly", trait: "Knight" }, power: 1 }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "Your opponent's keys cost +1<A> for each card in your archives.",
+    answer: { abilities: [], effects: [{ target: {}, keyCost: 1, opp: true, per: { p: "archives" } }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "After Reap: Exhaust an enemy creature. If you do, ready a non-Priest creature.",
+    answer: {
+      abilities: [
+        {
+          on: ["reap"],
+          acts: [
+            { k: "exhaust", s: "target" },
+            { k: "ready", s: { pick: { type: "Creature", trait: "!Priest" } }, if: { k: "count", of: "did", op: "gte", n: 1 } },
+          ],
+          target: { type: "Creature", side: "enemy" },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Destroyed: Your opponent purges a random card from their hand.",
+    answer: {
+      abilities: [{ on: ["destroyed"], acts: [{ k: "move", n: 1, from: "hand", to: "purged", opp: true, pick: "random" }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Action: Put a friendly creature on the bottom of its owner's deck.",
+    answer: {
+      abilities: [{ on: ["action"], acts: [{ k: "returnToDeck", s: "target", at: "bottom" }], target: { type: "Creature", side: "friendly" } }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Scrap: Archive a card.",
+    answer: { abilities: [{ on: ["scrap"], acts: [{ k: "move", n: 1, from: "hand", to: "archives" }] }], effects: [], keywords: {} },
+  },
 ];
 
 const SYSTEM_RULES = [
@@ -84,6 +187,8 @@ const SYSTEM_RULES = [
   'Prefixes map to triggers: "Play:" play, "Reap:" reap, "Fight:" fight, "Before Fight:" beforeFight, "Destroyed:" destroyed, "Action:" action, "Omni:" omni, "At the start of your turn:" startOfTurn, "At the end of your turn:" endOfTurn. "After X:" / "Each time X:" bind to the same trigger.',
   'An Ability `target` is the filter of the creature the player chooses; acts that use it say `s: "target"`. "You may" => `optional: true`. <A> is amber, <D> is damage.',
   'Ignore an "Enhance" sentence (its icons are deck-building bonusIcons, not an ability). "You are overwhelmed" = fewerCreatures. "Otherwise, X" = a second ability with if {"k":"not","c":<the previous condition>}.',
+  '"Scrap:" = on ["scrap"] (the card in its discard pile). "If you do" = the act\'s if {"k":"count","of":"did","op":"gte","n":1}: a condition in a later clause gates only its own acts. "Haunted" = 10+ cards in your discard.',
+  '"for each X" = the act\'s per. Filters: {"house":"Mars"}, {"house":"!Mars"}, {"trait":"Knight"}, {"house":"active"}. "keys cost +N" (no possessive) = two effects (owner + opp).',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
@@ -198,6 +303,7 @@ const TRIGGER_WORDS: Record<string, RegExp> = {
   omni: /\bomni\b/,
   startOfTurn: /\bstart of your turn\b/,
   endOfTurn: /\bend of your turn\b/,
+  scrap: /\bscrap\b/,
 };
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const TARGETED = new Set(["target", "targetAndNeighbors"]);
@@ -220,7 +326,9 @@ export function sanityProblem(face: CardFace, row: AbilityOverride): string | nu
   const checkAbility = (ability: Ability): string | null => {
     for (const trigger of ability.on) {
       if (face.type === "Action" || face.type === "Upgrade") {
-        if (trigger !== "play") return `trigger "${trigger}" cannot happen on a ${face.type} card`;
+        // Scrap is a trigger of the card DISCARDED from hand: an Action/Upgrade
+        // is the card that reaches the pile (keyteki Scrap: on those types).
+        if (trigger !== "play" && trigger !== "scrap") return `trigger "${trigger}" cannot happen on a ${face.type} card`;
       } else if (face.type === "Artifact" && (trigger === "reap" || trigger === "fight" || trigger === "beforeFight")) {
         return `trigger "${trigger}" cannot happen on an Artifact`;
       }
@@ -286,8 +394,9 @@ function brokenState(state: GameState): string | null {
     survive, so Destroyed:/Fight: text can fire), either in hand or in play. The
     rich table adds a hand of three dummies (one of another house), two archive
     cards, a full discard, three enemies against two friends and one damaged
-    creature per side. House/trait filters do not exist in this DSL version, so
-    a mix of houses is as far as "cited by the filters" can go. */
+    creature per side — a mix of houses so house filters have something to
+    answer; the dummies carry no traits, so a draft filtered by trait simply
+    finds nothing (the exercise still proves it does not crash). */
 function scenario(face: CardFace, where: "hand" | "board", rich: boolean): { state: GameState; card: CardInstance } {
   const state = createMatch(DEMO_DECK, DEMO_DECK_2, { seed: 7 });
   const card: CardInstance = { instanceId: "dry-card", face, damage: 0, ready: true, stunned: false };
@@ -302,8 +411,7 @@ function scenario(face: CardFace, where: "hand" | "board", rich: boolean): { sta
   me.discard = [dummy("dry-d0", face.house, 2)];
   // The rich table: a hand of three dummies (one of another house), two archive
   // cards, a full discard, three enemies against two friends and one damaged
-  // creature per side. House/trait filters do not exist in this DSL version, so
-  // a mix of houses is as far as "cited by the filters" can go.
+  // creature per side — the house mix is what "cited by the filters" can reach.
   if (rich) {
     me.hand.push(...pack("dry-h", face.house, 2), dummy("dry-h2", foe, 2));
     enemies.push(dummy("dry-e2", foe, 3));
@@ -330,7 +438,6 @@ function exerciseTable(face: CardFace, where: "hand" | "board", rich: boolean): 
   }
   const baseline = cardCount(state);
   for (const move of moves) {
-    if (move.type === "discard") continue;
     const next = applyMove(state, 0, move);
     const again = applyMove(state, 0, move);
     const problem = brokenState(next);

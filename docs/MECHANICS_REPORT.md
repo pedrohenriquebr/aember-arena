@@ -270,9 +270,10 @@ instância (JSON-safe) e sem UI própria.
   original não gasta ward). **Fora do escopo:** os "instead" condicionais ("If the
   tide is high, X instead"), a exceção de trait do redirect (o filtro não tem trait) e
   substituições de âmbar/compra.
-- **Gramática nova:** `if you do, X` (o `then` do keyteki; como o motor resolve os
-  atos de uma ability em ordem e sem resultado por ato, a continuação resolve sempre —
-  uma primeira cláusula que não fez nada ainda deixa a segunda acontecer),
+- **Gramática nova:** `if you do, X` (o `then` do keyteki; desde o lote 2 —
+  `docs/DSL_EXPANSION_PLAN.md` §2.2 — a continuação vira `act.if` =
+  `{k:"count","of":"did",op:"gte",n:1}`, então só resolve se o ato anterior fez algo;
+  a versão antiga resolvia sempre e foi corrigida),
   `each of this card's neighbors`, `take/gain control of X`, `ward/enrage X` e
   `remove ward|enrage from X`. **Fora do escopo:** alvo contado ("Ward 2 friendly
   creatures") precisa de escolha múltipla no move, que não existe.
@@ -458,9 +459,10 @@ Probes da auditoria (fora do `npm test`): `e2e/probes/` — ver `BUGS_AND_FEATUR
    proibições e duração. Continua fora a cauda de efeitos: `bonusFightDamage`
    (Valdr) e contadores de poder.
 3. **Gatilhos reativos**: `After …`/`Each time …`/início e fim de turno **fechados na
-   onda 2**; seguem sem suporte `Scrap:` (59 — precisa de descarte como custo),
-   `Interrupt:` e watchers globais ("each time you …"), que pedem um barramento de
-   eventos em vez do `fire` preso à fonte.
+   onda 2**; `Scrap:` **fechou no lote 2** (52 cartas: `toDiscard` dispara o gatilho
+   do lado ativo em `discard`/`move`/`discardRandom` — `docs/DSL_EXPANSION_PLAN.md`
+   §2.7); seguem sem suporte `Interrupt:` e watchers globais ("each time you …"), que
+   pedem um barramento de eventos em vez do `fire` preso à fonte.
 4. **Gramática**: `if` além das 3 formas (170), `for each`, traits ("a Mars
    creature" — hoje também limita purge/sacrifice/exalt a objetos sem trait),
    referências anafóricas ("that creature", "it" apontando para o alvo), `choose`
@@ -472,7 +474,13 @@ Probes da auditoria (fora do `npm test`): `e2e/probes/` — ver `BUGS_AND_FEATUR
    `ward`/`enrage` e tokens (`make a token creature`) e `exalt` **saíram da lista
    nas ondas 3/4**; `+1 power counter` continua fora. A onda 4 também fechou
    `if you do, …` (o `then` do keyteki), `take/gain control of X`, `ward/enrage X`
-   e `remove ward|enrage from X`.
+   e `remove ward|enrage from X`. O **lote 2** fechou `for each` (`Count`/`per`),
+   filtros por casa/traço/exausta (`Filter.house/trait/exhausted` — o traço só é
+   aceito com inicial maiúscula no texto impresso, senão "or"/"elusive"/"your
+   opponent's" virariam traço), condições
+   `count` (`did`/`gone`/haunted/flanco), `put`/`move` de zonas do jogador (mão,
+   deck, descarte, arquivo, purgado) e alvo contado (Selection `{pick}`) —
+   `docs/DSL_EXPANSION_PLAN.md` §2.1-§2.6.
 5. **Fidelidade de regras já identificada** (detalhes em BUGS_AND_FEATURES):
    escolha da casa não é pré-requisito para jogar (BUG-02); alvo de `Fight:`/`Before
    Fight:` sempre automático (BUG-06); `Use a creature` só colhe (BUG-11); criaturas

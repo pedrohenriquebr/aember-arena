@@ -195,6 +195,20 @@ describe("translateCard — validacao tripla", () => {
     expect(reason([{ on: ["reap"], acts: [{ k: "gainAmber", n: 1 }] }], face("Gain 1 amber."))).toContain('"reap" is not named');
   });
 
+  it("(c) sanity: Scrap is legal on Action/Upgrade and its draft survives the dry-run", () => {
+    const scrap = face("Scrap: Archive a card.", { type: "Action" });
+    const draft = validateDraft(scrap, { abilities: parseCardText(scrap).abilities, effects: [], keywords: {} }, "llm");
+    expect(draft.ok).toBe(true);
+    expect(dryRunProblem(scrap, draft.row!)).toBeNull();
+    expect(sanityProblem(scrap, draft.row!)).toBeNull();
+    // The trigger must still be named by the text ("Scrap:" is not printed here).
+    const invented = sanityProblem(face("Play: Gain 1<A>.", { type: "Action" }), {
+      ...draft.row!,
+      dsl: [{ on: ["scrap"], acts: [{ k: "gainAmber", n: 1 }] }],
+    });
+    expect(invented).toContain('"scrap" is not named');
+  });
+
   it("(b) dry-run: a draft that breaks the engine is rejected, a sane one passes", () => {
     const sane = validateDraft(reapCard, { abilities: VALID.abilities, effects: [], keywords: {} }, "llm");
     expect(sane.ok).toBe(true);

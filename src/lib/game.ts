@@ -8,7 +8,7 @@
 //
 // Pure API: every exported function clones its input and returns a new state;
 // the helpers below mutate only that private clone.
-import { rulesOf, type Ability, type Act, type Condition, type Filter, type PersistentEffect, type Replacement, type Restrict, type Selection, type Trigger } from "./abilities";
+import { rulesOf, type Ability, type Act, type Condition, type Count, type Filter, type PersistentEffect, type Replacement, type Restrict, type Selection, type Trigger } from "./abilities";
 import type { Keyword } from "./keywords";
 
 export type CardType = "Creature" | "Action" | "Artifact" | "Upgrade" | string;
@@ -160,7 +160,7 @@ export type GameMove =
   | { type: "fight"; attackerId: string; targetId: string; target?: string; decline?: boolean }
   | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action"; decline?: boolean }
   | { type: "unstun"; instanceId: string }
-  | { type: "discard"; instanceId: string }
+  | { type: "discard"; instanceId: string; target?: string; decline?: boolean }
   /** Picking the archives up is optional ("may"), so it is a move of its own. */
   | { type: "takeArchives" };
 
@@ -438,10 +438,22 @@ export function activeEffects(state: GameState, side: Side): ActiveEffect[] {
 
 const allEffects = (state: GameState): ActiveEffect[] => [...activeEffects(state, 0), ...activeEffects(state, 1)];
 
-/** Does this effect apply to `card` right now? (target filter + clause) */
+/** The scope of a persistent effect's own `if`/`per`/`of` reads: its source's
+    side asks the question (keyteki evaluates from the effect's controller). */
+const effectScope = (state: GameState, owner: ActiveEffect): Ctx => ({ state, me: owner.side, source: owner.source, deterministic: true });
+
+/** Does this effect apply to `card` right now? (target filter + clauses) */
 function effectHits(state: GameState, owner: ActiveEffect, card: CardInstance): boolean {
-  return matches(state, owner.side, owner.source, card, owner.effect.target) && (owner.effect.when !== "flank" || onFlank(state, card));
+  return (
+    (!owner.effect.if || holds(owner.effect.if, state, owner.side, owner.source)) &&
+    matches(state, owner.side, owner.source, card, owner.effect.target) &&
+    (owner.effect.when !== "flank" || onFlank(state, card))
+  );
 }
+
+/** A stat modifier multiplied by its dynamic count ("+1 power for each …"). */
+const effectPer = (state: GameState, owner: ActiveEffect, value: number) =>
+  owner.effect.per ? value * countOf(effectScope(state, owner), owner.effect.per) : value;
 
 /** First active "instead" replacement of `on` that applies to `card` (Onda 4),
     if any. Self-replacements are read off the card's own text; a board effect
@@ -464,14 +476,14 @@ function redirectFor(state: GameState, card: CardInstance): CardInstance | undef
 /** Power including every active modifier (keyteki card.power through effects). */
 export function effectivePower(state: GameState, card: CardInstance): number {
   let power = card.face.power;
-  for (const owner of allEffects(state)) if (owner.effect.power && effectHits(state, owner, card)) power += owner.effect.power;
+  for (const owner of allEffects(state)) if (owner.effect.power && effectHits(state, owner, card)) power += effectPer(state, owner, owner.effect.power);
   return Math.max(0, power);
 }
 
 /** Armor including every active modifier; as in keyteki it never drops below 0. */
 export function effectiveArmor(state: GameState, card: CardInstance): number {
   let armor = card.face.armor;
-  for (const owner of allEffects(state)) if (owner.effect.armor && effectHits(state, owner, card)) armor += owner.effect.armor;
+  for (const owner of allEffects(state)) if (owner.effect.armor && effectHits(state, owner, card)) armor += effectPer(state, owner, owner.effect.armor);
   return Math.max(0, armor);
 }
 
@@ -522,9 +534,19 @@ function playLimit(state: GameState, side: Side): number {
   return limit;
 }
 
-/** Key cost for `side` right now: 6 + active modifiers (keyteki player.getCurrentKeyCost). */
+/** Key cost for `side` right now: 6 + active modifiers (keyteki
+    player.getCurrentKeyCost) + every active keyCost effect (`opp` means the
+    effect charges the source's opponent). */
 export function keyCost(state: GameState, side: Side): number {
-  return BASE_KEY_COST + (state.players[side].keyCostMod ?? 0);
+  let cost = BASE_KEY_COST + (state.players[side].keyCostMod ?? 0);
+  for (const owner of allEffects(state)) {
+    const effect = owner.effect;
+    if (!effect.keyCost) continue;
+    if ((effect.opp ? other(owner.side) : owner.side) !== side) continue;
+    if (effect.if && !holds(effect.if, state, owner.side, owner.source)) continue;
+    cost += effectPer(state, owner, effect.keyCost);
+  }
+  return cost;
 }
 
 /** Key step core shared by endTurn and the "forge a key" acts (keyteki
@@ -556,17 +578,45 @@ export function forgeKey(current: GameState, side: Side, n = 1, options: { free?
 
 // ---------- specification (conditions and targets) ----------
 
-/** Exported for the AI: the same condition evaluation the engine runs (FEAT-03). */
-export function conditionHolds(condition: Condition, state: GameState, me: Side): boolean {
-  if (condition.k === "not") return !holds(condition.c, state, me);
+/** Exported for the AI: the same condition evaluation the engine runs (FEAT-03).
+    `source` is the card the condition belongs to (a `{c:{self:true}}` count needs
+    it); `previous` carries the did/gone of the act before, for act-level `if`. */
+export function conditionHolds(
+  condition: Condition,
+  state: GameState,
+  me: Side,
+  source?: CardInstance,
+  previous?: { did?: number; gone?: number },
+): boolean {
+  if (condition.k === "not") return !holds(condition.c, state, me, source, previous);
   if (condition.k === "amber") {
     const amber = state.players[condition.opp ? other(me) : me].amber;
     return condition.op === "eq" ? amber === condition.n : amber >= condition.n;
+  }
+  if (condition.k === "count") {
+    const value = countOf({ state, me, source, deterministic: true, did: previous?.did, gone: previous?.gone }, condition.of);
+    return condition.op === "eq" ? value === condition.n : condition.op === "gte" ? value >= condition.n : value <= condition.n;
   }
   const mine = battleline(state.players[me]).length;
   const theirs = battleline(state.players[other(me)]).length;
   return condition.k === "moreCreatures" ? mine > theirs : mine < theirs;
 }
+
+/** A house filter reads `state.activeHouse` when it says "active"; both sides
+    compare case-insensitively (the printed text is lowercased by normalise). */
+function houseMatches(state: GameState, card: CardInstance, wanted: string): boolean {
+  const house = card.face.house?.toLowerCase() ?? "";
+  return wanted === "active" ? house === (state.activeHouse ?? "").toLowerCase() : house === wanted.toLowerCase();
+}
+
+/** One trait token of face.traits ("Knight • Beast" prints two). */
+function traitMatches(card: CardInstance, wanted: string): boolean {
+  return (card.face.traits ?? "").split("•").some((trait) => trait.trim().toLowerCase() === wanted.toLowerCase());
+}
+
+/** A `!`/`non-` prefixed filter value negates its test. */
+const negated = (value: string) => value.startsWith("!");
+const positive = (value: string) => (negated(value) ? value.slice(1) : value);
 
 function matches(state: GameState, me: Side, source: CardInstance | undefined, card: CardInstance, filter: Filter): boolean {
   const side = controllerOf(state, card);
@@ -579,11 +629,14 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     (!filter.ready || (card.ready && !card.stunned)) &&
     (!filter.self || card === source) &&
     (!filter.host || card.instanceId === source?.attachedTo) &&
-    (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card)))
+    (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card))) &&
+    (filter.house === undefined || houseMatches(state, card, positive(filter.house)) !== negated(filter.house)) &&
+    (filter.trait === undefined || traitMatches(card, positive(filter.trait)) !== negated(filter.trait)) &&
+    (filter.exhausted === undefined || !card.ready === filter.exhausted)
   );
 }
 
-function everyMatch(state: GameState, me: Side, source: CardInstance, filter: Filter): CardInstance[] {
+function everyMatch(state: GameState, me: Side, source: CardInstance | undefined, filter: Filter): CardInstance[] {
   const found = [...state.players[me].board, ...state.players[other(me)].board].filter((card) =>
     matches(state, me, source, card, filter),
   );
@@ -604,10 +657,13 @@ function autoPick(state: GameState, me: Side, candidates: CardInstance[], harmfu
   return strongest(enemy) ?? [...friendly].sort((a, b) => effectivePower(state, a) - effectivePower(state, b))[0];
 }
 
-interface Context {
+/** What a selection (and a dynamic count) is resolved against. */
+interface Ctx {
   state: GameState;
   me: Side;
-  source: CardInstance;
+  /** The card the ability belongs to (absent outside a card context). */
+  source?: CardInstance;
+  /** The defender of the fight in progress ("the creature ~ fights"). */
   fought?: CardInstance;
   target?: CardInstance;
   deterministic: boolean;
@@ -615,6 +671,14 @@ interface Context {
   useVia?: "reap" | "action";
   /** The actor declined the "You may" clauses of this move (wave 2). */
   decline?: boolean;
+  /** What the previous act of this ability did (`per:"did"`/`"gone"`). */
+  did?: number;
+  gone?: number;
+}
+
+/** The ability context proper: an act always runs with its source card. */
+interface Context extends Ctx {
+  source: CardInstance;
 }
 
 /** Mutable holder: the move's chosen target is consumed by the first targeted ability. */
@@ -622,21 +686,56 @@ interface Choice {
   id?: string;
 }
 
-function select(context: Context, selection: Selection): CardInstance[] {
+/** The cards a selection points at. `k` is the act being resolved, which decides
+    whether a `{pick}` aims at the harmful or the helpful side. */
+function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[] {
   const { state, source, target, fought } = context;
-  if (selection === "self") return controllerOf(state, source) === undefined ? [] : [source];
+  if (selection === "self") return source && controllerOf(state, source) !== undefined ? [source] : [];
   if (selection === "host") {
-    return state.players.flatMap((player) => player.board.filter((card) => card.instanceId === source.attachedTo));
+    return state.players.flatMap((player) => player.board.filter((card) => card.instanceId === source?.attachedTo));
   }
   if (selection === "target") return target ? [target] : [];
   if (selection === "targetAndNeighbors") return target ? [target, ...neighbors(state, target)] : [];
   if (selection === "neighborsOfFought") return fought ? neighbors(state, fought) : [];
+  if (selection === "fought") return fought ? [fought] : [];
+  if ("pick" in selection) {
+    // Up to `n` DISTINCT cards, chosen as the engine auto-targets: the strongest
+    // enemy (or weakest friend) for a harmful act, the strongest friend for a
+    // helpful one. The player only ever chooses the ability's `target`.
+    const remaining = everyMatch(state, context.me, source, selection.pick);
+    const picked: CardInstance[] = [];
+    for (let count = 0; count < (selection.n ?? 1) && remaining.length; count += 1) {
+      const card = autoPick(state, context.me, remaining, k !== undefined && HARMFUL.has(k));
+      if (!card) break;
+      picked.push(card);
+      remaining.splice(remaining.indexOf(card), 1);
+    }
+    return picked;
+  }
   return everyMatch(state, context.me, source, selection.each);
+}
+
+/** A dynamic amount ("for each …"): the previous act, a board filter, a zone or
+    counter of a player, or a stat summed over a selection. */
+function countOf(scope: Ctx, spec: Count): number {
+  if (spec === "did") return scope.did ?? 0;
+  if (spec === "gone") return scope.gone ?? 0;
+  if ("c" in spec) return everyMatch(scope.state, scope.me, scope.source, spec.c).length;
+  if ("p" in spec) {
+    const player = scope.state.players[spec.opp ? other(scope.me) : scope.me];
+    if (spec.p === "keys" || spec.p === "amber") return player[spec.p];
+    if (spec.p === "plays") return scope.state.plays;
+    return player[spec.p].length;
+  }
+  return select(scope, spec.s).reduce(
+    (sum, card) => sum + (spec.of === "damage" ? card.damage : spec.of === "amber" ? (card.amber ?? 0) : effectivePower(scope.state, card)),
+    0,
+  );
 }
 
 /** Specification shared by the engine and the AI: can this ability do anything now? */
 export function canResolve(state: GameState, me: Side, source: CardInstance, ability: Ability): boolean {
-  return (!ability.if || holds(ability.if, state, me)) && (!ability.target || everyMatch(state, me, source, ability.target).length > 0);
+  return (!ability.if || holds(ability.if, state, me, source)) && (!ability.target || everyMatch(state, me, source, ability.target).length > 0);
 }
 
 // ---------- game actions ----------
@@ -804,10 +903,22 @@ function sweep(state: GameState, deterministic: boolean): void {
   }
 }
 
-function discardRandom(player: GamePlayer, deterministic: boolean, rng: Rng): void {
+/** The single door into a player's discard pile: fires the Scrap: trigger of
+    every card that lands there. Only the active player's discards are live — a
+    card discarded outside its controller's turn cannot react (keyteki raises
+    the event on the card, and Scrap is a discard trigger of that side). The
+    move's chosen target is forwarded so a Scrap ability can use it. */
+function toDiscard(state: GameState, side: Side, cards: CardInstance[], deterministic: boolean, decline = false, choice?: Choice): void {
+  state.players[side].discard.push(...cards);
+  if (side !== state.activePlayer) return;
+  for (const card of cards) fire(state, side, card, "scrap", { deterministic, decline, choice });
+}
+
+function discardRandom(state: GameState, side: Side, deterministic: boolean): void {
+  const player = state.players[side];
   if (!player.hand.length) return;
-  const index = deterministic ? 0 : Math.floor(roll(rng) * player.hand.length);
-  player.discard.push(...player.hand.splice(index, 1));
+  const index = deterministic ? 0 : Math.floor(roll(state) * player.hand.length);
+  toDiscard(state, side, player.hand.splice(index, 1), deterministic);
 }
 
 /** Extra bonus icons resolved when a card is played (keyteki
@@ -833,12 +944,65 @@ function resolveBonusIcons(state: GameState, side: Side, icons: BonusIcons): voi
   if (icons.draw) draw(me, icons.draw, state);
 }
 
+/** What an act leaves behind, for the "did"/"gone" counts of the act after it. */
+interface Snapshot {
+  /** The counters of both players: amber, keys, chains and the five zone sizes. */
+  counters: number[];
+  /** The act's selection as it was, with the signature each card showed. */
+  cards?: { card: CardInstance; signature: string; inPlay: boolean }[];
+}
+
+/** Everything an act can change about a card that stays in play — the signature
+    "did" compares ("for each creature healed this way"). */
+const signature = (state: GameState, card: CardInstance) =>
+  `${controllerOf(state, card)}|${card.damage}|${card.ready ? 1 : 0}|${card.stunned ? 1 : 0}|${card.amber ?? 0}|${card.warded ?? 0}|${card.enraged ?? 0}`;
+
+const countersOf = (state: GameState): number[] =>
+  state.players.flatMap((player) => [
+    player.amber,
+    player.keys,
+    player.chains,
+    player.hand.length,
+    player.deck.length,
+    player.discard.length,
+    player.archives.length,
+    player.purged.length,
+  ]);
+
+/** did/gone of the act just run, measured AFTER the sweep: with a selection, the
+    cards it affected (changed signature or left play); without one, the largest
+    absolute move of the counters. */
+function measured(state: GameState, before: Snapshot): { did: number; gone: number } {
+  if (!before.cards) {
+    const after = countersOf(state);
+    return { did: Math.max(...after.map((value, index) => Math.abs(value - before.counters[index]))), gone: 0 };
+  }
+  let did = 0;
+  let gone = 0;
+  for (const entry of before.cards) {
+    if (entry.inPlay && controllerOf(state, entry.card) === undefined) gone += 1;
+    if (signature(state, entry.card) !== entry.signature) did += 1;
+  }
+  return { did, gone };
+}
+
 function run(context: Context, act: Act): void {
-  if (act.optional && context.decline) return;
+  // A skipped act did nothing: the did/gone of the act before do not carry on.
+  if ((act.optional && context.decline) || (act.if && !holds(act.if, context.state, context.me, context.source, context))) {
+    context.did = 0;
+    context.gone = 0;
+    return;
+  }
   const { state, me, source, deterministic } = context;
-  const player = state.players["opp" in act && act.opp ? other(me) : me];
-  const cards = "s" in act ? select(context, act.s) : [];
-  const amount = "n" in act ? act.n : 0;
+  // `opp` flips the actor of the act (and the player whose zones it reads).
+  const side = "opp" in act && act.opp ? other(me) : me;
+  const player = state.players[side];
+  const cards = "s" in act ? select(context, act.s, act.k) : [];
+  const before: Snapshot = "s" in act
+    ? { counters: [], cards: cards.map((card) => ({ card, signature: signature(state, card), inPlay: controllerOf(state, card) !== undefined })) }
+    : { counters: countersOf(state) };
+  // "for each …": the count is read from the state the act starts in.
+  const amount = "n" in act ? act.n * (act.per ? countOf(context, act.per) : 1) : 0;
   switch (act.k) {
     case "gainAmber":
       player.amber += amount;
@@ -861,7 +1025,7 @@ function run(context: Context, act: Act): void {
       draw(player, amount, state);
       break;
     case "discardRandom":
-      for (let count = 0; count < amount; count += 1) discardRandom(player, deterministic, state);
+      for (let count = 0; count < amount; count += 1) discardRandom(state, side, deterministic);
       break;
     case "keyCost":
       player.keyCostMod = (player.keyCostMod ?? 0) + amount;
@@ -962,8 +1126,54 @@ function run(context: Context, act: Act): void {
       for (const card of cards) leaveByEffect(state, card, "hand");
       break;
     case "returnToDeck":
-      for (const card of cards) leaveByEffect(state, card, "deck");
+      // `at` repositions the card after the leave-play move: the deck's top is
+      // the array's end, so "bottom" is the front and "shuffle" re-shuffles.
+      for (const card of cards) {
+        const owner = ownerOf(state, card) ?? me;
+        leaveByEffect(state, card, "deck");
+        // A ward (or a token leaving the game) cancels the move: only a card
+        // that really landed in the deck is repositioned.
+        const deck = state.players[owner].deck;
+        if (!act.at || deck.lastIndexOf(card) < 0) continue;
+        if (act.at === "bottom") {
+          deck.splice(deck.lastIndexOf(card), 1);
+          deck.unshift(card);
+        } else state.players[owner].deck = shuffle(deck, state);
+      }
       break;
+    case "move": {
+      // One act for the player zones. `pick` chooses the cards: "top" is the
+      // array's end (the deck's top), "random" draws from the PRNG and "all"
+      // ignores n. Without `pick` the controller chooses — from a hidden hand
+      // that means the first card outside the active house, elsewhere the top.
+      const from = player[act.from];
+      const candidates = act.type ? from.filter((card) => card.face.type === act.type) : [...from];
+      const choose = () =>
+        act.pick === "random"
+          ? candidates[Math.floor(roll(state) * candidates.length)]
+          : act.pick === undefined && act.from === "hand"
+            ? (candidates.find((card) => card.face.house !== state.activeHouse) ?? candidates[candidates.length - 1])
+            : candidates[candidates.length - 1];
+      const moved: CardInstance[] = [];
+      // `all` takes the whole zone, so the bound is read before the picks.
+      const take = act.pick === "all" ? candidates.length : Math.min(amount, candidates.length);
+      for (let count = 0; count < take; count += 1) {
+        const card = choose();
+        if (!card) break;
+        moved.push(card);
+        candidates.splice(candidates.indexOf(card), 1);
+      }
+      if (!moved.length) break;
+      player[act.from] = from.filter((card) => !moved.includes(card));
+      if (act.to === "discard") toDiscard(state, side, moved, deterministic, context.decline);
+      else {
+        const destination = player[act.to];
+        if (act.at === "bottom") destination.unshift(...moved);
+        else destination.push(...moved);
+        if (act.at === "shuffle") player[act.to] = shuffle(destination, state);
+      }
+      break;
+    }
     case "archive":
       for (const card of cards) leaveByEffect(state, card, "archives");
       break;
@@ -999,6 +1209,9 @@ function run(context: Context, act: Act): void {
     }
   }
   sweep(state, deterministic);
+  // "did"/"gone" describe what THIS act did: they are read after the sweep, so
+  // a creature destroyed by the damage just dealt already counts as gone.
+  Object.assign(context, measured(state, before));
 }
 
 /** Resolves every ability of `source` bound to `trigger` (keyteki TriggeredAbility).
@@ -1017,7 +1230,7 @@ function fire(
     if (!ability.on.includes(trigger) || (options.decline && ability.optional)) continue;
     firing.push(ability);
   }
-  const live = firing.map((ability) => !ability.if || holds(ability.if, state, me));
+  const live = firing.map((ability) => !ability.if || holds(ability.if, state, me, source));
   for (const [index, ability] of firing.entries()) {
     if (!live[index]) continue;
     const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic, useVia: options.via, decline: options.decline };
@@ -1132,6 +1345,7 @@ function triggersFor(move: GameMove): Trigger[] {
   if (move.type === "play") return ["play"];
   if (move.type === "reap") return ["reap"];
   if (move.type === "fight") return ["beforeFight", "fight"];
+  if (move.type === "discard") return ["scrap"];
   return move.type === "use" ? ["action", "omni"] : [];
 }
 
@@ -1171,7 +1385,7 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
     (item) =>
       item.target &&
       item.on.some((trigger) => triggers.includes(trigger)) &&
-      (!item.if || holds(item.if, view, side)) &&
+      (!item.if || holds(item.if, view, side, card)) &&
       // A declined "You may" is waived: no target prompt for it.
       !(declines(move) && item.optional),
   );
@@ -1202,6 +1416,8 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
         if (hasOptionalTrigger(state, side, card, ["play"])) moves.push({ type: "play", instanceId: card.instanceId, decline: true });
       }
       moves.push({ type: "discard", instanceId: card.instanceId });
+      // "You may" Scrap: clauses get a declined variant of the discard move too.
+      if (hasOptionalTrigger(state, side, card, ["scrap"])) moves.push({ type: "discard", instanceId: card.instanceId, decline: true });
     }
   }
 
@@ -1243,7 +1459,7 @@ function hasOptionalTrigger(state: GameState, side: Side, source: CardInstance, 
     (ability) =>
       ability.on.some((trigger) => triggers.includes(trigger)) &&
       ability.acts.some((act) => act.optional) &&
-      (!ability.if || holds(ability.if, state, side)),
+      (!ability.if || holds(ability.if, state, side, source)),
   );
 }
 
@@ -1263,9 +1479,13 @@ export function getLegalMoves(state: GameState, playerIndex: Side, house: string
     prunes instead of sending the AI into a no-op. */
 export function moveHasEffect(state: GameState, side: Side, move: GameMove): boolean {
   if (move.type === "reap" || move.type === "fight" || move.type === "unstun" || move.type === "takeArchives") return true;
-  if (move.type === "discard") return false;
   const source = moveSource(state, side, move);
   if (!source) return false;
+  // A discard only "has an effect" when the card prints a Scrap: trigger that
+  // can resolve now (the card itself always reaches the pile).
+  if (move.type === "discard") {
+    return abilitiesOf(state, source).some((ability) => ability.on.includes("scrap") && canResolve(state, side, source, ability));
+  }
   const icons = source.face.bonusIcons;
   // A card that enters play, carries printed amber or resolves extra bonus
   // icons always does something when played (Onda 4).
@@ -1329,7 +1549,9 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   }
 
   if (move.type === "discard") {
-    player.discard.push(source);
+    // The discard move is the other door into the pile: a Scrap: trigger fires
+    // for the active player (toDiscard), and a declined move waives it.
+    toDiscard(state, playerIndex, [source], deterministic, decline, choice);
     record(state, "log.discard", params, silent);
   } else if (move.type === "play") {
     player.amber += printedAmber(source.face);

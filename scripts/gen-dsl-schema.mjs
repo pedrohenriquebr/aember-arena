@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-export const SCHEMA_TYPES = ["Trigger", "Filter", "Selection", "Act", "Condition", "Ability", "Restrict", "Replacement", "PersistentEffect"];
+export const SCHEMA_TYPES = ["Trigger", "Zone", "Filter", "Selection", "Count", "Act", "Condition", "Ability", "Restrict", "Replacement", "PersistentEffect"];
 
 function stripComments(source) {
   // Line comments first: the file header has a "GameActions/*" that is not a block opener.
