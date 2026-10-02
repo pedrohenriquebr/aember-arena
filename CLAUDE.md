@@ -6,15 +6,19 @@ Shipped as **one self-contained `index.html`** (JS + CSS inlined by
 `vite-plugin-singlefile`), so it can be opened from disk, emailed, or dropped on any
 static host with no server.
 
-**Estado atual (30/09, ~264 commits):** Mobile-first + palco de viewport (UX-FIT
+**Estado atual (02/10, ~280 commits):** Mobile-first + palco de viewport (UX-FIT
 FIT-01..08), animações estilo Arena (3 ondas), áudio procedural (14 timbres),
 tutorial, modo 3D da mesa (12 histórias + punch list), **motor de abilities
-declarativas (ondas 1-4)** — efeitos persistentes, "you may", reações,
-purge/sacrifice/tokens/exalt, ward/enrage/enhanced/take-control/forja/instead
-(cobertura do catálogo: full 200/2.603, crashes 0) — e a **onda 1 do catálogo
-dinâmico** (DB v4: stores `cards`/`abilities`, sync incremental do Master Vault,
-`rulesOf` lendo o store antes do parser, chip de catálogo; onda 2 = LLM/BYOK
-pendente). Specs: 239+. Este arquivo
+declarativas (ondas 1-4 + DSL v4)** — efeitos persistentes, "you may", reações,
+purge/sacrifice/tokens/exalt, ward/enrage/enhanced/take-control/forja/instead,
+e **quantidade dinâmica (`per`/`did`/`gone`), condições (`act.if`, haunted),
+filtros por casa/traço/exausta, `keyCost`, act `move`, gatilho `scrap`,
+observadores (`Ability.of`+`"event"`), `use.via`, contadores, splash,
+`versatile`** (expansão em 3 lotes, `docs/DSL_EXPANSION_PLAN.md`) — cobertura
+do parser: full **952/3.744** no corpus do MV. **Catálogo dinâmico completo**
+(DB v4, sync MV, BYOK, pipeline LLM com validação tripla + harvest, fila de
+tradução e de revisão in-game — CAT-3; proxy local do dono via
+`scripts/llm-cors-relay.mjs`). Specs: 374+. Este arquivo
 descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
 MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*,
 DYNAMIC_CATALOG_PLAN).
@@ -129,7 +133,9 @@ ações, cobertura por set, pendências).
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Orçamento de bundle:** gzip do `dist/index.html` ≤ **153 kB**. Histórico de
+7. **Tamanho de bundle:** INFORMATIVO desde 02/out/2026 (decisão do dono: features
+   valem mais que bytes — o número é telemetria, não gate; histórico abaixo).
+   Histórico de
    revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
    (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
    → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:

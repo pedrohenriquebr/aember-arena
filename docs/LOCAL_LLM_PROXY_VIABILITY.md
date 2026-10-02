@@ -65,8 +65,8 @@ Qualidade: o prompt tem schema grande + JSON estrito; modelos pequenos/free (nem
   npm run harvest:cards                                                  # exporta o catálogo do Vault (3744 cartas)
   npm run harvest -- --cards scripts/harvest/cards-mv.json --llm --limit 25   # 25 cartas ≈ 17 min
   ```
-  `LLM_TIMEOUT_MS` já está em 180s (cold start do CLI local; warm ~35s). Rascunhos em `scripts/harvest/drafts.json` para a fila de revisão do app; `npm run harvest -- --vendor` grava só os `reviewed: true` em `src/lib/generated/approved.json`.
-  **Cache**: falhas ficam presas por `textHash` — após expandir a DSL, limpe `drafts.json` (ou as linhas) para reprocessar.
+  `LLM_TIMEOUT_MS` já está em 180s (cold start do CLI local; warm ~35s). Rascunhos em `scripts/harvest/drafts.json`: a revisão do HARVEST é manual no arquivo (`"reviewed": true`) + `npm run harvest -- --vendor` (grava em `src/lib/generated/approved.json`) — a fila de revisão do app (CAT-3) lê só o IndexedDB dela, não este arquivo [integração dos dois é backlog].
+  **Cache**: falhas com `v` anterior ao `DSL_VERSION` atual são RE-ENFILEIRADAS automaticamente (contrato de versão) — não é preciso limpar `drafts.json` após expandir a DSL.
 - **Plano B (modelo realmente local/offline, outro dia)**: LiteLLM (`:4000`, precisa de backend) ou Ollama (`:11434/v1`, modelo ≥7B com JSON confiável, `OLLAMA_ORIGINS`).
 
 ## Riscos e próximos passos

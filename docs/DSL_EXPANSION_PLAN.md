@@ -1,8 +1,9 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Spec gerada pelo consultor Opus 5.5 (effort medium) em 02/out/2026, com medições
      reais do parser sobre scripts/harvest/cards-mv.json (3.744 ids, 2.196 textos únicos).
-     Implementação em lotes — ver final do documento. Teto de bundle: Lote 1 cabe em 157;
-     Lotes 2/3 pedem chore de teto (mecanismo CLAUDE.md §7) medido a cada commit. -->
+     Implementação em lotes — ver final do documento. [Atualização 02/out] O teto de
+     bundle foi APOSENTADO pelo dono: os alertas de teto deste documento NÃO se aplicam
+     mais; o gzip é telemetria informativa. -->
 
 # Spec: expansão da DSL de abilities (3 lotes)
 
@@ -248,7 +249,7 @@ interface Ability { /* … */ of?: Filter }
 | "Belongs to all houses", draw-step (Mother) | 1 a 3 cartas; o primeiro só seria aproximado por `versatile`. |
 | "Up to N" / "any number" (62) | Escolha real de N alvos; esperar `GameMove.targets[]`. |
 
-Para cada lote: `npm run build`, `npm test`, `npm run gen:schema`, `e2e:smoke` e `e2e:bundle`. Parar se passar do teto do lote.
+Para cada lote: `npm run build`, `npm test`, `npm run gen:schema`, `e2e:smoke` e `e2e:bundle`. [Atualização 02/out] O teto foi aposentado — meça e reporte o gzip, mas NÃO pare por tamanho.
 
 LOTE 1: normalise em 3 passos com hash congelado, prefixos/aspas, grafias sobre a DSL atual (flank, opp/each player, overwhelmed, Otherwise + snapshot no fire), DSL_VERSION + gate em tabela + whitelists + retry de falhas, higiene do prompt e dry-run rico — 177→314 full, cabe em 157 | LOTE 2: `per`/Count, Condition `count` + `act.if` (did/gone, haunted), Filter house/trait/exhausted, PersistentEffect if/per/keyCost, Selection pick/fought, act `move` + `returnToDeck.at`, gatilho `scrap` — ~500 full no parser, pede teto ~159 | LOTE 3: `use.via` (ready and fight), observadores `Ability.of` + `"event"`, contadores +1, splash `targetNeighbors`, keyword versatile — ~560 full, pede teto ~160
 
