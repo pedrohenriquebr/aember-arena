@@ -6,19 +6,26 @@ Shipped as **one self-contained `index.html`** (JS + CSS inlined by
 `vite-plugin-singlefile`), so it can be opened from disk, emailed, or dropped on any
 static host with no server.
 
-**Estado atual (02/10, ~280 commits):** Mobile-first + palco de viewport (UX-FIT
+**Estado atual (02/10, ~295 commits):** Mobile-first + palco de viewport (UX-FIT
 FIT-01..08), animações estilo Arena (3 ondas), áudio procedural (14 timbres),
 tutorial, modo 3D da mesa (12 histórias + punch list), **motor de abilities
-declarativas (ondas 1-4 + DSL v4)** — efeitos persistentes, "you may", reações,
-purge/sacrifice/tokens/exalt, ward/enrage/enhanced/take-control/forja/instead,
-e **quantidade dinâmica (`per`/`did`/`gone`), condições (`act.if`, haunted),
-filtros por casa/traço/exausta, `keyCost`, act `move`, gatilho `scrap`,
-observadores (`Ability.of`+`"event"`), `use.via`, contadores, splash,
-`versatile`** (expansão em 3 lotes, `docs/DSL_EXPANSION_PLAN.md`) — cobertura
-do parser: full **952/3.744** no corpus do MV. **Catálogo dinâmico completo**
-(DB v4, sync MV, BYOK, pipeline LLM com validação tripla + harvest, fila de
-tradução e de revisão in-game — CAT-3; proxy local do dono via
-`scripts/llm-cors-relay.mjs`). Specs: 374+. Este arquivo
+declarativas (ondas 1-4 + DSL v6, onda 2)** — efeitos persistentes, "you may",
+reações, purge/sacrifice/tokens/exalt, ward/enrage/enhanced/take-control/forja/
+instead, quantidade dinâmica (`per`/`did`/`gone`), condições (`act.if`, haunted,
+`myTurn`), filtros por casa/traço/exausta/contadores/âmbar, `keyCost`, act `move`
+(zonas com `top`/`bottom`/`random`/`all`), gatilho `scrap`, observadores
+(`Ability.of`+`"event"`, orçados por movimento), `use.via`, contadores
+(+`removeCounter`), splash, `versatile`, **`partial` para Fate**, **Entrench**
+(`hold`/`noReady`), `who` (dono/controlador dinâmico), `capture.own`,
+`moveAmber`, **escolha de casa (`move.house`/`forceHouse`), gatilho `house`,
+casa concedida (`houseOf`), `forged`/`forgeKey.less`, imunidades
+(`prevent`/`noSteal`)** — ondas 1-3 em `docs/DSL_EXPANSION_PLAN.md`, onda 2
+(Lotes 4-5) em `docs/DSL_EXPANSION_PLAN_WAVE2.md` — cobertura do parser:
+full **1.218/3.744 + 167 partial** no corpus do MV. **Catálogo dinâmico
+completo** (DB v4, sync MV, BYOK, pipeline LLM com validação tripla + harvest +
+fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
+(CAT-3.5, `--export-queue`); proxy local do dono via `scripts/llm-cors-relay.mjs`).
+Specs: 464+. Este arquivo
 descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
 MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*,
 DYNAMIC_CATALOG_PLAN).
@@ -82,7 +89,7 @@ src/
                            demoDeck(s).ts, settings.ts, sound.ts (WebAudio)
 ```
 
-## Motor de abilities (ondas 1-4 — leia antes de mexer em regras)
+## Motor de abilities (ondas 1-4 + onda 2 da DSL — leia antes de mexer em regras)
 
 As cartas têm efeitos declarativos derivados do `card_text` (não mais if/else por
 título): `rulesOf()` em `abilities.ts` retorna `CardRules { abilities, keywords,
@@ -104,9 +111,18 @@ ações, cobertura por set, pendências).
   inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
   de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
   `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
-- **Cobertura do catálogo**: full 200/2.603 (7,7%), partial 88, crashes 0.
-  Pendente (ondas 3-5 do ROADMAP_REVIEW): efeitos persistentes complexos,
-  opcionalidade de fase, verbos de busca, tide/enhanced-completo/prophecy.
+- **Versão e orçamentos (onda 2)**: `DSL_VERSION` (hoje 6) — linha com `v` maior é
+  descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
+  `docs/DSL_EXPANSION_PLAN.md`); `did`/`gone` são medidos pós-sweep; orçamentos
+  por movimento (`OBSERVER_BUDGET`, `FIRE_BUDGET`, `OBSERVER_DEPTH`) e recheck de
+  watcher vivo evitam laço de observador/`use.via`; `houseOf` tem guarda própria.
+  Entrench = `hold` (preferência do controlador via `setHold`, fora de GameMove)
+  + `canReady`; efeitos `noReady` bloqueiam pelo mesmo `canReady`.
+- **Cobertura do catálogo**: full 1.218/3.744 (32,5%) + 167 partial (Fate)
+  no corpus sincronizado, crashes 0. Pendente (cortes de
+  `docs/DSL_EXPANSION_PLAN_WAVE2.md` §4): "any number"/"up to N" (pede
+  `GameMove.targets[]`), look/reveal/search, Fate/Prophecy completo, cor de
+  chave, referência à carta movida, Tide/Treachery/Invulnerable.
 
 ## Regras de estilo vigentes
 

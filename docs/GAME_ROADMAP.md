@@ -1,5 +1,7 @@
 # GAME ROADMAP — mecânicas, animações, efeitos e cobertura (29/09)
 
+> **Cobertura atual (02/out/2026):** parser full 1.218/3.744 (32,5%) + 167 partial no corpus sincronizado do MV — a expansão da DSL em 5 lotes (`DSL_EXPANSION_PLAN.md` + `_WAVE2.md`, DSL v6) multiplicou os 200 full da medição original. As tabelas abaixo são a fotografia de 29/09 e ficam como histórico.
+
 Relatório consolidado: o que está coberto, o que falta, quanto custa, e como
 cada lacuna será fechada. Fontes: MECHANICS_REPORT.md (cobertura medida no pool
 real de 2.603 cartas), ANIMATIONS_PLAN.md + VALIDATE_FX.md (animações),

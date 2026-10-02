@@ -1,5 +1,7 @@
 # Plano — Catálogo dinâmico + pipeline de abilities por IA (2026-09-29)
 
+> **Estado (02/out/2026):** todas as camadas LANÇADAS — CAT-1 (DB v4 + sync), CAT-2 (pipeline LLM BYOK + validação tripla + harvest), CAT-3 (fila de tradução/revisão in-game) e CAT-3.5 (importação da fila do harvest via `--export-queue`). DSL na v6 (ondas 1-3 em `DSL_EXPANSION_PLAN.md`, onda 2 em `DSL_EXPANSION_PLAN_WAVE2.md`); parser full 1.218/3.744 + 167 partial (Fate). Proxy local do dono: `docs/LOCAL_LLM_PROXY_VIABILITY.md` + `scripts/llm-cors-relay.mjs`.
+
 Objetivo: fechar a lacuna "importei um deck real e metade das cartas é vanilla".
 Duas metades que se encontram no selo de cobertura:
 
