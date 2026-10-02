@@ -2,11 +2,10 @@
 //   1. Piso tipografico  -> "node e2e/capture.mjs --floor-only" (360x800, 5 telas).
 //      Contrato (§2): 11px p/ qualquer texto informativo; 10px so em caps/eyebrow com
 //      letter-spacing >= 0.1em; inputs 16px sempre.
-//   2. Orcamento de bundle -> gzipKB de dist/index.html <= --max-gzip-kb.
-//      Default 167 kB (DSL lote 2: per/Count, act.if, filtros casa/traco/exausta, keyCost,
-//      pick/fought, act move, gatilho scrap; mediu 166,44 kB (+3,77 — o dobro do
-//      estimado; cortar few-shots so chegaría a 166,03, nao vale); revisoes:
-//      155 -> 157 -> 162 -> 164 -> 167, ver CLAUDE.md §7).
+//   2. Tamanho de bundle -> gzipKB de dist/index.html, INFORMATIVO (nao bloqueia).
+//      Teto aposentado pelo dono (02/out/2026): foco em features; o numero serve
+//      so de telemetria. Historico dos tetos antigos: 155 -> 157 -> 162 -> 164 -> 167
+//      (ver CLAUDE.md §7).
 //      Antes: 155 kB (onda 1 do catalogo dinamico, docs/DYNAMIC_CATALOG_PLAN.md
 //      §1/§2/§3/§5: DB v4 com os stores `cards` (textHash/syncedAt) e `abilities`,
 //      sync incremental paginado com cursor e cancelamento, rulesOf lendo o store
@@ -151,15 +150,13 @@ if (skipFloor) {
   }
 }
 
-// 2) Orcamento de bundle
-console.log(`\n[2/6] orcamento de bundle (dist/index.html, zlib level 9, max ${maxGzipKb} kB):`);
+// 2) Tamanho de bundle (informativo — teto aposentado pelo dono, 02/out/2026)
+console.log(`\n[2/6] tamanho de bundle (dist/index.html, zlib level 9) — informativo, teto aposentado:`);
 const gzipKb = measureGzipKb();
 if (gzipKb === null) {
-  violations.push('bundle: dist/index.html nao encontrado - rode "npm run build" antes do acceptance');
-  console.log("  dist/index.html ausente");
+  console.log('  dist/index.html ausente - rode "npm run build" antes do acceptance (sem bloqueio)');
 } else {
-  console.log(`  gzipKB=${gzipKb.toFixed(2)}`);
-  if (gzipKb > maxGzipKb) violations.push(`bundle: gzip ${gzipKb.toFixed(2)} kB > max ${maxGzipKb} kB`);
+  console.log(`  gzipKB=${gzipKb.toFixed(2)}${gzipKb > maxGzipKb ? `  (acima do antigo teto de ${maxGzipKb} kB — observação, não violação)` : ""}`);
 }
 
 // 3) Bloco @media (max-width: 700px)

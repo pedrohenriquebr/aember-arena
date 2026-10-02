@@ -255,6 +255,11 @@ ações, cobertura por set, pendências).
    Baseline 162,67; mediu **166,44** (+3,77, o dobro do estimado; cortar os
    few-shots só chegaria a 166,03 — corte destrói entregável). Teto 167,
    revisão ÚNICA do lote — acima: parar.)
+   → **TETO APOSENTADO** (decisão do dono, 02/out/2026): o tamanho do bundle deixou
+   de ser gate — o acceptance mede o gzip só como telemetria informativa; features
+   valem mais que bytes. Lotes seguintes da DSL e qualquer feature NÃO param mais
+   por tamanho e não geram mais chore de teto; `maxGzipKb` segue só como referência
+   do histórico (167).
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
