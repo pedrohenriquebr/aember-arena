@@ -90,7 +90,9 @@ async function harvestLlm(cards) {
     console.log(`\nrascunhos em ${DRAFTS} — revise e marque "reviewed": true no que aprovar.`);
   } catch (error) {
     // A chave nunca aparece: o erro do pipeline já vem redigido (VaultError, chave llm.*).
-    console.error(`\nharvest interrompido: ${error?.key ?? "erro"}`);
+    // A mensagem importa: erros de transporte (llm.timeout/http/...) eram invisíveis
+    // quando a rodada morria numa chamada via pipe (o diagnóstico do Opus-low).
+    console.error(`\nharvest interrompido: ${error?.key ?? "erro"}${error?.message ? ` — ${error.message}` : ""}`);
     process.exit(1);
   }
 }
