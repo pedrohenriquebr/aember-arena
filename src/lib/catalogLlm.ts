@@ -70,9 +70,9 @@ export const FEW_SHOTS: { type: string; text: string; answer: DslAnswer | { unsu
     },
   },
   {
-    type: "Artifact",
-    text: "Each time a creature is destroyed, gain 1<A>.",
-    answer: { unsupported: true, reason: "Global watcher: the DSL only has triggers bound to the card itself." },
+    type: "Creature",
+    text: "Play: Gain 1<A>. Fate: Archive a card.",
+    answer: { unsupported: true, reason: "Fate: belongs to the Prophecy subsystem, which the engine does not resolve." },
   },
   // Lote 2 (docs/DSL_EXPANSION_PLAN.md §2): dynamic amounts, act conditions,
   // house/trait filters, key costs, picks, player zones and the Scrap trigger.
@@ -177,6 +177,56 @@ export const FEW_SHOTS: { type: string; text: string; answer: DslAnswer | { unsu
     text: "Scrap: Archive a card.",
     answer: { abilities: [{ on: ["scrap"], acts: [{ k: "move", n: 1, from: "hand", to: "archives" }] }], effects: [], keywords: {} },
   },
+  // Lote 3 (docs/DSL_EXPANSION_PLAN.md §3): use.via, observers, +1 power
+  // counters and splash.
+  {
+    type: "Action",
+    text: "Play: Ready and fight with a friendly creature.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [{ k: "ready", s: "target" }, { k: "use", s: "target", via: "fight" }],
+          target: { type: "Creature", side: "friendly" },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "After an enemy creature reaps, stun it.",
+    answer: {
+      abilities: [{ on: ["reap"], of: { type: "Creature", side: "enemy" }, acts: [{ k: "stun", s: "event" }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Give a creature two +1 power counters.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "counter", n: 2, s: "target" }], target: { type: "Creature" } }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Deal 3<D> to a creature, with 1<D> splash.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [{ k: "damage", n: 1, s: "targetNeighbors" }, { k: "damage", n: 3, s: "target" }],
+          target: { type: "Creature" },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
 ];
 
 const SYSTEM_RULES = [
@@ -189,6 +239,8 @@ const SYSTEM_RULES = [
   'Ignore an "Enhance" sentence (its icons are deck-building bonusIcons, not an ability). "You are overwhelmed" = fewerCreatures. "Otherwise, X" = a second ability with if {"k":"not","c":<the previous condition>}.',
   '"Scrap:" = on ["scrap"] (the card in its discard pile). "If you do" = the act\'s if {"k":"count","of":"did","op":"gte","n":1}: a condition in a later clause gates only its own acts. "Haunted" = 10+ cards in your discard.',
   '"for each X" = the act\'s per. Filters: {"house":"Mars"}, {"house":"!Mars"}, {"trait":"Knight"}, {"house":"active"}. "keys cost +N" (no possessive) = two effects (owner + opp).',
+  'Watchers ("After an enemy creature reaps, stun it.") set `of` to the watched filter; the event card is s:"event". "After your opponent plays a creature" = on ["play"], of {"type":"Creature","side":"enemy"}; "Each time you use an artifact" = on ["action","omni"].',
+  '"Ready and fight/reap with X" = [{k:"ready",s:"target"},{k:"use",s:"target",via:"fight"|"reap"}]. "Give X two +1 power counters" = {k:"counter",n:2,s:...}. Splash: "Deal 3<D> to a creature, with 1<D> splash" = [{k:"damage",n:1,s:"targetNeighbors"},{k:"damage",n:3,s:"target"}] — neighbors first, the only exception to the printed order.',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
@@ -294,19 +346,21 @@ function draftRow(face: CardFace, parts: { abilities: unknown; effects?: unknown
 
 const TRIGGER_WORDS: Record<string, RegExp> = {
   // Inflexões contam ("when played"); word boundary impede "displayed"/"replay".
+  // "reaps"/"fights" são as formas impressas dos observadores (§3.2).
   play: /\bplay(s|ed|ing)?\b/,
-  reap: /\breap\b/,
-  fight: /\bfight\b/,
+  reap: /\breaps?\b/,
+  fight: /\bfights?\b/,
   beforeFight: /\bbefore fight\b/,
   destroyed: /\bdestroyed\b/,
-  action: /\baction\b/,
-  omni: /\bomni\b/,
+  // "Each time you use an artifact" acorda Action/Omni sem imprimir as palavras.
+  action: /\baction\b|\buse[sd]? an? artifact\b/,
+  omni: /\bomni\b|\buse[sd]? an? artifact\b/,
   startOfTurn: /\bstart of your turn\b/,
   endOfTurn: /\bend of your turn\b/,
   scrap: /\bscrap\b/,
 };
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
-const TARGETED = new Set(["target", "targetAndNeighbors"]);
+const TARGETED = new Set(["target", "targetAndNeighbors", "targetNeighbors"]);
 
 function actProblem(act: Ability["acts"][number], ability: Ability, face: CardFace, text: string): string | null {
   if ("n" in act && (!Number.isInteger(act.n) || act.n < 1 || act.n > 20)) return `${act.k}: n=${act.n} is out of range`;
@@ -314,6 +368,12 @@ function actProblem(act: Ability["acts"][number], ability: Ability, face: CardFa
   if ("n" in act && act.n > 1 && !new RegExp(`\\b(${act.n}|${NUMBER_WORDS[act.n] ?? "$^"})\\b`).test(text)) return `${act.k}: the number ${act.n} is not in the card text`;
   if ("s" in act && typeof act.s === "string" && TARGETED.has(act.s) && !ability.target) return `${act.k}: selects a target but the ability has no \`target\` filter`;
   if ("s" in act && act.s === "host" && face.type !== "Upgrade") return `${act.k}: "host" only exists on upgrades`;
+  // Observers: "event" only exists when the ability declares what it watches.
+  if ("s" in act && act.s === "event" && !ability.of) return `${act.k}: selects the event but the ability has no \`of\` filter`;
+  // §3.1: the re-trigger loop the dry-run would only catch as a stack overflow.
+  if (act.k === "use" && act.s === "self" && (ability.on.includes("fight") || ability.on.includes("beforeFight"))) {
+    return `use: "self" on a ${ability.on.join("/")} trigger would re-run the ability forever`;
+  }
   if (act.k === "lasting" && !act.e.duration) return "lasting: the effect has no duration";
   return null;
 }

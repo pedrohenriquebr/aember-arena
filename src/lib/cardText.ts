@@ -12,11 +12,22 @@ import type { CardFace } from "./game";
 /** Every trigger prefix printed on cards. The ones without an engine trigger
     (Interrupt:, Fate: …) are recognised only to be reported as unsupported
     instead of leaking into the previous ability. "After <event>:" is the
-    post-event window and "Each time <event>:" fires on every occurrence. */
+    post-event window and "Each time <event>:" fires on every occurrence.
+    Observer sentences print no colon ("After an enemy creature reaps, stun
+    it."): the second branch segments them at the comma and the acts follow in
+    the same sentence. */
 /** `fate` is here to SEGMENT ("Fate: …" must not leak into the ability before
     it): the trigger table has no entry for it, so the segment is reported as
     unsupported and the previous ability still counts. */
-const PREFIX = /\b((?:play|reap|fight|destroyed|omni|action|scrap|interrupt|fate|each time [^:.]{1,90}?|at the (?:start|end) of [^:.]{1,90}?|after [^:.]{1,90}?|before [^:.]{1,90}?)(?:\/(?:after )?(?:play|reap|fight|destroyed))*)\s*:/gi;
+const PREFIX = new RegExp(
+  "\\b((?:play|reap|fight|destroyed|omni|action|scrap|interrupt|fate" +
+    "|each time [^:.]{1,90}?|at the (?:start|end) of [^:.]{1,90}?" +
+    "|after [^:.]{1,90}?|before [^:.]{1,90}?)" +
+    "(?:\\/(?:after )?(?:play|reap|fight|destroyed))*)\\s*:" +
+    "|\\b((?:after|each time) (?:(?:a|an) (?:friendly |enemy )?creatures? (?:reaps?|fights?|is destroyed)" +
+    "|(?:you|your opponent) plays? a creature|you (?:use|uses) an artifact))(?=\\s*,)",
+  "gi",
+);
 
 const TRIGGERS: Record<string, Trigger> = {
   play: "play",
@@ -43,13 +54,45 @@ function triggerFor(raw: string): Trigger | undefined {
   return TRIGGERS[part] ?? EVENTS[part.replace(/^(after|each time) /, "")];
 }
 
+/** Observer prefix (docs/DSL_EXPANSION_PLAN.md §3.2): the ability belongs to a
+    card WATCHING an event of another card ("After an enemy creature reaps, stun
+    it."). The watched card must match `of` and the event card is selected with
+    `s:"event"`. Only events of cards in play are representable. */
+function observerFor(raw: string): { triggers: Trigger[]; of: Filter } | null {
+  const part = raw.trim();
+  const creature = part.match(/^(?:after|each time) (?:a|an) (friendly |enemy )?creatures? (reaps?|fights?|is destroyed)$/);
+  if (creature) {
+    const filter: Filter = { type: "Creature" };
+    if (creature[1]) filter.side = creature[1].trim() as "friendly" | "enemy";
+    const trigger: Trigger = creature[2].startsWith("reap") ? "reap" : creature[2].startsWith("fight") ? "fight" : "destroyed";
+    return { triggers: [trigger], of: filter };
+  }
+  const plays = part.match(/^(?:after|each time) (you|your opponent) plays? a creature$/);
+  if (plays) return { triggers: ["play"], of: { type: "Creature", side: plays[1] === "you" ? "friendly" : "enemy" } };
+  if (/^(?:after|each time) you (?:use|uses) an artifact$/.test(part)) return { triggers: ["action", "omni"], of: { type: "Artifact", side: "friendly" } };
+  return null;
+}
+
+/** Header of one printed segment: its trigger group, plus the watched filter
+    when the prefix names an observer event. Null when it is outside the grammar. */
+function abilityHeader(raw: string): { triggers: Trigger[]; of?: Filter } | null {
+  const observer = observerFor(raw);
+  if (observer) return observer;
+  const triggers = raw.split("/").map((part) => triggerFor(part));
+  return triggers.every((trigger): trigger is Trigger => trigger !== undefined) ? { triggers } : null;
+}
+
 const num = (word: string) => (word === "a" || word === "an" ? 1 : Number(word));
+
+/** Spelled-out counts the counter wording uses ("two +1 power counters"). */
+const COUNT_WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|\\d+)";
 
 /** Version of the deterministic grammar. A stored `parser` row is the parser's
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 3;
+export const PARSER_VERSION = 4;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -242,7 +285,10 @@ function parseFilterWords(phrase: string): Filter | null {
   return filter;
 }
 
-function parseObject(phrase: string, upgrade: boolean): { s: Selection; target?: Filter } | null {
+function parseObject(phrase: string, upgrade: boolean, observer = false): { s: Selection; target?: Filter } | null {
+  // Inside an observer ability the event card is the subject: "stun it" stuns
+  // the creature that caused the event, not the watcher.
+  if (observer && phrase === "it") return { s: "event" };
   if (/^(this card|this creature|itself|it)$/.test(phrase)) return { s: upgrade && phrase === "this creature" ? "host" : "self" };
   if (phrase === "a creature and each of its neighbors") return { s: "targetAndNeighbors", target: { type: "Creature" } };
   if (/^each neighbor of the creature this card fights$/.test(phrase)) return { s: "neighborsOfFought" };
@@ -399,7 +445,7 @@ const VERBS: [RegExp, (m: RegExpMatchArray) => { k: Act["k"]; n?: number; obj: n
 
 /** A printed sentence. A leading "You may" makes every act of the sentence
     optional — the actor chooses whether it resolves (keyteki optional). */
-function parseSentence(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): Sentence | null {
+function parseSentence(sentence: string, upgrade: boolean, creature: boolean, quoted: string[], observer = false): Sentence | null {
   const may = sentence.match(/^you may:? (.+)$/);
   let body = may ? may[1] : sentence;
   // "… for each <count>" (either side of the clause): the dynamic amount of
@@ -416,7 +462,7 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean, qu
     if (!per) return null;
     body = prefix[2];
   }
-  const parsed = parseSentenceBody(body, upgrade, creature, quoted);
+  const parsed = parseSentenceBody(body, upgrade, creature, quoted, observer);
   if (parsed && per) {
     for (const act of parsed.acts) {
       if (act.k === "lasting") act.e.per = per;
@@ -430,14 +476,14 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean, qu
   return parsed;
 }
 
-function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): Sentence | null {
+function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean, quoted: string[], observer: boolean): Sentence | null {
   // "If you do, X" (keyteki's `then`) is the did-count of the clause before it,
   // so the conditional branch below reads it as a condition on X.
   const conditional = sentence.match(/^if ([^,]+), (.+)$/) ?? sentence.match(/^(.+?) if (you control more creatures than your opponent)$/);
   if (conditional) {
     const [condText, rest] = sentence.startsWith("if ") ? [conditional[1], conditional[2]] : [conditional[2], conditional[1]];
     const cond = parseCondition(condText);
-    const body = cond && parseSentence(rest, upgrade, creature, quoted);
+    const body = cond && parseSentence(rest, upgrade, creature, quoted, observer);
     return body && !body.cond ? { ...body, cond } : null;
   }
 
@@ -461,15 +507,56 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
 
   const stunExhaust = sentence.match(/^stun and exhaust (.+)$/);
   if (stunExhaust) {
-    const object = parseObject(stunExhaust[1], upgrade);
+    const object = parseObject(stunExhaust[1], upgrade, observer);
     return object ? { acts: [{ k: "stun", s: object.s }, { k: "exhaust", s: object.s }], target: object.target } : null;
+  }
+
+  // Lote 3 (§3.1): "Ready and fight/reap with X" readies and then uses the SAME
+  // creature, forcing how (its printed Action would win otherwise).
+  const readyFight = sentence.match(/^ready and (fight|reap) with (.+)$/);
+  if (readyFight) {
+    const object = parseObject(readyFight[2], upgrade, observer);
+    if (!object || object.s !== "target") return null;
+    return {
+      acts: [{ k: "ready", s: object.s }, { k: "use", s: object.s, via: readyFight[1] as "fight" | "reap" }],
+      target: object.target,
+    };
+  }
+
+  // Lote 3 (§3.4): splash damage ships BEFORE the target damage, so the target
+  // dying cannot rob its neighbors of the splash — the only exception to the
+  // printed order (the system prompt states it).
+  const splash = sentence.match(/^deal (\d+) damage to (.+?), with (\d+) damage splash$/);
+  if (splash) {
+    const object = parseObject(splash[2], upgrade, observer);
+    if (!object || object.s !== "target") return null;
+    return {
+      acts: [
+        { k: "damage", n: Number(splash[3]), s: "targetNeighbors" },
+        { k: "damage", n: Number(splash[1]), s: "target" },
+      ],
+      target: object.target,
+    };
+  }
+
+  // Lote 3 (§3.3): +1 power counters ("give X two +1 power counters", "put two
+  // +1 power counters on X"). Removal and "for each counter" stay out.
+  const giveCounters = sentence.match(new RegExp(`^give (.+?) (${COUNTER_COUNT}) \\+1 power counters?$`));
+  if (giveCounters) {
+    const object = parseObject(giveCounters[1], upgrade, observer);
+    return object ? { acts: [{ k: "counter", n: COUNT_WORDS[giveCounters[2]] ?? Number(giveCounters[2]), s: object.s }], target: object.target } : null;
+  }
+  const putCounters = sentence.match(new RegExp(`^put (${COUNTER_COUNT}) \\+1 power counters? on (.+)$`));
+  if (putCounters) {
+    const object = parseObject(putCounters[2], upgrade, observer);
+    return object ? { acts: [{ k: "counter", n: COUNT_WORDS[putCounters[1]] ?? Number(putCounters[1]), s: object.s }], target: object.target } : null;
   }
 
   for (const [pattern, build] of VERBS) {
     const m = sentence.match(pattern);
     if (!m) continue;
     const { k, n, obj, at } = build(m);
-    const object = parseObject(m[obj], upgrade);
+    const object = parseObject(m[obj], upgrade, observer);
     if (!object) return null;
     // keyteki's UseAction only affects creatures that can be used right now.
     if (k === "use" && object.target) object.target.ready = true;
@@ -484,9 +571,10 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
     "If you are overwhelmed, steal 2A. Otherwise, steal 1A." closes the first
     one and opens a twin with the negated condition. The negation is the whole
     point — a second `if:{k:"not"}` can never be expressed as one ability. */
-function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[]): Ability[] | null {
+function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter): Ability[] | null {
   const done: Ability[] = [];
-  let ability: Ability = { on: triggers, acts: [] };
+  const watching = of ? { of } : {};
+  let ability: Ability = { on: triggers, acts: [], ...watching };
   const close = (): boolean => {
     if (!ability.acts.length) return false;
     // Every act optional and the whole ability is a single "You may" clause.
@@ -499,16 +587,18 @@ function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, cre
     done.push(ability);
     return true;
   };
-  for (const sentence of body.split(/\.\s*/).map((part) => part.trim()).filter(Boolean)) {
+  // The leading comma of an observer segment ("…reaps, stun it.") belongs to the
+  // prefix, not to the sentence.
+  for (const sentence of body.split(/\.\s*/).map((part) => part.trim().replace(/^,\s*/, "")).filter(Boolean)) {
     // The branch of an "Otherwise" is only legal right after a conditional
     // clause, and it negates the condition printed BEFORE it.
     const otherwise = sentence.match(/^otherwise,? (.+)$/);
     if (otherwise) {
       const condition = ability.if;
       if (!condition || !close()) return null;
-      ability = { on: triggers, if: { k: "not", c: condition }, acts: [] };
+      ability = { on: triggers, if: { k: "not", c: condition }, acts: [], ...watching };
     }
-    const parsed = parseSentence(otherwise ? otherwise[1] : sentence, upgrade, creature, quoted);
+    const parsed = parseSentence(otherwise ? otherwise[1] : sentence, upgrade, creature, quoted, of !== undefined);
     if (!parsed) return null;
     // "You may X. If you do, Y.": declining X declines Y too, so the dependent
     // clause inherits the optional flag of the clause before it.
@@ -746,7 +836,7 @@ function parseCardBody(face: CardFace): CardRules {
   let prefix: string | null = null;
   for (const match of text.matchAll(PREFIX)) {
     segments.push({ prefix, body: text.slice(last, match.index) });
-    prefix = match[1];
+    prefix = match[1] ?? match[2] ?? null;
     last = (match.index ?? 0) + match[0].length;
   }
   segments.push({ prefix, body: text.slice(last) });
@@ -771,9 +861,9 @@ function parseCardBody(face: CardFace): CardRules {
   }
 
   for (const { prefix: raw, body } of segments.slice(1)) {
-    const triggers = raw!.split("/").map((part) => triggerFor(part));
-    const parsed = triggers.every((trigger): trigger is Trigger => trigger !== undefined)
-      ? parseAbilities(triggers, body.replace(self, "this card"), upgrade, creature, quoted)
+    const header = abilityHeader(raw!);
+    const parsed = header
+      ? parseAbilities(header.triggers, body.replace(self, "this card"), upgrade, creature, quoted, header.of)
       : null;
     if (parsed) {
       abilities.push(...parsed);

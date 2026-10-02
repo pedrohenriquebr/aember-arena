@@ -22,6 +22,9 @@ export const ENGINE_KEYWORDS = [
   "splash-attack",
   "exalt",
   "ward",
+  // Versatile has no printed value: it lets the card be played/used outside the
+  // active house (game.houseAllows reads it through keyword()).
+  "versatile",
 ] as const;
 
 export type Keyword = (typeof ENGINE_KEYWORDS)[number];

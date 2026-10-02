@@ -60,6 +60,9 @@ function scoreForPlayer(state: GameState, index: 0 | 1, abilityAware: boolean): 
     const textValue = abilityAware
       ? abilitiesOf(state, card).filter(
           (ability) =>
+            // An observer (`of`) watches other cards: it is not this card's own
+            // reap/fight/action/omni value (Lote 3 §3.2).
+            !ability.of &&
             ability.on.some((trigger) => trigger === "reap" || trigger === "fight" || trigger === "action" || trigger === "omni") &&
             canResolve(state, index, card, ability),
         ).length * 0.34
@@ -225,7 +228,8 @@ export function chooseAiMove(
       const source = moveSource(view, aiIndex, move)!;
       const heldBack = profile.abilityAware
         ? -0.45 * abilitiesOf(view, source).filter(
-            (ability) => ability.on.includes("play") && ability.if && !conditionHolds(ability.if, view, aiIndex, source),
+            // An observer's `on:["play"]` is not a condition on this card's play.
+            (ability) => !ability.of && ability.on.includes("play") && ability.if && !conditionHolds(ability.if, view, aiIndex, source),
           ).length
         : 0;
       return { move, value: search(next, aiIndex, depth - 1, profile, budget) + heldBack + (roll() - 0.5) * profile.noise };

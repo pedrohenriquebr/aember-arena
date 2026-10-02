@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 3; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 4; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -52,8 +52,20 @@ export interface Filter {
   exhausted?: boolean;
 }
 
-/** Which cards an action affects. */
-export type Selection = "self" | "host" | "target" | "targetAndNeighbors" | "neighborsOfFought" | "fought" | { each: Filter } | { pick: Filter; n?: number };
+/** Which cards an action affects. "event" is the card that caused the event an
+    observer ability (Ability.of) is watching; "targetNeighbors" the neighbors of
+    the ability's chosen target (splash, which ships before the target damage). */
+export type Selection =
+  | "self"
+  | "host"
+  | "target"
+  | "targetAndNeighbors"
+  | "targetNeighbors"
+  | "neighborsOfFought"
+  | "fought"
+  | "event"
+  | { each: Filter }
+  | { pick: Filter; n?: number };
 
 /** How many things a dynamic amount reads: the previous act of the ability
     ("did"/"gone"), a board filter, a zone/counter of a player or a stat summed
@@ -69,7 +81,12 @@ export type Act = (
   | { k: "gainAmber" | "loseAmber" | "steal" | "gainChains" | "draw" | "discardRandom" | "keyCost"; n: number; opp?: boolean }
   | { k: "capture"; n: number; s: Selection }
   | { k: "damage" | "heal" | "exalt"; n: number; s: Selection }
-  | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "archive" | "use"; s: Selection }
+  | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "archive"; s: Selection }
+  /** Use a creature now ("Ready and fight/reap with X"): `via` forces how the
+      creature is used, because its own Action would win otherwise. */
+  | { k: "use"; s: Selection; via?: "fight" | "reap" }
+  /** +1 power counters ("Give X two +1 power counters"). */
+  | { k: "counter"; n: number; s: Selection }
   /** "Put X on the bottom of its owner's deck" / "shuffle X into its owner's deck". */
   | { k: "returnToDeck"; s: Selection; at?: "bottom" | "shuffle" }
   /** One act for the player zones: mill, discard/archive from hand, purge from a
@@ -112,6 +129,11 @@ export type Condition =
 export interface Ability {
   on: Trigger[];
   if?: Condition;
+  /** Observer ability (docs/DSL_EXPANSION_PLAN.md §3.2): instead of reacting to
+      its own trigger, the card watches an EVENT of another card ("After an enemy
+      creature reaps, …"). The filter is matched against the event's card and the
+      acts select it with `s:"event"`. */
+  of?: Filter;
   target?: Filter;
   acts: Act[];
   /** Every act is a "You may" clause: the whole ability can be declined. */
@@ -426,6 +448,7 @@ const ACTS: Record<string, string> = {
   returnToDeck: "s",
   archive: "s",
   use: "s",
+  counter: "ns",
   move: "n",
   ward: "s",
   removeWard: "s",
@@ -440,7 +463,7 @@ const ACTS: Record<string, string> = {
   lasting: "",
 };
 
-const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "neighborsOfFought", "fought"]);
+const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "targetNeighbors", "neighborsOfFought", "fought", "event"]);
 
 /** Fields a stored Filter may carry. A key outside the list means the row was
     written by a NEWER grammar whose narrowing field this engine would silently
@@ -555,6 +578,7 @@ function validAct(value: unknown): boolean {
   if (need.includes("n") && !isFiniteNumber(value.n)) return false;
   if (need.includes("s") && !validSelection(value.s)) return false;
   if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target);
+  if (value.k === "use" && value.via !== undefined && value.via !== "fight" && value.via !== "reap") return false;
   if (value.at !== undefined && value.at !== "bottom" && value.at !== "shuffle") return false;
   if (value.k === "move") {
     return (
@@ -575,6 +599,7 @@ function validAbility(value: unknown): value is Ability {
   if (!Array.isArray(value.on) || !value.on.length || !value.on.every((trigger) => typeof trigger === "string" && ABILITY_TRIGGERS.has(trigger))) return false;
   if (!Array.isArray(value.acts) || !value.acts.length || !value.acts.every(validAct)) return false;
   if (value.if !== undefined && !validCondition(value.if)) return false;
+  if (value.of !== undefined && !validFilter(value.of)) return false;
   if (value.target !== undefined && !validFilter(value.target)) return false;
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
   return true;

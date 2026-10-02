@@ -84,6 +84,9 @@ export interface CardInstance {
       sits in that side's battleline and its owner — the other side, the pile it
       returns to when it leaves play — is derived from it. */
   controlledBy?: Side;
+  /** +1 power counters (Onda 5): each counter adds 1 power and they are reset
+      when the card leaves play (keyteki Card.powerCounters). */
+  counters?: number;
 }
 
 export interface GamePlayer {
@@ -475,7 +478,7 @@ function redirectFor(state: GameState, card: CardInstance): CardInstance | undef
 
 /** Power including every active modifier (keyteki card.power through effects). */
 export function effectivePower(state: GameState, card: CardInstance): number {
-  let power = card.face.power;
+  let power = card.face.power + (card.counters ?? 0);
   for (const owner of allEffects(state)) if (owner.effect.power && effectHits(state, owner, card)) power += effectPer(state, owner, owner.effect.power);
   return Math.max(0, power);
 }
@@ -665,6 +668,9 @@ interface Ctx {
   source?: CardInstance;
   /** The defender of the fight in progress ("the creature ~ fights"). */
   fought?: CardInstance;
+  /** Observer abilities: the card that caused the event ("After an enemy
+      creature reaps, stun it." — the reaper). */
+  event?: CardInstance;
   target?: CardInstance;
   deterministic: boolean;
   /** How a "use a creature" action resolves the creature (BUG-11). */
@@ -689,15 +695,17 @@ interface Choice {
 /** The cards a selection points at. `k` is the act being resolved, which decides
     whether a `{pick}` aims at the harmful or the helpful side. */
 function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[] {
-  const { state, source, target, fought } = context;
+  const { state, source, target, fought, event } = context;
   if (selection === "self") return source && controllerOf(state, source) !== undefined ? [source] : [];
   if (selection === "host") {
     return state.players.flatMap((player) => player.board.filter((card) => card.instanceId === source?.attachedTo));
   }
   if (selection === "target") return target ? [target] : [];
+  if (selection === "targetNeighbors") return target ? neighbors(state, target) : [];
   if (selection === "targetAndNeighbors") return target ? [target, ...neighbors(state, target)] : [];
   if (selection === "neighborsOfFought") return fought ? neighbors(state, fought) : [];
   if (selection === "fought") return fought ? [fought] : [];
+  if (selection === "event") return event ? [event] : [];
   if ("pick" in selection) {
     // Up to `n` DISTINCT cards, chosen as the engine auto-targets: the strongest
     // enemy (or weakest friend) for a harmful act, the strongest friend for a
@@ -774,6 +782,7 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
     warded: undefined,
     enraged: undefined,
     controlledBy: undefined,
+    counters: undefined,
   });
   // A token creature has no card behind it (isToken): it is removed from the
   // game instead of entering hand/discard/deck, so it can never be drawn or
@@ -955,7 +964,7 @@ interface Snapshot {
 /** Everything an act can change about a card that stays in play — the signature
     "did" compares ("for each creature healed this way"). */
 const signature = (state: GameState, card: CardInstance) =>
-  `${controllerOf(state, card)}|${card.damage}|${card.ready ? 1 : 0}|${card.stunned ? 1 : 0}|${card.amber ?? 0}|${card.warded ?? 0}|${card.enraged ?? 0}`;
+  `${controllerOf(state, card)}|${card.damage}|${card.ready ? 1 : 0}|${card.stunned ? 1 : 0}|${card.amber ?? 0}|${card.warded ?? 0}|${card.enraged ?? 0}|${card.counters ?? 0}`;
 
 const countersOf = (state: GameState): number[] =>
   state.players.flatMap((player) => [
@@ -1061,6 +1070,11 @@ function run(context: Context, act: Act): void {
       // creature. It behaves like captured amber (returns to the opponent when
       // the creature leaves play) — no player's pool is touched.
       for (const card of cards.filter(isCreature)) card.amber = (card.amber ?? 0) + amount;
+      break;
+    case "counter":
+      // keyteki +1 power counters (Onda 5): a plain counter on the instance;
+      // effectivePower reads it and leavePlay clears it.
+      for (const card of cards) card.counters = (card.counters ?? 0) + amount;
       break;
     case "ward":
       // keyteki WardAction/Card.ward(): the token does not stack, so warding a
@@ -1183,9 +1197,18 @@ function run(context: Context, act: Act): void {
         const side = controllerOf(state, card) as Side;
         // Using a creature is reap, fight or its Action, the player's choice;
         // until the UI prompts for it the engine resolves the printed Action
-        // when there is one, reap otherwise (BUG-11).
-        const via = context.useVia ?? (hasAbility(state, card, "action") ? "action" : "reap");
-        if (via === "action") fire(state, side, card, "action", { choice: {}, deterministic, decline: context.decline });
+        // when there is one, reap otherwise (BUG-11). An explicit `via` of the
+        // act wins ("Ready and fight/reap with X").
+        const via = act.via ?? context.useVia ?? (hasAbility(state, card, "action") ? "action" : "reap");
+        if (via === "fight") {
+          // The fight auto-targets like every engine-picked choice; with no
+          // legal defender the creature simply stays ready ("if able").
+          const target = autoPick(state, side, fightTargets(state, side, card), true);
+          if (target) {
+            context.fought = target;
+            fight(state, side, card, target, {}, deterministic, context.decline);
+          }
+        } else if (via === "action") fire(state, side, card, "action", { choice: {}, deterministic, decline: context.decline });
         else reap(state, side, card, {}, deterministic, context.decline);
       }
       break;
@@ -1217,7 +1240,9 @@ function run(context: Context, act: Act): void {
 /** Resolves every ability of `source` bound to `trigger` (keyteki TriggeredAbility).
     The `if` of every ability of the trigger is read BEFORE the first act runs:
     "If you are overwhelmed, steal 2. Otherwise, steal 1." must pick its branch
-    from the state as it was, not from what the first branch just changed. */
+    from the state as it was, not from what the first branch just changed.
+    Observer abilities (`of`) are not the source's own reaction: they run once
+    after the event, for every card in play watching it (fireObservers). */
 function fire(
   state: GameState,
   me: Side,
@@ -1227,7 +1252,7 @@ function fire(
 ): void {
   const firing: Ability[] = [];
   for (const ability of abilitiesOf(state, source)) {
-    if (!ability.on.includes(trigger) || (options.decline && ability.optional)) continue;
+    if (ability.of || !ability.on.includes(trigger) || (options.decline && ability.optional)) continue;
     firing.push(ability);
   }
   const live = firing.map((ability) => !ability.if || holds(ability.if, state, me, source));
@@ -1242,6 +1267,45 @@ function fire(
       if (!context.target) continue;
     }
     for (const act of ability.acts) run(context, act);
+  }
+  fireObservers(state, source, trigger, options.deterministic);
+}
+
+/** Recursion brake for observer chains (Lote 3 §3.2): an observer's acts can
+    cause the very event it watches ("After a creature reaps, ready and reap
+    with it"), so nested observer passes stop at this depth. The state stays
+    pure — the counter is a transient module value every move resets in its
+    `finally` (moves resolve synchronously, so no two matches interleave). */
+const OBSERVER_DEPTH = 8;
+let observerDepth = 0;
+
+/** Observer abilities (docs/DSL_EXPANSION_PLAN.md §3.2): cards that watch an
+    event another card caused ("After an enemy creature reaps, stun it."). Every
+    card in play on BOTH sides is scanned — only its own (printed/stored)
+    abilities, never a granted copy — and the ones bound to this trigger whose
+    `of` matches the event card fire with `me` = the watcher's side and the event
+    card as `s:"event"`. Targets are auto-picked: the player only chooses the
+    targets of their own move, and a watcher is never a "You may" decision. */
+function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, deterministic: boolean): void {
+  if (observerDepth >= OBSERVER_DEPTH) return;
+  observerDepth += 1;
+  try {
+    for (const side of [0, 1] as const) {
+      for (const watcher of state.players[side].board) {
+        for (const ability of rulesOf(watcher.face).abilities) {
+          if (!ability.of || !ability.on.includes(trigger) || !matches(state, side, watcher, event, ability.of)) continue;
+          if (ability.if && !holds(ability.if, state, side, watcher)) continue;
+          const context: Context = { state, me: side, source: watcher, event, deterministic };
+          if (ability.target) {
+            context.target = autoPick(state, side, everyMatch(state, side, watcher, ability.target), isHarmful(ability));
+            if (!context.target) continue;
+          }
+          for (const act of ability.acts) run(context, act);
+        }
+      }
+    }
+  } finally {
+    observerDepth -= 1;
   }
 }
 
@@ -1295,12 +1359,18 @@ function fight(state: GameState, me: Side, attacker: CardInstance, defender: Car
 
 // ---------- legality ----------
 
-const houseAllows = (card: CardInstance, house: string | null) => !house || card.face.house === house;
+/** May `card` be played/used with `house` active? Versatile (printed or granted)
+    lifts the house restriction (docs/DSL_EXPANSION_PLAN.md §3.5). */
+const houseAllows = (state: GameState, card: CardInstance, house: string | null) =>
+  !house || card.face.house === house || keyword(state, card, "versatile") > 0;
 const hasPrinted = (card: CardInstance, prefix: "Action" | "Omni") => new RegExp(`(^|[\\s/.])${prefix}:`, "i").test(card.face.text);
 
-/** Does the card have an Action (or Omni) ability right now — printed or granted? */
+/** Does the card have an Action (or Omni) ability right now — printed or granted?
+    Observer abilities (`of`) watch other cards: they are never the card's own
+    Action/Omni, so they must not make it usable (a phantom "use" move). */
 const hasAbility = (state: GameState, card: CardInstance, trigger: "action" | "omni") =>
-  hasPrinted(card, trigger === "action" ? "Action" : "Omni") || abilitiesOf(state, card).some((ability) => ability.on.includes(trigger));
+  hasPrinted(card, trigger === "action" ? "Action" : "Omni") ||
+  abilitiesOf(state, card).some((ability) => !ability.of && ability.on.includes(trigger));
 
 function mayAct(state: GameState, side: Side): boolean {
   return !mulliganPending(state) && state.winner === null && !(side === state.activePlayer && state.omega);
@@ -1338,7 +1408,7 @@ export function fightTargets(state: GameState, side: Side, attacker: CardInstanc
 
 function canUseCard(state: GameState, side: Side, card: CardInstance, house: string | null): boolean {
   if (restricted(state, side, "use", card)) return false;
-  return card.ready && !card.stunned && ((houseAllows(card, house) && hasAbility(state, card, "action")) || hasAbility(state, card, "omni"));
+  return card.ready && !card.stunned && ((houseAllows(state, card, house) && hasAbility(state, card, "action")) || hasAbility(state, card, "omni"));
 }
 
 function triggersFor(move: GameMove): Trigger[] {
@@ -1383,6 +1453,9 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
   const triggers = triggersFor(move);
   const ability = abilitiesOf(view, card).find(
     (item) =>
+      // An observer's target is auto-picked when its event happens, never by
+      // the player making this move.
+      !item.of &&
       item.target &&
       item.on.some((trigger) => triggers.includes(trigger)) &&
       (!item.if || holds(item.if, view, side, card)) &&
@@ -1409,7 +1482,7 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
   if (mayPlay(state, side)) {
     const limit = playLimit(state, side);
     for (const card of player.hand) {
-      if (!houseAllows(card, house)) continue;
+      if (!houseAllows(state, card, house)) continue;
       if (state.plays < limit && canPlay(state, side, card)) {
         moves.push({ type: "play", instanceId: card.instanceId });
         // "You may" clauses get a declined variant of the same move.
@@ -1422,7 +1495,7 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
   }
 
   for (const card of player.board) {
-    if (isCreature(card) && houseAllows(card, house) && card.ready) {
+    if (isCreature(card) && houseAllows(state, card, house) && card.ready) {
       if (card.stunned) {
         moves.push({ type: "unstun", instanceId: card.instanceId });
         continue;
@@ -1457,6 +1530,8 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
 function hasOptionalTrigger(state: GameState, side: Side, source: CardInstance, triggers: Trigger[]): boolean {
   return abilitiesOf(state, source).some(
     (ability) =>
+      // Observers are not the source's own reaction: no declined variant.
+      !ability.of &&
       ability.on.some((trigger) => triggers.includes(trigger)) &&
       ability.acts.some((act) => act.optional) &&
       (!ability.if || holds(ability.if, state, side, source)),
@@ -1482,9 +1557,10 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   const source = moveSource(state, side, move);
   if (!source) return false;
   // A discard only "has an effect" when the card prints a Scrap: trigger that
-  // can resolve now (the card itself always reaches the pile).
+  // can resolve now (the card itself always reaches the pile). An observer's
+  // `of` clause is never this card's own reaction (the card is not in play).
   if (move.type === "discard") {
-    return abilitiesOf(state, source).some((ability) => ability.on.includes("scrap") && canResolve(state, side, source, ability));
+    return abilitiesOf(state, source).some((ability) => !ability.of && ability.on.includes("scrap") && canResolve(state, side, source, ability));
   }
   const icons = source.face.bonusIcons;
   // A card that enters play, carries printed amber or resolves extra bonus
@@ -1494,6 +1570,8 @@ export function moveHasEffect(state: GameState, side: Side, move: GameMove): boo
   const declined = declines(move);
   return abilitiesOf(state, source).some(
     (ability) =>
+      // An observer is not the source's own reap/fight/action/omni value.
+      !ability.of &&
       ability.on.some((trigger) => triggers.includes(trigger)) &&
       (!declined || !ability.optional) &&
       canResolve(state, side, source, ability),
@@ -1602,10 +1680,15 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   } else {
     source.ready = false;
     const house = playerIndex === state.activePlayer ? state.activeHouse : null;
-    if (houseAllows(source, house) && hasAbility(state, source, "action")) {
+    // One use is one event: the in-house Action resolves, otherwise the Omni.
+    // Firing both would wake an observer watching "each time you use an
+    // artifact" twice for a single use (Lote 3 §3.2); a card printing both
+    // abilities resolves its Action, as in keyteki.
+    if (houseAllows(state, source, house) && hasAbility(state, source, "action")) {
       fire(state, playerIndex, source, "action", { choice, deterministic, via: move.via, decline });
+    } else if (hasAbility(state, source, "omni")) {
+      fire(state, playerIndex, source, "omni", { choice, deterministic, via: move.via, decline });
     }
-    fire(state, playerIndex, source, "omni", { choice, deterministic, via: move.via, decline });
     record(state, "log.use", params, silent);
   }
 

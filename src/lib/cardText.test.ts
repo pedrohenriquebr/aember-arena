@@ -201,7 +201,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(3);
+    expect(PARSER_VERSION).toBe(4);
   });
 });
 
@@ -348,6 +348,62 @@ describe("Lote 2: quantidades, condições, filtros, zonas e Scrap", () => {
   });
 });
 
+describe("Lote 3: use.via, observadores, contadores, splash e versatile", () => {
+  const acts = (text: string, type = "Creature", title = "Test Card") => parseCardText(face(text, type, title)).abilities[0]?.acts;
+
+  it("reads 'Ready and fight/reap with X' as ready + use, without forcing target.ready", () => {
+    const rules = parseCardText(face("Play: Ready and fight with a friendly creature.", "Action"));
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities[0]).toEqual({
+      on: ["play"],
+      acts: [{ k: "ready", s: "target" }, { k: "use", s: "target", via: "fight" }],
+      target: { type: "Creature", side: "friendly" },
+    });
+    expect(rules.abilities[0].target?.ready).toBeUndefined();
+    expect(acts("Play: Ready and reap with a friendly creature.")).toEqual([
+      { k: "ready", s: "target" },
+      { k: "use", s: "target", via: "reap" },
+    ]);
+  });
+
+  it("reads observer sentences with and without the colon", () => {
+    expect(parseCardText(face("After an enemy creature reaps, stun it.")).abilities).toEqual([
+      { on: ["reap"], of: { type: "Creature", side: "enemy" }, acts: [{ k: "stun", s: "event" }] },
+    ]);
+    expect(parseCardText(face("Each time a friendly creature is destroyed, gain 1<A>.")).abilities).toEqual([
+      { on: ["destroyed"], of: { type: "Creature", side: "friendly" }, acts: [{ k: "gainAmber", n: 1 }] },
+    ]);
+    const opponent = parseCardText(face("After your opponent plays a creature, draw a card."));
+    expect(opponent.abilities[0]).toEqual({ on: ["play"], of: { type: "Creature", side: "enemy" }, acts: [{ k: "draw", n: 1 }] });
+    const artifact = parseCardText(face("Each time you use an artifact, gain 1<A>.", "Artifact"));
+    expect(artifact.abilities[0]).toMatchObject({ on: ["action", "omni"], of: { type: "Artifact", side: "friendly" } });
+    // Colon form of the same grammar ("After Reap:") keeps working, and a watch
+    // clause outside it still drops the ability instead of guessing.
+    expect(parseCardText(face("After Reap: Gain 1<A>.")).abilities[0].of).toBeUndefined();
+    expect(parseCardText(face("After an enemy creature is destroyed fighting this card, gain 1<A>.")).coverage).toBe("vanilla");
+  });
+
+  it("reads +1 power counters in both wordings", () => {
+    expect(acts("Play: Give a creature two +1 power counters.")).toEqual([{ k: "counter", n: 2, s: "target" }]);
+    expect(parseCardText(face("Play: Give a creature two +1 power counters.")).abilities[0].target).toEqual({ type: "Creature" });
+    expect(acts("Play: Put a +1 power counter on a friendly creature.")).toEqual([{ k: "counter", n: 1, s: "target" }]);
+    expect(acts("Reap: Give Bulk three +1 power counters.", "Creature", "Bulk")).toEqual([{ k: "counter", n: 3, s: "self" }]);
+  });
+
+  it("reads splash with the neighbors BEFORE the target", () => {
+    expect(acts("Play: Deal 3<D> to a creature, with 1<D> splash.")).toEqual([
+      { k: "damage", n: 1, s: "targetNeighbors" },
+      { k: "damage", n: 3, s: "target" },
+    ]);
+  });
+
+  it("reads Versatile as an engine keyword", () => {
+    const rules = parseCardText(face("Versatile. Reap: Gain 1<A>."));
+    expect(rules.coverage).toBe("full");
+    expect(rules.keywords).toEqual({ versatile: 1 });
+  });
+});
+
 describe("zone verbs and tokens (Onda 3)", () => {
   it("reads purge, sacrifice and exalt as separate verbs", () => {
     const purge = parseCardText(face("Play: Purge an enemy creature."));
@@ -479,11 +535,13 @@ describe("starter decks", () => {
     // then may forge a key at the current cost).
     // 41 -> 42 with the Lote 2 zone moves (Sloppy Labwork: "Archive a card.
     // Discard a card.").
+    // 42 -> 43 with the Lote 3 observer wording (Veylan Analyst: "Each time you
+    // use an artifact, gain 1 amber.").
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 42,
+        "full": 43,
         "partial": 1,
-        "vanilla": 15,
+        "vanilla": 14,
       }
     `);
   });
