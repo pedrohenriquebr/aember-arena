@@ -410,6 +410,122 @@ export const FEW_SHOTS: {
       keywords: {},
     },
   },
+  {
+    type: "Action",
+    text: "Play: Destroy each creature with power 3 or lower.",
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "destroy", s: { each: { type: "Creature", powerMax: 3 } } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "After an enemy creature is destroyed fighting ~, gain 1<A>.",
+    answer: { abilities: [{ on: ["destroyed"], of: { type: "Creature", side: "enemy", fighting: true }, acts: [{ k: "gainAmber", n: 1 }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "After your opponent forges a key, destroy ~ and ward each friendly creature.",
+    answer: {
+      abilities: [{ on: ["forge"], if: { k: "actor", opp: true }, acts: [{ k: "destroy", s: "self" }, { k: "ward", s: { each: { type: "Creature", side: "friendly" } } }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "After a player readies a creature, deal 1<D> to it.",
+    answer: { abilities: [{ on: ["ready"], of: { type: "Creature" }, acts: [{ k: "damage", n: 1, s: "event" }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "After a friendly Cat creature enters play, ward it.",
+    answer: { abilities: [{ on: ["enter"], of: { type: "Creature", side: "friendly", trait: "Cat" }, acts: [{ k: "ward", s: "event" }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Action",
+    text: "Play: Discard the bottom card of your opponent's deck. Deal 2<D> to each enemy creature that shares a house with the discarded card.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "move", n: 1, from: "deck", to: "discard", opp: true, pick: "bottom" }, { k: "damage", n: 2, s: { each: { type: "Creature", side: "enemy", house: "moved" } } }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Destroy each creature that does not share a house with at least 1 of its neighbors.",
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "destroy", s: { each: { type: "Creature", house: "!neighbor" } } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Action",
+    promptOnly: true,
+    text: "Play: Deal 2<D> to a creature. If it is not destroyed, its controller must choose that creature's house as their active house on their next turn.",
+    answer: {
+      abilities: [{
+        on: ["play"],
+        target: { type: "Creature" },
+        acts: [
+          { k: "damage", n: 2, s: "target" },
+          { k: "forceHouse", house: "target", who: "controller", if: { k: "count", of: "gone", op: "eq", n: 0 } },
+        ],
+      }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Discard the top 6 cards of your deck. You may put a non-Geistoid card discarded this way into your hand.",
+    answer: {
+      abilities: [{
+        on: ["play"],
+        acts: [
+          { k: "move", n: 6, from: "deck", to: "discard", pick: "top" },
+          { k: "move", n: 1, from: "discard", to: "hand", pick: "moved", house: "!Geistoid", optional: true },
+        ],
+      }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Your opponent discards a random card from their hand. For each bonus icon on the discarded card, they lose 1<A>.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "discardRandom", n: 1, opp: true }, { k: "loseAmber", n: 1, opp: true, per: { m: "icons" } }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "After Reap: Purge a card from your discard pile. If you do, until the start of your next turn, your opponent cannot play cards of the purged card's type.",
+    answer: {
+      abilities: [{
+        on: ["reap"],
+        acts: [
+          { k: "move", n: 1, from: "discard", to: "purged" },
+          { k: "lasting", e: { target: {}, restrict: { who: "opponent", action: "play", type: "moved" }, duration: "next" }, if: { k: "count", of: "did", op: "gte", n: 1 } },
+        ],
+      }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: 'During their "draw cards" step, your opponent refills their hand to 1 less card.',
+    answer: { abilities: [], effects: [{ target: {}, hand: -1, opp: true }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "At the end of your turn, put a scheme counter on ~. Action: Remove each scheme counter from ~. Steal 1<A> for each scheme counter removed this way.",
+    answer: {
+      abilities: [
+        { on: ["endOfTurn"], acts: [{ k: "counter", n: 1, s: "self", name: "scheme" }] },
+        { on: ["action"], acts: [{ k: "removeCounter", s: "self", name: "scheme" }, { k: "steal", n: 1, per: "did" }] },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
 ];
 
 const SYSTEM_RULES = [
@@ -430,7 +546,7 @@ const SYSTEM_RULES = [
   '"The creature ~ fights" / "the attacked enemy" = s:"fought" (the defender of the fight in progress).',
   '"Choose a house" resolves no act: the NEXT sentences read it as {"house":"chosen"} ("of that house"). "Your opponent must choose that house next turn" = {"k":"forceHouse"}. "After a player chooses an active house, X" = on ["house"], and "that house" there is {"house":"active"}; "After you choose" adds if {"k":"myTurn"}.',
   '"Forge a key at +N cost, reduced by 1 for each X" = forgeKey with mod N and less = the count of X; "If you do, purge ~" on an Action = {"k":"purge","s":"self","if":<did gte 1>}. "Steal all but N of your opponent\'s <A>" = steal n 1 per {"sub":[{"p":"amber","opp":true},N]}. "an even/odd amount of <A>" = count op "even"/"odd" (n ignored). "If you forged a key on your previous turn" = {"k":"forged"} (opp:true for the opponent).',
-  '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. Qualified forms ("by Mutant creatures", "unless") are unsupported.',
+  '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. `unless <cond>` = `if: not <cond>` on the effect. A card always goes to its owner\'s zone. A filter without `type` matches any card in play.',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
@@ -466,9 +582,9 @@ function endpoint(baseUrl: string): string {
 /** One chat completion. Failures become VaultError with `llm.*` keys (the same
     channel keyforgeApi uses), and the key never reaches a message: provider
     error text is redacted before it becomes a parameter. */
-export async function callProvider(config: LlmConfig, messages: ChatMessage[], options: { signal?: AbortSignal; fetcher?: Fetcher } = {}): Promise<string> {
+export async function callProvider(config: LlmConfig, messages: ChatMessage[], options: { signal?: AbortSignal; fetcher?: Fetcher; timeoutMs?: number } = {}): Promise<string> {
   if (!llmReady(config)) throw new VaultError("llm.noKey");
-  const { signal, clear } = withTimeout(LLM_TIMEOUT_MS, options.signal);
+  const { signal, clear } = withTimeout(options.timeoutMs ?? LLM_TIMEOUT_MS, options.signal);
   const url = endpoint(config.baseUrl);
   const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey.trim()}` };
   // Anthropic only answers browsers that say so (its own CORS opt-in header).
@@ -555,6 +671,9 @@ const TRIGGER_WORDS: Record<string, RegExp> = {
   scrap: /\bscrap\b/,
   // "After a player chooses an active house" (Lote 5 §5.2).
   house: /\bchooses?\b[^.]*\bactive house\b/,
+  forge: /\bforges?\b|\bkey is forged\b/,
+  ready: /\breadies\b/,
+  enter: /\benters play\b/,
 };
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const TARGETED = new Set(["target", "targetAndNeighbors", "targetNeighbors"]);
@@ -816,7 +935,7 @@ function withParserParts(face: CardFace, answer: Record<string, unknown>): { abi
 export async function translateCard(
   face: CardFace,
   config: LlmConfig,
-  options: { signal?: AbortSignal; fetcher?: Fetcher; tries?: number } = {},
+  options: { signal?: AbortSignal; fetcher?: Fetcher; tries?: number; timeoutMs?: number } = {},
 ): Promise<AbilityOverride> {
   const reply = await callProvider(config, buildMessages(face), options);
   const model = config.model.trim();
@@ -824,25 +943,72 @@ export async function translateCard(
   if (!isRecord(answer)) return failureRow(face, "reply: not a JSON object", model, { tries: (options.tries ?? 0) + 1 });
   if (answer.unsupported === true) return failureRow(face, `unsupported: ${typeof answer.reason === "string" ? answer.reason.slice(0, 200) : "not representable"}`, model);
   const result = validateDraft(face, withParserParts(face, answer), "llm", model);
-  return result.ok ? result.row! : failureRow(face, result.reason ?? "invalid", model);
+  // Schema, sanity and dry-run failures count like a spent attempt. Without
+  // `tries` the card stays under the draft cap forever (Lote 6 review).
+  return result.ok ? result.row! : failureRow(face, result.reason ?? "invalid", model, { tries: (options.tries ?? 0) + 1 });
 }
 
-/** Cards worth a call: the parser does not cover them fully and the store holds
-    no answer yet for this exact text. A card with a hand-written script is
-    skipped — the script wins over any draft, so the call would be wasted
-    (§4.0). The cache is eternal per textHash, except for a FAILURE written by an
-    older DSL_VERSION — the DSL grows every version and yesterday's
-    "unsupported" may be expressible today, so those retry. A "reply:" failure
-    is a transient format error: it retries on the current version too, up to
-    three tries. */
+/** Tries already spent on this version. A row from an older DSL counts as zero
+    (Lote 6 §6.0): a v6 `tries: 3` must not become 4 on the first v7 failure. */
+export function translationTries(row: AbilityOverride | undefined): number {
+  if (!row || (row.v ?? 1) < DSL_VERSION) return 0;
+  return row.tries ?? 0;
+}
+
+const DRAFT_FAIL = /^(?:schema|sanity|dry-run)\b/;
+
+/** Cards worth a call. Retry is by failure class (Lote 6 §6.0): verdicts only
+    when `v` is older; invalid drafts twice; `reply:` three times; transport
+    (`llm.*`) five times. Order: never tried, then drafts, then format, then
+    transport — so the same timeouts do not occupy the head of every round. */
 export function pendingTranslations(cards: CardFace[], known: (id: string) => AbilityOverride | undefined): CardFace[] {
-  return cards.filter((face) => {
-    if (!face.text?.trim() || hasScript(face) || parseCardText(face).coverage === "full") return false;
+  const fresh: CardFace[] = [];
+  const drafts: CardFace[] = [];
+  const format: CardFace[] = [];
+  const transport: CardFace[] = [];
+  for (const face of cards) {
+    if (!face.text?.trim() || hasScript(face) || parseCardText(face).coverage === "full") continue;
     const row = known(face.id);
-    if (!row || row.textHash !== textHash(face.text)) return true;
-    if (!row.failure) return false;
-    if ((row.v ?? 1) < DSL_VERSION) return true;
-    return row.failure.startsWith("reply:") && (row.tries ?? 0) < 3;
+    if (!row || row.textHash !== textHash(face.text)) {
+      fresh.push(face);
+      continue;
+    }
+    if (!row.failure) continue;
+    if ((row.v ?? 1) < DSL_VERSION) {
+      fresh.push(face);
+      continue;
+    }
+    const tries = row.tries ?? 0;
+    if (row.failure.startsWith("unsupported:")) continue;
+    if (DRAFT_FAIL.test(row.failure) && tries < 2) drafts.push(face);
+    else if (row.failure.startsWith("reply:") && tries < 3) format.push(face);
+    else if (row.failure.startsWith("llm.") && tries < 5) transport.push(face);
+  }
+  return [...fresh, ...drafts, ...format, ...transport];
+}
+
+/** One call per printed text and card type (the dry-run differs by type). */
+export function groupByText(faces: CardFace[]): CardFace[][] {
+  const groups = new Map<string, CardFace[]>();
+  for (const face of faces) {
+    const key = `${textHash(face.text ?? "")}|${face.type}`;
+    const list = groups.get(key) ?? [];
+    list.push(face);
+    groups.set(key, list);
+  }
+  return [...groups.values()];
+}
+
+/** Rows the harvest export keeps. Transport is not a verdict; scripts, unknown
+    ids and cards the parser now covers are pruned (Lote 6 §6.0). */
+export function exportableRows(rows: AbilityOverride[], cards: CardFace[]): AbilityOverride[] {
+  const byId = new Map(cards.map((face) => [face.id, face]));
+  return rows.filter((row) => {
+    if (row.failure?.startsWith("llm.")) return false;
+    const face = byId.get(row.cardId);
+    if (!face) return false;
+    if (row.failure && (hasScript(face) || parseCardText(face).coverage === "full")) return false;
+    return true;
   });
 }
 
@@ -927,34 +1093,48 @@ export async function runTranslation(
     previous?: (cardId: string) => number | undefined;
   } = {},
 ): Promise<RunProgress> {
-  const queue = faces.slice(0, options.limit ?? LLM_RUN_LIMIT);
+  // Identical texts are one call. Grouping after the slice would split a
+  // repeated text across the limit and pay for it again next round.
+  const groups = groupByText(faces).slice(0, options.limit ?? LLM_RUN_LIMIT);
   const save = options.save ?? putAbilityOverride;
-  const progress: RunProgress = { done: 0, total: queue.length, drafted: 0, failed: 0 };
+  const progress: RunProgress = { done: 0, total: groups.reduce((sum, group) => sum + group.length, 0), drafted: 0, failed: 0 };
   options.onProgress?.({ ...progress });
   // Erro de transporte (timeout/rede/provedor) numa carta não derruba a rodada:
-  // vira failureRow — o contrato de versão re-enfileira depois — e a fila segue.
+  // um retry imediato com o dobro do timeout, depois failureRow com `tries`.
   // Só N falhas de transporte CONSECUTIVAS param, pois isso indica provedor fora,
   // não carta difícil (falha honesta zera o contador).
   const TRANSPORT = new Set(["llm.timeout", "llm.http", "llm.rateLimit", "llm.unreachable", "llm.badBody"]);
+  const transportKey = (error: unknown) => (error instanceof VaultError && TRANSPORT.has(error.key) ? error.key : null);
   let consecutiveTransport = 0;
-  for (const face of queue) {
+  for (const group of groups) {
     if (options.signal?.aborted) break;
+    const face = group[0];
+    const spent = options.previous?.(face.id) ?? 0;
     let row: AbilityOverride;
     try {
-      row = await translateCard(face, config, { signal: options.signal, fetcher: options.fetcher, tries: options.previous?.(face.id) ?? 0 });
+      row = await translateCard(face, config, { signal: options.signal, fetcher: options.fetcher, tries: spent });
     } catch (error) {
-      // An abort (Cancel button) is a stop, not a failure.
       if (options.signal?.aborted) break;
-      const key = error instanceof VaultError && TRANSPORT.has(error.key) ? error.key : null;
+      const key = transportKey(error);
       if (!key || consecutiveTransport >= 3) throw error;
-      consecutiveTransport += 1;
-      row = failureRow(face, key, config.model);
+      try {
+        row = await translateCard(face, config, { signal: options.signal, fetcher: options.fetcher, tries: spent, timeoutMs: LLM_TIMEOUT_MS * 2 });
+      } catch (again) {
+        if (options.signal?.aborted) break;
+        const retryKey = transportKey(again);
+        if (!retryKey) throw again;
+        consecutiveTransport += 1;
+        row = failureRow(face, retryKey, config.model, { tries: spent + 1 });
+      }
     }
     if (!row.failure || !TRANSPORT.has(row.failure)) consecutiveTransport = 0;
-    await save(row);
-    progress.done += 1;
-    if (row.failure) progress.failed += 1;
-    else progress.drafted += 1;
+    for (const sibling of group) {
+      const copy = sibling === face ? row : { ...row, cardId: sibling.id };
+      await save(copy);
+      progress.done += 1;
+      if (copy.failure) progress.failed += 1;
+      else progress.drafted += 1;
+    }
     options.onProgress?.({ ...progress });
   }
   return progress;

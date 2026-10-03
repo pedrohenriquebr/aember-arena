@@ -32,7 +32,9 @@ const PREFIX = new RegExp(
     "|\\b((?:after|each time) (?:(?:a|an) (?:friendly |enemy )?creatures? (?:reaps?|fights?|is destroyed)" +
     "|(?:you|your opponent) plays? a creature|you (?:use|uses) an artifact))(?=\\s*,)" +
     // Lote 5 §5.2: "After a player chooses an active house, …" (a comma, no colon).
-    "|\\b(after (?:a player|you|your opponent) chooses? (?:an active house|[^,:.]{1,60}? as (?:your|their) active house))(?=\\s*,)",
+    "|\\b(after (?:a player|you|your opponent) chooses? (?:an active house|[^,:.]{1,60}? as (?:your|their) active house))(?=\\s*,)" +
+    // Lote 6 §6.2: forge / ready / enter / destroyed-fighting, comma form.
+    "|\\b(after (?:you|your opponent|a player) forges? a key|after a key is forged|after a player readies a creature|after (?:a|an|another) (?:friendly |enemy )?(?:[a-z]+ )?creatures? enters play|after an enemy creature is destroyed fighting (?:~|this creature|this card|it))(?=\\s*,)",
   "gi",
 );
 
@@ -80,6 +82,32 @@ function observerFor(raw: string): { triggers: Trigger[]; of: Filter } | null {
   return null;
 }
 
+/** Lote 6 §6.2: forge is a player event (`actor`); ready/enter are observers (`of` required). */
+function lote6Header(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Condition } | null {
+  const part = raw.trim();
+  const forge = part.match(/^after (you|your opponent|a player) forges? a key$/) ?? (part === "after a key is forged" ? ["", "a player"] as RegExpMatchArray : null);
+  if (forge) {
+    const who = forge[1];
+    const cond: Condition | undefined = who === "you" ? { k: "actor" } : who === "your opponent" ? { k: "actor", opp: true } : undefined;
+    return { triggers: ["forge"], ...(cond ? { cond } : {}) };
+  }
+  if (part === "after a player readies a creature") return { triggers: ["ready"], of: { type: "Creature" } };
+  const enters = part.match(/^after (a|an|another) (friendly |enemy )?([a-z]+ )?creatures? enters play$/);
+  if (enters) {
+    const filter: Filter = { type: "Creature" };
+    if (enters[1] === "another") filter.other = true;
+    if (enters[2]) filter.side = enters[2].trim() as "friendly" | "enemy";
+    const trait = enters[3]?.trim();
+    if (trait && properNouns.has(trait)) filter.trait = trait[0].toUpperCase() + trait.slice(1);
+    else if (trait) return null;
+    return { triggers: ["enter"], of: filter };
+  }
+  if (/^after an enemy creature is destroyed fighting (?:~|this creature|this card|it)$/.test(part)) {
+    return { triggers: ["destroyed"], of: { type: "Creature", side: "enemy", fighting: true } };
+  }
+  return null;
+}
+
 /** Lote 5 §5.2: the `house` trigger. "After you choose" only counts on the
     chooser's own turn (`myTurn`), "your opponent" on the other's; a named house
     is only readable as the card's own printed house ("choose Dis" on a Dis card
@@ -101,6 +129,8 @@ function houseHeader(raw: string): { triggers: Trigger[]; cond?: Condition } | n
 /** Header of one printed segment: its trigger group, plus the watched filter
     when the prefix names an observer event. Null when it is outside the grammar. */
 function abilityHeader(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Condition } | null {
+  const lote6 = lote6Header(raw);
+  if (lote6) return lote6;
   const house = houseHeader(raw);
   if (house) return house;
   const observer = observerFor(raw);
@@ -119,7 +149,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 6;
+export const PARSER_VERSION = 7;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -322,10 +352,52 @@ function parseFilterWords(phrase: string): Filter | null {
     if (worn[3].startsWith("amber")) amberClause = worn[2] !== "no ";
     else counterClause = worn[2] !== "no ";
   }
-  const tokens = words.split(" ");
+  let powerMax: number | undefined;
+  let powerMin: number | undefined;
+  let weaker: boolean | undefined;
+  const power = words.match(/^(.*?) with power (\d+) or (lower|less|higher|more)$/);
+  if (power) {
+    words = power[1];
+    if (power[3] === "lower" || power[3] === "less") powerMax = Number(power[2]);
+    else powerMin = Number(power[2]);
+  }
+  if (/ with lower power than (?:~|this creature|it|this card)$/.test(words)) {
+    words = words.replace(/ with lower power than (?:~|this creature|it|this card)$/, "");
+    weaker = true;
+  }
+  let share: string | undefined;
+  const shares = words.match(/^(.*?) that (?:(does not|do not) )?shares? a house with (.+)$/);
+  if (shares) {
+    words = shares[1];
+    const withWhom = shares[3];
+    const neg = Boolean(shares[2]);
+    let literal: string | undefined;
+    if (/^(?:it|this creature|this card|~)$/.test(withWhom)) literal = "self";
+    else if (/^the (?:discarded|purged|archived) (?:card|creature)$/.test(withWhom)) literal = "moved";
+    else if (/^the destroyed creature$/.test(withWhom)) literal = "target";
+    else if (/^(?:at least )?(?:1|one) of its neighbors$/.test(withWhom)) literal = "neighbor";
+    if (!literal) return null;
+    share = (neg ? "!" : "") + literal;
+  }
+  const either = words.match(/^(.*?) ?creatures? or artifacts?$/);
+  if (either) {
+    const rest = either[1].trim();
+    const base = rest ? parseFilterWords(`${rest} creature`) : ({ type: "!Upgrade" } as Filter);
+    return base ? { ...base, type: "!Upgrade" } : null;
+  }
+  const tokens = words.split(" ").filter(Boolean);
   const noun = tokens.pop();
-  if (noun !== "creature" && noun !== "creatures" && noun !== "artifact" && noun !== "artifacts") return null;
-  const filter: Filter = { type: noun.startsWith("artifact") ? "Artifact" : "Creature" };
+  if (noun === "artifact" || noun === "artifacts") {
+    /* creature or artifact is handled before the noun split, below */
+  }
+  if (noun !== "creature" && noun !== "creatures" && noun !== "artifact" && noun !== "artifacts" && noun !== "upgrade" && noun !== "upgrades") return null;
+  const filter: Filter = {
+    type: noun.startsWith("upgrade") ? "Upgrade" : noun.startsWith("artifact") ? "Artifact" : "Creature",
+  };
+  if (powerMax !== undefined) filter.powerMax = powerMax;
+  if (powerMin !== undefined) filter.powerMin = powerMin;
+  if (weaker) filter.weaker = true;
+  if (share) filter.house = share;
   if (flankClause !== undefined) filter.flank = flankClause;
   if (amberClause !== undefined) filter.amber = amberClause;
   if (counterClause !== undefined) filter.counters = counterClause;
@@ -343,8 +415,8 @@ function parseFilterWords(phrase: string): Filter | null {
 function parseObject(phrase: string, upgrade: boolean, observer = false): { s: Selection; target?: Filter } | null {
   // Inside an observer ability the event card is the subject: "stun it" stuns
   // the creature that caused the event, not the watcher.
-  if (observer && phrase === "it") return { s: "event" };
-  if (/^(this card|this creature|itself|it)$/.test(phrase)) return { s: upgrade && phrase === "this creature" ? "host" : "self" };
+  if (observer && (phrase === "it" || phrase === "~")) return { s: "event" };
+  if (/^(this card|this creature|itself|it|~)$/.test(phrase)) return { s: upgrade && phrase === "this creature" ? "host" : "self" };
   if (phrase === "a creature and each of its neighbors") return { s: "targetAndNeighbors", target: { type: "Creature" } };
   if (/^each neighbor of the creature this card fights$/.test(phrase)) return { s: "neighborsOfFought" };
   // "The creature ~ fights" (Before Fight): the defender of the fight in progress.
@@ -403,6 +475,11 @@ function parseCondition(clause: string): Condition | null {
   if (/^(?:it is not|it's not) your turn$/.test(clause)) return { k: "not", c: { k: "myTurn" } };
   if (/^(?:this damage destroys that creature|that creature is destroyed|it is destroyed)$/.test(clause)) return count("gone", "gte", 1);
   if (/^(?:it|that creature) is not destroyed$/.test(clause)) return count("gone", "eq", 0);
+  if (clause === "it was already exhausted" || clause === "it is already exhausted") return count({ c: { target: true, exhausted: true } }, "gte", 1);
+  const houseCard = clause.match(/^it is (not )?a ([a-z ]+?) card$/);
+  if (houseCard && HOUSES[houseCard[2]]) {
+    return count({ c: { house: (houseCard[1] ? "!" : "") + HOUSES[houseCard[2]], target: true } }, houseCard[1] ? "eq" : "gte", houseCard[1] ? 0 : 1);
+  }
   const haunted = clause.match(/^(you|your opponent) (?:is |are )?haunted$/);
   if (haunted) return { k: "count", of: { p: "discard", ...(haunted[1] === "you" ? {} : { opp: true }) }, op: "gte", n: HAUNTED };
   if (/^this (?:card|creature) is on a flank$/.test(clause)) return { k: "count", of: { c: { self: true, flank: true } }, op: "gte", n: 1 };
@@ -416,6 +493,8 @@ function parseCondition(clause: string): Condition | null {
 function parsePer(phrase: string): Count | null {
   if (/^creatures? (?:healed|damaged) this way$/.test(phrase) || /^cards? discarded this way$/.test(phrase)) return "did";
   if (/^creatures? destroyed this way$/.test(phrase)) return "gone";
+  if (/^(?:bonus icons?|.+ counters?) (?:on the discarded card|removed this way)$/.test(phrase)) return phrase.startsWith("bonus") ? { m: "icons" } : "did";
+  if (/^the (?:archived|purged|discarded) (?:creature|card)'?s? power$/.test(phrase)) return { m: "power" };
   const zone = phrase.match(/^cards? in your (hand|deck|discard(?: pile)?|archives|purged)$/);
   if (zone) return { p: (zone[1] === "discard pile" ? "discard" : zone[1]) as Zone };
   if (/^(?:forged )?keys? your opponent has$/.test(phrase)) return { p: "keys", opp: true };
@@ -448,6 +527,7 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^gain (\d+) amber$/, (m) => ({ k: "gainAmber", n: +m[1] })],
   [/^your opponent gains (\d+) amber$/, (m) => ({ k: "gainAmber", n: +m[1], opp: true })],
   [/^your opponent loses (\d+) amber$/, (m) => ({ k: "loseAmber", n: +m[1], opp: true })],
+  [/^they lose (\d+) amber$/, (m) => ({ k: "loseAmber", n: +m[1], opp: true })],
   [/^lose (\d+) amber$/, (m) => ({ k: "loseAmber", n: +m[1] })],
   [/^steal (\d+) amber$/, (m) => ({ k: "steal", n: +m[1] })],
   // Lote 5 §5.5: "all but N" = the pool minus N, floored at 0 (Count.sub).
@@ -624,11 +704,34 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
   if (/^your opponent must choose that house(?: as their active house)?(?: (?:on|during))?(?: their)? next turn$/.test(sentence)) {
     return thatHouse === "chosen" ? { acts: [{ k: "forceHouse" }] } : null;
   }
+  if (/^its controller must choose that creature's house as their active house(?: on their next turn)?$/.test(sentence)) {
+    return { acts: [{ k: "forceHouse", house: "target", who: "controller" }] };
+  }
 
   // A sentence that sets a lasting effect ("… on their next turn") rather than
   // resolving now (keyteki lastingEffect / duringOpponentNextTurn).
   const persistent = parsePersistent(sentence, upgrade, creature, quoted);
   if (persistent) return { acts: persistent.map((e) => ({ k: "lasting", e })) };
+
+  const discardedWay = sentence.match(/^put (a|each) (non-)?([a-z]+) cards? discarded this way into your hand$/);
+  if (discardedWay) {
+    const house = HOUSES[discardedWay[3]];
+    if (!house) return null;
+    return {
+      acts: [{ k: "move", n: discardedWay[1] === "each" ? 99 : 1, from: "discard", to: "hand", pick: "moved", house: (discardedWay[2] ? "!" : "") + house }],
+    };
+  }
+  const namedPut = sentence.match(new RegExp(`^put (${COUNTER_COUNT}) ([a-z]+) counters? on (.+)$`));
+  if (namedPut && namedPut[2] !== "power") {
+    const object = parseObject(namedPut[3], upgrade, observer);
+    const n = COUNT_WORDS[namedPut[1]] ?? Number(namedPut[1]);
+    return object && n ? { acts: [{ k: "counter", n, s: object.s, name: namedPut[2] }], target: object.target } : null;
+  }
+  const namedRemove = sentence.match(/^remove (?:each |all )?([a-z]+) counters? from (.+)$/);
+  if (namedRemove && namedRemove[1] !== "power") {
+    const object = parseObject(namedRemove[2], upgrade, observer);
+    return object ? { acts: [{ k: "removeCounter", s: object.s, name: namedRemove[1] }], target: object.target } : null;
+  }
 
   for (const [pattern, build] of SIMPLE) {
     const m = sentence.match(pattern);
@@ -713,6 +816,15 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
     return object
       ? { acts: [{ k: "moveAmber", ...(supply[1] ? { n: Number(supply[1]) } : {}), s: object.s, to: "supply" }], target: object.target }
       : null;
+  }
+
+  const conjunction = sentence.match(/^(.+?) and (.+)$/);
+  if (conjunction && !/^stun and |^ready and /.test(sentence)) {
+    const left = parseSentenceBody(conjunction[1], upgrade, creature, quoted, observer);
+    const right = parseSentenceBody(conjunction[2], upgrade, creature, quoted, observer);
+    if (left && right && left.acts.length && right.acts.length && !left.cond && !right.cond) {
+      return { acts: [...left.acts, ...right.acts], target: left.target ?? right.target, ...(left.optional || right.optional ? { optional: true } : {}) };
+    }
   }
 
   for (const [pattern, build] of VERBS) {
@@ -940,6 +1052,7 @@ function parseRestriction(sentence: string): Restrict | null {
     return restrict;
   }
   if (rest.match(/^ creatures to fight$/)) return { ...restrict, action: "fight" };
+  if (/^ cards of the purged card's type$/.test(rest)) return { ...restrict, type: "moved" };
   const type = rest.match(/^ (action|creature|artifact|upgrade)s?(?: cards?)?$/);
   if (type) return { ...restrict, type: RESTRICT_TYPES[type[1]] };
   if (rest.match(/^ (?:any )?cards?$/)) return restrict;
@@ -953,6 +1066,23 @@ function parseRestriction(sentence: string): Restrict | null {
 function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): PersistentEffect[] | null {
   let body = sentence;
   let duration: PersistentEffect["duration"];
+  const untilNext = body.match(/^until the start of your next turn, (.+)$/);
+  if (untilNext) {
+    body = untilNext[1];
+    duration = "next";
+  }
+  const refill = body.match(
+    /^during (your|their) "?draw cards"? step, (you|your opponent|each player) refills? (?:your|their) hands? to (\d+) (additional|less) cards?$/,
+  ) ?? body.match(/^(you|your opponent|each player) refills? (?:your|their) hands? to (\d+) (additional|less) cards? during (your|their) "?draw cards"? step$/);
+  if (refill) {
+    const who = refill[0].startsWith("during") ? refill[2] : refill[1];
+    const count = Number(refill[0].startsWith("during") ? refill[3] : refill[2]);
+    const dir = refill[0].startsWith("during") ? refill[4] : refill[3];
+    const hand = dir === "less" ? -count : count;
+    const effect: PersistentEffect = { target: {}, hand };
+    const effects = who === "each player" ? [effect, { ...effect, opp: true }] : who === "you" ? [effect] : [{ ...effect, opp: true }];
+    return effects.map((item) => (duration ? { ...item, duration } : item));
+  }
   let per: Count | null = null;
   let condition: Condition | null = null;
   const prefix = body.match(/^for the remainder of the turn, (.+)$/);
@@ -1072,7 +1202,7 @@ function parseCardBody(face: CardFace): CardRules {
   let prefix: string | null = null;
   for (const match of text.matchAll(PREFIX)) {
     segments.push({ prefix, body: text.slice(last, match.index) });
-    prefix = match[1] ?? match[2] ?? match[3] ?? match[4] ?? null;
+    prefix = match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5] ?? null;
     last = (match.index ?? 0) + match[0].length;
   }
   segments.push({ prefix, body: text.slice(last) });

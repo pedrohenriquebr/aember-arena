@@ -65,6 +65,13 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
     refresh();
   }
 
+  /** Transporte no teto (5) sai da fila sozinho. Zerar `tries` devolve a carta
+      à próxima rodada sem apagar o motivo (Lote 6 §2). */
+  async function retryTransport(row: AbilityOverride) {
+    await putAbilityOverride({ ...row, tries: 0 });
+    refresh();
+  }
+
   /** Importar a fila do harvest: valida tudo antes de gravar; reviewed:true entra
       como regra (mesmo gating de sempre, o mapa vivo só vale na próxima partida). */
   async function importQueue(file: File) {
@@ -148,6 +155,9 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
                   </small>
                 </div>
                 <div className="llm-review-actions">
+                  {row.failure?.startsWith("llm.") && (row.tries ?? 0) >= 5 && (
+                    <button type="button" className="ghost-button" onClick={() => void retryTransport(row)}>{t("config.llm.retry")}</button>
+                  )}
                   <button type="button" className="ghost-button" onClick={() => void approve(row)}>{t("config.llm.approve")}</button>
                   <button type="button" className="ghost-button" onClick={() => void reject(row)}>{t("config.llm.reject")}</button>
                 </div>

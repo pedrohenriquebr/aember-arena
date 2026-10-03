@@ -132,6 +132,7 @@ const DICT: Record<string, [string, string]> = {
   "config.llm.reviewEmpty": ["No drafts awaiting review.", "Nenhum rascunho aguardando revisão."],
   "config.llm.approve": ["Approve", "Aprovar"],
   "config.llm.reject": ["Reject", "Rejeitar"],
+  "config.llm.retry": ["Try again", "Tentar de novo"],
   "config.llm.import": ["Import harvest queue", "Importar fila do harvest"],
   "config.llm.importError": ["Import failed — file rejected.", "Falha na importação — arquivo rejeitado."],
   "config.llm.importDone": ["{ok} imported, {skipped} ignored", "{ok} importadas, {skipped} ignoradas"],
@@ -197,6 +198,7 @@ const DICT: Record<string, [string, string]> = {
   "game.stunned": ["STUNNED", "ATORDOADA"],
   // Entrench (Lote 4 §4.2): a criatura fica exausta no passo de ready.
   "game.entrenched": ["Entrench: stays exhausted in the ready step", "Entrench: permanece exausta no passo de ready"],
+  "game.mark": ["{n} {name}", "{n} {name}"],
   "game.dmg": ["DMG", "DANO"],
   "game.keys": ["KEYS", "CHAVES"],
   "game.aember": ["AEMBER", "ÂMBAR"],

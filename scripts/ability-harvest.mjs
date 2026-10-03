@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normaliseAbilityOverride } from "../src/lib/abilities";
-import { pendingTranslations, runTranslation } from "../src/lib/catalogLlm";
+import { exportableRows, pendingTranslations, runTranslation, translationTries } from "../src/lib/catalogLlm";
 import { parseCardText, textHash } from "../src/lib/cardText";
 import { DEMO_DECK } from "../src/lib/demoDeck";
 import { DEMO_DECK_2 } from "../src/lib/demoDeck2";
@@ -37,11 +37,20 @@ const value = (name) => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
-function loadCards() {
-  const file = value("--cards");
-  if (file) return JSON.parse(readFileSync(resolve(file), "utf8"));
+function demoCards() {
   const unique = new Map();
   for (const card of [...DEMO_DECK.cards, ...DEMO_DECK_2.cards]) unique.set(card.id, card);
+  return [...unique.values()];
+}
+
+/** `--cards` is always united with the demo decks (Lote 6 §6.0): the demo's
+    orphans never re-enter a harvest that only passes the Master Vault export. */
+function loadCards() {
+  const file = value("--cards");
+  const unique = new Map(demoCards().map((card) => [card.id, card]));
+  if (file) {
+    for (const card of JSON.parse(readFileSync(resolve(file), "utf8"))) unique.set(card.id, card);
+  }
   return [...unique.values()];
 }
 
@@ -84,7 +93,7 @@ async function harvestLlm(cards) {
     await runTranslation(waiting, config, {
       limit,
       // `reply:` é re-tentado: a linha carrega quantas tentativas já gastou (§4.0).
-      previous: (id) => rows.get(id)?.tries,
+      previous: (id) => translationTries(rows.get(id)),
       save: async (row) => {
         rows.set(row.cardId, row);
         writeJson(DRAFTS, [...rows.values()]);
@@ -122,11 +131,7 @@ function vendor() {
     (higiene do pipeline, §4.0). */
 function exportQueue() {
   const drafts = readDrafts();
-  const byId = new Map(loadCards().map((card) => [card.id, card]));
-  const rows = drafts.filter((row) => {
-    const face = byId.get(row.cardId);
-    return !(row.failure && face && parseCardText(face).coverage === "full");
-  });
+  const rows = exportableRows(drafts, loadCards());
   const pruned = drafts.length - rows.length;
   writeJson(QUEUE_EXPORT, rows);
   console.log(`exportadas ${rows.length} linhas em ${QUEUE_EXPORT}${pruned ? ` (${pruned} zumbis podados)` : ""} — importe pela Config do app.`);

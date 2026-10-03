@@ -87,6 +87,8 @@ export interface CardInstance {
   /** +1 power counters (Onda 5): each counter adds 1 power and they are reset
       when the card leaves play (keyteki Card.powerCounters). */
   counters?: number;
+  /** Named counters (Lote 6 §6.6). They do not change power; leavePlay clears them. */
+  marks?: Record<string, number>;
   /** Entrench (Lote 4 §4.2): the controller's choice to leave this exhausted
       creature exhausted during its "ready cards" step. A controller
       preference, not a move — it never counts in `acted`/Alpha and is reset
@@ -271,9 +273,22 @@ function draw(player: GamePlayer, count: number, rng: Rng): void {
 
 /** Draw step (keyteki DrawAction refill): up to 6, minus 1 card per 6 chains
     (rounded up), shedding one chain whenever the hand was below its size. */
-function refill(player: GamePlayer, rng: Rng): void {
-  if (player.hand.length >= HAND_SIZE) return;
-  draw(player, HAND_SIZE - player.hand.length - Math.floor((player.chains + 5) / 6), rng);
+function refill(state: GameState, side: Side): void {
+  const player = state.players[side];
+  let size = HAND_SIZE;
+  for (const owner of allEffects(state)) {
+    const delta = owner.effect.hand;
+    if (delta === undefined) continue;
+    if ((owner.effect.opp ? other(owner.side) : owner.side) !== side) continue;
+    if (owner.effect.if && !holds(owner.effect.if, state, owner.side, owner.source)) continue;
+    size += delta;
+  }
+  size = Math.max(0, size);
+  // A hand already at size has no refill: chains are spent only when the step
+  // had room to draw fewer cards because of them (keyteki DrawAction).
+  if (player.hand.length >= size) return;
+  const want = size - player.hand.length - Math.floor((player.chains + 5) / 6);
+  if (want > 0) draw(player, want, state);
   if (player.chains > 0) player.chains -= 1;
 }
 
@@ -643,6 +658,8 @@ interface ForgeOptions {
   less?: number;
   /** Floor of the reduced cost. */
   min?: number;
+  /** Forwarded to the `forge` player-event (Lote 6 §6.2). */
+  deterministic?: boolean;
 }
 
 function forge(state: GameState, side: Side, options: ForgeOptions = {}): boolean {
@@ -656,6 +673,8 @@ function forge(state: GameState, side: Side, options: ForgeOptions = {}): boolea
   if (player.forgedAt !== undefined && player.forgedAt !== turnStamp(state)) player.forgedBeforeAt = player.forgedAt;
   player.forgedAt = turnStamp(state);
   record(state, "log.forge", { name: player.name });
+  // Player event, same shape as `house` (Lote 6 §6.2): every card in play, actor = who forged.
+  wakePlayer(state, side, "forge", options.deterministic ?? false);
   if (player.keys >= 3) {
     state.winner = side;
     record(state, "log.wins", { name: player.name });
@@ -676,15 +695,33 @@ export function forgeKey(current: GameState, side: Side, n = 1, options: ForgeOp
 /** Exported for the AI: the same condition evaluation the engine runs (FEAT-03).
     `source` is the card the condition belongs to (a `{c:{self:true}}` count needs
     it); `previous` carries the did/gone of the act before, for act-level `if`. */
+/** What an act-level `if` (and a player-event condition) may read besides did/gone. */
+interface Prior {
+  did?: number;
+  gone?: number;
+  actor?: Side;
+  moved?: CardInstance[];
+  movedHouse?: string;
+  fought?: CardInstance;
+  foughtHouse?: string;
+  target?: CardInstance;
+  targetHouse?: string;
+  wasNeighbors?: CardInstance[];
+}
+
 export function conditionHolds(
   condition: Condition,
   state: GameState,
   me: Side,
   source?: CardInstance,
-  previous?: { did?: number; gone?: number },
+  previous?: Prior,
 ): boolean {
   if (condition.k === "not") return !holds(condition.c, state, me, source, previous);
   if (condition.k === "myTurn") return state.activePlayer === me;
+  if (condition.k === "actor") {
+    if (previous?.actor === undefined) return false;
+    return condition.opp ? previous.actor !== me : previous.actor === me;
+  }
   if (condition.k === "forged") {
     // Stamps: during side X's turn its previous turn is stamp-2, otherwise the
     // other side's turn right before is stamp-1 (turnStamp = round*2 + side).
@@ -698,7 +735,25 @@ export function conditionHolds(
     return condition.op === "eq" ? amber === condition.n : amber >= condition.n;
   }
   if (condition.k === "count") {
-    const value = countOf({ state, me, source, deterministic: true, did: previous?.did, gone: previous?.gone }, condition.of);
+    const value = countOf(
+      {
+        state,
+        me,
+        source,
+        deterministic: true,
+        did: previous?.did,
+        gone: previous?.gone,
+        actor: previous?.actor,
+        moved: previous?.moved,
+        movedHouse: previous?.movedHouse,
+        fought: previous?.fought,
+        foughtHouse: previous?.foughtHouse,
+        target: previous?.target,
+        targetHouse: previous?.targetHouse,
+        wasNeighbors: previous?.wasNeighbors,
+      },
+      condition.of,
+    );
     // even/odd read the count alone (Lote 5 §5.5): `n` is ignored.
     if (condition.op === "even") return value % 2 === 0;
     if (condition.op === "odd") return value % 2 === 1;
@@ -717,6 +772,26 @@ function houseMatches(state: GameState, card: CardInstance, wanted: string): boo
   if (house === "all") return true;
   if (wanted === "chosen") return chosenHouse !== undefined && house === chosenHouse.toLowerCase();
   return wanted === "active" ? house === (state.activeHouse ?? "").toLowerCase() : house === wanted.toLowerCase();
+}
+
+const REL_HOUSES = new Set(["self", "target", "fought", "moved", "neighbor"]);
+
+/** Two cards share a house when either is "all" or the names match. */
+function sameHouse(state: GameState, a: CardInstance, b: CardInstance): boolean {
+  const left = houseOf(state, a).toLowerCase();
+  const right = houseOf(state, b).toLowerCase();
+  return left === "all" || right === "all" || left === right;
+}
+
+/** Relational house literals (Lote 6 §6.3) against a house captured when the ability started. */
+function relationalHouse(state: GameState, card: CardInstance, wanted: string, source: CardInstance | undefined, scope?: Ctx): boolean {
+  if (wanted === "neighbor") return neighbors(state, card).some((neighbor) => sameHouse(state, card, neighbor));
+  const ref =
+    wanted === "self" ? (source ? houseOf(state, source) : undefined) : wanted === "target" ? scope?.targetHouse : wanted === "fought" ? scope?.foughtHouse : scope?.movedHouse;
+  if (!ref) return false;
+  const mine = houseOf(state, card).toLowerCase();
+  const otherHouse = ref.toLowerCase();
+  return mine === "all" || otherHouse === "all" || mine === otherHouse;
 }
 
 /** The house the move in resolution chose ("Choose a house", Lote 5 §5.1). A
@@ -752,10 +827,21 @@ function traitMatches(card: CardInstance, wanted: string): boolean {
 const negated = (value: string) => value.startsWith("!");
 const positive = (value: string) => (negated(value) ? value.slice(1) : value);
 
-function matches(state: GameState, me: Side, source: CardInstance | undefined, card: CardInstance, filter: Filter): boolean {
+/** The fight currently resolving. Saved and restored so a nested `use via:"fight"` does not leak (Lote 6 §6.2). */
+let fightPair: { attacker: CardInstance; defender: CardInstance } | null = null;
+
+function matches(state: GameState, me: Side, source: CardInstance | undefined, card: CardInstance, filter: Filter, scope?: Ctx): boolean {
   const side = controllerOf(state, card);
+  const typeName = filter.type?.startsWith("!") ? filter.type.slice(1) : filter.type;
+  const typeNeg = filter.type?.startsWith("!") === true;
+  const foe = fightPair ? (fightPair.attacker === source ? fightPair.defender : fightPair.defender === source ? fightPair.attacker : undefined) : undefined;
+  const neighborPool =
+    scope?.target && controllerOf(state, scope.target) !== undefined ? neighbors(state, scope.target) : (scope?.wasNeighbors ?? []);
+  const counterOk =
+    filter.counters === undefined ||
+    (typeof filter.counters === "string" ? (card.marks?.[filter.counters] ?? 0) > 0 : ((card.counters ?? 0) > 0) === filter.counters);
   return (
-    (!filter.type || card.face.type === filter.type) &&
+    (!filter.type || (card.face.type === typeName) !== typeNeg) &&
     (!filter.side || (filter.side === "friendly") === (side === me)) &&
     (filter.damaged === undefined || card.damage > 0 === filter.damaged) &&
     (filter.flank === undefined || onFlank(state, card) === filter.flank) &&
@@ -764,17 +850,27 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     (!filter.self || card === source) &&
     (!filter.host || card.instanceId === source?.attachedTo) &&
     (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card))) &&
-    (filter.house === undefined || (!unchosen(filter.house) && houseMatches(state, card, positive(filter.house)) !== negated(filter.house))) &&
+    (!filter.neighborsOfTarget || neighborPool.includes(card)) &&
+    (!filter.target || card === scope?.target) &&
+    (!filter.fighting || card === foe) &&
+    (filter.powerMax === undefined || effectivePower(state, card) <= filter.powerMax) &&
+    (filter.powerMin === undefined || effectivePower(state, card) >= filter.powerMin) &&
+    (!filter.weaker || (source !== undefined && effectivePower(state, card) < effectivePower(state, source))) &&
+    (filter.house === undefined ||
+      (!unchosen(filter.house) &&
+        (REL_HOUSES.has(positive(filter.house))
+          ? relationalHouse(state, card, positive(filter.house), source, scope)
+          : houseMatches(state, card, positive(filter.house))) !== negated(filter.house))) &&
     (filter.trait === undefined || traitMatches(card, positive(filter.trait)) !== negated(filter.trait)) &&
     (filter.exhausted === undefined || !card.ready === filter.exhausted) &&
     (filter.amber === undefined || ((card.amber ?? 0) > 0) === filter.amber) &&
-    (filter.counters === undefined || ((card.counters ?? 0) > 0) === filter.counters)
+    counterOk
   );
 }
 
-function everyMatch(state: GameState, me: Side, source: CardInstance | undefined, filter: Filter): CardInstance[] {
+function everyMatch(state: GameState, me: Side, source: CardInstance | undefined, filter: Filter, scope?: Ctx): CardInstance[] {
   const found = [...state.players[me].board, ...state.players[other(me)].board].filter((card) =>
-    matches(state, me, source, card, filter),
+    matches(state, me, source, card, filter, scope),
   );
   if (filter.top) return found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top);
   // `least` is the mirror of `top`: ties (no printed power difference) keep the
@@ -830,6 +926,16 @@ interface Ctx {
   /** What the previous act of this ability did (`per:"did"`/`"gone"`). */
   did?: number;
   gone?: number;
+  /** Cards the previous relocating act moved, and the house of the first (Lote 6 §6.4). */
+  moved?: CardInstance[];
+  movedHouse?: string;
+  /** Neighbors of the target as they were when the ability started (Lote 6 §6.7). */
+  wasNeighbors?: CardInstance[];
+  /** Houses captured before a destroy clears `houseAs` (Lote 6 §6.3). */
+  targetHouse?: string;
+  foughtHouse?: string;
+  /** Who caused the player-event this ability is answering (forge / house). */
+  actor?: Side;
 }
 
 /** The ability context proper: an act always runs with its source card. */
@@ -851,7 +957,10 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
     return state.players.flatMap((player) => player.board.filter((card) => card.instanceId === source?.attachedTo));
   }
   if (selection === "target") return target ? [target] : [];
-  if (selection === "targetNeighbors") return target ? neighbors(state, target) : [];
+  if (selection === "targetNeighbors") {
+    if (target && controllerOf(state, target) !== undefined) return neighbors(state, target);
+    return context.wasNeighbors ?? [];
+  }
   if (selection === "targetAndNeighbors") return target ? [target, ...neighbors(state, target)] : [];
   if (selection === "neighborsOfFought") return fought ? neighbors(state, fought) : [];
   if (selection === "fought") return fought ? [fought] : [];
@@ -860,7 +969,7 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
     // Up to `n` DISTINCT cards, chosen as the engine auto-targets: the strongest
     // enemy (or weakest friend) for a harmful act, the strongest friend for a
     // helpful one. The player only ever chooses the ability's `target`.
-    const remaining = everyMatch(state, context.me, source, selection.pick);
+    const remaining = everyMatch(state, context.me, source, selection.pick, context);
     const picked: CardInstance[] = [];
     for (let count = 0; count < (selection.n ?? 1) && remaining.length; count += 1) {
       const card = autoPick(state, context.me, remaining, k !== undefined && HARMFUL.has(k));
@@ -870,7 +979,7 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
     }
     return picked;
   }
-  return everyMatch(state, context.me, source, selection.each);
+  return everyMatch(state, context.me, source, selection.each, context);
 }
 
 /** A dynamic amount ("for each …"): the previous act, a board filter, a zone or
@@ -878,7 +987,23 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
 function countOf(scope: Ctx, spec: Count): number {
   if (spec === "did") return scope.did ?? 0;
   if (spec === "gone") return scope.gone ?? 0;
-  if ("c" in spec) return everyMatch(scope.state, scope.me, scope.source, spec.c).length;
+  if ("c" in spec) return everyMatch(scope.state, scope.me, scope.source, spec.c, scope).length;
+  if ("m" in spec) {
+    const moved = (scope.moved ?? []).filter((card) => {
+      if (spec.type && card.face.type !== spec.type) return false;
+      if (!spec.house) return true;
+      const neg = spec.house.startsWith("!");
+      const name = (neg ? spec.house.slice(1) : spec.house).toLowerCase();
+      const house = houseOf(scope.state, card).toLowerCase();
+      const hit = house === "all" || house === name;
+      return hit !== neg;
+    });
+    if (spec.m === "cards") return moved.length;
+    const icons = (card: CardInstance) =>
+      (card.face.amber ?? 0) + (card.face.bonusIcons?.amber ?? 0) + (card.face.bonusIcons?.capture ?? 0) + (card.face.bonusIcons?.damage ?? 0) + (card.face.bonusIcons?.draw ?? 0);
+    if (spec.m === "icons") return moved.reduce((sum, card) => sum + icons(card), 0);
+    return moved.reduce((sum, card) => sum + (card.face.power ?? 0), 0);
+  }
   if ("sub" in spec) {
     const [from, less] = spec.sub;
     return Math.max(0, countOf(scope, from) - (typeof less === "number" ? less : countOf(scope, less)));
@@ -897,7 +1022,9 @@ function countOf(scope: Ctx, spec: Count): number {
         : spec.of === "amber"
           ? (card.amber ?? 0)
           : spec.of === "counters"
-            ? (card.counters ?? 0)
+            ? spec.name
+              ? (card.marks?.[spec.name] ?? 0)
+              : (card.counters ?? 0)
             : effectivePower(scope.state, card)),
     0,
   );
@@ -945,6 +1072,7 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
     enraged: undefined,
     controlledBy: undefined,
     counters: undefined,
+    marks: undefined,
     hold: undefined,
     houseAs: undefined,
   });
@@ -973,7 +1101,8 @@ const dying = new WeakSet<CardInstance>();
 
 // Actions whose own text purged them ("If you do, purge ~"): applyMove sends
 // them to the purged zone instead of the discard pile (Lote 5 §5.4).
-const purgeSelf = new WeakSet<CardInstance>();
+/** An Action still resolving that moved itself out of the discard pile (Lote 6 §6.7). */
+const selfLeave = new WeakMap<CardInstance, "purged" | "archives" | "deck" | "hand">();
 
 function destroy(state: GameState, card: CardInstance, deterministic: boolean, by?: Side): boolean {
   const side = controllerOf(state, card);
@@ -1014,9 +1143,9 @@ function sacrifice(state: GameState, card: CardInstance, deterministic: boolean,
     play exhausted on the right flank. Its face is synthesized — the engine has
     no token card data — with the house of the card that made it, 1 power and
     the "Token" trait; `isToken` marks the instance so it never touches a deck. */
-function makeToken(state: GameState, side: Side, house: string): void {
+function makeToken(state: GameState, side: Side, house: string): CardInstance {
   state.tokenSerial = (state.tokenSerial ?? 0) + 1;
-  state.players[side].board.push({
+  const token: CardInstance = {
     instanceId: `token-${side}-${state.tokenSerial}`,
     face: {
       id: `token-${state.tokenSerial}`,
@@ -1034,7 +1163,9 @@ function makeToken(state: GameState, side: Side, house: string): void {
     ready: false,
     stunned: false,
     isToken: true,
-  });
+  };
+  state.players[side].board.push(token);
+  return token;
 }
 
 /** Armor absorbs damage once per turn (keyteki DealDamageAction/armorUsed).
@@ -1094,11 +1225,13 @@ function toDiscard(state: GameState, side: Side, cards: CardInstance[], determin
   for (const card of cards) fire(state, side, card, "scrap", { deterministic, decline, choice });
 }
 
-function discardRandom(state: GameState, side: Side, deterministic: boolean): void {
+function discardRandom(state: GameState, side: Side, deterministic: boolean): CardInstance | undefined {
   const player = state.players[side];
-  if (!player.hand.length) return;
+  if (!player.hand.length) return undefined;
   const index = deterministic ? 0 : Math.floor(roll(state) * player.hand.length);
-  toDiscard(state, side, player.hand.splice(index, 1), deterministic);
+  const [card] = player.hand.splice(index, 1);
+  toDiscard(state, side, [card], deterministic);
+  return card;
 }
 
 /** Extra bonus icons resolved when a card is played (keyteki
@@ -1166,6 +1299,16 @@ function measured(state: GameState, before: Snapshot): { did: number; gone: numb
   return { did, gone };
 }
 
+/** The previous relocating act's cards, with the first card's house taken before leavePlay. */
+function remember(context: Context, cards: CardInstance[], houses?: Map<CardInstance, string>): void {
+  context.moved = cards;
+  const first = cards[0];
+  context.movedHouse = first ? (houses?.get(first) ?? houseOf(context.state, first)) : undefined;
+}
+
+const iconScore = (card: CardInstance) =>
+  (card.amber ?? 0) + (card.face.amber ?? 0) + (card.face.bonusIcons?.amber ?? 0) + (card.face.bonusIcons?.capture ?? 0) + (card.face.bonusIcons?.damage ?? 0) + (card.face.bonusIcons?.draw ?? 0);
+
 function run(context: Context, act: Act): void {
   // A skipped act did nothing: the did/gone of the act before do not carry on.
   if ((act.optional && context.decline) || (act.if && !holds(act.if, context.state, context.me, context.source, context))) {
@@ -1219,9 +1362,15 @@ function run(context: Context, act: Act): void {
     case "draw":
       draw(player, amount, state);
       break;
-    case "discardRandom":
-      for (let count = 0; count < amount; count += 1) discardRandom(state, side, deterministic);
+    case "discardRandom": {
+      const discarded: CardInstance[] = [];
+      for (let count = 0; count < amount; count += 1) {
+        const card = discardRandom(state, side, deterministic);
+        if (card) discarded.push(card);
+      }
+      remember(context, discarded);
       break;
+    }
     case "keyCost":
       player.keyCostMod = (player.keyCostMod ?? 0) + amount;
       break;
@@ -1243,21 +1392,29 @@ function run(context: Context, act: Act): void {
     case "heal":
       for (const card of cards) card.damage = Math.max(0, card.damage - amount);
       break;
-    case "destroy":
+    case "destroy": {
+      const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) destroy(state, card, deterministic, me);
+      remember(context, cards.filter((card) => controllerOf(state, card) === undefined), houses);
       break;
-    case "purge":
+    }
+    case "purge": {
       // A leave-play destination of its own (keyteki PurgeAction): the card is
       // out of the game and cannot come back through a reshuffle.
+      const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) leaveByEffect(state, card, "purged");
       // "Purge ~" on an Action still being played: it is not in play yet, so
-      // mark the source and applyMove sends it to purged instead of the
-      // discard pile (Lote 5 §5.4).
-      if (act.s === "self" && controllerOf(state, source) === undefined) purgeSelf.add(source);
+      // applyMove sends it to purged instead of the discard pile (Lote 5 §5.4).
+      if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "purged");
+      remember(context, cards.filter((card) => controllerOf(state, card) === undefined), houses);
       break;
-    case "sacrifice":
+    }
+    case "sacrifice": {
+      const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) sacrifice(state, card, deterministic, me);
+      remember(context, cards.filter((card) => controllerOf(state, card) === undefined), houses);
       break;
+    }
     case "exalt":
       // keyteki ExaltAction: place N amber from the common supply on the
       // creature. It behaves like captured amber (returns to the opponent when
@@ -1265,9 +1422,12 @@ function run(context: Context, act: Act): void {
       for (const card of cards.filter(isCreature)) card.amber = (card.amber ?? 0) + amount;
       break;
     case "counter":
-      // keyteki +1 power counters (Onda 5): a plain counter on the instance;
-      // effectivePower reads it and leavePlay clears it.
-      for (const card of cards) card.counters = (card.counters ?? 0) + amount;
+      // A named counter lives in `marks` and does not change power (Lote 6 §6.6).
+      // Absent `name`, it is the +1 power counter (Onda 5).
+      for (const card of cards) {
+        if (act.name) card.marks = { ...card.marks, [act.name]: (card.marks?.[act.name] ?? 0) + amount };
+        else card.counters = (card.counters ?? 0) + amount;
+      }
       break;
     case "ward":
       // keyteki WardAction/Card.ward(): the token does not stack, so warding a
@@ -1321,15 +1481,20 @@ function run(context: Context, act: Act): void {
       break;
     }
     case "removeCounter": {
-      // Removes `n` +1 power counters (absent = all) from each selected card;
-      // `did` is the total removed (Lote 4 §4.10).
+      // Removes `n` counters (absent = all). A name reads `marks`; otherwise +1 power.
+      // `did` is the total removed (Lote 4 §4.10, Lote 6 §6.6).
       let removed = 0;
       for (const card of cards) {
-        const have = card.counters ?? 0;
+        const have = act.name ? (card.marks?.[act.name] ?? 0) : (card.counters ?? 0);
         const taken = Math.min(act.n ?? have, have);
         if (taken <= 0) continue;
         const left = have - taken;
-        card.counters = left > 0 ? left : undefined;
+        if (act.name) {
+          const marks = { ...card.marks };
+          if (left > 0) marks[act.name] = left;
+          else delete marks[act.name];
+          card.marks = Object.keys(marks).length ? marks : undefined;
+        } else card.counters = left > 0 ? left : undefined;
         removed += taken;
       }
       explicitDid = removed;
@@ -1341,7 +1506,7 @@ function run(context: Context, act: Act): void {
       // `less` is read again for every key: the pool it counts changes.
       for (let count = 0; count < amount; count += 1) {
         const less = act.less ? countOf(context, act.less) : undefined;
-        if (!forge(state, me, { free: act.free, mod: act.mod, less, min: act.min })) break;
+        if (!forge(state, me, { free: act.free, mod: act.mod, less, min: act.min, deterministic })) break;
       }
       break;
     case "setHouse":
@@ -1351,10 +1516,14 @@ function run(context: Context, act: Act): void {
         if (house) card.houseAs = house;
       }
       break;
-    case "forceHouse":
-      // The opponent's next active house is the chosen one (chooseHouse reads it).
-      if (chosenHouse) state.players[other(me)].mustChoose = chosenHouse;
+    case "forceHouse": {
+      // The next active house of `who` (default: the opponent). `house` reads a
+      // reference card captured when the ability started (Lote 6 §6.3).
+      const house = act.house === "target" ? context.targetHouse : act.house === "fought" ? context.foughtHouse : act.house === "moved" ? context.movedHouse : chosenHouse;
+      const whoSide = act.who === "owner" ? context.whoOwner : act.who === "controller" ? context.whoController : other(me);
+      if (house && whoSide !== undefined) state.players[whoSide].mustChoose = house;
       break;
+    }
     case "unforgeKey":
       // keyteki UnforgeAction: every printed "unforge" takes an opponent's key.
       for (let count = 0; count < amount; count += 1) {
@@ -1365,7 +1534,10 @@ function run(context: Context, act: Act): void {
       }
       break;
     case "makeToken":
-      for (let count = 0; count < amount; count += 1) makeToken(state, me, source.face.house);
+      for (let count = 0; count < amount; count += 1) {
+        const token = makeToken(state, me, source.face.house);
+        fireObservers(state, token, "enter", deterministic);
+      }
       break;
     case "stun":
       for (const card of cards.filter(isCreature)) card.stunned = true;
@@ -1375,22 +1547,34 @@ function run(context: Context, act: Act): void {
       break;
     case "ready":
       // An effect-readied creature ignores Entrench/hold but not `noReady: true`.
-      for (const card of cards) if (canReady(state, card, false)) card.ready = true;
+      // `ready` observers see each creature this act actually readied (Lote 6 §6.2).
+      for (const card of cards) {
+        if (card.ready || !canReady(state, card, false)) continue;
+        card.ready = true;
+        fireObservers(state, card, "ready", deterministic);
+      }
       break;
     case "unstun":
       for (const card of cards) card.stunned = false;
       break;
-    case "returnToHand":
+    case "returnToHand": {
+      const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) leaveByEffect(state, card, "hand");
+      if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "hand");
+      remember(context, cards.filter((card) => state.players.some((player) => player.hand.includes(card))), houses);
       break;
-    case "returnToDeck":
+    }
+    case "returnToDeck": {
       // `at` repositions the card after the leave-play move: the deck's top is
       // the array's end (where leavePlay already pushes), so the absent `at`
       // and the explicit "top" are the same, "bottom" is the front and
       // "shuffle" re-shuffles.
+      const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
+      const landed: CardInstance[] = [];
       for (const card of cards) {
         const owner = ownerOf(state, card) ?? me;
         leaveByEffect(state, card, "deck");
+        if (state.players[owner].deck.includes(card)) landed.push(card);
         // A ward (or a token leaving the game) cancels the move: only a card
         // that really landed in the deck is repositioned.
         const deck = state.players[owner].deck;
@@ -1400,7 +1584,10 @@ function run(context: Context, act: Act): void {
           deck.unshift(card);
         } else if (act.at === "shuffle") state.players[owner].deck = shuffle(deck, state);
       }
+      if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "deck");
+      remember(context, landed, houses);
       break;
+    }
     case "move": {
       // One act for the player zones. `pick` chooses the cards: "top" is the
       // array's end (the deck's top), "random" draws from the PRNG and "all"
@@ -1417,15 +1604,33 @@ function run(context: Context, act: Act): void {
               ? (candidates.find((card) => card.face.house !== state.activeHouse) ?? candidates[candidates.length - 1])
               : candidates[candidates.length - 1];
       const moved: CardInstance[] = [];
+      if (act.pick === "moved") {
+        // Still sitting in `from`. The engine keeps the highest amber + icons
+        // when `n` is smaller than the pile (Lote 6 §6.4); a real choice waits for targets[].
+        const pool = (context.moved ?? []).filter((card) => from.includes(card));
+        const fitting = pool.filter((card) => {
+          if (act.type && card.face.type !== act.type) return false;
+          if (!act.house) return true;
+          const neg = act.house.startsWith("!");
+          const name = (neg ? act.house.slice(1) : act.house).toLowerCase();
+          const house = card.face.house.toLowerCase();
+          return (house === name) !== neg;
+        });
+        fitting.sort((a, b) => iconScore(b) - iconScore(a));
+        moved.push(...fitting.slice(0, Math.min(amount, fitting.length)));
+      }
       // `all` takes the whole zone, so the bound is read before the picks.
-      const take = act.pick === "all" ? candidates.length : Math.min(amount, candidates.length);
+      const take = act.pick === "moved" ? 0 : act.pick === "all" ? candidates.length : Math.min(amount, candidates.length);
       for (let count = 0; count < take; count += 1) {
         const card = choose();
         if (!card) break;
         moved.push(card);
         candidates.splice(candidates.indexOf(card), 1);
       }
-      if (!moved.length) break;
+      if (!moved.length) {
+        remember(context, []);
+        break;
+      }
       player[act.from] = from.filter((card) => !moved.includes(card));
       if (act.to === "discard") toDiscard(state, side, moved, deterministic, context.decline);
       else {
@@ -1434,11 +1639,20 @@ function run(context: Context, act: Act): void {
         else destination.push(...moved);
         if (act.at === "shuffle") player[act.to] = shuffle(destination, state);
       }
+      remember(context, moved);
       break;
     }
-    case "archive":
+    case "archive": {
+      const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) leaveByEffect(state, card, "archives");
+      if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "archives");
+      remember(
+        context,
+        cards.filter((card) => state.players.some((player) => player.archives.includes(card))),
+        houses,
+      );
       break;
+    }
     case "use":
       for (const card of cards) {
         if (!card.ready || card.stunned) continue;
@@ -1463,12 +1677,18 @@ function run(context: Context, act: Act): void {
     case "fromDiscard": {
       const card = [...player.discard].reverse().find((item) => !act.type || item.face.type === act.type);
       if (card) player.discard = player.discard.filter((item) => item !== card);
-      if (card) player.hand.push(card);
+      if (card) {
+        player.hand.push(card);
+        remember(context, [card]);
+      }
       break;
     }
     case "archiveTop": {
       const card = player.deck.pop();
-      if (card) player.archives.push(card);
+      if (card) {
+        player.archives.push(card);
+        remember(context, [card]);
+      }
       break;
     }
     case "lasting": {
@@ -1480,6 +1700,12 @@ function run(context: Context, act: Act): void {
       if (stored.target.house !== undefined && positive(stored.target.house) === "chosen") {
         if (!chosenHouse) break;
         stored.target.house = (negated(stored.target.house) ? "!" : "") + chosenHouse;
+      }
+      // "cards of the purged card's type": freeze the literal when the lasting is stored.
+      if (stored.restrict?.type === "moved") {
+        const type = context.moved?.[0]?.face.type;
+        if (!type) break;
+        stored.restrict = { ...stored.restrict, type };
       }
       state.lasting = [...(state.lasting ?? []), { ...stored, side: me, until }];
       break;
@@ -1498,12 +1724,32 @@ function run(context: Context, act: Act): void {
     from the state as it was, not from what the first branch just changed.
     Observer abilities (`of`) are not the source's own reaction: they run once
     after the event, for every card in play watching it (fireObservers). */
+/** `forge` / the house choice: each card in play of both sides, the causer as `actor`. */
+function wakePlayer(state: GameState, actor: Side, trigger: Trigger, deterministic: boolean): void {
+  for (const side of [actor, other(actor)] as const) {
+    for (const card of [...state.players[side].board]) {
+      if (controllerOf(state, card) !== side) continue;
+      if (abilitiesOf(state, card).some((ability) => !ability.of && ability.on.includes(trigger))) {
+        fire(state, side, card, trigger, { deterministic, actor });
+      }
+    }
+  }
+}
+
+function stamp(state: GameState, context: Context, fought?: CardInstance): void {
+  if (context.target) {
+    context.targetHouse = houseOf(state, context.target);
+    context.wasNeighbors = neighbors(state, context.target).slice();
+  }
+  if (fought) context.foughtHouse = houseOf(state, fought);
+}
+
 function fire(
   state: GameState,
   me: Side,
   source: CardInstance,
   trigger: Trigger,
-  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean },
+  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean; actor?: Side },
 ): void {
   // A self-re-triggering chain ("Reap: ready and use ~ via reap") has no
   // observer at all: the per-move fire budget stops it (GAP 3 review).
@@ -1520,17 +1766,18 @@ function fireOwn(
   me: Side,
   source: CardInstance,
   trigger: Trigger,
-  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean },
+  options: { fought?: CardInstance; choice?: Choice; deterministic: boolean; via?: "reap" | "action"; decline?: boolean; actor?: Side },
 ): void {
   const firing: Ability[] = [];
   for (const ability of abilitiesOf(state, source)) {
     if (ability.of || !ability.on.includes(trigger) || (options.decline && ability.optional)) continue;
     firing.push(ability);
   }
-  const live = firing.map((ability) => !ability.if || holds(ability.if, state, me, source));
+  const prior: Prior = { actor: options.actor, fought: options.fought, foughtHouse: options.fought ? houseOf(state, options.fought) : undefined };
+  const live = firing.map((ability) => !ability.if || holds(ability.if, state, me, source, prior));
   for (const [index, ability] of firing.entries()) {
     if (!live[index]) continue;
-    const context: Context = { state, me, source, fought: options.fought, deterministic: options.deterministic, useVia: options.via, decline: options.decline };
+    const context: Context = { state, me, source, fought: options.fought, foughtHouse: prior.foughtHouse, actor: options.actor, deterministic: options.deterministic, useVia: options.via, decline: options.decline };
     if (ability.target) {
       const legal = everyMatch(state, me, source, ability.target);
       const chosen = legal.find((card) => card.instanceId === options.choice?.id);
@@ -1546,6 +1793,7 @@ function fireOwn(
       context.whoController = controllerOf(state, reference);
       context.whoOwner = ownerOf(state, reference);
     }
+    stamp(state, context, options.fought);
     for (const act of ability.acts) run(context, act);
   }
 }
@@ -1606,6 +1854,7 @@ function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, 
             context.whoController = controllerOf(state, reference);
             context.whoOwner = ownerOf(state, reference);
           }
+          stamp(state, context);
           if (observerBudget <= 0) return;
           observerBudget -= 1;
           for (const act of ability.acts) run(context, act);
@@ -1628,6 +1877,16 @@ function reap(state: GameState, me: Side, creature: CardInstance, choice: Choice
 /** keyteki ResolveFightAction: before-fight abilities, Assault/Hazardous, Elusive,
     Skirmish, Poison and Splash-attack, then "Fight:" if the attacker survived. */
 function fight(state: GameState, me: Side, attacker: CardInstance, defender: CardInstance, choice: Choice, deterministic: boolean, decline?: boolean): void {
+  const savedFight = fightPair;
+  fightPair = { attacker, defender };
+  try {
+  fightBody(state, me, attacker, defender, choice, deterministic, decline);
+  } finally {
+    fightPair = savedFight;
+  }
+}
+
+function fightBody(state: GameState, me: Side, attacker: CardInstance, defender: CardInstance, choice: Choice, deterministic: boolean, decline?: boolean): void {
   attacker.ready = false;
   // keyteki ResolveFightAction: the enrage token is removed when the creature
   // fights (its onUseCard child event calls card.unenrage()).
@@ -2069,13 +2328,17 @@ function resolveMove(state: GameState, playerIndex: Side, move: Exclude<GameMove
       player.board.push(source);
     }
     fire(state, playerIndex, source, "play", { choice, deterministic, decline });
+    if (source.face.type === "Creature" && controllerOf(state, source) === playerIndex) fireObservers(state, source, "enter", deterministic);
     // The extra bonus icons resolve after the card is played (keyteki
     // BasePlayAction: the bonus sub-event follows the Play: ability).
     if (source.face.bonusIcons) resolveBonusIcons(state, playerIndex, source.face.bonusIcons);
     if (source.face.type !== "Creature" && source.face.type !== "Artifact" && source.face.type !== "Upgrade") {
       // An Action that purged itself ("If you do, purge ~") leaves the game, not for the discard pile.
-      if (purgeSelf.delete(source)) player.purged.push(source);
-      else player.discard.push(source);
+      const away = selfLeave.get(source);
+      if (away) {
+        selfLeave.delete(source);
+        player[away === "purged" ? "purged" : away].push(source);
+      } else player.discard.push(source);
     }
     if (keyword(state, source, "omega") && playerIndex === state.activePlayer) state.omega = true;
   } else if (move.type === "unstun") {
@@ -2134,7 +2397,9 @@ export function chooseHouse(state: GameState, playerIndex: Side, house: string):
   for (const side of [next.activePlayer, other(next.activePlayer)]) {
     for (const card of [...next.players[side].board]) {
       if (controllerOf(next, card) !== side) continue;
-      if (abilitiesOf(next, card).some((ability) => !ability.of && ability.on.includes("house"))) fire(next, side, card, "house", { deterministic: false });
+      if (abilitiesOf(next, card).some((ability) => !ability.of && ability.on.includes("house"))) {
+        fire(next, side, card, "house", { deterministic: false, actor: playerIndex });
+      }
     }
   }
   return next;
@@ -2150,8 +2415,15 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   const endingPlayer = state.players[playerIndex];
   // Ready step, then draw step (keyteki ReadyPhase + DrawPhase). Entrench
   // (Lote 4 §4.2): a held creature with the keyword stays exhausted.
-  for (const card of endingPlayer.board) if (canReady(state, card, true)) card.ready = true;
-  refill(endingPlayer, state);
+  const readied: CardInstance[] = [];
+  for (const card of endingPlayer.board) {
+    if (card.ready || !canReady(state, card, true)) continue;
+    card.ready = true;
+    readied.push(card);
+  }
+  // After the whole ready step, over the creatures that actually readied (Lote 6 §6.2).
+  for (const card of readied) fireObservers(state, card, "ready", false);
+  refill(state, playerIndex);
   endingPlayer.keyCostMod = 0;
   for (const card of state.players.flatMap((player) => player.board)) {
     card.armorUsed = 0;

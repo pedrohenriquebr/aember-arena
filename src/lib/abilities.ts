@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 6; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 7; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -24,15 +24,17 @@ export const DSL_VERSION = 6; // 1 = implicit (rows without `v`)
     would need an event bus across sources, not a card-bound trigger.
     `scrap` is the printed "Scrap:" of a card going to its discard pile; `house`
     wakes every card in play of BOTH sides when a player chooses the active house
-    (Lote 5 §5.2). */
-export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni" | "startOfTurn" | "endOfTurn" | "scrap" | "house";
+    (Lote 5 §5.2). `forge` is a player event (someone forged a key). `ready` and
+    `enter` are observer-only (Lote 6 §6.2): the gate rejects them without `of`. */
+export type Trigger = "play" | "reap" | "fight" | "beforeFight" | "destroyed" | "action" | "omni" | "startOfTurn" | "endOfTurn" | "scrap" | "house" | "forge" | "ready" | "enter";
 
 /** A player's card zones an act can read or move cards out of. */
 export type Zone = "hand" | "deck" | "discard" | "archives" | "purged";
 
 /** Card filter. `side` is relative to the ability's controller. */
 export interface Filter {
-  type?: "Creature" | "Artifact";
+  /** `!Upgrade` is "a creature or artifact" (Lote 6 §6.7). */
+  type?: "Creature" | "Artifact" | "Upgrade" | "!Upgrade";
   side?: "friendly" | "enemy";
   damaged?: boolean;
   flank?: boolean;
@@ -44,16 +46,27 @@ export interface Filter {
   least?: number;
   /** "creature with amber on it": worn amber (exalt/capture) present/absent. */
   amber?: boolean;
-  /** "creature with a +1 power counter on it": counters present/absent. */
-  counters?: boolean;
+  /** "creature with a +1 power counter on it" (boolean) or a named counter present (string, Lote 6 §6.6). */
+  counters?: boolean | string;
+  /** Printed power at most/at least this (Lote 6 §6.1). Named powerMin/powerMax so they never collide with forgeKey.min. */
+  powerMin?: number;
+  powerMax?: number;
+  /** Power strictly lower than the source's. */
+  weaker?: boolean;
+  /** The card is the ability's chosen target. */
+  target?: boolean;
+  neighborsOfTarget?: boolean;
+  /** The other card of the fight in progress (Lote 6 §6.2). */
+  fighting?: boolean;
   /** The source card itself ("This creature gets +1 power"). */
   self?: boolean;
   /** The creature an upgrade is attached to ("This creature gets +2 armor" on an upgrade). */
   host?: boolean;
   /** The source's neighbors ("Each of ~'s neighbors gets +2 armor"). */
   neighborsOfSource?: boolean;
-  /** "each Mars creature" (prefix `!` negates): a printed house name, `active` or
-      `chosen` — the house picked by the move's "Choose a house" (Lote 5 §5.1). */
+  /** "each Mars creature" (prefix `!` negates): a printed house name, `active`,
+      `chosen`, or a relational house `self`/`target`/`fought`/`moved`/`neighbor`
+      (Lote 5 §5.1, Lote 6 §6.3). */
   house?: string;
   /** "each Knight creature" (prefix `!` negates): a token of face.traits. */
   trait?: string;
@@ -84,7 +97,9 @@ export type Count =
   | "gone"
   | { c: Filter }
   | { p: Zone | "keys" | "amber" | "plays"; opp?: boolean }
-  | { of: "damage" | "amber" | "power" | "counters"; s: Selection }
+  | { of: "damage" | "amber" | "power" | "counters"; s: Selection; name?: string }
+  /** Cards the previous act moved (Lote 6 §6.4): how many, their bonus icons, or their printed power. */
+  | { m: "cards" | "icons" | "power"; house?: string; type?: string }
   /** max(0, a - b): "all but 6" (Lote 5 §5.5). */
   | { sub: [Count, Count | number] };
 
@@ -103,14 +118,14 @@ export type Act = (
       creature is used, because its own Action would win otherwise. */
   | { k: "use"; s: Selection; via?: "fight" | "reap" }
   /** +1 power counters ("Give X two +1 power counters"). */
-  | { k: "counter"; n: number; s: Selection }
+  | { k: "counter"; n: number; s: Selection; name?: string }
   /** "Put X on the bottom of its owner's deck" / "shuffle X into its owner's
       deck"; `top` is the literal of the default landing (the array's end). */
   | { k: "returnToDeck"; s: Selection; at?: "top" | "bottom" | "shuffle" }
   /** One act for the player zones: mill, discard/archive from hand, purge from a
       zone, shuffle the discard into the deck. `pick` is how the cards are
       chosen (absent = the controller's choice) and `at` where they land. */
-  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; pick?: "top" | "bottom" | "random" | "all"; at?: "top" | "bottom" | "shuffle"; type?: string }
+  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; pick?: "top" | "bottom" | "random" | "all" | "moved"; at?: "top" | "bottom" | "shuffle"; type?: string; house?: string }
   /** Set tokens of the set layer (keyteki WardAction/EnrageAction/RemoveWardAction)
       and control changes (game.takeControl). */
   | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection; opp?: boolean }
@@ -120,7 +135,7 @@ export type Act = (
   | { k: "moveAmber"; s: Selection; n?: number; to: "pool" | "supply"; opp?: boolean }
   /** Remove +1 power counters ("remove each +1 power counter from X"): `n`
       absent removes them all. */
-  | { k: "removeCounter"; s: Selection; n?: number }
+  | { k: "removeCounter"; s: Selection; n?: number; name?: string }
   /** "Make a token creature": the token is born on the battleline (keyteki
       MakeTokenCreatureAction), never in the deck. */
   | { k: "makeToken"; n: number }
@@ -130,7 +145,7 @@ export type Act = (
   /** "Choose a house" side effects (Lote 5): the chosen house becomes the card's
       until it leaves play, or the opponent's mandatory next active house. */
   | { k: "setHouse"; s: Selection; house: string }
-  | { k: "forceHouse" }
+  | { k: "forceHouse"; house?: "target" | "fought" | "moved"; who?: "owner" | "controller" }
   | { k: "unforgeKey"; n: number }
   | { k: "fromDiscard"; type?: "Creature" }
   | { k: "archiveTop" }
@@ -157,6 +172,8 @@ export type Condition =
   | { k: "forged"; opp?: boolean }
   /** "If it is not your turn": the active player is the other side. */
   | { k: "myTurn" }
+  /** "After you / your opponent …": the player who caused this player-event (Lote 6 §6.2). */
+  | { k: "actor"; opp?: boolean }
   | { k: "not"; c: Condition };
 
 export interface Ability {
@@ -181,7 +198,8 @@ export type Coverage = "full" | "partial" | "vanilla";
 export interface Restrict {
   who: "you" | "opponent";
   action: "play" | "use" | "fight";
-  /** Only cards of this type are banned; absent bans every card of the action. */
+  /** Only cards of this type are banned; absent bans every card of the action.
+      `"moved"` freezes to the type of the card the previous act moved (Lote 6 §6.4). */
   type?: string;
   /** "cannot play more than N cards each turn" — a per-turn budget, not a ban. */
   limit?: number;
@@ -233,8 +251,11 @@ export interface PersistentEffect {
   /** "Keys cost +N": added to the cost the effect's side pays (`opp` → the
       other side's keys). */
   keyCost?: number;
-  /** keyCost applies to the opponent of the effect's source instead. */
+  /** keyCost applies to the opponent of the effect's source instead.
+      A `hand` delta uses the same flag: the other side's draw step (Lote 6 §6.5). */
   opp?: boolean;
+  /** Added to the draw-step refill size (negative = fewer cards). */
+  hand?: number;
   /** Printed duration of a triggered effect: end of this turn, or of the
       opponent's next turn (keyteki duringOpponentNextTurn). Trap: "next" is
       stamp + 2, correct ONLY for "the opponent's next turn"; a "your next
@@ -477,6 +498,9 @@ const ABILITY_TRIGGERS: ReadonlySet<string> = new Set<Trigger>([
   "endOfTurn",
   "scrap",
   "house",
+  "forge",
+  "ready",
+  "enter",
 ]);
 
 /** Every stored act, and which of its fields the engine needs: `n` (a finite
@@ -543,6 +567,12 @@ const FILTER_FIELDS: Record<string, 0> = {
   least: 0,
   amber: 0,
   counters: 0,
+  powerMin: 0,
+  powerMax: 0,
+  weaker: 0,
+  target: 0,
+  neighborsOfTarget: 0,
+  fighting: 0,
   self: 0,
   host: 0,
   neighborsOfSource: 0,
@@ -558,6 +588,7 @@ const CONDITION_FIELDS: Record<string, string> = {
   count: "k,of,op,n",
   forged: "k,opp",
   myTurn: "k",
+  actor: "k,opp",
   not: "k,c",
 };
 const COUNT_OPS: ReadonlySet<string> = new Set(["eq", "gte", "lte", "even", "odd"]);
@@ -619,9 +650,15 @@ function validCount(value: unknown): boolean {
     );
   }
   return (
-    value.of === "damage" || value.of === "amber" || value.of === "power" || value.of === "counters"
-      ? Object.keys(value).every((key) => key === "of" || key === "s") && validSelection(value.s)
-      : false
+    value.m === "cards" || value.m === "icons" || value.m === "power"
+      ? Object.keys(value).every((key) => key === "m" || key === "house" || key === "type") &&
+        (value.house === undefined || typeof value.house === "string") &&
+        (value.type === undefined || typeof value.type === "string")
+      : value.of === "damage" || value.of === "amber" || value.of === "power" || value.of === "counters"
+        ? Object.keys(value).every((key) => key === "of" || key === "s" || key === "name") &&
+          validSelection(value.s) &&
+          (value.name === undefined || (value.of === "counters" && typeof value.name === "string" && value.name.length > 0))
+        : false
   );
 }
 
@@ -631,7 +668,7 @@ function validCondition(value: unknown): boolean {
   if (!Object.keys(value).every((key) => `,${fields},`.includes(`,${key},`))) return false;
   if (value.k === "amber") return typeof value.opp === "boolean" && (value.op === "eq" || value.op === "gte") && isFiniteNumber(value.n);
   if (value.k === "not") return validCondition(value.c);
-  if (value.k === "forged") return value.opp === undefined || typeof value.opp === "boolean";
+  if (value.k === "forged" || value.k === "actor") return value.opp === undefined || typeof value.opp === "boolean";
   if (value.k === "count") {
     return validCount(value.of) && COUNT_OPS.has(value.op as string) && isFiniteNumber(value.n);
   }
@@ -644,7 +681,9 @@ function validCondition(value: unknown): boolean {
     rejects them (docs/DSL_EXPANSION_PLAN.md §2.4). */
 function readsPower(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
-  return Object.entries(value).some(([key, inner]) => key === "top" || key === "least" || (key === "of" && inner === "power") || readsPower(inner));
+  return Object.entries(value).some(
+    ([key, inner]) => key === "top" || key === "least" || key === "powerMin" || key === "powerMax" || key === "weaker" || (key === "of" && inner === "power") || readsPower(inner),
+  );
 }
 
 /** Does this key appear anywhere inside `value`? */
@@ -682,9 +721,16 @@ function validAct(value: unknown): boolean {
   if (value.who !== undefined) {
     if (value.who !== "owner" && value.who !== "controller") return false;
     if (value.opp === true) return false;
-    if (value.k !== "gainAmber" && value.k !== "loseAmber" && value.k !== "draw" && value.k !== "gainChains") return false;
+    if (value.k !== "gainAmber" && value.k !== "loseAmber" && value.k !== "draw" && value.k !== "gainChains" && value.k !== "forceHouse") return false;
   }
-  if (value.k === "lasting") return isRecord(value.e) && isRecord(value.e.target) && !houseEffectLoops(value.e);
+  if ((value.k === "counter" || value.k === "removeCounter") && value.name !== undefined && (typeof value.name !== "string" || !value.name)) return false;
+  if (value.name !== undefined && value.k !== "counter" && value.k !== "removeCounter") return false;
+  if (value.k === "lasting") {
+    // The stored effect is read by effectivePower the same way a printed one is.
+    // A power modifier whose target filters by power recurses (Lote 6 review).
+    if (!isRecord(value.e) || !isRecord(value.e.target) || houseEffectLoops(value.e)) return false;
+    return !(value.e.power !== undefined && readsPower(value.e.target)) && !readsPower(value.e.if) && !readsPower(value.e.per);
+  }
   if (value.k === "setHouse") return typeof value.house === "string" && value.house.length > 0;
   if (value.k === "forgeKey") {
     if (value.less !== undefined && !validCount(value.less)) return false;
@@ -694,14 +740,18 @@ function validAct(value: unknown): boolean {
   }
   if (value.k === "use" && value.via !== undefined && value.via !== "fight" && value.via !== "reap") return false;
   if (value.at !== undefined && value.at !== "top" && value.at !== "bottom" && value.at !== "shuffle") return false;
+  if (value.k === "forceHouse") {
+    return value.house === undefined || value.house === "target" || value.house === "fought" || value.house === "moved";
+  }
   if (value.k === "move") {
     return (
       typeof value.from === "string" &&
       typeof value.to === "string" &&
       ZONES.has(value.from) &&
       ZONES.has(value.to) &&
-      (value.pick === undefined || value.pick === "top" || value.pick === "bottom" || value.pick === "random" || value.pick === "all") &&
-      (value.type === undefined || typeof value.type === "string")
+      (value.pick === undefined || value.pick === "top" || value.pick === "bottom" || value.pick === "random" || value.pick === "all" || value.pick === "moved") &&
+      (value.type === undefined || typeof value.type === "string") &&
+      (value.house === undefined || typeof value.house === "string")
     );
   }
   return true;
@@ -715,6 +765,13 @@ function validAbility(value: unknown): value is Ability {
   if (value.of !== undefined && !validFilter(value.of)) return false;
   if (value.target !== undefined && !validFilter(value.target)) return false;
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
+  // Direct loops the budgets would only truncate (Lote 6 §6.2).
+  const ons = value.on as string[];
+  const kinds = new Set((value.acts as { k?: string }[]).map((act) => act.k));
+  if ((ons.includes("ready") || ons.includes("enter")) && !validFilter(value.of)) return false;
+  if (ons.includes("ready") && (kinds.has("ready") || kinds.has("use"))) return false;
+  if (ons.includes("forge") && kinds.has("forgeKey")) return false;
+  if (ons.includes("enter") && kinds.has("makeToken")) return false;
   return true;
 }
 
@@ -737,6 +794,8 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.per === undefined || validCount(effect.per)) &&
         (effect.keyCost === undefined || isFiniteNumber(effect.keyCost)) &&
         (effect.opp === undefined || typeof effect.opp === "boolean") &&
+        (effect.hand === undefined || isFiniteNumber(effect.hand)) &&
+        !(effect.power !== undefined && readsPower(effect.target)) &&
         (effect.noReady === undefined || effect.noReady === true || effect.noReady === "step") &&
         (effect.house === undefined || (typeof effect.house === "string" && effect.house.length > 0)) &&
         (effect.noSteal === undefined || typeof effect.noSteal === "boolean") &&

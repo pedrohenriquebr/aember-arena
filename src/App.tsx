@@ -44,7 +44,7 @@ import { chooseAiHouse, chooseAiMove, describeAiThinking, holdEntrench, shouldMu
 import { vendoredOverrides } from "./lib/vendored";
 import { flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides } from "./lib/abilities";
 import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCatalogCards, listCachedDecks, loadAbilityOverrides, loadSavedMatch, putAbilityOverride, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
-import { LLM_RUN_LIMIT, pendingTranslations, runTranslation, type RunProgress } from "./lib/catalogLlm";
+import { LLM_RUN_LIMIT, pendingTranslations, runTranslation, translationTries, type RunProgress } from "./lib/catalogLlm";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
 import { DEMO_DECK_2 } from "./lib/demoDeck2";
 import {
@@ -1406,6 +1406,11 @@ const BoardLane = memo(function BoardLane({
                 <Anchor size={12} strokeWidth={2.4} />
               </span>
             )}
+            {card.marks && Object.entries(card.marks).map(([name, n]) => (
+              <span className="mark-badge" key={name} role="img" aria-label={t("game.mark", { name, n })}>
+                {n}
+              </span>
+            ))}
           </div>
         );
       })}
@@ -3189,7 +3194,7 @@ function App() {
       const progress = await runTranslation(pendingTranslations(cards, (id) => overrides.get(id)), llm, {
         limit: LLM_RUN_LIMIT,
         // `reply:` re-tentado: a tentativa anterior conta (§4.0).
-        previous: (id) => overrides.get(id)?.tries,
+        previous: (id) => translationTries(overrides.get(id)),
         save: putAbilityOverride,
         onProgress: setLlmRun,
         signal: controller.signal,

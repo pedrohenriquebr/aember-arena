@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normaliseAbilityOverride, DSL_VERSION, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
-import { buildMessages, callProvider, dryRunProblem, extractJson, FEW_SHOTS, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, validateDraft, validateQueueRows } from "./catalogLlm";
+import { buildMessages, callProvider, dryRunProblem, exportableRows, extractJson, FEW_SHOTS, groupByText, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, translationTries, validateDraft, validateQueueRows } from "./catalogLlm";
 import { parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
 import { DSL_SCHEMA } from "./generated/dslSchema";
@@ -291,15 +291,17 @@ describe("queue run", () => {
     const progress: number[] = [];
     const fetcher = stub(reply(VALID), reply({ unsupported: true, reason: "no" }), reply(VALID));
     const result = await runTranslation(cards, config, { limit: 2, fetcher, save: async (row) => void saved.push(row), onProgress: (p) => progress.push(p.done) });
-    expect(result).toMatchObject({ done: 2, total: 2, drafted: 1, failed: 1 });
-    expect(saved.map((row) => row.cardId)).toEqual(["a", "b"]);
-    expect(progress).toEqual([0, 1, 2]);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    // a, b and c share a text, so they are one group and the limit keeps that group.
+    expect(result).toMatchObject({ done: 3, total: 3, drafted: 3, failed: 0 });
+    expect(saved.map((row) => row.cardId)).toEqual(["a", "b", "c"]);
+    expect(progress).toEqual([0, 3]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("an auth error ends the run after the rows already stored; an abort is a quiet stop", async () => {
     const saved: AbilityOverride[] = [];
-    await expect(runTranslation(cards, config, { fetcher: stub(reply(VALID), new Response("", { status: 401 })), save: async (row) => void saved.push(row) })).rejects.toMatchObject({ key: "llm.auth" });
+    const distinct = [face("Play: Alpha zzz unique.", { id: "a" }), face("Play: Beta zzz unique.", { id: "b" })];
+    await expect(runTranslation(distinct, config, { fetcher: stub(reply(VALID), new Response("", { status: 401 })), save: async (row) => void saved.push(row) })).rejects.toMatchObject({ key: "llm.auth" });
     expect(saved).toHaveLength(1);
     const controller = new AbortController();
     controller.abort();
@@ -515,6 +517,91 @@ describe("BYOK settings", () => {
     expect(readLlmConfig()).toEqual(config);
     stored = "{broken";
     expect(readLlmConfig()).toEqual(DEFAULT_LLM);
+  });
+});
+
+describe("pipeline hygiene — Lote 6 §6.0", () => {
+  const gapText = "Play: Look at the top of your deck.";
+  const gap = (id: string, type = "Action"): CardFace => face(gapText, { id, type, title: id });
+
+  it("retries by class, resets tries when v is older, and sorts transport last", () => {
+    const stored = (id: string, patch: Partial<AbilityOverride>): AbilityOverride => ({
+      cardId: id,
+      dsl: [],
+      textHash: textHash(gapText),
+      source: "llm",
+      reviewed: false,
+      generatedAt: 1,
+      v: DSL_VERSION,
+      ...patch,
+    });
+    const cards = [gap("fresh"), gap("draft"), gap("format"), gap("transport"), gap("old")];
+    const rows = new Map<string, AbilityOverride>([
+      ["draft", stored("draft", { failure: "schema: no", tries: 1 })],
+      ["format", stored("format", { failure: "reply: not a JSON object", tries: 1 })],
+      ["transport", stored("transport", { failure: "llm.timeout", tries: 4 })],
+      ["old", stored("old", { failure: "llm.timeout", tries: 5, v: DSL_VERSION - 1 })],
+    ]);
+    expect(translationTries(rows.get("old"))).toBe(0);
+    expect(pendingTranslations(cards, (id) => rows.get(id)).map((item) => item.id)).toEqual(["fresh", "old", "draft", "format", "transport"]);
+    expect(pendingTranslations([gap("done")], () => stored("done", { failure: "llm.timeout", tries: 5 }))).toHaveLength(0);
+    expect(pendingTranslations([gap("cap")], () => stored("cap", { failure: "schema: no", tries: 2 }))).toHaveLength(0);
+  });
+
+  it("retries a timeout once with a doubled timeout and records tries", async () => {
+    const fetcher = vi.fn(async () => {
+      throw new DOMException("aborted", "AbortError");
+    }) as unknown as typeof fetch;
+    const saved: AbilityOverride[] = [];
+    await runTranslation([gap("slow")], config, { fetcher, previous: () => 1, save: async (row) => void saved.push(row) });
+    expect(saved[0]).toMatchObject({ failure: "llm.timeout", tries: 2 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("counts a schema failure toward the draft cap", async () => {
+    const row = await translateCard(face("Reap: Gain 1<A>."), config, { fetcher: stub(reply({ abilities: "nope" })), tries: 1 });
+    expect(row.failure).toMatch(/^schema:/);
+    expect(row.tries).toBe(2);
+  });
+
+  it("groups identical text before the run limit", async () => {
+    const shared = "Play: Alpha zzz unique shared.";
+    const other = "Play: Beta zzz unique other.";
+    const faces = [face(shared, { id: "a" }), face(other, { id: "b" }), face(shared, { id: "c" })];
+    const fetcher = stub(reply({ abilities: [], effects: [], keywords: {}, unsupported: true, reason: "no" }));
+    const saved: AbilityOverride[] = [];
+    await runTranslation(faces, config, { limit: 1, fetcher, save: async (row) => void saved.push(row) });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(saved.map((row) => row.cardId).sort()).toEqual(["a", "c"]);
+  });
+
+  it("translates one lead per textHash and type and copies the row", async () => {
+    const a = gap("a");
+    const b = gap("b");
+    const upgrade = gap("u", "Upgrade");
+    expect(groupByText([a, b, upgrade])).toHaveLength(2);
+    const saved: AbilityOverride[] = [];
+    const fetcher = stub(reply({ abilities: [], effects: [], keywords: {}, unsupported: true, reason: "no" }));
+    await runTranslation([a, b], config, { fetcher, save: async (row) => void saved.push(row) });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(saved.map((row) => row.cardId).sort()).toEqual(["a", "b"]);
+  });
+
+  it("drops transport, scripts and unknown ids from the export", () => {
+    const known = gap("known");
+    const rows: AbilityOverride[] = [
+      { cardId: "known", dsl: [], textHash: textHash(gapText), source: "llm", reviewed: false, generatedAt: 1, failure: "unsupported: no", v: DSL_VERSION },
+      { cardId: "known", dsl: [], textHash: "x", source: "llm", reviewed: false, generatedAt: 2, failure: "llm.timeout", v: DSL_VERSION },
+      { cardId: "missing", dsl: [], textHash: "h", source: "llm", reviewed: false, generatedAt: 1, failure: "unsupported: no", v: DSL_VERSION },
+      { cardId: "bear", dsl: [], textHash: "h", source: "llm", reviewed: false, generatedAt: 1, failure: "unsupported: no", v: DSL_VERSION },
+    ];
+    const bear = face("Scripted.", { id: "bear", title: "Ancient Bear" });
+    expect(exportableRows(rows, [known, bear]).map((row) => row.failure)).toEqual(["unsupported: no"]);
+  });
+
+  it("tells the model that unless is a negated condition", () => {
+    expect(buildMessages(face("Play: Gain 1<A>."))[0].content).toContain("unless <cond>");
+    expect(buildMessages(face("Play: Gain 1<A>."))[0].content).not.toContain("Qualified forms");
   });
 });
 

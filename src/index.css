@@ -1744,6 +1744,25 @@ button:disabled {
   border-color: rgba(120, 165, 191, 0.62);
 }
 
+.mark-badge {
+  position: absolute;
+  z-index: 2;
+  bottom: 3px;
+  right: -4px;
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  place-items: center;
+  border: 1px solid rgba(212, 175, 55, 0.7);
+  border-radius: 999px;
+  color: #f3e6b8;
+  background: #3a3218;
+  font-size: var(--fs-2xs);
+  line-height: 1;
+  pointer-events: none;
+}
+
 .hold-badge {
   position: absolute;
   z-index: 2;

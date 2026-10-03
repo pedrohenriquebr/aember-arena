@@ -432,7 +432,7 @@ describe("5.5 aritmética de contagem", () => {
 });
 
 describe("5.6 imunidades", () => {
-  it("the parser reads the unqualified forms only", () => {
+  it("parses the unqualified immunity forms in full and leaves a qualified one unread", () => {
     expect(parseCardText(rawFace("Friendly creatures cannot be dealt damage.", "Artifact")).effects).toEqual([
       { target: { type: "Creature", side: "friendly" }, replace: { on: "damage", prevent: true } },
     ]);
@@ -476,9 +476,9 @@ describe("5.6 imunidades", () => {
 describe("DSL_VERSION 6", () => {
   it("a stored row above the running version is rejected, the current one accepted", () => {
     const row = { cardId: "c", dsl: [], textHash: "h", source: "manual" };
-    expect(DSL_VERSION).toBe(6);
-    expect(normaliseAbilityOverride({ ...row, v: 6 })?.v).toBe(6);
-    expect(normaliseAbilityOverride({ ...row, v: 7 })).toBeNull();
+    expect(DSL_VERSION).toBe(7);
+    expect(normaliseAbilityOverride({ ...row, v: 7 })?.v).toBe(7);
+    expect(normaliseAbilityOverride({ ...row, v: 8 })).toBeNull();
   });
 
   it("draft and failure rows carry v:6", () => {
@@ -486,8 +486,8 @@ describe("DSL_VERSION 6", () => {
     const parsed = parseCardText(face);
     const result = validateDraft(face, { abilities: parsed.abilities, keywords: parsed.keywords }, "llm");
     expect(result.reason).toBeUndefined();
-    expect(result.row?.v).toBe(6);
-    expect(failureRow(face, "reply: nope").v).toBe(6);
+    expect(result.row?.v).toBe(7);
+    expect(failureRow(face, "reply: nope").v).toBe(7);
   });
 
   it("the sanity gate wants the sentence behind a chosen house and a house trigger needs its text", () => {

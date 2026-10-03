@@ -44,7 +44,6 @@ describe("trigger prefixes", () => {
   });
 
   it.each([
-    "After an enemy creature is destroyed fighting this card: Gain 1A.",
     "Interrupt: Gain 1A.",
     // Watchers globais ("each time you …") não são gatilhos da fonte: ficam
     // de fora em vez de virarem um gatilho errado da própria carta.
@@ -201,7 +200,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(6);
+    expect(PARSER_VERSION).toBe(7);
   });
 });
 
@@ -270,7 +269,9 @@ describe("Lote 2: quantidades, condições, filtros, zonas e Scrap", () => {
     expect(banner.effects[0]).toMatchObject({ target: { type: "Creature", side: "friendly", flank: true, house: "Mars" }, power: 1 });
     // Words outside the closed lists keep the phrase unparsed.
     expect(parseCardText(face("Play: Destroy each stunned creature.")).coverage).toBe("vanilla");
-    expect(parseCardText(face("Play: Destroy each creature with power 3 or lower.")).coverage).toBe("vanilla");
+    expect(parseCardText(face("Play: Destroy each creature with power 3 or lower.")).abilities[0].acts).toEqual([
+      { k: "destroy", s: { each: { type: "Creature", powerMax: 3 } } },
+    ]);
   });
 
   // A conjunction, a noun, a possessive and a keyword must not turn into a
@@ -380,7 +381,11 @@ describe("Lote 3: use.via, observadores, contadores, splash e versatile", () => 
     // Colon form of the same grammar ("After Reap:") keeps working, and a watch
     // clause outside it still drops the ability instead of guessing.
     expect(parseCardText(face("After Reap: Gain 1<A>.")).abilities[0].of).toBeUndefined();
-    expect(parseCardText(face("After an enemy creature is destroyed fighting this card, gain 1<A>.")).coverage).toBe("vanilla");
+    expect(parseCardText(face("After an enemy creature is destroyed fighting this card, gain 1<A>.")).abilities[0].of).toEqual({
+      type: "Creature",
+      side: "enemy",
+      fighting: true,
+    });
   });
 
   it("reads +1 power counters in both wordings", () => {
@@ -431,10 +436,10 @@ describe("zone verbs and tokens (Onda 3)", () => {
     expect(parseCardText(face("Reap: Create a token creature.")).abilities[0].acts).toEqual([{ k: "makeToken", n: 1 }]);
   });
 
-  it("keeps purge wording outside the object grammar unparsed", () => {
+  it("parses a power-or-lower purge as a full targeted purge", () => {
     const rules = parseCardText(face("Play: Purge a creature with power 3 or lower."));
-    expect(rules.coverage).toBe("vanilla");
-    expect(rules.abilities).toHaveLength(0);
+    expect(rules.coverage).toBe("full");
+    expect(rules.abilities[0].acts[0]).toMatchObject({ k: "purge", s: "target" });
   });
 });
 
