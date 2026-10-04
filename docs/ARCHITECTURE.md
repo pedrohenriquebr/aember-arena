@@ -18,7 +18,8 @@ O app React (`App.tsx`) é o orquestrador: chama o motor puro, lê/grava o catá
 flowchart LR
   subgraph UI["App React"]
     APP["App.tsx<br/>(orquestrador)"]
-    COMP["components/<br/>CardArt, Deck*, Tutorial"]
+    COMP["components/<br/>CardArt, Deck*, TutorialWizard,<br/>CoverageBadge, HouseIcon, Pagination,<br/>ErrorBoundary, useDialogFocus"]
+    SWR["sw.js<br/>(register em App.tsx)"]
     I18N["i18n.ts<br/>en / pt-BR"]
     FX["FxLayer + table-plane<br/>(FX / mesa 3D)"]
   end
@@ -31,6 +32,7 @@ flowchart LR
   subgraph CAT["Catálogo dinâmico"]
     CACHE["cache.ts<br/>(IndexedDB)"]
     API["keyforgeApi.ts<br/>(sync MV)"]
+    VEND["vendored.ts<br/>(generated/approved.json)"]
   end
   APP --> COMP
   APP --> I18N
@@ -43,7 +45,13 @@ flowchart LR
   APP --> CACHE
   APP --> API
   CACHE --> ABIL
+  API --> CACHE
+  VEND --> ABIL
+  APP --> VEND
+  APP --> SWR
 ```
+
+`abilities.ts` só importa tipos de `game.ts` (`import type`), então não há ciclo em runtime; `game.ts` importa `rulesOf` de `abilities.ts`. `vite.config` + `vite-plugin-singlefile` empacotam tudo em um `index.html`; `sw.js` é registrado por `App.tsx` (`./sw.js`, relativo) e faz cache LRU.
 
 ### 1.2 Catálogo, LLM, harvest, e2e e infra externa
 
@@ -67,7 +75,9 @@ flowchart LR
     PROXY["Proxy do dono :47813"]
     RL["Relay CORS :47814"]
   end
-  E2E["e2e/ probes, fit,<br/>floor, acceptance"]
+  E2E["e2e/ probes (_3d-*, fx-*, ui),<br/>fit, floor, acceptance"]
+  BENCH["bench/ duelos de IA<br/>(RUNBOOK.md)"]
+  VITE["vite.config +<br/>vite-plugin-singlefile"]
   LLMUI --> LLM
   LLM --> SCHEMA
   LLM --> CACHE
@@ -80,6 +90,7 @@ flowchart LR
   RELAY --> RL
   RL --> PROXY
   E2E -.dirige.-> APPC
+  VITE -.empacota.-> APPC
 ```
 
 **Fluxo:** o navegador não fala direto com o proxy local (ele não responde preflight CORS), então passa pelo relay `:47814`, que repassa a `:47813`. O harvest roda em Node e reutiliza o mesmo `catalogLlm.ts` do app. O e2e (Playwright sobre Edge/Chrome) só dirige o app.
@@ -146,6 +157,45 @@ sequenceDiagram
 
 **Fluxo:** o harvest filtra o que falta, traduz em paralelo, valida cada rascunho 3 vezes e persiste em `drafts.json`. O export vira um arquivo importável; no app o dono revisa e aprova. Aprovar grava no IndexedDB e atualiza o mapa vivo do motor (sem recarregar).
 
+### 2c. Importar deck do Master Vault e sincronizar catálogo
+
+```mermaid
+sequenceDiagram
+  actor J as Jogador
+  participant UI as App.tsx
+  participant K as keyforgeApi.ts
+  participant MV as Master Vault
+  participant C as cache.ts
+  J->>UI: cola link ou UUID do deck
+  UI->>K: fetchKeyforgeDeck / loadDeckOrCache
+  K->>MV: GET deck
+  MV-->>K: deck + cartas
+  K->>C: grava deck (IndexedDB, fallback localStorage)
+  K-->>UI: DeckInfo (ou VaultError → vaultErrorText)
+  J->>UI: Sync do catálogo
+  UI->>K: syncCatalog (paginado, cursor persistido)
+  K->>MV: fetchCardPage
+  K->>C: só cartas novas ou com textHash mudado
+  Note over C: overrides só valem entre partidas
+```
+
+**Fluxo:** falha de rede cai no cache; o sync é incremental e cancelável.
+
+### 2d. Desfazer (undo)
+
+```mermaid
+sequenceDiagram
+  actor J as Jogador
+  participant UI as App.tsx
+  participant H as pilha de undo
+  J->>UI: Desfazer
+  UI->>UI: undoInfo (pass-and-play: indisponível)
+  UI->>H: volta ao último ponto do jogador
+  H-->>UI: GameState anterior + deck do momento
+```
+
+**Fluxo:** `commitGame` empilha cada transição (limite `UNDO_LIMIT` = 40); como o Sync pode trocar faces no meio do turno, cada entrada guarda também o deck.
+
 ---
 
 ## 3. C4
@@ -179,7 +229,8 @@ flowchart TB
   end
   IDB[("[Container] IndexedDB<br/>decks, cards, stats, abilities")]
   subgraph NODE["[Container] Scripts Node"]
-    HARV["harvest / export"]
+    EXPN["catalog-export"]
+    HARV["ability-harvest"]
     RELAY["llm-cors-relay"]
   end
   E2E["[Container] e2e harness<br/>Playwright"]
@@ -188,10 +239,13 @@ flowchart TB
   BUNDLE --> MV
   SW -.cache LRU.-> BUNDLE
   BUNDLE --> RELAY
-  HARV --> MV
+  EXPN --> MV
+  EXPN -->|cards-mv.json| HARV
   HARV -->|drafts.json / queue-export.json| BUNDLE
   E2E -->|dirige| BUNDLE
 ```
+
+Probes (`e2e/probes/*`) e `bench/` (duelos de IA, `RUNBOOK.md`) ficam fora do bundle e só rodam em dev.
 
 **Fluxo:** o bundle é autossuficiente (roda de `file://`). Estado persistente fica no IndexedDB (com fallback localStorage). Os scripts Node alimentam o app por arquivos, não por rede.
 
@@ -293,7 +347,25 @@ flowchart TB
   ROW --> SV["saveChain<br/>(saves serializados)"]
 ```
 
-**Fluxo:** textos idênticos viram uma chamada só. Os workers buscam em paralelo, mas os `save` passam por uma cadeia de promessas (o `drafts.json` é reescrito inteiro). A cadeia é descarregada mesmo em abort, então nada já traduzido se perde.
+#### chooseAiMove — decisão da IA
+
+```mermaid
+flowchart TB
+  CH["chooseAiMove(state, aiIndex, house, settings)"] --> CM["candidateMoves"]
+  CM --> RR{"roll menor que randomRate?"}
+  RR -->|sim| RND["jogada aleatória semeada"]
+  RR -->|não| SIM["applyMove em cópia (SIM)<br/>+ search com orçamento de nós"]
+  SIM --> EV["evaluatePosition / replyValue"]
+  EV --> PICK["melhor valor; null se pior que parar"]
+```
+
+**Fluxo:** a IA usa só funções puras de `game.ts` (`applyMove`, `keyCost`, `houseOf`, efeitos persistentes), então vê as mesmas regras do jogador. O RNG vem da semente da partida.
+
+#### Núcleo auxiliar: houseOf e keyCost
+
+`houseOf(state, card)` resolve a casa efetiva (casa concedida, com guarda própria anti-laço) e `keyCost(state, side)` o custo da chave com efeitos persistentes (`forgeKey.less`, guarda anti-recursão). `isLegalMove`, `applyMove` e a IA os leem.
+
+**Fluxo (runTranslation):** textos idênticos viram uma chamada só. Os workers buscam em paralelo, mas os `save` passam por uma cadeia de promessas (o `drafts.json` é reescrito inteiro). A cadeia é descarregada mesmo em abort, então nada já traduzido se perde.
 
 ---
 
