@@ -92,6 +92,8 @@ async function harvestLlm(cards) {
   try {
     await runTranslation(waiting, config, {
       limit,
+      // Chamadas em paralelo ao provedor (padrão 2 = max_concurrency do proxy).
+      concurrency: Number(value("--concurrency") ?? process.env.HARVEST_CONCURRENCY ?? 2),
       // `reply:` é re-tentado: a linha carrega quantas tentativas já gastou (§4.0).
       previous: (id) => translationTries(rows.get(id)),
       save: async (row) => {

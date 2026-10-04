@@ -625,3 +625,52 @@ describe("harvest vendorizado", () => {
     }
   });
 });
+
+describe("runTranslation concorrente", () => {
+  it("processa N grupos em paralelo e grava cada linha exatamente uma vez", async () => {
+    const faces = Array.from({ length: 6 }, (_, i) =>
+      face(`Play: Gain ${i + 1} amber lote paralelo.`, { id: `p-${i}` }),
+    );
+    let inFlight = 0;
+    let peak = 0;
+    const saved: string[] = [];
+    const progress = await runTranslation(faces, config, {
+      concurrency: 3,
+      fetcher: async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return reply(VALID);
+        } finally {
+          inFlight -= 1;
+        }
+      },
+      save: async (row) => {
+        // Gravação serializada na prática (o runTranslation encadeia os saves);
+        // o teste garante que nenhuma carta foi gravada duas vezes.
+        if (saved.includes(row.cardId)) throw new Error(`duplicada: ${row.cardId}`);
+        saved.push(row.cardId);
+      },
+    });
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(peak).toBeGreaterThan(1);
+    expect(saved).toHaveLength(6);
+    expect(progress.done).toBe(6);
+  });
+
+  it("concurrencia 1 mantém o comportamento sequencial", async () => {
+    const faces = [face("Play: Gain 2 amber lote sequencial.", { id: "s-1" })];
+    let calls = 0;
+    const progress = await runTranslation(faces, config, {
+      concurrency: 1,
+      fetcher: async () => {
+        calls += 1;
+        return reply(VALID);
+      },
+      save: async () => {},
+    });
+    expect(calls).toBe(1);
+    expect(progress.done).toBe(1);
+  });
+});

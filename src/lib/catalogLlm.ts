@@ -1142,6 +1142,9 @@ export async function runTranslation(
     /** Attempts already spent on a `reply:` failure, so the retry can count
         them (Lote 4 §4.0). */
     previous?: (cardId: string) => number | undefined;
+    /** Chamadas em paralelo ao provedor (padrão 1 = sequencial). O harvest usa
+        HARVEST_CONCURRENCY; respeite o max_concurrency do provedor local. */
+    concurrency?: number;
   } = {},
 ): Promise<RunProgress> {
   // Identical texts are one call. Grouping after the slice would split a
@@ -1157,21 +1160,30 @@ export async function runTranslation(
   const TRANSPORT = new Set(["llm.timeout", "llm.http", "llm.rateLimit", "llm.unreachable", "llm.badBody"]);
   const transportKey = (error: unknown) => (error instanceof VaultError && TRANSPORT.has(error.key) ? error.key : null);
   let consecutiveTransport = 0;
-  for (const group of groups) {
-    if (options.signal?.aborted) break;
+  // Pool de workers sobre os grupos (textos idênticos são UMA chamada). As
+  // gravações são serializadas por uma cadeia de promessas: o drafts.json é
+  // reescrito inteiro a cada save e não tolera duas escritas concorrentes.
+  const concurrency = Math.max(1, options.concurrency ?? 1);
+  let next = 0;
+  let saveChain = Promise.resolve();
+  let saveError = null as { error: unknown } | null;
+  // consecutiveTransport é GLOBAL de propósito: com workers concorrentes, 3
+  // grupos esgotados em qualquer ordem = provedor fora, e a rodada para.
+  const translateGroup = async (group: CardFace[]): Promise<void> => {
+    if (options.signal?.aborted) return;
     const face = group[0];
     const spent = options.previous?.(face.id) ?? 0;
     let row: AbilityOverride;
     try {
       row = await translateCard(face, config, { signal: options.signal, fetcher: options.fetcher, tries: spent });
     } catch (error) {
-      if (options.signal?.aborted) break;
+      if (options.signal?.aborted) return;
       const key = transportKey(error);
       if (!key || consecutiveTransport >= 3) throw error;
       try {
         row = await translateCard(face, config, { signal: options.signal, fetcher: options.fetcher, tries: spent, timeoutMs: LLM_TIMEOUT_MS * 2 });
       } catch (again) {
-        if (options.signal?.aborted) break;
+        if (options.signal?.aborted) return;
         const retryKey = transportKey(again);
         if (!retryKey) throw again;
         consecutiveTransport += 1;
@@ -1179,14 +1191,36 @@ export async function runTranslation(
       }
     }
     if (!row.failure || !TRANSPORT.has(row.failure)) consecutiveTransport = 0;
-    for (const sibling of group) {
-      const copy = sibling === face ? row : { ...row, cardId: sibling.id };
-      await save(copy);
-      progress.done += 1;
-      if (copy.failure) progress.failed += 1;
-      else progress.drafted += 1;
+    // O worker NÃO espera a cadeia: segue para o próximo fetch enquanto o save
+    // (rápido, mas serializado) corre; a cadeia é descarregada antes do return.
+    saveChain = saveChain.then(async () => {
+      if (saveError) return;
+      try {
+        for (const sibling of group) {
+          const copy = sibling === face ? row : { ...row, cardId: sibling.id };
+          await save(copy);
+          progress.done += 1;
+          if (copy.failure) progress.failed += 1;
+          else progress.drafted += 1;
+        }
+        options.onProgress?.({ ...progress });
+      } catch (error) {
+        saveError = { error };
+      }
+    });
+  };
+  const workers = Array.from({ length: Math.min(concurrency, groups.length) }, async () => {
+    while (next < groups.length && !saveError) {
+      const index = next++;
+      await translateGroup(groups[index]);
     }
-    options.onProgress?.({ ...progress });
+  });
+  try {
+    await Promise.all(workers);
+  } finally {
+    // Também no abort/erro de transporte: nenhuma linha já traduzida se perde.
+    await saveChain;
   }
+  if (saveError) throw saveError.error;
   return progress;
 }
