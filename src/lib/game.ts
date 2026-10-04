@@ -99,6 +99,9 @@ export interface CardInstance {
   houseAs?: string;
 }
 
+/** Key colors (Lote 7 §7.2): a KeyForge player forges one key of each color. */
+export type KeyColor = "red" | "yellow" | "blue";
+
 export interface GamePlayer {
   name: string;
   deckName: string;
@@ -112,6 +115,11 @@ export interface GamePlayer {
   purged: CardInstance[];
   amber: number;
   keys: number;
+  /** Colors of the forged keys, in forging order (Lote 7 §7.2). Absent on older saves:
+      forgedKeyColors derives them from `keys` and the order. */
+  keyColors?: KeyColor[];
+  /** The order this side forges its colors in (a preference, set outside GameMove like `hold`). */
+  keyOrder?: KeyColor[];
   chains: number;
   /** Key cost modifier active during this player's current/next turn (e.g. Lash of Broken Dreams). */
   keyCostMod: number;
@@ -177,15 +185,22 @@ export interface GameState {
     `decline` resolves the move but skips its "You may" clauses (wave 2). `house`
     is the answer to a "Choose a house" the card's text asks (Lote 5 §5.1): only
     cards whose DSL cites `"chosen"` get one variant per house in play. */
-export type GameMove =
-  | { type: "play"; instanceId: string; target?: string; slot?: number; flank?: "left" | "right"; decline?: boolean; house?: string }
+export type GameMove = (
+  | { type: "play"; instanceId: string; target?: string; slot?: number; decline?: boolean; house?: string }
   | { type: "reap"; instanceId: string; target?: string; decline?: boolean; house?: string }
   | { type: "fight"; attackerId: string; targetId: string; target?: string; decline?: boolean; house?: string }
   | { type: "use"; instanceId: string; target?: string; via?: "reap" | "action"; decline?: boolean; house?: string }
   | { type: "unstun"; instanceId: string }
   | { type: "discard"; instanceId: string; target?: string; decline?: boolean; house?: string }
   /** Picking the archives up is optional ("may"), so it is a move of its own. */
-  | { type: "takeArchives" };
+  | { type: "takeArchives" }
+) & {
+  /** Lote 7 §7.1: the answers after `target`, in order — the second target (`target2`)
+      first, then the cards of an "up to N" selection. Absent/empty = the engine decides. */
+  targets?: string[];
+  /** Where a `toFlank` act sends its creature (default left). */
+  flank?: "left" | "right";
+};
 
 const declines = (move: GameMove) => "decline" in move && move.decline === true;
 
@@ -394,6 +409,8 @@ export function cloneGame(state: GameState): GameState {
     board: player.board.map((card) => ({ ...card, under: card.under?.map((half) => ({ ...half })) })),
     archives: (player.archives ?? []).map((card) => ({ ...card })),
     purged: (player.purged ?? []).map((card) => ({ ...card })),
+    ...(player.keyColors ? { keyColors: [...player.keyColors] } : {}),
+    ...(player.keyOrder ? { keyOrder: [...player.keyOrder] } : {}),
   });
 
   return {
@@ -662,6 +679,35 @@ interface ForgeOptions {
   deterministic?: boolean;
 }
 
+const KEY_ORDER_DEFAULT: KeyColor[] = ["red", "yellow", "blue"];
+
+/** AI/default order: the colors the deck's own cards cite most come first, so a
+    "your red key" payoff is not left to the dice; ties keep red, yellow, blue. */
+function defaultKeyOrder(player: GamePlayer): KeyColor[] {
+  const texts = [player.deck, player.hand, player.discard, player.board, player.archives, player.purged].flatMap((zone) => zone.map((card) => card.face.text ?? ""));
+  const cites = (color: KeyColor) => texts.filter((text) => new RegExp("\\b" + color + " key", "i").test(text)).length;
+  return [...KEY_ORDER_DEFAULT].sort((a, b) => cites(b) - cites(a) || KEY_ORDER_DEFAULT.indexOf(a) - KEY_ORDER_DEFAULT.indexOf(b));
+}
+
+/** Colors of the keys `side` has forged. A save (or a fixture that set `keys` by
+    hand) without them is completed in the side's order, so the answer always has
+    `keys` entries. */
+export function forgedKeyColors(state: GameState, side: Side): KeyColor[] {
+  const player = state.players[side];
+  const known = (player.keyColors ?? []).slice(0, player.keys);
+  if (known.length >= player.keys) return known;
+  const order = player.keyOrder ?? defaultKeyOrder(player);
+  return [...known, ...order.filter((color) => !known.includes(color))].slice(0, Math.min(player.keys, 3));
+}
+
+/** The player's color preference for the keys still to forge (pure, outside GameMove
+    like setHold). Anything but a permutation of the three colors is ignored. */
+export function setKeyOrder(current: GameState, side: Side, order: KeyColor[]): GameState {
+  const state = cloneGame(current);
+  if (order.length === 3 && new Set(order).size === 3 && order.every((color) => KEY_ORDER_DEFAULT.includes(color))) state.players[side].keyOrder = [...order];
+  return state;
+}
+
 function forge(state: GameState, side: Side, options: ForgeOptions = {}): boolean {
   const player = state.players[side];
   if (player.keys >= 3) return false;
@@ -669,6 +715,8 @@ function forge(state: GameState, side: Side, options: ForgeOptions = {}): boolea
   if (player.amber < cost) return false;
   player.amber -= cost;
   player.keys += 1;
+  // The new key takes the first color of the side's order not forged yet.
+  player.keyColors = forgedKeyColors(state, side);
   // Keep the earlier forge stamp: forging again this turn must not erase "forged last turn".
   if (player.forgedAt !== undefined && player.forgedAt !== turnStamp(state)) player.forgedBeforeAt = player.forgedAt;
   player.forgedAt = turnStamp(state);
@@ -721,6 +769,10 @@ export function conditionHolds(
   if (condition.k === "actor") {
     if (previous?.actor === undefined) return false;
     return condition.opp ? previous.actor !== me : previous.actor === me;
+  }
+  if (condition.k === "key") {
+    const colors = condition.any ? [...forgedKeyColors(state, 0), ...forgedKeyColors(state, 1)] : forgedKeyColors(state, condition.opp ? other(me) : me);
+    return colors.includes(condition.color);
   }
   if (condition.k === "forged") {
     // Stamps: during side X's turn its previous turn is stamp-2, otherwise the
@@ -936,6 +988,11 @@ interface Ctx {
   foughtHouse?: string;
   /** Who caused the player-event this ability is answering (forge / house). */
   actor?: Side;
+  /** The second chosen card (Lote 7 §7.1) and the rest of the move's `targets` queue after it. */
+  target2?: CardInstance;
+  queue?: string[];
+  /** Where a `toFlank` act sends the creature. */
+  flank?: "left" | "right";
 }
 
 /** The ability context proper: an act always runs with its source card. */
@@ -946,6 +1003,9 @@ interface Context extends Ctx {
 /** Mutable holder: the move's chosen target is consumed by the first targeted ability. */
 interface Choice {
   id?: string;
+  /** The move's `targets` queue: consumed whole by the first ability that reads it. */
+  targets?: string[];
+  flank?: "left" | "right";
 }
 
 /** The cards a selection points at. `k` is the act being resolved, which decides
@@ -957,6 +1017,7 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
     return state.players.flatMap((player) => player.board.filter((card) => card.instanceId === source?.attachedTo));
   }
   if (selection === "target") return target ? [target] : [];
+  if (selection === "target2") return context.target2 ? [context.target2] : [];
   if (selection === "targetNeighbors") {
     if (target && controllerOf(state, target) !== undefined) return neighbors(state, target);
     return context.wasNeighbors ?? [];
@@ -971,6 +1032,16 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
     // helpful one. The player only ever chooses the ability's `target`.
     const remaining = everyMatch(state, context.me, source, selection.pick, context);
     const picked: CardInstance[] = [];
+    // "Up to N" (Lote 7 §7.1): the player's queue, in order, never more than N and only legal cards.
+    // No queue, no cards: the engine never guesses a subset for the human.
+    if (selection.upTo) {
+      for (const id of context.queue ?? []) {
+        if (picked.length >= (selection.n ?? 99)) break;
+        const card = remaining.find((item) => item.instanceId === id);
+        if (card && !picked.includes(card)) picked.push(card);
+      }
+      return picked;
+    }
     for (let count = 0; count < (selection.n ?? 1) && remaining.length; count += 1) {
       const card = autoPick(state, context.me, remaining, k !== undefined && HARMFUL.has(k));
       if (!card) break;
@@ -1010,6 +1081,10 @@ function countOf(scope: Ctx, spec: Count): number {
   }
   if ("p" in spec) {
     const player = scope.state.players[spec.opp ? other(scope.me) : scope.me];
+    if (spec.p === "keyColors") {
+      const sides: Side[] = spec.any ? [0, 1] : [spec.opp ? other(scope.me) : scope.me];
+      return new Set(sides.flatMap((side) => forgedKeyColors(scope.state, side))).size;
+    }
     if (spec.p === "keys" || spec.p === "amber") return player[spec.p];
     if (spec.p === "plays") return scope.state.plays;
     return player[spec.p].length;
@@ -1032,7 +1107,14 @@ function countOf(scope: Ctx, spec: Count): number {
 
 /** Specification shared by the engine and the AI: can this ability do anything now? */
 export function canResolve(state: GameState, me: Side, source: CardInstance, ability: Ability): boolean {
-  return (!ability.if || holds(ability.if, state, me, source)) && (!ability.target || everyMatch(state, me, source, ability.target).length > 0);
+  if (ability.if && !holds(ability.if, state, me, source)) return false;
+  if (!ability.target) return true;
+  const firsts = everyMatch(state, me, source, ability.target);
+  if (!firsts.length) return false;
+  if (!ability.target2) return true;
+  // The second target is another card than the first.
+  const seconds = everyMatch(state, me, source, ability.target2);
+  return firsts.some((first) => seconds.some((second) => second !== first));
 }
 
 // ---------- game actions ----------
@@ -1219,10 +1301,12 @@ function sweep(state: GameState, deterministic: boolean): void {
     card discarded outside its controller's turn cannot react (keyteki raises
     the event on the card, and Scrap is a discard trigger of that side). The
     move's chosen target is forwarded so a Scrap ability can use it. */
-function toDiscard(state: GameState, side: Side, cards: CardInstance[], deterministic: boolean, decline = false, choice?: Choice): void {
+function toDiscard(state: GameState, side: Side, cards: CardInstance[], deterministic: boolean, decline = false, choice?: Choice, fromHand = false): void {
   state.players[side].discard.push(...cards);
-  if (side !== state.activePlayer) return;
-  for (const card of cards) fire(state, side, card, "scrap", { deterministic, decline, choice });
+  if (side === state.activePlayer) for (const card of cards) fire(state, side, card, "scrap", { deterministic, decline, choice });
+  // Lote 7 §7.3: a card that left a HAND wakes the `discard` observers of both sides (mills do not);
+  // `side` is who discarded, read by `if: {k:"actor"}`.
+  if (fromHand) for (const card of cards) fireObservers(state, card, "discard", deterministic, side);
 }
 
 function discardRandom(state: GameState, side: Side, deterministic: boolean): CardInstance | undefined {
@@ -1230,7 +1314,7 @@ function discardRandom(state: GameState, side: Side, deterministic: boolean): Ca
   if (!player.hand.length) return undefined;
   const index = deterministic ? 0 : Math.floor(roll(state) * player.hand.length);
   const [card] = player.hand.splice(index, 1);
-  toDiscard(state, side, [card], deterministic);
+  toDiscard(state, side, [card], deterministic, false, undefined, true);
   return card;
 }
 
@@ -1469,13 +1553,17 @@ function run(context: Context, act: Act): void {
       // resolving side (`opp` the other one), "supply" discards it. `did` is
       // the total amber moved (Lote 4 §4.9).
       let moved = 0;
+      // "…to another creature" (Lote 7 §7.1): without a living second target nothing leaves the first.
+      const dest = act.to === "target2" ? context.target2 : undefined;
       for (const card of cards) {
+        if (act.to === "target2" && (!dest || controllerOf(state, dest) === undefined || dest === card)) continue;
         const have = card.amber ?? 0;
         const taken = Math.min(act.n ?? have, have);
         if (taken <= 0) continue;
         card.amber = have - taken;
         moved += taken;
       }
+      if (dest && moved > 0) dest.amber = (dest.amber ?? 0) + moved;
       if (act.to === "pool" && moved > 0) state.players[act.opp ? other(me) : me].amber += moved;
       explicitDid = moved;
       break;
@@ -1500,6 +1588,19 @@ function run(context: Context, act: Act): void {
       explicitDid = removed;
       break;
     }
+    case "toFlank":
+      // Lote 7 §7.1: the creature leaves its slot and re-enters at the chosen end of its
+      // controller's battleline (artifacts/upgrades in the board array do not count as flanks).
+      for (const card of cards.filter(isCreature)) {
+        const owner = controllerOf(state, card);
+        if (owner === undefined) continue;
+        const rest = state.players[owner].board.filter((item) => item !== card);
+        const line = rest.filter(isCreature);
+        const at = context.flank === "right" ? (line.length ? rest.indexOf(line[line.length - 1]) + 1 : rest.length) : line.length ? rest.indexOf(line[0]) : rest.length;
+        rest.splice(at, 0, card);
+        state.players[owner].board = rest;
+      }
+      break;
     case "forgeKey":
       // keyteki ForgeAction: the cost comes out of the pool unless the text
       // says "at no cost"; `mod` is the printed "+N cost".
@@ -1529,7 +1630,10 @@ function run(context: Context, act: Act): void {
       for (let count = 0; count < amount; count += 1) {
         const foe = state.players[other(me)];
         if (foe.keys <= 0) break;
+        // The most recently forged color is the one that goes back.
+        const colors = forgedKeyColors(state, other(me));
         foe.keys -= 1;
+        foe.keyColors = colors.slice(0, foe.keys);
         record(state, "log.unforge", { name: foe.name });
       }
       break;
@@ -1604,6 +1708,26 @@ function run(context: Context, act: Act): void {
               ? (candidates.find((card) => card.face.house !== state.activeHouse) ?? candidates[candidates.length - 1])
               : candidates[candidates.length - 1];
       const moved: CardInstance[] = [];
+      if (act.until) {
+        // Lote 7 §7.3: one card at a time off the top until one matches (that one is kept in the
+        // pile) or the deck runs out. The deck is finite, UNTIL_LIMIT is the belt over the braces.
+        const stops = (card: CardInstance) => {
+          const wanted = act.until!;
+          if (wanted.type && card.face.type !== wanted.type) return false;
+          if (!wanted.house) return true;
+          const neg = wanted.house.startsWith("!");
+          const name = (neg ? wanted.house.slice(1) : wanted.house).toLowerCase();
+          return (houseOf(state, card).toLowerCase() === name) !== neg;
+        };
+        for (let step = 0; step < UNTIL_LIMIT && player.deck.length; step += 1) {
+          const card = player.deck.pop()!;
+          moved.push(card);
+          if (stops(card)) break;
+        }
+        if (moved.length) toDiscard(state, side, moved, deterministic, context.decline);
+        remember(context, moved);
+        break;
+      }
       if (act.pick === "moved") {
         // Still sitting in `from`. The engine keeps the highest amber + icons
         // when `n` is smaller than the pile (Lote 6 §6.4); a real choice waits for targets[].
@@ -1632,7 +1756,7 @@ function run(context: Context, act: Act): void {
         break;
       }
       player[act.from] = from.filter((card) => !moved.includes(card));
-      if (act.to === "discard") toDiscard(state, side, moved, deterministic, context.decline);
+      if (act.to === "discard") toDiscard(state, side, moved, deterministic, context.decline, undefined, act.from === "hand");
       else {
         const destination = player[act.to];
         if (act.at === "bottom") destination.unshift(...moved);
@@ -1785,6 +1909,21 @@ function fireOwn(
       context.target = chosen ?? autoPick(state, me, legal, isHarmful(ability), givesControl(ability));
       if (!context.target) continue;
     }
+    // Lote 7 §7.1: the second target and the rest of the queue belong to the first ability that reads them.
+    context.flank = options.choice?.flank;
+    if (ability.target2 || citesQueue(ability)) {
+      const queue = options.choice?.targets ?? [];
+      if (options.choice) options.choice.targets = undefined;
+      let rest = queue;
+      if (ability.target2) {
+        const legal = everyMatch(state, me, source, ability.target2, context).filter((card) => card !== context.target);
+        const chosen = legal.find((card) => card.instanceId === queue[0]);
+        context.target2 = chosen ?? autoPick(state, me, legal, isHarmful(ability), givesControl(ability));
+        if (!context.target2) continue;
+        rest = chosen ? queue.slice(1) : queue;
+      }
+      context.queue = rest;
+    }
     // `who` (Lote 4 §4.6) captures the reference card's owner/controller BEFORE
     // the acts run: "Destroy a creature. Its controller gains 1" would read a
     // card already out of play otherwise.
@@ -1798,6 +1937,17 @@ function fireOwn(
   }
 }
 
+/** Does an ability select with an "up to N" pick (it reads the move's `targets` queue)? */
+const queueCache = new WeakMap<Ability, boolean>();
+function citesQueue(ability: Ability): boolean {
+  let cites = queueCache.get(ability);
+  if (cites === undefined) {
+    cites = JSON.stringify(ability.acts).includes('"upTo"');
+    queueCache.set(ability, cites);
+  }
+  return cites;
+}
+
 /** Ability budgets for one move (Lote 3 §3.2 review). OBSERVER_DEPTH bounds how
     deep observer passes nest (restored by fireObservers' own `finally`);
     OBSERVER_BUDGET bounds the TOTAL observer dispatches of a move (N
@@ -1808,6 +1958,8 @@ function fireOwn(
     resetAbilityBudgets() refills them at every applyMove/endTurn; a spent budget
     silently stops dispatching until the move ends. */
 const OBSERVER_DEPTH = 8;
+/** Iterations a `move.until` loop may run in one act (Lote 7 §7.3). */
+const UNTIL_LIMIT = 200;
 const OBSERVER_BUDGET = 100;
 const FIRE_BUDGET = 64;
 let observerDepth = 0;
@@ -1828,7 +1980,7 @@ function resetAbilityBudgets(): void {
     `of` matches the event card fire with `me` = the watcher's side and the event
     card as `s:"event"`. Targets are auto-picked: the player only chooses the
     targets of their own move, and a watcher is never a "You may" decision. */
-function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, deterministic: boolean): void {
+function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, deterministic: boolean, actor?: Side): void {
   if (observerDepth >= OBSERVER_DEPTH || observerBudget <= 0) return;
   observerDepth += 1;
   // A watcher resolves with no house of its own choosing.
@@ -1841,9 +1993,12 @@ function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, 
           // The board loop iterates the pre-pass snapshot: a watcher an earlier
           // dispatch of this same pass destroyed (or took control of) is out.
           if (controllerOf(state, watcher) !== side) break;
+          // A discarded card is no longer in play, so it cannot observe its own discard
+          // (self-observation stays legitimate for reap/fight/ready).
+          if (trigger === "discard" && watcher === event) continue;
           if (!ability.of || !ability.on.includes(trigger) || !matches(state, side, watcher, event, ability.of)) continue;
-          if (ability.if && !holds(ability.if, state, side, watcher)) continue;
-          const context: Context = { state, me: side, source: watcher, event, deterministic };
+          if (ability.if && !holds(ability.if, state, side, watcher, { actor })) continue;
+          const context: Context = { state, me: side, source: watcher, event, deterministic, actor };
           if (ability.target) {
             context.target = autoPick(state, side, everyMatch(state, side, watcher, ability.target), isHarmful(ability), givesControl(ability));
             if (!context.target) continue;
@@ -2106,6 +2261,94 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
   return ability?.target ? withChosen(house, () => everyMatch(view, side, card, ability.target!).map((item) => item.instanceId)) : [];
 }
 
+// ---------- the choices after `target` (Lote 7 §7.1) ----------
+
+/** The abilities this move will resolve, read against a view with the played creature
+    already in play (same view as targetChoices). Observers never get a prompt. */
+function resolvingAbilities(state: GameState, side: Side, move: GameMove): { view: GameState; card: CardInstance; abilities: Ability[] } | null {
+  const card = moveSource(state, side, move);
+  if (!card || move.type === "takeArchives" || move.type === "unstun") return null;
+  let view = state;
+  if (move.type === "play" && isCreature(card)) {
+    const players = [...state.players] as [GamePlayer, GamePlayer];
+    players[side] = { ...players[side], board: [...players[side].board, card] };
+    view = { ...view, players };
+  }
+  const triggers = triggersFor(move);
+  const abilities = abilitiesOf(view, card).filter(
+    (item) => !item.of && item.on.some((trigger) => triggers.includes(trigger)) && (!item.if || holds(item.if, view, side, card)) && !(declines(move) && item.optional),
+  );
+  return abilities.length ? { view, card, abilities } : null;
+}
+
+/** The first "up to N" selection of an ability, with the verb that decides which side it aims at. */
+function upToSpec(ability: Ability): { pick: Filter; n: number; k: Act["k"] } | undefined {
+  for (const act of ability.acts) {
+    const selection = "s" in act ? act.s : undefined;
+    if (selection && typeof selection === "object" && "pick" in selection && selection.upTo) return { pick: selection.pick, n: selection.n ?? 99, k: act.k };
+  }
+  return undefined;
+}
+
+/** What the move still has to ask the player after the house and the first target. */
+export interface MovePrompt {
+  /** `target2`: one more card (the move's `targets[0]`); `targets`: 0..max cards; `flank`: left or right. */
+  kind: "target2" | "targets" | "flank";
+  ids: string[];
+  max?: number;
+}
+
+/** The next unanswered question of a move, or null when the move is complete. The UI feeds the
+    answer back into `move.targets` / `move.flank` and asks again; an unanswered question
+    never blocks the engine, it just resolves as "no choice made" (see select/fireOwn). */
+export function pendingPrompt(state: GameState, side: Side, move: GameMove): MovePrompt | null {
+  const live = resolvingAbilities(state, side, move);
+  if (!live) return null;
+  const { view, card, abilities } = live;
+  const house = "house" in move ? move.house : undefined;
+  const first = "target" in move ? move.target : undefined;
+  return withChosen(house, () => {
+    for (const ability of abilities) {
+      if (ability.target2 && !move.targets?.length) {
+        const excluded = first ?? (ability.target ? everyMatch(view, side, card, ability.target)[0]?.instanceId : undefined);
+        const ids = everyMatch(view, side, card, ability.target2).map((item) => item.instanceId).filter((id) => id !== excluded);
+        if (ids.length > 1) return { kind: "target2" as const, ids };
+      }
+      const spec = upToSpec(ability);
+      if (spec && !ability.target2 && move.targets === undefined) {
+        const ids = everyMatch(view, side, card, spec.pick).map((item) => item.instanceId);
+        if (ids.length) return { kind: "targets" as const, ids, max: Math.min(spec.n, ids.length) };
+      }
+      if (move.flank === undefined && ability.acts.some((act) => act.k === "toFlank")) return { kind: "flank" as const, ids: [] };
+    }
+    return null;
+  });
+}
+
+/** The AI's variants of an "up to N" move: none (the engine's zero-card default) and the
+    heuristic subset — enemies for a harmful verb, friends for a helpful one, strongest first.
+    A harmful pick that can only reach the AI's own side ("destroy any number of friendly
+    creatures") has no approved subset, so the only variant is "none": the act is skipped. */
+function queueVariants(state: GameState, side: Side, move: GameMove): GameMove[] {
+  // The AI's hot path: most moves cite no queue, answer before building a view.
+  const origin = moveSource(state, side, move);
+  if (!origin || !abilitiesOf(state, origin).some(citesQueue)) return [move];
+  const live = resolvingAbilities(state, side, move);
+  if (!live) return [move];
+  for (const ability of live.abilities) {
+    const spec = upToSpec(ability);
+    if (!spec) continue;
+    const harmful = HARMFUL.has(spec.k);
+    const ids = everyMatch(live.view, side, live.card, spec.pick)
+      .filter((item) => (controllerOf(live.view, item) === side) !== harmful)
+      .sort((a, b) => effectivePower(live.view, b) - effectivePower(live.view, a))
+      .slice(0, spec.n)
+      .map((item) => item.instanceId);
+    if (ids.length) return [move, { ...move, targets: ids } as GameMove];
+  }
+  return [move];
+}
+
 /** Every legal move before target expansion: the single legality specification
     used by getLegalMoves (UI/AI) and by applyMove's guard. */
 function baseMoves(state: GameState, side: Side, house: string | null): GameMove[] {
@@ -2189,7 +2432,7 @@ export function getLegalMoves(state: GameState, playerIndex: Side, house: string
     const variants = houses.length ? houses.map((choice) => ({ ...base, house: choice }) as GameMove) : [base];
     return variants.flatMap((move) => {
       const choices = targetChoices(state, playerIndex, move);
-      return choices.length > 1 ? choices.map((target) => ({ ...move, target }) as GameMove) : [move];
+      return (choices.length > 1 ? choices.map((target) => ({ ...move, target }) as GameMove) : [move]).flatMap((expanded) => queueVariants(state, playerIndex, expanded));
     });
   });
 }
@@ -2263,7 +2506,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     record(state, "log.archives", { name: player.name }, silent);
     return state;
   }
-  const choice: Choice = { id: "target" in move ? move.target : undefined };
+  const choice: Choice = { id: "target" in move ? move.target : undefined, targets: move.targets, flank: move.flank };
   const source = moveSource(state, playerIndex, move)!;
   // "Choose a house": a move without a valid house still resolves, with the
   // engine's default pick, so replays and old callers never stall.
@@ -2296,7 +2539,7 @@ function resolveMove(state: GameState, playerIndex: Side, move: Exclude<GameMove
   if (move.type === "discard") {
     // The discard move is the other door into the pile: a Scrap: trigger fires
     // for the active player (toDiscard), and a declined move waives it.
-    toDiscard(state, playerIndex, [source], deterministic, decline, choice);
+    toDiscard(state, playerIndex, [source], deterministic, decline, choice, true);
     record(state, "log.discard", params, silent);
   } else if (move.type === "play") {
     player.amber += printedAmber(source.face);

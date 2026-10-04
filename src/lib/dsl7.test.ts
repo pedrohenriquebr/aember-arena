@@ -45,7 +45,7 @@ const face = (text: string, type = "Action"): CardFace => ({
 
 describe("DSL_VERSION 7", () => {
   it("accepts the new literals and rejects a newer row", () => {
-    expect(DSL_VERSION).toBe(7);
+    expect(DSL_VERSION).toBeGreaterThanOrEqual(7);
     const row = {
       cardId: "c",
       dsl: [{ on: ["forge"], if: { k: "actor", opp: true }, acts: [{ k: "gainAmber", n: 1 }] }],
@@ -55,7 +55,7 @@ describe("DSL_VERSION 7", () => {
       v: 7,
     };
     expect(normaliseAbilityOverride(row)?.v).toBe(7);
-    expect(normaliseAbilityOverride({ ...row, v: 8 })).toBeNull();
+    expect(normaliseAbilityOverride({ ...row, v: DSL_VERSION + 1 })).toBeNull();
     expect(normaliseAbilityOverride({ ...row, dsl: [{ on: ["ready"], acts: [{ k: "damage", n: 1, s: "event" }] }] })).toBeNull();
     expect(normaliseAbilityOverride({ ...row, dsl: [{ on: ["ready"], of: { type: "Creature" }, acts: [{ k: "ready", s: "event" }] }] })).toBeNull();
     expect(normaliseAbilityOverride({ ...row, dsl: [{ on: ["forge"], acts: [{ k: "forgeKey", n: 1 }] }] })).toBeNull();

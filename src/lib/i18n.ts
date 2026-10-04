@@ -271,6 +271,12 @@ const DICT: Record<string, [string, string]> = {
   // Onda 2 ("You may"): resolve a jogada sem a cláusula opcional da carta.
   "inspector.withoutEffect": ["Without effect", "Sem efeito"],
   "inspector.cannotPlay": ["Cannot be played now", "Não pode ser jogada agora"],
+  "game.chooseTarget2": ["Choose a second card (highlighted)", "Escolha uma segunda carta (destacada)"],
+  "game.chooseUpTo": ["Choose up to {max} cards ({chosen} picked)", "Escolha até {max} cartas ({chosen} escolhidas)"],
+  "game.confirmPick": ["Confirm", "Confirmar"],
+  "game.chooseFlank": ["Choose the flank", "Escolha o flanco"],
+  "game.flankLeft": ["Left flank", "Flanco esquerdo"],
+  "game.flankRight": ["Right flank", "Flanco direito"],
   "inspector.cancelTarget": ["Cancel target", "Cancelar alvo"],
   "inspector.captured": ["{amount} captured", "{amount} capturado"],
   "coverage.full": ["Full effect", "Efeito completo"],

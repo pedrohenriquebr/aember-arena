@@ -34,7 +34,7 @@ const PREFIX = new RegExp(
     // Lote 5 §5.2: "After a player chooses an active house, …" (a comma, no colon).
     "|\\b(after (?:a player|you|your opponent) chooses? (?:an active house|[^,:.]{1,60}? as (?:your|their) active house))(?=\\s*,)" +
     // Lote 6 §6.2: forge / ready / enter / destroyed-fighting, comma form.
-    "|\\b(after (?:you|your opponent|a player) forges? a key|after a key is forged|after a player readies a creature|after (?:a|an|another) (?:friendly |enemy )?(?:[a-z]+ )?creatures? enters play|after an enemy creature is destroyed fighting (?:~|this creature|this card|it))(?=\\s*,)",
+    "|\\b(after (?:you|your opponent|a player) forges? a key|after a key is forged|after a player readies a creature|after (?:a|an|another) (?:friendly |enemy )?(?:[a-z]+ )?creatures? enters play|after an enemy creature is destroyed fighting (?:~|this creature|this card|it)|after a card is discarded from (?:your|your opponent's|a player's) hand)(?=\\s*,)",
   "gi",
 );
 
@@ -90,6 +90,12 @@ function lote6Header(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Co
     const who = forge[1];
     const cond: Condition | undefined = who === "you" ? { k: "actor" } : who === "your opponent" ? { k: "actor", opp: true } : undefined;
     return { triggers: ["forge"], ...(cond ? { cond } : {}) };
+  }
+  const discarded = part.match(/^after a card is discarded from (your|your opponent's|a player's) hand$/);
+  if (discarded) {
+    // The discarded card controls nothing, so "whose hand" is the `actor` of the event, not a `side`.
+    const cond: Condition | undefined = discarded[1] === "your" ? { k: "actor" } : discarded[1] === "a player's" ? undefined : { k: "actor", opp: true };
+    return { triggers: ["discard"], of: {}, ...(cond ? { cond } : {}) };
   }
   if (part === "after a player readies a creature") return { triggers: ["ready"], of: { type: "Creature" } };
   const enters = part.match(/^after (a|an|another) (friendly |enemy )?([a-z]+ )?creatures? enters play$/);
@@ -149,7 +155,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 7;
+export const PARSER_VERSION = 8;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -432,6 +438,13 @@ function parseObject(phrase: string, upgrade: boolean, observer = false): { s: S
     const filter = parseFilterWords(least[1]);
     return filter ? { s: { each: { ...filter, least: 1 } } } : null;
   }
+  // Lote 7 §7.1: "up to three creatures" / "any number of friendly creatures" — the player's queue.
+  const upTo = phrase.match(/^(?:up to (a|an|one|two|three|four|five|six|seven|eight|nine|ten|\d+)|any number of) (.+)$/);
+  if (upTo) {
+    const filter = parseFilterWords(upTo[2]);
+    const n = upTo[1] ? (COUNT_WORDS[upTo[1]] ?? Number(upTo[1])) : 99;
+    return filter && n > 0 ? { s: { pick: filter, n, upTo: true } } : null;
+  }
   // "<verb> N (friendly|enemy) creatures": the engine picks the N cards.
   const many = phrase.match(/^(\d+) (.+)$/);
   if (many) {
@@ -462,6 +475,12 @@ function parseCondition(clause: string): Condition | null {
   // Lote 5 §5.4: the turn stamp of the last forge (game.forge records it).
   const forged = clause.match(/^(you|your opponent) forged a key (?:(?:on|during) (?:your|their) )?(?:previous|last) turn$/);
   if (forged) return forged[1] === "you" ? { k: "forged" } : { k: "forged", opp: true };
+  // Lote 7 §7.2: key colors. "A red key is forged" reads either side; "your" / "your opponent's" one.
+  const keyed = clause.match(/^(an?|your|your opponent's|an opponent's) (red|yellow|blue) key is forged$/);
+  if (keyed) {
+    const color = keyed[2] as "red" | "yellow" | "blue";
+    return keyed[1].startsWith("a") && keyed[1] !== "an opponent's" ? { k: "key", color, any: true } : keyed[1] === "your" ? { k: "key", color } : { k: "key", color, opp: true };
+  }
   if (clause === "you control more creatures than your opponent") return { k: "moreCreatures" };
   if (clause === "your opponent controls more creatures than you") return { k: "fewerCreatures" };
   // "Overwhelmed" is the printed word for "the opponent has more creatures".
@@ -495,6 +514,9 @@ function parsePer(phrase: string): Count | null {
   if (/^creatures? destroyed this way$/.test(phrase)) return "gone";
   if (/^(?:bonus icons?|.+ counters?) (?:on the discarded card|removed this way)$/.test(phrase)) return phrase.startsWith("bonus") ? { m: "icons" } : "did";
   if (/^the (?:archived|purged|discarded) (?:creature|card)'?s? power$/.test(phrase)) return { m: "power" };
+  // Lote 7 §7.2: distinct colors among the forged keys (both sides unless named).
+  const colors = phrase.match(/^colors? represented among (?:(your opponent's|your) )?forged keys$/);
+  if (colors) return { p: "keyColors", ...(colors[1] === "your" ? {} : colors[1] ? { opp: true } : { any: true }) };
   const zone = phrase.match(/^cards? in your (hand|deck|discard(?: pile)?|archives|purged)$/);
   if (zone) return { p: (zone[1] === "discard pile" ? "discard" : zone[1]) as Zone };
   if (/^(?:forged )?keys? your opponent has$/.test(phrase)) return { p: "keys", opp: true };
@@ -519,6 +541,8 @@ function parsePer(phrase: string): Count | null {
 interface Sentence {
   acts: Act[];
   target?: Filter;
+  /** The second chosen card (Lote 7 §7.1). */
+  target2?: Filter;
   cond?: Condition;
   optional?: boolean;
 }
@@ -681,7 +705,45 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean, qu
   return parsed;
 }
 
+/** Lote 7 §7.3: the printed stop of a deck-mill loop, as the engine's `until`. */
+function untilOf(word: string): { house?: string; type?: string } | null {
+  const house = HOUSES[word];
+  if (house) return { house };
+  const type = { creature: "Creature", artifact: "Artifact", action: "Action", upgrade: "Upgrade" }[word];
+  return type ? { type } : null;
+}
+
 function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean, quoted: string[], observer: boolean): Sentence | null {
+  // Lote 7 §7.3: "Discard cards from the top of your deck until you discard a Logos card or run out of cards."
+  const mill = sentence.match(/^discard cards from the top of your deck until you discard an? ([a-z]+) card or run out of cards$/);
+  if (mill) {
+    const until = untilOf(mill[1]);
+    return until ? { acts: [{ k: "move", n: 1, from: "deck", to: "discard", pick: "top", until }] } : null;
+  }
+  const keep = sentence.match(/^if you discard an? ([a-z]+) card this way, put it into your hand$/);
+  if (keep) {
+    const until = untilOf(keep[1]);
+    return until ? { acts: [{ k: "move", n: 1, from: "discard", to: "hand", pick: "moved", ...until }] } : null;
+  }
+  // Lote 7 §7.1: two chosen cards, and the flank choice.
+  if (/^move all amber from one creature to another creature$/.test(sentence)) {
+    return { acts: [{ k: "moveAmber", s: "target", to: "target2" }], target: { type: "Creature", amber: true }, target2: { type: "Creature" } };
+  }
+  if (/^move each \+1 power counter from a creature to another creature$/.test(sentence)) {
+    return {
+      acts: [
+        { k: "removeCounter", s: "target" },
+        { k: "counter", n: 1, s: "target2", per: "did" },
+      ],
+      target: { type: "Creature", counters: true },
+      target2: { type: "Creature" },
+    };
+  }
+  const flank = sentence.match(/^move a creature to a flank of its controller's battleline( and exhaust it)?$/);
+  if (flank) {
+    return { acts: [{ k: "toFlank", s: "target" }, ...(flank[1] ? [{ k: "exhaust" as const, s: "target" as const }] : [])], target: { type: "Creature" } };
+  }
+
   // "If you do, X" (keyteki's `then`) is the did-count of the clause before it,
   // so the conditional branch below reads it as a condition on X.
   const conditional = sentence.match(/^if ([^,]+), (.+)$/) ?? sentence.match(/^(.+?) if (you control more creatures than your opponent)$/);
@@ -898,7 +960,9 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
   };
   // The leading comma of an observer segment ("…reaps, stun it.") belongs to the
   // prefix, not to the sentence.
-  for (const sentence of body.split(/\.\s*/).map((part) => part.trim().replace(/^,\s*/, "")).filter(Boolean)) {
+  const sentences = body.split(/\.\s*/).map((part) => part.trim().replace(/^,\s*/, "")).filter(Boolean);
+  const independent = sentences.filter((part) => /^if (?!you do)/.test(part)).length;
+  for (const sentence of sentences) {
     // The branch of an "Otherwise" is only legal right after a conditional
     // clause, and it negates the condition printed BEFORE it.
     const otherwise = sentence.match(/^otherwise,? (.+)$/);
@@ -914,6 +978,7 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
     if (!otherwise && /^if you do,? /.test(sentence) && ability.acts.length && ability.acts.every((act) => act.optional)) {
       for (const act of parsed.acts) act.optional = true;
     }
+    if (parsed.target2) ability.target2 = parsed.target2;
     if (parsed.target) {
       if (ability.target) {
         // A later "a/an … creature" sentence has no `target` slot left: those
@@ -925,7 +990,9 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
       // The condition the ability OPENS with gates the whole ability (it keeps
       // the AI's pruning); one printed in a later clause gates only its own
       // acts — "Damage a creature. If it is not destroyed, draw a card."
-      if (!ability.acts.length && !ability.if) ability.if = parsed.cond;
+      // Lote 7: with two independent conditionals ("If your red key is forged, … If your yellow
+      // key is forged, …") the first cannot gate the ability — each one gates only its own acts.
+      if (!ability.acts.length && !ability.if && independent < 2) ability.if = parsed.cond;
       else for (const act of parsed.acts) act.if = parsed.cond;
     }
     ability.acts.push(...parsed.acts);

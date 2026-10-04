@@ -440,6 +440,56 @@ export const FEW_SHOTS: {
     answer: { abilities: [{ on: ["enter"], of: { type: "Creature", side: "friendly", trait: "Cat" }, acts: [{ k: "ward", s: "event" }] }], effects: [], keywords: {} },
   },
   {
+    type: "Creature",
+    text: "After Fight: Steal 1<A>. If a blue key is forged, ward ~.",
+    answer: { abilities: [{ on: ["fight"], acts: [{ k: "steal", n: 1 }, { k: "ward", s: "self", if: { k: "key", color: "blue", any: true } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Action",
+    text: "Play: For each color represented among forged keys, steal 1<A>.",
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "steal", n: 1, per: { p: "keyColors", any: true } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Action",
+    text: "Play: Deal 1<D> to up to three creatures. Gain 1<A> for each creature destroyed this way.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "damage", n: 1, s: { pick: { type: "Creature" }, n: 3, upTo: true } }, { k: "gainAmber", n: 1, per: "gone" }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Move all <A> from one creature to another creature.",
+    answer: {
+      abilities: [{ on: ["play"], target: { type: "Creature", amber: true }, target2: { type: "Creature" }, acts: [{ k: "moveAmber", s: "target", to: "target2" }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Discard cards from the top of your deck until you discard a Logos card or run out of cards. If you discard a Logos card this way, put it into your hand.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [
+            { k: "move", n: 1, from: "deck", to: "discard", pick: "top", until: { house: "Logos" } },
+            { k: "move", n: 1, from: "discard", to: "hand", pick: "moved", house: "Logos" },
+          ],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Artifact",
+    text: "After a card is discarded from your hand, archive the top card of your deck.",
+    answer: { abilities: [{ on: ["discard"], of: {}, if: { k: "actor" }, acts: [{ k: "archiveTop" }] }], effects: [], keywords: {} },
+  },
+  {
     type: "Action",
     text: "Play: Discard the bottom card of your opponent's deck. Deal 2<D> to each enemy creature that shares a house with the discarded card.",
     answer: {
@@ -544,6 +594,7 @@ const SYSTEM_RULES = [
   '"If <condition>, repeat the preceding effect" = duplicate the acts of the preceding effect with that condition in the duplicated acts\' `if` (the repeated target becomes a {pick} of the same filter). "Repeat this effect" as a loop stays unsupported.',
   '"May be used as if it belonged to the active house" (Versatile\'s reminder) = keyword versatile; granted through effects when another card grants it. "May be played as if it belonged to the active house" is the same permission ONLY in that bare form — "as if it was in your hand/discard pile" stays unsupported.',
   '"The creature ~ fights" / "the attacked enemy" = s:"fought" (the defender of the fight in progress).',
+  '"If a red key is forged" = {"k":"key","color":"red","any":true}; "your red key" = no `any`, "your opponent\'s" = opp:true; "each color represented among forged keys" = per {"p":"keyColors","any":true}. "Up to N creatures" / "any number of X" = s {"pick":<filter>,"n":N,"upTo":true} (99 for any number) — no `target`. "One creature … another creature" = `target` plus `target2` (always a different card, s:"target2"); "to a flank" = {"k":"toFlank","s":"target"}. "Discard from the top of your deck until you discard X" = a move with `until` ({"house"} or {"type"}) from deck to discard; "After a card is discarded from your hand" = on ["discard"], of {} and if {"k":"actor"} (opp:true for the opponent\'s hand, no `if` for any hand).',
   '"Choose a house" resolves no act: the NEXT sentences read it as {"house":"chosen"} ("of that house"). "Your opponent must choose that house next turn" = {"k":"forceHouse"}. "After a player chooses an active house, X" = on ["house"], and "that house" there is {"house":"active"}; "After you choose" adds if {"k":"myTurn"}.',
   '"Forge a key at +N cost, reduced by 1 for each X" = forgeKey with mod N and less = the count of X; "If you do, purge ~" on an Action = {"k":"purge","s":"self","if":<did gte 1>}. "Steal all but N of your opponent\'s <A>" = steal n 1 per {"sub":[{"p":"amber","opp":true},N]}. "an even/odd amount of <A>" = count op "even"/"odd" (n ignored). "If you forged a key on your previous turn" = {"k":"forged"} (opp:true for the opponent).',
   '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. `unless <cond>` = `if: not <cond>` on the effect. A card always goes to its owner\'s zone. A filter without `type` matches any card in play.',

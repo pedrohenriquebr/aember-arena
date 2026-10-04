@@ -57,6 +57,7 @@ import {
   fightTargets,
   getLegalMoves,
   houseChoices,
+  pendingPrompt,
   houseOf,
   housesFor,
   isLegalMove,
@@ -97,7 +98,16 @@ type Screen = "home" | "config" | "game" | "browse" | "inspect";
 type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanceId: string };
 /** Board pick in progress: a fight defender (`targetId` still empty) or the
     target of the move's ability / an upgrade's host. `ids` are the legal cards. */
-type Pick = { move: GameMove; ids: string[]; /** The move's card asks "Choose a house" (Lote 5 §5.1): the picker offers these first. */ houses?: string[] };
+type Pick = {
+  move: GameMove;
+  ids: string[];
+  /** The move's card asks "Choose a house" (Lote 5 §5.1): the picker offers these first. */
+  houses?: string[];
+  /** Lote 7 §7.1: a later question of the move — a second card, 0..max cards, or a flank. */
+  kind?: "target2" | "targets" | "flank";
+  chosen?: string[];
+  max?: number;
+};
 type Toast = {
   message: string;
   kind: "success" | "error";
@@ -1458,6 +1468,8 @@ function GameBoard({
   t,
   onHouse,
   onPickHouse = NOOP,
+  onConfirmPick = NOOP,
+  onPickFlank = NOOP,
   onSelectHand,
   onSelectBoard,
   onEndTurn,
@@ -1507,6 +1519,9 @@ function GameBoard({
   onHouse: (house: string) => void;
   /** Lote 5: the house answering the pending move's "Choose a house". */
   onPickHouse?: (house: string) => void;
+  /** Lote 7: confirms the cards of an "up to N" pick (possibly none). */
+  onConfirmPick?: () => void;
+  onPickFlank?: (flank: "left" | "right") => void;
   onSelectHand: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
   onEndTurn: () => void;
@@ -1650,7 +1665,18 @@ function GameBoard({
             </div>
             {pick && (
               <div className="fight-instruction" role="status">
-                {pick.houses ? <><Crosshair size={15} /> {t("game.chooseMoveHouse")}</> : pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
+                {pick.kind === "flank" ? (
+                  <>
+                    <Crosshair size={15} /> {t("game.chooseFlank")}
+                    <button type="button" className="filter-chip" onClick={() => onPickFlank("left")}>{t("game.flankLeft")}</button>
+                    <button type="button" className="filter-chip" onClick={() => onPickFlank("right")}>{t("game.flankRight")}</button>
+                  </>
+                ) : pick.kind === "targets" ? (
+                  <>
+                    <Crosshair size={15} /> {t("game.chooseUpTo", { chosen: pick.chosen?.length ?? 0, max: pick.max ?? 0 })}
+                    <button type="button" className="filter-chip" onClick={onConfirmPick}>{t("game.confirmPick")}</button>
+                  </>
+                ) : pick.kind === "target2" ? <><Crosshair size={15} /> {t("game.chooseTarget2")}</> : pick.houses ? <><Crosshair size={15} /> {t("game.chooseMoveHouse")}</> : pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
               </div>
             )}
             <BoardLane
@@ -2955,6 +2981,13 @@ function App() {
       setPick({ move, ids: choices });
       return;
     }
+    // Lote 7: the second card, the "up to N" cards and the flank come after the first target.
+    const prompt = pendingPrompt(prev, side, move);
+    if (prompt) {
+      sound.play("select");
+      setPick({ move, ids: prompt.ids, kind: prompt.kind, max: prompt.max, chosen: [] });
+      return;
+    }
     // O resumo do turno do Warden morre na primeira ação do jogador.
     setAiSummary(null);
     // O som da jogada sai de dentro do commitWithFx (VAL-04: o pouso acompanha o voo).
@@ -2969,6 +3002,19 @@ function App() {
       if (!live) return;
       const own = owner === humanSideOf(live, matchModeRef.current);
       if (pick) {
+        if (pick.ids.includes(card.instanceId) && pick.kind === "target2") {
+          performHumanMove({ ...pick.move, targets: [card.instanceId] });
+          return;
+        }
+        if (pick.ids.includes(card.instanceId) && pick.kind === "targets") {
+          const chosen = pick.chosen?.includes(card.instanceId) ? pick.chosen.filter((id) => id !== card.instanceId) : [...(pick.chosen ?? []), card.instanceId];
+          if (pick.max !== undefined && chosen.length >= pick.max) performHumanMove({ ...pick.move, targets: chosen });
+          else {
+            sound.play("select");
+            setPick({ ...pick, chosen });
+          }
+          return;
+        }
         if (pick.ids.includes(card.instanceId)) {
           // A fight pick fills the defender first, then the ability target.
           const applied: GameMove =
@@ -2990,6 +3036,17 @@ function App() {
   const pickMoveHouse = useCallback(
     (house: string) => {
       if (pick?.houses) performHumanMove({ ...pick.move, house } as GameMove);
+    },
+    [pick, performHumanMove],
+  );
+
+  const confirmPick = useCallback(() => {
+    if (pick?.kind === "targets") performHumanMove({ ...pick.move, targets: pick.chosen ?? [] });
+  }, [pick, performHumanMove]);
+
+  const pickFlank = useCallback(
+    (flank: "left" | "right") => {
+      if (pick?.kind === "flank") performHumanMove({ ...pick.move, flank });
     },
     [pick, performHumanMove],
   );
@@ -3554,6 +3611,8 @@ function App() {
                   t={t}
                   onHouse={choosePlayerHouse}
                   onPickHouse={pickMoveHouse}
+                  onConfirmPick={confirmPick}
+                  onPickFlank={pickFlank}
                   onSelectHand={selectHandCard}
                   onSelectBoard={pickBoardCard}
                   onEndTurn={endHumanTurn}
