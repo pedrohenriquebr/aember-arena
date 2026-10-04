@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normaliseAbilityOverride, DSL_VERSION, rulesOf, setAbilityOverrides, type Ability, type AbilityOverride } from "./abilities";
-import { buildMessages, callProvider, dryRunProblem, exportableRows, extractJson, FEW_SHOTS, groupByText, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, translationTries, validateDraft, validateQueueRows } from "./catalogLlm";
+import { approvedFailures, buildMessages, callProvider, dryRunProblem, exportableRows, extractJson, FEW_SHOTS, groupByText, pendingTranslations, reviewQueue, runTranslation, sanityProblem, translateCard, translationTries, validateDraft, validateQueueRows } from "./catalogLlm";
 import { parseCardText, textHash } from "./cardText";
 import type { CardFace } from "./game";
 import { DSL_SCHEMA } from "./generated/dslSchema";
@@ -334,6 +334,26 @@ describe("review queue", () => {
       row({ cardId: "failed", failure: "unsupported: no", generatedAt: 3 }),
     ];
     expect(reviewQueue(rows).map((item) => item.cardId)).toEqual(["failed", "draft"]);
+  });
+
+  it("approvedFailures lists only reviewed llm failures, newest first", () => {
+    const row = (patch: Partial<AbilityOverride>): AbilityOverride => ({
+      cardId: "x",
+      dsl: [],
+      textHash: "h",
+      source: "llm",
+      reviewed: true,
+      generatedAt: 1,
+      ...patch,
+    });
+    const rows = [
+      row({ cardId: "old", failure: "unsupported: no", generatedAt: 2 }),
+      row({ cardId: "new", failure: "unsupported: no", generatedAt: 5 }),
+      row({ cardId: "rule", generatedAt: 9 }),
+      row({ cardId: "open", failure: "unsupported: no", reviewed: false }),
+      row({ cardId: "manual", failure: "x", source: "manual" }),
+    ];
+    expect(approvedFailures(rows).map((item) => item.cardId)).toEqual(["new", "old"]);
   });
 
   it("prunes a zombie failure whose card the parser covers fully today (Lote 4 §4.0)", () => {

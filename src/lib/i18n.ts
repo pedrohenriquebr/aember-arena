@@ -132,6 +132,8 @@ const DICT: Record<string, [string, string]> = {
   "config.llm.reviewEmpty": ["No drafts awaiting review.", "Nenhum rascunho aguardando revisão."],
   "config.llm.approve": ["Approve", "Aprovar"],
   "config.llm.reject": ["Reject", "Rejeitar"],
+  "config.llm.reopenTitle": ["Approved failures ({count})", "Falhas aprovadas ({count})"],
+  "config.llm.reopen": ["Reopen", "Reabrir"],
   "config.llm.retry": ["Try again", "Tentar de novo"],
   "config.llm.import": ["Import harvest queue", "Importar fila do harvest"],
   "config.llm.importError": ["Import failed — file rejected.", "Falha na importação — arquivo rejeitado."],

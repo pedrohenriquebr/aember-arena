@@ -3,7 +3,7 @@ import { ExternalLink, LoaderCircle, X } from "lucide-react";
 import { mergeAbilityOverrides, type AbilityOverride } from "../lib/abilities";
 import { deleteAbilityOverride, listCatalogCards, loadAbilityOverrides, putAbilityOverride } from "../lib/cache";
 import { parseCardText } from "../lib/cardText";
-import { reviewQueue, validateQueueRows, type RunProgress } from "../lib/catalogLlm";
+import { approvedFailures, reviewQueue, validateQueueRows, type RunProgress } from "../lib/catalogLlm";
 import { applyLlmPreset, LLM_PRESETS, llmReady, type LlmConfig, type LlmPreset } from "../lib/settings";
 import type { Translator } from "../lib/i18n";
 
@@ -27,6 +27,7 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
   const ready = llmReady(config);
   const keyUrl = config.preset === "custom" ? null : LLM_PRESETS[config.preset].keyUrl;
   const [drafts, setDrafts] = useState<AbilityOverride[]>([]);
+  const [approved, setApproved] = useState<AbilityOverride[]>([]);
   const [titles, setTitles] = useState<Map<string, string>>(new Map());
   const [importNote, setImportNote] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
@@ -39,6 +40,7 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
     void Promise.all([loadAbilityOverrides(), listCatalogCards()]).then(([rows, cards]) => {
       const covered = new Set(cards.filter((card) => parseCardText(card).coverage === "full").map((card) => card.id));
       setDrafts(reviewQueue([...rows.values()], (id) => covered.has(id)));
+      setApproved(approvedFailures([...rows.values()]));
     });
   }, []);
   useEffect(() => {
@@ -56,6 +58,15 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
     const reviewed: AbilityOverride = { ...row, reviewed: true };
     await putAbilityOverride(reviewed);
     mergeAbilityOverrides(new Map([[reviewed.cardId, reviewed]]));
+    refresh();
+  }
+
+  /** Reabrir uma falha aprovada: volta à fila e, pelo contrato de versão, é
+      re-tentada. O merge é inofensivo (falha não afeta o motor). */
+  async function reopen(row: AbilityOverride) {
+    const reopened: AbilityOverride = { ...row, reviewed: false };
+    await putAbilityOverride(reopened);
+    mergeAbilityOverrides(new Map([[reopened.cardId, reopened]]));
     refresh();
   }
 
@@ -164,6 +175,24 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
               </li>
             ))}
           </ul>
+        )}
+        {approved.length > 0 && (
+          <details>
+            <summary className="review-label">{t("config.llm.reopenTitle", { count: approved.length })}</summary>
+            <ul className="llm-review-list">
+              {approved.map((row) => (
+                <li key={row.cardId} className="llm-review-row">
+                  <div>
+                    <strong>{titles.get(row.cardId) ?? row.cardId}</strong>
+                    <small className="llm-review-meta">{row.textHash.slice(0, 8)} · {row.failure}</small>
+                  </div>
+                  <div className="llm-review-actions">
+                    <button type="button" className="ghost-button" onClick={() => void reopen(row)}>{t("config.llm.reopen")}</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
       </div>
     </div>

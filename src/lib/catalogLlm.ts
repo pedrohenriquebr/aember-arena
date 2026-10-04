@@ -1074,6 +1074,14 @@ export function reviewQueue(rows: AbilityOverride[], covered: (cardId: string) =
     .sort((a, b) => b.generatedAt - a.generatedAt);
 }
 
+/** Failures a human approved (no rule came out of them): the only approved rows
+    worth reopening — a validated draft became a rule on purpose. */
+export function approvedFailures(rows: AbilityOverride[]): AbilityOverride[] {
+  return rows
+    .filter((row) => row.source === "llm" && row.reviewed && row.failure)
+    .sort((a, b) => b.generatedAt - a.generatedAt);
+}
+
 export type QueueRejection = "shape" | "version" | "source" | "unknownCard" | "hash" | "protected";
 
 /** Porta de entrada da fila do harvest (CAT-3.5): cada linha do JSON exportado só
