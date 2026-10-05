@@ -6,26 +6,34 @@ Shipped as **one self-contained `index.html`** (JS + CSS inlined by
 `vite-plugin-singlefile`), so it can be opened from disk, emailed, or dropped on any
 static host with no server.
 
-**Estado atual (02/10, ~295 commits):** Mobile-first + palco de viewport (UX-FIT
+**Estado atual (05/out, ~315 commits):** Mobile-first + palco de viewport (UX-FIT
 FIT-01..08), animações estilo Arena (3 ondas), áudio procedural (14 timbres),
 tutorial, modo 3D da mesa (12 histórias + punch list), **motor de abilities
-declarativas (ondas 1-4 + DSL v6, onda 2)** — efeitos persistentes, "you may",
+declarativas (ondas 1-4 + DSL v12, ondas 2-3)** — efeitos persistentes, "you may",
 reações, purge/sacrifice/tokens/exalt, ward/enrage/enhanced/take-control/forja/
-instead, quantidade dinâmica (`per`/`did`/`gone`), condições (`act.if`, haunted,
-`myTurn`), filtros por casa/traço/exausta/contadores/âmbar, `keyCost`, act `move`
-(zonas com `top`/`bottom`/`random`/`all`), gatilho `scrap`, observadores
-(`Ability.of`+`"event"`, orçados por movimento), `use.via`, contadores
-(+`removeCounter`), splash, `versatile`, **`partial` para Fate**, **Entrench**
-(`hold`/`noReady`), `who` (dono/controlador dinâmico), `capture.own`,
+instead, quantidade dinâmica (`per`/`did`/`gone`/`slain`/`healed`/`housesOf`/
+`sub`/`div`), condições (`act.if`, haunted, `myTurn`, `count op`), filtros por
+casa/traço/exausta/contadores/âmbar/poder relativo, `keyCost`, act `move` (zonas
+com `top`/`bottom`/`random`/`all`/`moved`/`revealed` + `side:"opponent"|"any"`),
+gatilho `scrap` + **gatilho `discard`/`house`**, observadores
+(`Ability.of`+`"event"`, orçados por movimento), `use.via`+`use {asYours}`,
+contadores (+`removeCounter`), splash, `versatile`, **`partial` para Fate**,
+**Entrench** (`hold`/`noReady`), `who` (dono/controlador dinâmico), `capture.own`,
 `moveAmber`, **escolha de casa (`move.house`/`forceHouse`), gatilho `house`,
 casa concedida (`houseOf`), `forged`/`forgeKey.less`, imunidades
-(`prevent`/`noSteal`)** — ondas 1-3 em `docs/DSL_EXPANSION_PLAN.md`, onda 2
-(Lotes 4-5) em `docs/DSL_EXPANSION_PLAN_WAVE2.md` — cobertura do parser:
-full **1.218/3.744 + 167 partial** no corpus do MV. **Catálogo dinâmico
-completo** (DB v4, sync MV, BYOK, pipeline LLM com validação tripla + harvest +
-fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
-(CAT-3.5, `--export-queue`); proxy local do dono via `scripts/llm-cors-relay.mjs`).
-Specs: 464+. Este arquivo
+(`prevent`/`noSteal`), **mayPlay**, **restrict.action:"reap"**,
+**fightDamageCap (atacante E defensor)**, **Replacement.when
+("attacking"/"defending")**, **peek privado + reveal público com ctx**
+(`s:"revealed"`)**, **entersPlayReady**, **heal "all"**, **damage divide/upTo**
+**— ondas em `docs/DSL_EXPANSION_PLAN.md` (ondas 1-3), `_WAVE2.md` (Lotes 4-5),
+`_WAVE3.md` (Lotes 6-12, incl. §Lote 11/12)** — cobertura do parser sobre o
+**corpus 4.809 (MV+keyteki)**: full **~1.800 + 276 partial**. **Catálogo
+dinâmico completo** (DB v4, sync MV, BYOK com headers extras JSON, pipeline LLM
+com validação tripla + harvest concorrente (`--concurrency`, saves serializados)
++ fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
+(CAT-3.5, `--export-queue`); ETL keyteki (`npm run keyteki:cards` + `merge:cards`
+→ corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
+`npm run relay:go` (tier OpenCode Go). Specs: 674+. Este arquivo
 descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
 MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*,
 DYNAMIC_CATALOG_PLAN).
@@ -119,18 +127,21 @@ ações, cobertura por set, pendências).
   sets que o keyteki não cobre (MoMu/VM25/CC/ToC). Top gaps da nossa DSL vs keyteki:
   interrupt/replace genérico de eventos, modos de alvo (select/house/card-name/trait),
   search+reveal públicos, until declarativo.
-- **Versão e orçamentos (onda 2)**: `DSL_VERSION` (hoje 6) — linha com `v` maior é
+- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 12) — linha com `v` maior é
   descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
-  `docs/DSL_EXPANSION_PLAN.md`); `did`/`gone` são medidos pós-sweep; orçamentos
-  por movimento (`OBSERVER_BUDGET`, `FIRE_BUDGET`, `OBSERVER_DEPTH`) e recheck de
-  watcher vivo evitam laço de observador/`use.via`; `houseOf` tem guarda própria.
-  Entrench = `hold` (preferência do controlador via `setHold`, fora de GameMove)
-  + `canReady`; efeitos `noReady` bloqueiam pelo mesmo `canReady`.
-- **Cobertura do catálogo**: full 1.218/3.744 (32,5%) + 167 partial (Fate)
-  no corpus sincronizado, crashes 0. Pendente (cortes de
-  `docs/DSL_EXPANSION_PLAN_WAVE2.md` §4): "any number"/"up to N" (pede
-  `GameMove.targets[]`), look/reveal/search, Fate/Prophecy completo, cor de
-  chave, referência à carta movida, Tide/Treachery/Invulnerable.
+  `docs/DSL_EXPANSION_PLAN.md`); falhas `reply:` e transporte usam `tries` com tetos
+  (3 e 5); `did`/`gone` são medidos pós-sweep (side capturado antes de sair de jogo);
+  orçamentos por movimento (`OBSERVER_BUDGET`, `FIRE_BUDGET`, `OBSERVER_DEPTH`) e
+  recheck de watcher vivo evitam laço de observador/`use.via`; `houseOf` tem guarda
+  própria. Entrench = `hold` (preferência do controlador via `setHold`, fora de
+  GameMove) + `canReady`; efeitos `noReady` bloqueiam pelo mesmo `canReady`.
+  RunTranslation tem pool de concorrência (`--concurrency`/HARVEST_CONCURRENCY,
+  saves serializados em cadeia, flush no abort).
+- **Cobertura do catálogo**: full ~1.800/4.809 (37,4%) + 276 partial no corpus
+  MV+keyteki (`npm run merge:cards`), crashes 0. Pendente (cortes de
+  `docs/DSL_EXPANSION_PLAN_WAVE3.md` + `docs/WAVE4_BACKLOG.md`): "any number"/
+  "up to N" (pede `GameMove.targets[]`), look/reveal/search de zonas ocultas,
+  Fate/Prophecy completo, cor de chave, Tide/Treachery/Invulnerable.
 
 ## Regras de estilo vigentes
 
