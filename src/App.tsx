@@ -2388,6 +2388,24 @@ function ConfirmDialog({
 
 // ---------- App ----------
 
+// Navigation pointer, not a setting: sessionStorage survives a reload but not a new session.
+const INSPECT_KEY = "aember.review.inspect";
+function readInspectPointer(): string | null {
+  try {
+    return sessionStorage.getItem(INSPECT_KEY);
+  } catch {
+    return null;
+  }
+}
+function writeInspectPointer(id: string | null) {
+  try {
+    if (id) sessionStorage.setItem(INSPECT_KEY, id);
+    else sessionStorage.removeItem(INSPECT_KEY);
+  } catch {
+    // Storage is optional; the match stays playable.
+  }
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(readLanguage);
   const [settings, setSettings] = useState<AppSettings>(() => readSettings(readLanguage()));
@@ -2881,6 +2899,20 @@ function App() {
   // Restore every deck cached in IndexedDB, plus the last one the player chose.
   useEffect(() => {
     let disposed = false;
+    // Reload keeps the deck under inspection; the pointer is per-tab on purpose.
+    const inspectId = readInspectPointer();
+    if (inspectId) {
+      void getCachedDeck(inspectId).then((deck) => {
+        if (disposed) return;
+        if (!deck) {
+          writeInspectPointer(null);
+          return;
+        }
+        setInspectDeck(deck);
+        void getDeckStats(deck.id).then((stats) => { if (!disposed) setInspectStats(stats); });
+        setScreen("inspect");
+      });
+    }
     void listCachedDecks().then((cached) => {
       if (disposed) return;
       setLibraryReady(true);
@@ -3639,6 +3671,7 @@ function App() {
     setInspectStats(null);
     void getDeckStats(deck.id).then(setInspectStats);
     setScreen("inspect");
+    writeInspectPointer(deck.id);
   }
 
   // Adopt a deck from the vault or inspector without leaving the current screen flow.
@@ -3676,6 +3709,7 @@ function App() {
     sound.play("click");
     setSavedDecks((prev) => prev.filter((item) => item.id !== deck.id));
     void deleteDeck(deck.id);
+    if (readInspectPointer() === deck.id) writeInspectPointer(null);
     // The selection falls back to a bundled deck; a live match keeps its
     // in-memory faces and only loses the resume lookup for this deck.
     setSelectedDeck((prev) => (prev.id === deck.id ? DEMO_DECK : prev));
@@ -3872,7 +3906,7 @@ function App() {
             t={t}
             selected={selectedDeck.id === inspectDeck.id}
             stats={inspectStats}
-            onBack={() => { sound.play("click"); setScreen(savedDecks.some((item) => item.id === inspectDeck.id) ? "home" : "browse"); }}
+            onBack={() => { sound.play("click"); writeInspectPointer(null); setScreen(savedDecks.some((item) => item.id === inspectDeck.id) ? "home" : "browse"); }}
             onUseDeck={() => { adoptDeck(inspectDeck); setScreen("config"); }}
           />
         )}
