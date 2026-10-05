@@ -37,3 +37,10 @@ Ver os `X` crus no drafts.json antes de desenhar; mistura provável de comparati
 - 4× `sanity: empty translation` — resposta vazia deveria virar `unsupported`, não falha de sanidade (conserto de 1 linha).
 
 Amostra crua dos títulos: 448c1335, 4CR “Foreseer”, 56252b23, 60f095d7, 652c4e38, Abyssal Sight, Against All Flags, Allusions of Grandeur, Ambassador Liu, Ardent Hero, Aubade the Grim, Auto-Encoder, Azrael, Bandit Culver, Banish, Barrel Roll, Blank Check, Bondsman Belvan, Book of Malefaction, Borr Nit’s Touch, Bot Bookton, Broken Intent, Build Your Champion, Burning Glare, Bypass Burglar, CALV-1N, Caspart, Catch and Release, Cauldron Boil, Chonk Evermore, Cladogenesis, Code Monkey, Collector Worm, Com. Officer Kirby, Consult the Bones, Cosmicrux, Cover Fire, Cursed Loot, Cŏnrăd Fisiquĕ, Dapper Chapeau
+
+## ➕ Novos achados do farm v10 (04/out — rodada do dono)
+| Linhas | O que falta | Nota |
+|---|---|---|
+| 1 (Beam of Forgetting) | Reveal + agir sobre a carta revelada | família 🔴 (reveal + referência à revelada) |
+| 1 (Lollop the Titanic) | **Prevenir o dano que a criatura DÁ** quando atacada | direção NOVA: Lote 9 só previne dano RECEBIDO (replace/prevent escopa o alvo) |
+| 1 (The Warchest) | Contar criaturas inimigas destruídas EM LUTA neste turno | `gone` existe, mas sem escopo "em luta neste turno" |
