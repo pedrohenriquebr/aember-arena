@@ -19,7 +19,7 @@ const HAUNTED_COUNT = { k: "count", of: { p: "discard" }, op: "gte", n: 10 };
 
 describe("contract", () => {
   it("bumps the parser and keeps the DSL version (invulnerable reuses prevent)", () => {
-    expect(PARSER_VERSION).toBe(13);
+    expect(PARSER_VERSION).toBe(14);
     expect(DSL_VERSION).toBe(12);
   });
 });
@@ -52,13 +52,38 @@ describe("Haunted House", () => {
 });
 
 describe("Seda the Sleeper (invulnerable)", () => {
-  it("parses invulnerable as a damage prevent gated by exhausted + flank on the source", () => {
+  const DID = { k: "count", of: "did", op: "gte", n: 1 } as const;
+
+  it("parses full: invulnerable, the self ready-watch, and the play capture", () => {
     const parsed = parse("Seda the Sleeper", SEDA, "Creature", "Ouroboros");
+    expect(parsed.coverage).toBe("full");
     expect(parsed.effects).toEqual([
       { target: { self: true }, replace: { on: "damage", prevent: true }, if: { k: "count", of: { c: { self: true, flank: true, exhausted: true } }, op: "gte", n: 1 } },
     ]);
-    expect(parsed.abilities.map((ability) => ability.on)).toEqual([["play"]]);
-    expect(parsed.coverage).toBe("partial"); // the "After you ready ~, you may deal 2" observer is still outside the grammar
+    // `of.self` is what the ready step's observers match. `did` counts a signature
+    // change (damage is in the signature), so 2 to itself is enough for the exhaust
+    // even though the card never leaves play. "If you do" also inherits optional,
+    // which is how a declined "you may" skips the follow-up when decline is threaded.
+    expect(parsed.abilities).toEqual([
+      {
+        on: ["ready"],
+        of: { self: true },
+        optional: true,
+        acts: [
+          { k: "damage", n: 2, s: "self", optional: true },
+          { k: "exhaust", s: "self", optional: true, if: DID },
+        ],
+      },
+      { on: ["play"], acts: [{ k: "capture", n: 6, s: "self" }] },
+    ]);
+  });
+
+  it("reads the 'is readied' spelling as the same self watch", () => {
+    const parsed = parse("Z", "After this creature is readied, you may deal 2 damage to it. If you do, exhaust it.", "Creature");
+    expect(parsed.coverage).toBe("full");
+    expect(parsed.abilities[0].on).toEqual(["ready"]);
+    expect(parsed.abilities[0].of).toEqual({ self: true });
+    expect(parsed.abilities[0].acts[0]).toMatchObject({ k: "damage", n: 2, s: "self" });
   });
 
   it.each(["This creature gains invulnerable.", "This creature is invulnerable."])("reads %s", (text) => {
@@ -85,6 +110,27 @@ describe("Seda the Sleeper (invulnerable)", () => {
     expect(fight(true, true).warded).toBe(0);
     const middle = fight(false, false);
     expect(middle.warded).toBe(0);
+  });
+
+  it("after the ready step, deals 2 to itself and exhausts again", () => {
+    const seda = card("Seda the Sleeper", { house: "Ouroboros", power: 6, text: SEDA }, false);
+    const other = card("Bystander", { house: "Ouroboros", power: 4 }, false);
+    const next = endTurn(setupTest({ inPlay: [seda, other] }, {}, "Ouroboros"), 0);
+    const woke = next.players[0].board.find((item) => item.face.title === "Seda the Sleeper")!;
+    expect(woke.damage).toBe(2);
+    expect(woke.ready).toBe(false);
+    const bystander = next.players[0].board.find((item) => item.face.title === "Bystander")!;
+    expect(bystander.damage).toBe(0);
+    expect(bystander.ready).toBe(true);
+  });
+
+  it("does not deal when a different creature is the one readied", () => {
+    const seda = card("Seda the Sleeper", { house: "Ouroboros", power: 6, text: SEDA }, true);
+    const other = card("Bystander", { house: "Ouroboros", power: 4 }, false);
+    const next = endTurn(setupTest({ inPlay: [seda, other] }, {}, "Ouroboros"), 0);
+    const still = next.players[0].board.find((item) => item.face.title === "Seda the Sleeper")!;
+    expect(still.damage).toBe(0);
+    expect(still.ready).toBe(true);
   });
 
   it("takes the damage with no ward when ready", () => {

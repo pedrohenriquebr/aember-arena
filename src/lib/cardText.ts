@@ -19,7 +19,7 @@ import type { CardFace } from "./game";
 /** `fate` is here to SEGMENT ("Fate: …" must not leak into the ability before
     it): the trigger table has no entry for it, so the segment is reported as
     unsupported and the previous ability still counts. */
-const PREFIX = new RegExp(
+const PREFIX_SRC =
   "\\b((?:play|reap|fight|destroyed|omni|action|scrap|interrupt|fate" +
     "|each time [^:.]{1,90}?|at the (?:start|end) of [^:.]{1,90}?" +
     "|after [^:.]{1,90}?|before [^:.]{1,90}?)" +
@@ -34,9 +34,18 @@ const PREFIX = new RegExp(
     // Lote 5 §5.2: "After a player chooses an active house, …" (a comma, no colon).
     "|\\b(after (?:a player|you|your opponent) chooses? (?:an active house|[^,:.]{1,60}? as (?:your|their) active house))(?=\\s*,)" +
     // Lote 6 §6.2: forge / ready / enter / destroyed-fighting, comma form.
-    "|\\b(after (?:you|your opponent|a player) forges? a key|after a key is forged|after a player readies a creature|after (?:a|an|another) (?:friendly |enemy )?(?:[a-z]+ )?creatures? enters play|after an enemy creature is destroyed fighting (?:~|this creature|this card|it)|after a card is discarded from (?:your|your opponent's|a player's) hand)(?=\\s*,)",
-  "gi",
-);
+    "|\\b(after (?:you|your opponent|a player) forges? a key|after a key is forged|after a player readies a creature|after (?:a|an|another) (?:friendly |enemy )?(?:[a-z]+ )?creatures? enters play|after an enemy creature is destroyed fighting (?:~|this creature|this card|it)|after a card is discarded from (?:your|your opponent's|a player's) hand)(?=\\s*,)" +
+    // "After you ready ~" / "After this creature is readied": the ready step already
+    // wakes `ready` observers. TITLE is the card's own normalised name, so "Splash-attack" stays a keyword.
+    "|\\b(after you ready (?:~|this creature|this card|it|TITLE)|after this creature is readied)(?=\\s*,)";
+
+/** The card being parsed, so "After you ready <title>" is a self ready-watch. */
+let cardTitle = "";
+
+function prefixPattern(): RegExp {
+  const title = cardTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(PREFIX_SRC.replace("TITLE", title || "~"), "gi");
+}
 
 const TRIGGERS: Record<string, Trigger> = {
   play: "play",
@@ -83,7 +92,7 @@ function observerFor(raw: string): { triggers: Trigger[]; of: Filter } | null {
 }
 
 /** Lote 6 §6.2: forge is a player event (`actor`); ready/enter are observers (`of` required). */
-function lote6Header(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Condition } | null {
+function lote6Header(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Condition; selfWatch?: boolean } | null {
   const part = raw.trim();
   const forge = part.match(/^after (you|your opponent|a player) forges? a key$/) ?? (part === "after a key is forged" ? ["", "a player"] as RegExpMatchArray : null);
   if (forge) {
@@ -98,6 +107,12 @@ function lote6Header(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Co
     return { triggers: ["discard"], of: {}, ...(cond ? { cond } : {}) };
   }
   if (part === "after a player readies a creature") return { triggers: ["ready"], of: { type: "Creature" } };
+  // "After you ready ~, …" watches this card being readied (`of.self`). Pronouns in the
+  // body stay `self`: the event card IS the watcher, and "deal 2 to it" is not "stun the
+  // creature that caused a foreign event". `selfWatch` keeps that reading.
+  if (part === "after you ready this card" || part === "after you ready this creature" || part === "after you ready it" || part === "after you ready ~" || (cardTitle !== "" && part === `after you ready ${cardTitle}`) || part === "after this creature is readied") {
+    return { triggers: ["ready"], of: { self: true }, selfWatch: true };
+  }
   const enters = part.match(/^after (a|an|another) (friendly |enemy )?([a-z]+ )?creatures? enters play$/);
   if (enters) {
     const filter: Filter = { type: "Creature" };
@@ -134,7 +149,7 @@ function houseHeader(raw: string): { triggers: Trigger[]; cond?: Condition } | n
 
 /** Header of one printed segment: its trigger group, plus the watched filter
     when the prefix names an observer event. Null when it is outside the grammar. */
-function abilityHeader(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Condition } | null {
+function abilityHeader(raw: string): { triggers: Trigger[]; of?: Filter; cond?: Condition; selfWatch?: boolean } | null {
   const lote6 = lote6Header(raw);
   if (lote6) return lote6;
   const house = houseHeader(raw);
@@ -155,7 +170,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 13;
+export const PARSER_VERSION = 14;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -1047,7 +1062,7 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
     "If you are overwhelmed, steal 2A. Otherwise, steal 1A." closes the first
     one and opens a twin with the negated condition. The negation is the whole
     point — a second `if:{k:"not"}` can never be expressed as one ability. */
-function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition): Ability[] | null {
+function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition, selfWatch = false): Ability[] | null {
   // "That house" is the active one under a `house` trigger, the chosen one after
   // the ability's own "Choose a house" (Lote 5); a quoted grant parsed inside
   // this ability starts clean and hands the state back.
@@ -1056,7 +1071,7 @@ function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, cre
   thatHouse = triggers.includes("house") ? "active" : null;
   choseHouse = false;
   try {
-    const done = parseAbilityBody(triggers, body, upgrade, creature, quoted, of, headerIf);
+    const done = parseAbilityBody(triggers, body, upgrade, creature, quoted, of, headerIf, selfWatch);
     // "Choose a house" and a `chosen` reader must come together: one without the
     // other would claim full coverage for a text the engine cannot resolve.
     // `redirect:"chosen"` (Lote 8) names the ability's chosen creature, not a house.
@@ -1070,9 +1085,12 @@ function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, cre
 /** The ability had its own "Choose a house" sentence (Lote 5 §5.1). */
 let choseHouse = false;
 
-function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition): Ability[] | null {
+function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition, selfWatch = false): Ability[] | null {
   const done: Ability[] = [];
   const watching = of ? { of } : {};
+  // `of` marks an observer, whose "it" is the event card. A self ready-watch still
+  // needs `of` (only observers hear the ready step) but "deal 2 to it" names the watcher.
+  const observer = of !== undefined && !selfWatch;
   // Lote 8 §8.4: "Choose one:" followed by exactly two options (the printed lines collapse into sentences).
   const modal = body.trim().match(/^choose one:\s*(.+)$/);
   if (modal) {
@@ -1080,7 +1098,7 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
     if (options.length !== 2) return null;
     const modalActs: Act[] = [];
     for (const [index, option] of options.entries()) {
-      const parsed = parseSentence(option, upgrade, creature, quoted, of !== undefined);
+      const parsed = parseSentence(option, upgrade, creature, quoted, observer);
       if (!parsed || parsed.target || parsed.target2 || parsed.cond || !parsed.acts.length) return null;
       for (const act of parsed.acts) act.mode = index === 0 ? "a" : "b";
       modalActs.push(...parsed.acts);
@@ -1136,7 +1154,7 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
       if (!condition || !close()) return null;
       ability = { on: triggers, if: { k: "not", c: condition }, acts: [], ...watching };
     }
-    const parsed = parseSentence(otherwise ? otherwise[1] : sentence, upgrade, creature, quoted, of !== undefined);
+    const parsed = parseSentence(otherwise ? otherwise[1] : sentence, upgrade, creature, quoted, observer);
     if (!parsed) return null;
     // "You may X. If you do, Y.": declining X declines Y too, so the dependent
     // clause inherits the optional flag of the clause before it.
@@ -1494,15 +1512,18 @@ function parseCardBody(face: CardFace): CardRules {
   cardHouse = (face.house ?? "").toLowerCase();
   const { text, quoted } = maskQuotes(normalise(face.text ?? ""));
   // Self references only inside ability text, so a card named like a keyword keeps its keywords.
+  // The title is also a ready-prefix ("After you ready Seda the Sleeper"); splicing it into
+  // the whole text would eat "Splash-attack".
   const self = new RegExp(`\\b${normalise(face.title).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g");
+  cardTitle = normalise(face.title);
   const upgrade = face.type === "Upgrade";
   const creature = face.type === "Creature";
   const segments: { prefix: string | null; body: string }[] = [];
   let last = 0;
   let prefix: string | null = null;
-  for (const match of text.matchAll(PREFIX)) {
+  for (const match of text.matchAll(prefixPattern())) {
     segments.push({ prefix, body: text.slice(last, match.index) });
-    prefix = match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5] ?? null;
+    prefix = match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5] ?? match[6] ?? null;
     last = (match.index ?? 0) + match[0].length;
   }
   segments.push({ prefix, body: text.slice(last) });
@@ -1529,7 +1550,7 @@ function parseCardBody(face: CardFace): CardRules {
   for (const { prefix: raw, body } of segments.slice(1)) {
     const header = abilityHeader(raw!);
     const parsed = header
-      ? parseAbilities(header.triggers, body.replace(self, "this card"), upgrade, creature, quoted, header.of, header.cond)
+      ? parseAbilities(header.triggers, body.replace(self, "this card"), upgrade, creature, quoted, header.of, header.cond, header.selfWatch)
       : null;
     if (parsed) {
       abilities.push(...parsed);
