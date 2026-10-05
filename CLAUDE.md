@@ -143,6 +143,17 @@ ações, cobertura por set, pendências).
   "up to N" (pede `GameMove.targets[]`), look/reveal/search de zonas ocultas,
   Fate/Prophecy completo, cor de chave, Tide/Treachery/Invulnerable.
 
+## Direções de futuro (anotadas, sem design ainda)
+
+- **Multiplayer com backend/API**: o dono pretende adicionar partida multiplayer com
+  backend próprio — impacta o single-file (API same-origin mata CORS de terceiros),
+  o modo solo vs remote, e a arte (servida pelo backend). Anotado; plano separado
+  quando entrar na pauta.
+- **Empacotamento desktop via Tauri** (primeira opção leve): envolve o single-file
+  como webview, filesystem próprio para arte offline (pacote WebP extraído numa pasta
+  do usuário, sem quota de navegador), e atualização via pacote. Plano:
+  `docs/ART_OFFLINE_PLAN.md` (ajustado para Tauri).
+
 ## Regras de estilo vigentes
 
 - **Piso tipográfico (contrato):** 11px para qualquer texto informativo; 10px só em
