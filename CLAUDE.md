@@ -33,7 +33,9 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 + fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
 (CAT-3.5, `--export-queue`); ETL keyteki (`npm run keyteki:cards` + `merge:cards`
 → corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
-`npm run relay:go` (tier OpenCode Go). Specs: 750+ (Lote 14). Este arquivo
+`npm run relay:go` (tier OpenCode Go). Specs: 750+ (Lote 14).
+
+**PAUSA 05/out (dono desligou): Lote 15a (then-chains + canon do join) NO STASH** — `git stash pop` para retomar. Estado (relatório do agente): Parte 1 (canonDeTexto no join.mjs) COMPLETA — rows 363→469, converted 221→279, golden 285→371, queue-cauda 2.724 linhas; Parte 2 motor+parser COMPLETA (DSL v14 `Act.then`+Selection "moved", parser v16 com "Then/If you do/anáforas", smoke 7 prints reais full); `dsl15.test.ts` (14 testes) criado mas **1 falha conhecida**: Key Abduction — `optional` do then-link não chega ao ato (mesmo padrão do bug Legate Scipio: propagar optional para o ato). FALTA: consertar essa 1 asserção/propagação, fechar stub `fail("then","M2")` em scripts/keyteki/lower.mjs + spec, gates tsc/FIT/probe, convert --all final. Retomar com o agente interno `mimo` começando por `git stash pop`. Este arquivo
 descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
 MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*,
 DYNAMIC_CATALOG_PLAN).
