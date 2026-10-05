@@ -200,7 +200,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(9);
+    expect(PARSER_VERSION).toBe(10);
   });
 });
 
@@ -546,11 +546,12 @@ describe("starter decks", () => {
     // Weak read "Choose a house"; Experimental Therapy "belongs to all houses").
     // 46 -> 47 with "forged a key last turn" + "unforge it" (Key Hammer).
     // 47 -> 49 with Lote 8 (Tentacus' toll, Gabos Longarms' chosen redirect).
+    // 49 -> 51 with Lote 10 (Psychic Bug: bare "Look at your opponent's hand"; Valdr: attackBonus).
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 49,
+        "full": 51,
         "partial": 0,
-        "vanilla": 9,
+        "vanilla": 7,
       }
     `);
   });

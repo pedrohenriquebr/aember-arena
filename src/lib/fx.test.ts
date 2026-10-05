@@ -52,7 +52,7 @@ describe("diffFx", () => {
   });
 
   it("reports the damage a surviving creature took (the '-N' over the tile)", () => {
-    const attacker = card("Valdr", { power: 1 });
+    const attacker = card("Tocsin", { power: 1 });
     const target = card("Headhunter", { power: 9 });
     const state = setupTest({ inPlay: [attacker] }, { inPlay: [target] });
     const next = applyMove(state, 0, { type: "fight", attackerId: attacker.instanceId, targetId: target.instanceId });

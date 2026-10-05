@@ -177,6 +177,9 @@ export interface GameState {
   /** Onda 3: how many token creatures this match has made — the counter keeps
       their instance ids unique and deterministic (plain number, JSON-safe). */
   tokenSerial?: number;
+  /** Lote 10 §10.1: what the last "Look at …" showed. Private to `side` (the UI opens it only for a human
+      viewer); the log keeps just the count. Replaced by the next move/turn end, plain JSON data. */
+  peek?: { side: 0 | 1; owner: 0 | 1; from: "hand" | "deck"; faces: CardFace[] };
 }
 
 /** `target` optionally names the card chosen for the triggered ability (or the
@@ -590,6 +593,18 @@ export function effectiveArmor(state: GameState, card: CardInstance): number {
   let armor = card.face.armor;
   for (const owner of allEffects(state)) if (owner.effect.armor && effectHits(state, owner, card)) armor += effectPer(state, owner, owner.effect.armor);
   return Math.max(0, armor);
+}
+
+/** Extra damage `attacker` deals in the fight it starts against `defender` (Lote 10 §10.2). Read at fight time,
+    never folded into effectivePower: it is neither the displayed power nor what a defender deals back. */
+export function attackBonusAgainst(state: GameState, attacker: CardInstance, defender: CardInstance): number {
+  let bonus = 0;
+  for (const owner of allEffects(state)) {
+    const { attackBonus, whenAttacking } = owner.effect;
+    if (!attackBonus || !effectHits(state, owner, attacker)) continue;
+    if (!whenAttacking || matches(state, owner.side, owner.source, defender, whenAttacking)) bonus += attackBonus;
+  }
+  return bonus;
 }
 
 /** May this card become ready? (Lote 4 §4.2) A `noReady` effect blocks always
@@ -1886,6 +1901,14 @@ function run(context: Context, act: Act): void {
       }
       break;
     }
+    case "peek": {
+      // The zone is the (possibly flipped) side's; "top" of a deck is the array's end. Only the count is
+      // logged — the faces ride in state.peek for the acting player's modal (Lote 10 §10.1).
+      const zone = act.from === "hand" ? [...player.hand] : player.deck.slice(-(act.n ?? 1)).reverse();
+      record(state, "log.peek", { name: state.players[me].name, n: String(zone.length) });
+      if (zone.length) state.peek = { side: me, owner: side, from: act.from, faces: zone.map((card) => card.face) };
+      break;
+    }
     case "archiveTop": {
       const card = player.deck.pop();
       if (card) {
@@ -2175,7 +2198,7 @@ function fightBody(state: GameState, me: Side, attacker: CardInstance, defender:
   defender.elusiveUsed = true;
   if (!elusive) {
     if (!keyword(state, attacker, "skirmish")) dealDamage(state, attacker, effectivePower(state, defender), keyword(state, defender, "poison") > 0);
-    dealDamage(state, defender, effectivePower(state, attacker), keyword(state, attacker, "poison") > 0);
+    dealDamage(state, defender, effectivePower(state, attacker) + attackBonusAgainst(state, attacker, defender), keyword(state, attacker, "poison") > 0);
   }
   const splash = keyword(state, attacker, "splash-attack");
   if (splash) for (const neighbor of neighbors(state, defender)) dealDamage(state, neighbor, splash);
@@ -2620,6 +2643,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
   const state = cloneGame(current);
   resetAbilityBudgets();
   if (!isLegalMove(state, playerIndex, move)) return state;
+  delete state.peek;
   const player = state.players[playerIndex];
   const silent = options.silent === true;
   if (move.type === "takeArchives") {
@@ -2755,6 +2779,7 @@ export function chooseHouse(state: GameState, playerIndex: Side, house: string):
   const player = next.players[playerIndex];
   if (playerIndex !== next.activePlayer || next.activeHouse !== null || mulliganPending(next) || !housesFor(next, playerIndex).includes(house)) return next;
   resetAbilityBudgets();
+  delete next.peek;
   next.activeHouse = house;
   delete player.mustChoose;
   // Picking the archives up is optional ("may", docs/ROADMAP_REVIEW.md §1.2):
@@ -2781,6 +2806,8 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   // The turn cannot end before the mandatory house choice (BUG-02).
   if (state.activeHouse === null) return state;
   resetAbilityBudgets();
+  // A look is private to the turn it happened in: it must not cross the handover or land in a save.
+  delete state.peek;
 
   const endingPlayer = state.players[playerIndex];
   // Ready step, then draw step (keyteki ReadyPhase + DrawPhase). Entrench
@@ -2828,6 +2855,9 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
     and discard recovery count as hidden too (the conservative side). */
 export function revealsHiddenInfo(prev: GameState, next: GameState): boolean {
   if (next.rngCalls !== prev.rngCalls) return true;
+  // A peek is information too: undoing Psychic Bug would let the player re-plan around the opponent's hand.
+  // applyMove clears the snapshot first, so any peek on `next` that differs from `prev` is a fresh look.
+  if (next.peek && next.peek !== prev.peek) return true;
   return next.players.some((player, index) => {
     const before = prev.players[index];
     return player.hand.length > before.hand.length || player.deck.length < before.deck.length;

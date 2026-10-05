@@ -155,7 +155,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 9;
+export const PARSER_VERSION = 10;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -580,6 +580,15 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^your opponent discards (a|\d+) random cards?(?: from their hand)?$/, (m) => ({ k: "discardRandom", n: num(m[1]), opp: true })],
   [/^keys cost \+(\d+) (?:amber )?during your opponent's next turn$/, (m) => ({ k: "keyCost", n: +m[1], opp: true })],
   [/^archive the top card of your deck$/, () => ({ k: "archiveTop" })],
+  // Lote 10 §10.1: a bare "look at" is a private peek; anything that acts on what was seen stays a separate
+  // (unsupported) sentence, so the card is at worst partial.
+  [/^look at your opponent's hand$/, () => ({ k: "peek", from: "hand", opp: true })],
+  [/^look at the top (card|\d+ cards) of (your|your opponent's) deck$/, (m) => ({
+    k: "peek",
+    from: "deck",
+    ...(m[1] === "card" ? {} : { n: parseInt(m[1], 10) }),
+    ...(m[2] === "your" ? {} : { opp: true }),
+  })],
   // Onda 3: tokens nascem na mesa (keyteki MakeTokenCreatureAction).
   [/^(?:make|create) (a|an|\d+) token creatures?$/, (m) => ({ k: "makeToken", n: num(m[1]) })],
   // Onda 4: forjar/desforjar fora do passo de chave (keyteki ForgeAction e
@@ -1309,6 +1318,13 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
   if (mayFight) {
     const target = parseSubject(mayFight[1], upgrade) ?? parseFilterWords(mayFight[1]);
     return target ? [{ target, mayFight: true, duration, ...gate }] : null;
+  }
+  // Lote 10 §10.2: "~ deals +2 while attacking an enemy creature on the flank" — a fight-time bonus of the
+  // attacker, optionally narrowed by a filter on the defender (never power: see game.attackBonusAgainst).
+  const attack = body.match(/^(this card|this creature|it|~) deals \+(\d+)(?: damage)? while attacking (?:an? |the )?(.+)$/);
+  if (attack) {
+    const defender = parseFilterWords(attack[3].replace(/ on the flank$/, " on a flank"));
+    return defender ? [{ target: upgrade ? { host: true } : { self: true }, attackBonus: Number(attack[2]), whenAttacking: defender, duration, ...gate }] : null;
   }
   const restrict = parseRestriction(body);
   if (restrict) return [{ target: {}, restrict, duration, ...gate }];

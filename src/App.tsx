@@ -1760,6 +1760,29 @@ function GameBoard({
   const selectPlayerCard = useCallback((card: CardInstance) => onSelectBoard(humanSide, card), [onSelectBoard, humanSide]);
   const winnerRef = useDialogFocus<HTMLDivElement>(game.winner !== null);
   const passRef = useDialogFocus<HTMLDivElement>(handHidden);
+  // Lote 10 §10.1: "Look at …" opens a private modal for the acting human (solo: side 0 only; pass-and-play:
+  // the active player, who is the one holding the device). The log carries just the count. The object identity
+  // survives the state clones, so a dismissed peek stays dismissed until the next move replaces it.
+  // The UI owns the window: the modal captures the faces and stays open until the human closes it, even when the
+  // engine drops `game.peek` on someone else's move (a reaction peek in the AI's turn). A signature in sessionStorage
+  // keeps a reload from reopening a look already shown. Pass-and-play only opens it for the owner of the look (the
+  // active player); a reaction peek in the other player's turn is never shown there — one shared device cannot
+  // hide it from whoever holds it at that moment.
+  const [openPeek, setOpenPeek] = useState<GameState["peek"]>(undefined);
+  const seenPeek = useRef<GameState["peek"]>(undefined);
+  useEffect(() => {
+    const incoming = game.peek;
+    if (!incoming || incoming === seenPeek.current || readOnly || handHidden) return;
+    if (passAndPlay ? game.activePlayer !== incoming.side : incoming.side !== humanSide) return;
+    seenPeek.current = incoming;
+    const sign = `peek:${game.seed}:${game.turn}:${game.log.length}:${incoming.side}:${incoming.faces.map((face) => face.id).join(",")}`;
+    try {
+      if (sessionStorage.getItem("aember.peekSeen") === sign) return;
+      sessionStorage.setItem("aember.peekSeen", sign);
+    } catch { /* storage is best-effort: worst case the modal reopens after a reload */ }
+    setOpenPeek(incoming);
+  }, [game, readOnly, handHidden, passAndPlay, humanSide]);
+  const peek = !readOnly && !handHidden ? openPeek ?? null : null;
   // FEAT-10/13: in pass-and-play both sides decide their own mulligan (the
   // solo board only prompts for side 0 and lets the AI decide side 1).
   const mulliganSide = inMulligan(game) ? (game.pendingMulligan as 0 | 1) : null;
@@ -1957,6 +1980,8 @@ function GameBoard({
           {handDrag.ghost}
         </section>
       </div>
+
+      {peek && <PeekDialog peek={peek} t={t} onClose={() => setOpenPeek(undefined)} />}
 
       {mulliganSide !== null && !readOnly && !handHidden && (
         <div className="winner-shade mulligan-shade" role="dialog" aria-modal="true" aria-labelledby="mulligan-title">
@@ -2275,6 +2300,40 @@ function DeckModal({
         )}
         <div className="api-attribution"><ExternalLink size={12} /> {t("deck.attribution")}</div>
       </section>
+    </div>
+  );
+}
+
+// ---------- Peek dialog ----------
+
+/** Private view of the cards a "Look at …" showed (Lote 10 §10.1): closes on click/Escape, no game effect. */
+function PeekDialog({ peek, t, onClose }: { peek: NonNullable<GameState["peek"]>; t: (key: string) => string; onClose: () => void }) {
+  const dialogRef = useDialogFocus<HTMLDivElement>();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="modal-panel peek-panel" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="peek-title">
+        <div className="modal-heading">
+          <div>
+            <span className="eyebrow">{t(peek.from === "hand" ? "peek.hand" : "peek.deck")}</span>
+            <h2 id="peek-title">{t("peek.title")}</h2>
+          </div>
+          <button className="modal-close" type="button" onClick={onClose} aria-label={t("common.close")}><X size={18} /></button>
+        </div>
+        <div className="peek-cards">
+          {peek.faces.map((face, index) => (
+            <CardArt key={`${face.id}-${index}`} face={face} size="hand" />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { abilityOverrideOf, applyAbilityOverride, DSL_VERSION, flushAbilityOverr
 import { PARSER_VERSION, textHash } from "./cardText";
 import type { CardFace } from "./game";
 
-const card: CardFace = { id: "ov-1", title: "Ov One", house: "Logos", type: "Action", image: "", text: "Play: Look at the top card of your deck.", amber: 0, power: 0, armor: 0 };
+const card: CardFace = { id: "ov-1", title: "Ov One", house: "Logos", type: "Action", image: "", text: "Play: Look at the top card of your deck and name it.", amber: 0, power: 0, armor: 0 };
 const ability: Ability = { on: ["play"], acts: [{ k: "draw", n: 1 }] };
 const row = (patch: Partial<AbilityOverride> = {}): AbilityOverride => ({
   cardId: card.id,
@@ -43,7 +43,7 @@ describe("parserVersion", () => {
 
 describe("DSL_VERSION (versioning contract)", () => {
   it("rejects a row written by a newer grammar and copies the version", () => {
-    expect(DSL_VERSION).toBe(9);
+    expect(DSL_VERSION).toBe(10);
     expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION })?.v).toBe(DSL_VERSION);
     expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION + 1 })).toBeNull();
     expect(normaliseAbilityOverride({ ...row(), v: "2" })).toBeNull();

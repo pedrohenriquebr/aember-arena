@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 9; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 10; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -167,6 +167,10 @@ export type Act = (
   | { k: "unforgeKey"; n: number }
   | { k: "fromDiscard"; type?: "Creature" }
   | { k: "archiveTop" }
+  /** "Look at your opponent's hand" / "the top N cards of your deck" (Lote 10 §10.1): shows the cards to the
+      acting player only (`GameState.peek`); the log records the count, never the identities. `opp` reads the
+      opponent's zone, `n` is the deck depth (default 1; a hand is shown whole). */
+  | { k: "peek"; from: "hand" | "deck"; n?: number; opp?: boolean }
   /** A triggered effect with a duration ("Play: … on their next turn"). */
   | { k: "lasting"; e: PersistentEffect }
 ) & {
@@ -270,6 +274,11 @@ export interface PersistentEffect {
   traits?: string;
   /** "each friendly creature may fight" (Lote 8 §8.8): usable to fight outside the active house (versatile for fighting only). */
   mayFight?: true;
+  /** "~ deals +2 while attacking …" (Lote 10 §10.2): extra damage the source deals in a fight it starts. Only the
+      attacker gets it (never when defending) and it is NOT power: effectivePower stays untouched. */
+  attackBonus?: number;
+  /** Narrows `attackBonus` to defenders matching this filter (`side` relative to the effect's side). */
+  whenAttacking?: Filter;
   /** "Your amber cannot be stolen": steals against the effect's side do nothing. */
   noSteal?: boolean;
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
@@ -579,6 +588,7 @@ const ACTS: Record<string, string> = {
   unforgeKey: "n",
   fromDiscard: "",
   archiveTop: "",
+  peek: "",
   lasting: "",
 };
 
@@ -758,6 +768,13 @@ function validReplacement(value: unknown, allowChosen = false): boolean {
   return (value.redirect === undefined || typeof value.redirect === "boolean") && (value.prevent === undefined || typeof value.prevent === "boolean");
 }
 
+/** `whenAttacking` only narrows an `attackBonus`. The bonus is read at fight time, outside effectivePower, so a
+    defender filter that reads power (`most`, `powerMin`…) cannot recurse (Lote 10 §10.2). */
+function validAttackBonus(effect: Record<string, unknown>): boolean {
+  if (effect.attackBonus === undefined) return effect.whenAttacking === undefined;
+  return isFiniteNumber(effect.attackBonus) && effect.attackBonus !== 0 && (effect.whenAttacking === undefined || validFilter(effect.whenAttacking));
+}
+
 function validRestrict(value: unknown): boolean {
   if (!isRecord(value) || (value.who !== "you" && value.who !== "opponent") || !["play", "use", "fight"].includes(value.action as string)) return false;
   if (value.type !== undefined && typeof value.type !== "string") return false;
@@ -795,7 +812,15 @@ function validAct(value: unknown): boolean {
     if (value.e.replace !== undefined && !validReplacement(value.e.replace, true)) return false;
     if (value.e.traits !== undefined && (typeof value.e.traits !== "string" || !value.e.traits)) return false;
     if (value.e.mayFight !== undefined && value.e.mayFight !== true) return false;
+    if (!validAttackBonus(value.e)) return false;
     return !(value.e.power !== undefined && readsPower(value.e.target)) && !readsPower(value.e.if) && !readsPower(value.e.per);
+  }
+  if (value.k === "peek") {
+    return (
+      (value.from === "hand" || value.from === "deck") &&
+      (value.n === undefined || (Number.isInteger(value.n) && (value.n as number) > 0)) &&
+      Object.keys(value).every((key) => key === "k" || key === "from" || key === "n" || key === "opp" || key === "optional" || key === "mode" || key === "if")
+    );
   }
   if (value.k === "setHouse") return typeof value.house === "string" && value.house.length > 0;
   if (value.k === "forgeKey") {
@@ -890,6 +915,7 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.restrict === undefined || validRestrict(effect.restrict)) &&
         (effect.traits === undefined || (typeof effect.traits === "string" && effect.traits.length > 0)) &&
         (effect.mayFight === undefined || effect.mayFight === true) &&
+        validAttackBonus(effect) &&
         !houseEffectLoops(effect) &&
         !traitEffectLoops(effect) &&
         !readsPower(effect.if) &&

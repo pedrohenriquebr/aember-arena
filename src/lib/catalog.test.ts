@@ -258,7 +258,7 @@ describe("DB v4 stores", () => {
   });
 
   it("deleteAbilityOverride removes a rejected draft from the store", async () => {
-    const card = face("reject-1", "Play: Look at the top card of your deck.");
+    const card = face("reject-1", "Play: Look at the top card of your deck and name it.");
     await putAbilityOverride(overrideFor(card, { source: "llm", reviewed: false }));
     expect((await loadAbilityOverrides()).has(card.id)).toBe(true);
     await deleteAbilityOverride(card.id);
@@ -302,7 +302,7 @@ describe("DB v4 stores", () => {
   });
 
   it("putAbilityOverride applies to the live map right away", async () => {
-    const card = face("live-1", "Play: Look at the top card of your deck.");
+    const card = face("live-1", "Play: Look at the top card of your deck and name it.");
     expect(rulesOf(card).abilities).toEqual([]);
     await putAbilityOverride(overrideFor(card));
     expect(rulesOf(card).abilities).toEqual([ability]); // sem esperar o proximo boot
@@ -446,7 +446,7 @@ describe("catalog sync (incremental)", () => {
 
 describe("rulesOf reads the ability store before the parser", () => {
   it("uses a manual DSL and reports full coverage", () => {
-    const card = face("manual-1", "Play: Look at the top card of your deck.");
+    const card = face("manual-1", "Play: Look at the top card of your deck and name it.");
     expect(rulesOf(card).coverage).not.toBe("full");
     setAbilityOverrides(new Map([[card.id, overrideFor(card)]]));
     expect(rulesOf(card).abilities).toEqual([ability]);
@@ -454,7 +454,7 @@ describe("rulesOf reads the ability store before the parser", () => {
   });
 
   it("ignores an unreviewed llm draft and accepts it once reviewed", () => {
-    const card = face("llm-1", "Play: Look at the top card of your deck.");
+    const card = face("llm-1", "Play: Look at the top card of your deck and name it.");
     setAbilityOverrides(new Map([[card.id, overrideFor(card, { source: "llm", reviewed: false })]]));
     expect(rulesOf(card).abilities).toEqual([]);
     expect(rulesOf(card).coverage).not.toBe("full");
@@ -466,7 +466,7 @@ describe("rulesOf reads the ability store before the parser", () => {
   });
 
   it("falls back to the parser when the stored text hash does not match", () => {
-    const card = face("stale-1", "Play: Look at the top card of your deck.");
+    const card = face("stale-1", "Play: Look at the top card of your deck and name it.");
     setAbilityOverrides(new Map([[card.id, overrideFor(card, { textHash: textHash("some other text") })]]));
     expect(rulesOf(card).abilities).toEqual([]);
     expect(rulesOf(card).coverage).not.toBe("full");
@@ -481,7 +481,7 @@ describe("rulesOf reads the ability store before the parser", () => {
   });
 
   it("counts an overridden card as full in coverageCounts", () => {
-    const covered = face("count-1", "Play: Look at the top card of your deck.");
+    const covered = face("count-1", "Play: Look at the top card of your deck and name it.");
     const vanilla = face("count-2", "Play: Shuffle things around in a strange way.");
     setAbilityOverrides(new Map([[covered.id, overrideFor(covered)]]));
     expect(coverageCounts([covered, vanilla])).toEqual({ full: 1, partial: 0, vanilla: 1 });
@@ -534,7 +534,7 @@ describe("rulesOf reads the ability store before the parser", () => {
   });
 
   it("a dsl-only row keeps parser effects and never claims full coverage", () => {
-    const card = face("cover-parts", "This creature gets +2 power. Play: Look at the top card of your deck.");
+    const card = face("cover-parts", "This creature gets +2 power. Play: Look at the top card of your deck and name it.");
     const parsed = parseCardText(card);
     expect(parsed.coverage).toBe("partial");
 
@@ -550,7 +550,7 @@ describe("rulesOf reads the ability store before the parser", () => {
   });
 
   it("applyAbilityOverride invalidates the memo of the exact same face", () => {
-    const card = face("memo-same", "Play: Look at the top card of your deck.");
+    const card = face("memo-same", "Play: Look at the top card of your deck and name it.");
     expect(rulesOf(card).abilities).toEqual([]); // consulta e memoiza ESTA face
     applyAbilityOverride(overrideFor(card));
     expect(rulesOf(card).abilities).toEqual([ability]);

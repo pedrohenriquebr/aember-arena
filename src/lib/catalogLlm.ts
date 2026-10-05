@@ -676,6 +676,16 @@ export const FEW_SHOTS: {
   },
   {
     type: "Creature",
+    text: "Play/Reap: Look at your opponent's hand.",
+    answer: { abilities: [{ on: ["play", "reap"], acts: [{ k: "peek", from: "hand", opp: true }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "~ deals +2<D> while attacking an enemy creature on the flank.",
+    answer: { abilities: [], effects: [{ target: { self: true }, attackBonus: 2, whenAttacking: { type: "Creature", side: "enemy", flank: true } }], keywords: {} },
+  },
+  {
+    type: "Creature",
     text: "Play: Each player randomly discards one third of their cards from their hand (rounding down).",
     answer: {
       abilities: [
@@ -713,7 +723,7 @@ const SYSTEM_RULES = [
   '"Choose a house" resolves no act: the NEXT sentences read it as {"house":"chosen"} ("of that house"). "Your opponent must choose that house next turn" = {"k":"forceHouse"}. "After a player chooses an active house, X" = on ["house"], and "that house" there is {"house":"active"}; "After you choose" adds if {"k":"myTurn"}.',
   '"Forge a key at +N cost, reduced by 1 for each X" = forgeKey with mod N and less = the count of X; "If you do, purge ~" on an Action = {"k":"purge","s":"self","if":<did gte 1>}. "Steal all but N of your opponent\'s <A>" = steal n 1 per {"sub":[{"p":"amber","opp":true},N]}. "an even/odd amount of <A>" = count op "even"/"odd" (n ignored). "If you forged a key on your previous turn" = {"k":"forged"} (opp:true for the opponent).',
   '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. `unless <cond>` = `if: not <cond>` on the effect. A card always goes to its owner\'s zone. A filter without `type` matches any card in play.',
-  'Superlatives: "the most powerful [enemy] creature" = {"each":{...,"most":1}} (mirror of "least": 1). "Choose one:" with two lines = every act of the first line has mode "a", of the second mode "b" (no target). "a player\'s deck" = a move with side:"any" (the player picks whose; a following "If it is a creature, purge it" is a move pick "moved" type Creature with the same side). "Your opponent must pay you N<A> to use an artifact" = effects [{target:{},restrict:{who:"opponent",action:"use",type:"Artifact",cost:N}}]. "for each X destroyed this way" = per {"gone":<filter of X>}. "gains the Mutant trait" = a lasting effect with traits; "each friendly creature may fight" = mayFight:true. "one third of the cards in your hand" = per {"p":"hand","div":3}. "~ deals damage to that creature rather than the one it is fighting" (after "Choose a creature", on Before Fight) = a lasting act with replace {"on":"damage","redirect":"chosen"}.',
+  'Superlatives: "the most powerful [enemy] creature" = {"each":{...,"most":1}} (mirror of "least": 1). "Choose one:" with two lines = every act of the first line has mode "a", of the second mode "b" (no target). "a player\'s deck" = a move with side:"any" (the player picks whose; a following "If it is a creature, purge it" is a move pick "moved" type Creature with the same side). "Your opponent must pay you N<A> to use an artifact" = effects [{target:{},restrict:{who:"opponent",action:"use",type:"Artifact",cost:N}}]. "for each X destroyed this way" = per {"gone":<filter of X>}. "gains the Mutant trait" = a lasting effect with traits; "each friendly creature may fight" = mayFight:true. "one third of the cards in your hand" = per {"p":"hand","div":3}. "~ deals damage to that creature rather than the one it is fighting" (after "Choose a creature", on Before Fight) = a lasting act with replace {"on":"damage","redirect":"chosen"}. A bare "Look at your opponent\'s hand" = {"k":"peek","from":"hand","opp":true}; "Look at the top N cards of your [opponent\'s] deck" = {"k":"peek","from":"deck","n":N} (+ opp) — only when nothing is done with what was seen (a following sentence that acts on it is not representable). "~ deals +N while attacking <filter>" = effects [{target:{self:true},attackBonus:N,whenAttacking:<filter of the DEFENDER>}], never power.',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
