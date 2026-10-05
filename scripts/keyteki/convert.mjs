@@ -17,6 +17,7 @@ import { isCLayer, lowerCard } from "./lower.mjs";
 import { Unsupported } from "./lambdas.mjs";
 import { facesOf, indexCorpus, loadPacks } from "./join.mjs";
 import { parseCardFile } from "./parse.mjs";
+import { runDump } from "./dump.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const SOURCE = JSON.parse(readFileSync(resolve(ROOT, "scripts/keyteki/SOURCE.json"), "utf8"));
@@ -44,6 +45,14 @@ function bump(map, key, example) {
 }
 
 function main() {
+  const dump = value("--dump");
+  if (dump) {
+    const src = value("--src") ?? SOURCE.defaultSrc;
+    const root = resolve(src, "server/game/cards");
+    const sets = args.includes("--all") ? readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort() : [value("--set") ?? "01-Core"];
+    runDump(dump, { sets, src, root: ROOT });
+    return;
+  }
   const set = value("--set");
   if (!set) throw new Error("usage: keyteki:convert -- --set <01-Core> [--limit N] [--src <clone>] [--only <slug>]");
   const src = value("--src") ?? SOURCE.defaultSrc;
