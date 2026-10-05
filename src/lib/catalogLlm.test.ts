@@ -692,11 +692,13 @@ describe("extractJson", () => {
 });
 
 describe("harvest vendorizado", () => {
-  it("o JSON aprovado do repositorio e valido e nao carrega texto de carta", async () => {
+  it("os JSON aprovados do repositorio sao validos e nao carregam texto de carta", async () => {
     const { vendoredOverrides } = await import("./vendored");
-    const approved = JSON.parse(readFileSync(new URL("./generated/approved.json", import.meta.url), "utf8")) as Record<string, unknown>[];
-    expect(vendoredOverrides().size).toBe(approved.length);
-    for (const row of approved) {
+    const files = ["./generated/approved.json", "./generated/keyteki.json"];
+    const rows = files.flatMap((f) => JSON.parse(readFileSync(new URL(f, import.meta.url), "utf8"))) as Record<string, unknown>[];
+    const ids = new Set(rows.map((r) => r.cardId));
+    expect(vendoredOverrides().size).toBe(ids.size);
+    for (const row of rows) {
       expect(row.reviewed).toBe(true);
       expect(row).not.toHaveProperty("text");
       expect(row).not.toHaveProperty("failure");

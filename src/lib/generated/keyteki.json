@@ -1,0 +1,2218 @@
+[
+ {
+  "cardId": "02ec8afe-ea89-431c-bf4f-758d756f3000",
+  "dsl": [
+   {
+    "on": [
+     "action"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "enrage",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "bb4993f7",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "07a23ca9-4f5c-4266-a496-6b32ecd8c751",
+  "dsl": [],
+  "textHash": "49c6060c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "flank": true,
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "armor": 2,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "09110d61-8f83-4a22-abd6-5f77b407c6d8",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "stun",
+      "s": "target"
+     },
+     {
+      "k": "enrage",
+      "s": "target"
+     },
+     {
+      "k": "exhaust",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "20182d7c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "0994433d-0d1a-47d6-a87d-36e32f7ef3b2",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "gainChains",
+      "n": 3,
+      "opp": true
+     }
+    ]
+   }
+  ],
+  "textHash": "ecacb9ea",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "0aa2a199-bb42-472d-bf49-e0350b0254fd",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "draw",
+      "n": 2
+     }
+    ]
+   },
+   {
+    "on": [
+     "action"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "2d2e03dd",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "0d415c0c-69e6-4c65-a579-f2ddededa719",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "heal",
+      "n": 3,
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "ef681e80",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "0db9c88b-ca4e-48c6-929d-20817eb7d844",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "b2652c15",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "11c0d87a-61f3-413c-abb4-8d8f6302dc29",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Artifact",
+     "ready": true
+    },
+    "acts": [
+     {
+      "k": "use",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d999f50f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "11df3651-b1a5-4ecd-ac25-3c4e6bac86ba",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "steal",
+      "n": 1
+     }
+    ]
+   },
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "returnToHand",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "5bd53b57",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "13895422-dc36-49ae-bb7c-5e5d1f3f9df4",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "draw",
+      "n": 2
+     }
+    ]
+   },
+   {
+    "on": [
+     "action"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "2d2e03dd",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "18c59740-cf33-4301-bb36-c300c87b7e16",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "8aa271b1",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "19be77ba-1bbd-4876-b245-597b049d3be9",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "heal",
+      "n": 3,
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "ef681e80",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "23508e89-0431-45d1-9692-192c6dffeb5a",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "amber",
+     "opp": true,
+     "op": "eq",
+     "n": 1
+    },
+    "acts": [
+     {
+      "k": "steal",
+      "n": 1
+     }
+    ]
+   }
+  ],
+  "textHash": "84b76938",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "2522a7c7-27fa-48ea-b750-ee9ab7fbe844",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "amber",
+     "opp": true,
+     "op": "gte",
+     "n": 8
+    },
+    "acts": [
+     {
+      "k": "steal",
+      "n": 2
+     }
+    ]
+   }
+  ],
+  "textHash": "7b7e65b9",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "274225b9-0a19-48a8-94c6-63f4ece1ee40",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "b8421971",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "27dde47d-d097-4ba2-b3ee-a4c4a0943880",
+  "dsl": [],
+  "textHash": "49c6060c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "flank": true,
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "armor": 2,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "3056e60c-8f7c-40da-951c-6e0e9cfb9d46",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "b2652c15",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "31b6bb24-9dd0-4a79-ae91-7606340b1cd4",
+  "dsl": [],
+  "textHash": "a1e963f9",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "armor": 2,
+    "keywords": {
+     "hazardous": 2
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "333f45b6-73e0-44c3-9ff8-8961687e57ab",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "gainChains",
+      "n": 3,
+      "opp": true
+     }
+    ]
+   }
+  ],
+  "textHash": "ecacb9ea",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "3833ee03-36da-40f9-86e6-56f905995fc7",
+  "dsl": [
+   {
+    "on": [
+     "fight",
+     "reap"
+    ],
+    "target": {
+     "type": "Creature",
+     "house": "Sanctum",
+     "neighborsOfSource": true
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "8e109a07",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "deploy": 1
+  }
+ },
+ {
+  "cardId": "3a13aca5-c627-4e9a-9a15-77b484fc54aa",
+  "dsl": [
+   {
+    "on": [
+     "destroyed"
+    ],
+    "target": {
+     "type": "Creature",
+     "other": true
+    },
+    "acts": [
+     {
+      "k": "returnToHand",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "70b69743",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "elusive": 1
+  }
+ },
+ {
+  "cardId": "3d00f551-b0f2-4b0a-b9fc-8c03e139ab57",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "c": {
+       "type": "Creature",
+       "side": "friendly"
+      }
+     },
+     "op": "eq",
+     "n": 0
+    },
+    "acts": [
+     {
+      "k": "damage",
+      "n": 4,
+      "s": {
+       "each": {
+        "type": "Creature"
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "c8a19ca3",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "3dd8c326-bcef-402b-a577-3a5389eeb918",
+  "dsl": [
+   {
+    "on": [
+     "fight",
+     "reap"
+    ],
+    "target": {
+     "type": "Creature",
+     "house": "Sanctum",
+     "neighborsOfSource": true
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "8e109a07",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "deploy": 1
+  }
+ },
+ {
+  "cardId": "4418ab03-b189-46a1-a4ba-81e4245d5d17",
+  "dsl": [],
+  "textHash": "1de21824",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "keywords": {
+     "elusive": 1,
+     "skirmish": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "4923f730-5040-4ead-9f4c-05b8c03cda4a",
+  "dsl": [
+   {
+    "on": [
+     "action"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "enrage",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "bb4993f7",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "4a5c8d10-5dea-4879-b9cc-8da2103847a4",
+  "dsl": [],
+  "textHash": "49c6060c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "flank": true,
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "armor": 2,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "4dd0c61a-dfda-4d4f-80f6-9bb58946035b",
+  "dsl": [],
+  "textHash": "49c6060c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "flank": true,
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "armor": 2,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "5b090c20-7636-4960-946e-1d9352c85cc4",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "stun",
+      "s": "target"
+     },
+     {
+      "k": "enrage",
+      "s": "target"
+     },
+     {
+      "k": "exhaust",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "20182d7c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "6c5822ae-5a57-4d9f-a6dd-8dcc6ce02986",
+  "dsl": [
+   {
+    "on": [
+     "destroyed"
+    ],
+    "target": {
+     "type": "Creature",
+     "other": true
+    },
+    "acts": [
+     {
+      "k": "returnToHand",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "70b69743",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "elusive": 1
+  }
+ },
+ {
+  "cardId": "7194b2be-d812-44fa-ac30-2da11aa7a4f2",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Artifact",
+     "ready": true
+    },
+    "acts": [
+     {
+      "k": "use",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d999f50f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "7a6a6024-597d-45ad-85ab-ff4664afed95",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "house": "Mars"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "56395a00",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "7ae8a127-8d86-49f2-885e-4eef29397ab3",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "ward",
+      "s": {
+       "each": {
+        "type": "Creature",
+        "side": "friendly",
+        "amber": true
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "d1519a55",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "7bf05cd5-7c03-4e06-9ace-bb730ff6100e",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "amber",
+     "opp": true,
+     "op": "gte",
+     "n": 8
+    },
+    "acts": [
+     {
+      "k": "steal",
+      "n": 2
+     }
+    ]
+   }
+  ],
+  "textHash": "7b7e65b9",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "7e160bb3-026a-47bc-a6ce-583d650a0b51",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "trait": "!Dragon"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "907b6804",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "829b40aa-90a2-424f-afa5-ee0f5f72f367",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Artifact",
+     "ready": true
+    },
+    "acts": [
+     {
+      "k": "use",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d999f50f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "832d5b81-cbe9-4f38-b3f5-068fec7983e3",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "stun",
+      "s": "target"
+     },
+     {
+      "k": "enrage",
+      "s": "target"
+     },
+     {
+      "k": "exhaust",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "20182d7c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "8b9e4ce1-5004-4c3c-b31e-612c0c4cbd50",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "exhausted": true
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "c2b14997",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "91123016-bfdc-4e18-b9d1-aa8ee49a39c5",
+  "dsl": [
+   {
+    "on": [
+     "action"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "exalt",
+      "n": 1,
+      "s": "target"
+     },
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "e2945fc1",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "94387722-ef2e-4591-8cbf-989feaf94656",
+  "dsl": [],
+  "textHash": "1de21824",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "keywords": {
+     "elusive": 1,
+     "skirmish": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "9ec01e67-b3f4-4ef7-8233-365f40da5fa8",
+  "dsl": [],
+  "textHash": "b392e0f3",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "armor": 1,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "a8b24d43-1940-4852-afcb-d034d99da55d",
+  "dsl": [],
+  "textHash": "b392e0f3",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "armor": 1,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "a9cda2c7-6172-43e6-b37f-24971041020d",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Artifact",
+     "ready": true
+    },
+    "acts": [
+     {
+      "k": "use",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d999f50f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "b29dbaab-d17d-4bd8-8a8d-01694bd83e8f",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Artifact",
+     "ready": true
+    },
+    "acts": [
+     {
+      "k": "use",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d999f50f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "b70cc7f6-bec7-4bcb-880b-3c19f8efe4a3",
+  "dsl": [
+   {
+    "on": [
+     "action"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "exalt",
+      "n": 1,
+      "s": "target"
+     },
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "e2945fc1",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "b764e5a8-57d4-4863-a16d-150efc9a925a",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "house": "Mars"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "56395a00",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "bab75bb4-6108-4056-ae9f-0df44752cc85",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Artifact",
+     "ready": true
+    },
+    "acts": [
+     {
+      "k": "use",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d999f50f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "be4a9611-f840-4d41-a9f3-f40871f0fc0e",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "draw",
+      "n": 2
+     }
+    ]
+   },
+   {
+    "on": [
+     "action"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "2d2e03dd",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "c0dd2e4a-810f-454c-b84b-7e8689dd8854",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "b2652c15",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "c1494f7b-eb87-4c64-9405-871579af1f80",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "destroy",
+      "s": {
+       "each": {
+        "type": "Creature",
+        "amber": true
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "a09c5484",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "c225caa0-5e29-4b7d-8b89-aa7cbf3f4b14",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "amber",
+     "opp": true,
+     "op": "gte",
+     "n": 7
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "p": "amber",
+       "opp": true
+      },
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "5e331efc",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "elusive": 1
+  }
+ },
+ {
+  "cardId": "cdf41105-5f8d-44a9-8da1-b1b5e0b033ec",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "exhausted": true
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "c2b14997",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "d7b7db3e-e18a-43a7-8c42-c8a988659f78",
+  "dsl": [
+   {
+    "on": [
+     "action"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d0a10681",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "da4ae547-9a42-44ec-a869-ac744bd84cf7",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "exhausted": true
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "c2b14997",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "dbf23782-df9f-4b80-9b48-8cedda0293a6",
+  "dsl": [],
+  "textHash": "1de21824",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "keywords": {
+     "elusive": 1,
+     "skirmish": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "e4d98dbb-d0e1-4760-967c-e0aad041514c",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "draw",
+      "n": 2
+     },
+     {
+      "k": "discardRandom",
+      "n": 2
+     }
+    ]
+   }
+  ],
+  "textHash": "a0883128",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "e5728bb3-6f9b-40ed-a482-c162c5b7b1c4",
+  "dsl": [
+   {
+    "on": [
+     "action"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "d0a10681",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "e8175d3f-a71b-4a46-991e-dd6500c10423",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "house": "Mars"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "56395a00",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "ebd2361a-38e7-438e-b050-e857c00068aa",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "trait": "!Dragon"
+    },
+    "acts": [
+     {
+      "k": "ready",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "907b6804",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "f053545e-55a0-4b4b-9607-67dd47021c70",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "of": {
+     "neighborsOfSource": true
+    },
+    "acts": [
+     {
+      "k": "draw",
+      "n": 1
+     }
+    ]
+   }
+  ],
+  "textHash": "a66685d6",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "elusive": 1
+  }
+ },
+ {
+  "cardId": "fb8269c9-4901-45fd-8232-fc6afaed90b7",
+  "dsl": [],
+  "textHash": "49c6060c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "flank": true,
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "armor": 2,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "fc73b00b-a5d8-4e89-85d2-4ee5d9aa7e05",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "of": {
+     "neighborsOfSource": true
+    },
+    "acts": [
+     {
+      "k": "draw",
+      "n": 1
+     }
+    ]
+   }
+  ],
+  "textHash": "a66685d6",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "elusive": 1
+  }
+ },
+ {
+  "cardId": "fcd12380-7ed8-49ed-8b00-7635d383b648",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "b8421971",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:341:048:brobnar",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "heal",
+      "n": 3,
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "7a368de9",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:341:106:dis",
+  "dsl": [],
+  "textHash": "1407043f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "power": 2,
+    "keywords": {
+     "hazardous": 2
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:435:209:mars",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "damage",
+      "n": 2,
+      "s": "target"
+     },
+     {
+      "k": "toFlank",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "39c43ea5",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:452:275:shadows",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "p": "deck"
+     },
+     "op": "lte",
+     "n": 5
+    },
+    "acts": [
+     {
+      "k": "steal",
+      "n": 2
+     }
+    ]
+   },
+   {
+    "on": [
+     "fight",
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self",
+      "optional": true
+     }
+    ],
+    "optional": true
+   }
+  ],
+  "textHash": "c1c0def0",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:479:142:sanctum",
+  "dsl": [
+   {
+    "on": [
+     "action"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "exalt",
+      "n": 1,
+      "s": "target"
+     },
+     {
+      "k": "ward",
+      "s": "target"
+     },
+     {
+      "k": "heal",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "6384d8a3",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:479:255:shadows",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "steal",
+      "n": 1
+     }
+    ]
+   },
+   {
+    "on": [
+     "destroyed"
+    ],
+    "acts": [
+     {
+      "k": "returnToDeck",
+      "at": "shuffle",
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "f6984845",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:479:341:saurian",
+  "dsl": [
+   {
+    "on": [
+     "play",
+     "reap",
+     "fight"
+    ],
+    "target": {
+     "side": "friendly",
+     "house": "Star Alliance",
+     "ready": true
+    },
+    "acts": [
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "575998cb",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:479:380:untamed",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "loseAmber",
+      "n": 1,
+      "per": {
+       "p": "amber"
+      }
+     },
+     {
+      "k": "gainAmber",
+      "n": 4
+     }
+    ]
+   }
+  ],
+  "textHash": "7618f22d",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "omega": 1
+  }
+ },
+ {
+  "cardId": "kt:496:328:unfathomable",
+  "dsl": [
+   {
+    "on": [
+     "forge"
+    ],
+    "if": {
+     "k": "actor",
+     "opp": true
+    },
+    "acts": [
+     {
+      "k": "exhaust",
+      "s": {
+       "each": {
+        "type": "Creature",
+        "side": "enemy"
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "31c5634e",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:886:254:staralliance",
+  "dsl": [
+   {
+    "on": [
+     "play",
+     "reap"
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    },
+    "acts": [
+     {
+      "k": "heal",
+      "s": "target"
+     },
+     {
+      "k": "use",
+      "s": "target"
+     }
+    ]
+   }
+  ],
+  "textHash": "babf548f",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:918:141:sanctum",
+  "dsl": [],
+  "textHash": "2187c5ec",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 12,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [
+   {
+    "target": {
+     "type": "Creature",
+     "trait": "Knight",
+     "side": "friendly"
+    },
+    "power": 1,
+    "keywords": {
+     "taunt": 1
+    }
+   }
+  ],
+  "keywords": {}
+ }
+]
