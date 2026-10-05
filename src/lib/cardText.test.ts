@@ -200,7 +200,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(8);
+    expect(PARSER_VERSION).toBe(9);
   });
 });
 
@@ -545,11 +545,12 @@ describe("starter decks", () => {
     // 43 -> 46 with the Lote 5 house wording (Blinding Light and Control the
     // Weak read "Choose a house"; Experimental Therapy "belongs to all houses").
     // 46 -> 47 with "forged a key last turn" + "unforge it" (Key Hammer).
+    // 47 -> 49 with Lote 8 (Tentacus' toll, Gabos Longarms' chosen redirect).
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 47,
+        "full": 49,
         "partial": 0,
-        "vanilla": 11,
+        "vanilla": 9,
       }
     `);
   });

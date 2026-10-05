@@ -20,7 +20,8 @@ const HORDE = "Play: For each color represented among forged keys, steal 1<A>.";
 
 describe("DSL_VERSION 8", () => {
   it("accepts the new literals and rejects what would loop or dangle", () => {
-    expect(DSL_VERSION).toBe(8);
+    // A floor, not an equality: the lote that introduced these literals is v8, and later bumps keep them.
+    expect(DSL_VERSION).toBeGreaterThanOrEqual(8);
     const row = (dsl: unknown[], extra: object = {}) => ({ cardId: "c", dsl, textHash: "h", source: "manual" as const, v: 8, ...extra });
     const good = [
       [{ on: ["play"], acts: [{ k: "steal", n: 1, per: { p: "keyColors", any: true } }] }],
@@ -32,7 +33,7 @@ describe("DSL_VERSION 8", () => {
       [{ on: ["discard"], of: {}, acts: [{ k: "archiveTop" }] }],
     ];
     for (const dsl of good) expect(normaliseAbilityOverride(row(dsl))?.v).toBe(8);
-    expect(normaliseAbilityOverride(row(good[0], { v: 9 }))).toBeNull();
+    expect(normaliseAbilityOverride(row(good[0], { v: DSL_VERSION + 1 }))).toBeNull();
     const bad = [
       [{ on: ["fight"], acts: [{ k: "ward", s: "self", if: { k: "key", color: "green" } }] }],
       [{ on: ["play"], acts: [{ k: "steal", n: 1, per: { p: "amber", any: true } }] }],

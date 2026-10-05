@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 8; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 9; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -47,6 +47,8 @@ export interface Filter {
   top?: number;
   /** Only the N least powerful matching creatures (mirror of `top`). */
   least?: number;
+  /** "the most powerful enemy creature" (Lote 8 §8.3): the N most powerful matching creatures, the superlative the parser reads. */
+  most?: number;
   /** "creature with amber on it": worn amber (exalt/capture) present/absent. */
   amber?: boolean;
   /** "creature with a +1 power counter on it" (boolean) or a named counter present (string, Lote 6 §6.6). */
@@ -56,6 +58,8 @@ export interface Filter {
   powerMax?: number;
   /** Power strictly lower than the source's. */
   weaker?: boolean;
+  /** Power strictly higher than the source's (mirror of `weaker`, Lote 8 §8.3). */
+  stronger?: boolean;
   /** The card is the ability's chosen target. */
   target?: boolean;
   neighborsOfTarget?: boolean;
@@ -101,10 +105,13 @@ export type Selection =
 export type Count =
   | "did"
   | "gone"
+  /** Cards the previous act sent out of play that match the filter (Lote 8 §8.5): "for each Mutant creature destroyed this way". */
+  | { gone: Filter }
   | { c: Filter }
   /** `keyColors` (Lote 7 §7.2) counts DISTINCT colors among the forged keys of the player,
       of the opponent (`opp`) or of both sides together (`any`). */
-  | { p: Zone | "keys" | "amber" | "plays" | "keyColors"; opp?: boolean; any?: boolean }
+  /** `div` (Lote 8 §8.9) is the floor of the count divided by an integer: "one third of the cards in your hand". */
+  | { p: Zone | "keys" | "amber" | "plays" | "keyColors"; opp?: boolean; any?: boolean; div?: number }
   | { of: "damage" | "amber" | "power" | "counters"; s: Selection; name?: string }
   /** Cards the previous act moved (Lote 6 §6.4): how many, their bonus icons, or their printed power. */
   | { m: "cards" | "icons" | "power"; house?: string; type?: string }
@@ -133,7 +140,7 @@ export type Act = (
   /** One act for the player zones: mill, discard/archive from hand, purge from a
       zone, shuffle the discard into the deck. `pick` is how the cards are
       chosen (absent = the controller's choice) and `at` where they land. */
-  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; pick?: "top" | "bottom" | "random" | "all" | "moved"; at?: "top" | "bottom" | "shuffle"; type?: string; house?: string; until?: { house?: string; type?: string } }
+  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; side?: "opponent" | "any"; pick?: "top" | "bottom" | "random" | "all" | "moved"; at?: "top" | "bottom" | "shuffle"; type?: string; house?: string; until?: { house?: string; type?: string } }
   /** Set tokens of the set layer (keyteki WardAction/EnrageAction/RemoveWardAction)
       and control changes (game.takeControl). */
   | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection; opp?: boolean }
@@ -165,6 +172,8 @@ export type Act = (
 ) & {
   /** "You may <efeito>": the actor decides whether this part resolves. */
   optional?: boolean;
+  /** "Choose one:" (Lote 8 §8.4): the act belongs to option "a" or "b"; only the option the move chose resolves. */
+  mode?: "a" | "b";
   /** "If you do, …" / "if this damage destroys that creature": gates THIS act
       on the state left by the act before it. */
   if?: Condition;
@@ -218,6 +227,8 @@ export interface Restrict {
   type?: string;
   /** "cannot play more than N cards each turn" — a per-turn budget, not a ban. */
   limit?: number;
+  /** "Your opponent must pay you N in order to use an artifact" (Lote 8 §8.2): using costs N amber, paid to the effect's controller. */
+  cost?: number;
 }
 
 /** An "instead" replacement of an engine default (Onda 4, docs/ROADMAP_REVIEW.md
@@ -228,8 +239,9 @@ export interface Replacement {
   on: "destroy" | "damage";
   /** Where a destroyed card goes instead (keyteki's leave-play interrupt). */
   to?: "archives" | "hand" | "deck" | "purged";
-  /** The damage is dealt to the effect's source instead (Shadow Self). */
-  redirect?: boolean;
+  /** The damage is dealt to the effect's source instead (Shadow Self). `"chosen"` (Lote 8 §8.1, only in a `lasting` act of an ability with a `target`):
+      the damage the fought creature takes during this fight goes to the ability's chosen creature. */
+  redirect?: boolean | "chosen";
   /** The damage is cancelled ("cannot be dealt damage", Lote 5 §5.6). */
   prevent?: boolean;
 }
@@ -254,6 +266,10 @@ export interface PersistentEffect {
   noReady?: true | "step";
   /** "This creature belongs to all houses" / to a named house (Lote 5 §5.3). */
   house?: string;
+  /** "each creature gains the Mutant trait" (Lote 8 §8.6): added to the printed traits. */
+  traits?: string;
+  /** "each friendly creature may fight" (Lote 8 §8.8): usable to fight outside the active house (versatile for fighting only). */
+  mayFight?: true;
   /** "Your amber cannot be stolen": steals against the effect's side do nothing. */
   noSteal?: boolean;
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
@@ -582,11 +598,13 @@ const FILTER_FIELDS: Record<string, 0> = {
   ready: 0,
   top: 0,
   least: 0,
+  most: 0,
   amber: 0,
   counters: 0,
   powerMin: 0,
   powerMax: 0,
   weaker: 0,
+  stronger: 0,
   target: 0,
   neighborsOfTarget: 0,
   fighting: 0,
@@ -651,6 +669,7 @@ function validSelection(value: unknown): boolean {
 function validCount(value: unknown): boolean {
   if (value === "did" || value === "gone") return true;
   if (!isRecord(value)) return false;
+  if (value.gone !== undefined) return Object.keys(value).every((key) => key === "gone") && validFilter(value.gone);
   if (value.c !== undefined) return Object.keys(value).every((key) => key === "c") && validFilter(value.c);
   if (value.sub !== undefined) {
     return (
@@ -663,11 +682,13 @@ function validCount(value: unknown): boolean {
   }
   if (value.p !== undefined) {
     return (
-      Object.keys(value).every((key) => key === "p" || key === "opp" || key === "any") &&
+      Object.keys(value).every((key) => key === "p" || key === "opp" || key === "any" || key === "div") &&
       typeof value.p === "string" &&
       (ZONES.has(value.p) || COUNT_SOURCES.has(value.p)) &&
       (value.opp === undefined || typeof value.opp === "boolean") &&
-      (value.any === undefined || (typeof value.any === "boolean" && value.p === "keyColors"))
+      (value.any === undefined || (typeof value.any === "boolean" && value.p === "keyColors")) &&
+      // "one third of": the floor of the zone size over an integer >= 2 (Lote 8 §8.9).
+      (value.div === undefined || (Number.isInteger(value.div) && (value.div as number) >= 2 && value.p !== "keyColors"))
     );
   }
   return (
@@ -706,7 +727,7 @@ function validCondition(value: unknown): boolean {
 function readsPower(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   return Object.entries(value).some(
-    ([key, inner]) => key === "top" || key === "least" || key === "powerMin" || key === "powerMax" || key === "weaker" || (key === "of" && inner === "power") || readsPower(inner),
+    ([key, inner]) => key === "top" || key === "least" || key === "most" || key === "powerMin" || key === "powerMax" || key === "weaker" || key === "stronger" || (key === "of" && inner === "power") || readsPower(inner),
   );
 }
 
@@ -723,16 +744,33 @@ function houseEffectLoops(effect: Record<string, unknown>): boolean {
   return effect.house !== undefined && (mentionsKey(effect.target, "house") || mentionsKey(effect.if, "house") || mentionsKey(effect.per, "house"));
 }
 
-function validReplacement(value: unknown): boolean {
+/** An effect that grants a trait and filters (or gates itself) by trait would ask the traits of the
+    very cards it is deciding the traits of: the same loop as houseEffectLoops (Lote 8 §8.6). */
+function traitEffectLoops(effect: Record<string, unknown>): boolean {
+  return effect.traits !== undefined && (mentionsKey(effect.target, "trait") || mentionsKey(effect.if, "trait") || mentionsKey(effect.per, "trait"));
+}
+
+/** `"chosen"` only makes sense inside a lasting act of an ability with a target; a constant effect never carries it. */
+function validReplacement(value: unknown, allowChosen = false): boolean {
   if (!isRecord(value) || (value.on !== "destroy" && value.on !== "damage")) return false;
+  if (value.redirect === "chosen") return allowChosen && value.on === "damage" && Object.keys(value).every((key) => key === "on" || key === "redirect");
   if (value.to !== undefined && !["archives", "hand", "deck", "purged"].includes(value.to as string)) return false;
   return (value.redirect === undefined || typeof value.redirect === "boolean") && (value.prevent === undefined || typeof value.prevent === "boolean");
+}
+
+function validRestrict(value: unknown): boolean {
+  if (!isRecord(value) || (value.who !== "you" && value.who !== "opponent") || !["play", "use", "fight"].includes(value.action as string)) return false;
+  if (value.type !== undefined && typeof value.type !== "string") return false;
+  if (value.limit !== undefined && !isFiniteNumber(value.limit)) return false;
+  // A toll only exists for using: a play/fight toll has no engine path.
+  return value.cost === undefined || (isFiniteNumber(value.cost) && Number.isInteger(value.cost) && value.cost > 0 && value.action === "use");
 }
 
 function validAct(value: unknown): boolean {
   if (!isRecord(value) || typeof value.k !== "string" || !Object.hasOwn(ACTS, value.k)) return false;
   const need = ACTS[value.k];
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
+  if (value.mode !== undefined && value.mode !== "a" && value.mode !== "b") return false;
   if (value.if !== undefined && !validCondition(value.if)) return false;
   if (value.per !== undefined && !validCount(value.per)) return false;
   if (value.n !== undefined && !isFiniteNumber(value.n)) return false;
@@ -752,7 +790,11 @@ function validAct(value: unknown): boolean {
   if (value.k === "lasting") {
     // The stored effect is read by effectivePower the same way a printed one is.
     // A power modifier whose target filters by power recurses (Lote 6 review).
-    if (!isRecord(value.e) || !isRecord(value.e.target) || houseEffectLoops(value.e)) return false;
+    if (!isRecord(value.e) || !isRecord(value.e.target) || houseEffectLoops(value.e) || traitEffectLoops(value.e)) return false;
+    if (value.e.restrict !== undefined && !validRestrict(value.e.restrict)) return false;
+    if (value.e.replace !== undefined && !validReplacement(value.e.replace, true)) return false;
+    if (value.e.traits !== undefined && (typeof value.e.traits !== "string" || !value.e.traits)) return false;
+    if (value.e.mayFight !== undefined && value.e.mayFight !== true) return false;
     return !(value.e.power !== undefined && readsPower(value.e.target)) && !readsPower(value.e.if) && !readsPower(value.e.per);
   }
   if (value.k === "setHouse") return typeof value.house === "string" && value.house.length > 0;
@@ -776,6 +818,8 @@ function validAct(value: unknown): boolean {
     if (value.from !== "deck" || value.to !== "discard") return false;
   }
   if (value.until !== undefined && value.k !== "move") return false;
+  // `side` picks whose zone a move reads: the opponent's, or either one (the move's chosen option, Lote 8 §8.7).
+  if (value.side !== undefined && (value.k !== "move" || (value.side !== "opponent" && value.side !== "any") || value.opp === true)) return false;
   if (value.k === "move") {
     return (
       typeof value.from === "string" &&
@@ -809,6 +853,10 @@ function validAbility(value: unknown): value is Ability {
   // The discard watcher feeds on discards: a hand discard in its own acts is a direct loop (the budgets are the second line).
   if (ons.includes("discard") && (!validFilter(value.of) || value.of === undefined || kinds.has("discardRandom"))) return false;
   if (ons.includes("discard") && (value.acts as { k?: string; from?: string; to?: string }[]).some((act) => act.k === "move" && act.from === "hand" && act.to === "discard")) return false;
+  // A chosen-creature redirect reads the ability's target, and only Before Fight has a live fought creature: the redirect is zeroed once the fight ends, so on "fight" it would be inert (Lote 8 §8.1).
+  if (JSON.stringify(value.acts).includes('"redirect":"chosen"') && (value.target === undefined || !ons.includes("beforeFight"))) return false;
+  // "Choose one:" (Lote 8 §8.4) is a pair: a lone option would be a choice with nothing to choose.
+  if (new Set((value.acts as { mode?: string }[]).map((act) => act.mode).filter(Boolean)).size === 1) return false;
   // `target2` / `s:"target2"` need the second target to exist.
   if (value.target2 === undefined && JSON.stringify(value.acts).includes('"target2"')) return false;
   return true;
@@ -839,7 +887,11 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.house === undefined || (typeof effect.house === "string" && effect.house.length > 0)) &&
         (effect.noSteal === undefined || typeof effect.noSteal === "boolean") &&
         (effect.replace === undefined || validReplacement(effect.replace)) &&
+        (effect.restrict === undefined || validRestrict(effect.restrict)) &&
+        (effect.traits === undefined || (typeof effect.traits === "string" && effect.traits.length > 0)) &&
+        (effect.mayFight === undefined || effect.mayFight === true) &&
         !houseEffectLoops(effect) &&
+        !traitEffectLoops(effect) &&
         !readsPower(effect.if) &&
         !readsPower(effect.per),
     )

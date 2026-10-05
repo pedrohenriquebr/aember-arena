@@ -97,6 +97,25 @@ import { useHandDrag } from "./components/useHandDrag";
 import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 
+const RANDOM_RIVAL_KEY = "aember-arena-random-rival";
+
+function readRandomRivalId(): string | undefined {
+  try {
+    return localStorage.getItem(RANDOM_RIVAL_KEY) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeRandomRivalId(id: string | undefined): void {
+  try {
+    if (id) localStorage.setItem(RANDOM_RIVAL_KEY, id);
+    else localStorage.removeItem(RANDOM_RIVAL_KEY);
+  } catch {
+    // O sorteio só deixa de sobreviver ao reload; a partida segue jogável.
+  }
+}
+
 type Screen = "home" | "config" | "game" | "browse" | "inspect";
 type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanceId: string };
 /** Board pick in progress: a fight defender (`targetId` still empty) or the
@@ -107,9 +126,11 @@ type Pick = {
   /** The move's card asks "Choose a house" (Lote 5 §5.1): the picker offers these first. */
   houses?: string[];
   /** Lote 7 §7.1: a later question of the move — a second card, 0..max cards, or a flank. */
-  kind?: "target2" | "targets" | "flank";
+  kind?: "target2" | "targets" | "flank" | "mode";
   chosen?: string[];
   max?: number;
+  /** Lote 8: a "mode" question offers two zones (own/opponent's) or the two printed options. */
+  modeChoice?: "side" | "option";
 };
 type Toast = {
   message: string;
@@ -1638,6 +1659,7 @@ function GameBoard({
   onPickHouse = NOOP,
   onConfirmPick = NOOP,
   onPickFlank = NOOP,
+  onPickMode = NOOP,
   onSelectHand,
   onPlayHand = NOOP,
   onSelectBoard,
@@ -1694,6 +1716,8 @@ function GameBoard({
   /** Lote 7: confirms the cards of an "up to N" pick (possibly none). */
   onConfirmPick?: () => void;
   onPickFlank?: (flank: "left" | "right") => void;
+  /** Lote 8: the answer to a "Choose one:" / "a player's deck" prompt. */
+  onPickMode?: (mode: "a" | "b") => void;
   onSelectHand: (card: CardInstance) => void;
   /** Drag-to-play: soltar sobre a battleline = o mesmo move do botão Play. */
   onPlayHand?: (card: CardInstance) => void;
@@ -1857,6 +1881,12 @@ function GameBoard({
                     <Crosshair size={15} /> {t("game.chooseFlank")}
                     <button type="button" className="filter-chip" onClick={() => onPickFlank("left")}>{t("game.flankLeft")}</button>
                     <button type="button" className="filter-chip" onClick={() => onPickFlank("right")}>{t("game.flankRight")}</button>
+                  </>
+                ) : pick.kind === "mode" ? (
+                  <>
+                    <Crosshair size={15} /> {t("game.chooseMode")}
+                    <button type="button" className="filter-chip" onClick={() => onPickMode("a")}>{t(pick.modeChoice === "side" ? "game.modeOwnDeck" : "game.modeOption1")}</button>
+                    <button type="button" className="filter-chip" onClick={() => onPickMode("b")}>{t(pick.modeChoice === "side" ? "game.modeOppDeck" : "game.modeOption2")}</button>
                   </>
                 ) : pick.kind === "targets" ? (
                   <>
@@ -2320,7 +2350,9 @@ function App() {
   const [pendingDeck, setPendingDeck] = useState<{ mode: GameMode; deck: DeckInfo; opponent?: DeckInfo } | null>(null);
   // Modo aleatório: o sorteio do Warden acontece ANTES da partida (a revisão mostra
   // e inspeciona o baralho); launchMatch consome este id e o limpa para a próxima.
-  const [randomRivalId, setRandomRivalId] = useState<string | undefined>(undefined);
+  // O sorteio sobrevive a reload/restart (localStorage, como as outras configs); só vale com a biblioteca carregada.
+  const [randomRivalId, setRandomRivalId] = useState<string | undefined>(readRandomRivalId);
+  const [libraryReady, setLibraryReady] = useState(false);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
   const [game, setGame] = useState<GameState | null>(null);
   // FEAT-13: the mode the LIVE match was created with (settings.gameMode only
@@ -2383,12 +2415,20 @@ function App() {
   const randomRival = randomPool.find((item) => item.id === randomRivalId);
   const randomPoolKey = randomPool.map((item) => item.id).join("|");
   useEffect(() => {
-    if (randomRival || !randomPool.length) return;
+    // Antes da biblioteca (IndexedDB) chegar o pool só tem os starters: sortear agora descartaria um rival persistido.
+    if (!libraryReady || randomRival || !randomPool.length) return;
     // Não repete o rival da partida anterior quando há alternativa.
     const fresh = randomPool.filter((item) => item.id !== opponentRef.current?.id);
     setRandomRivalId(drawDeck(fresh.length ? fresh : randomPool)?.id);
     // randomPoolKey resume o pool (o array é novo a cada render).
-  }, [randomRival, randomPoolKey]);
+  }, [libraryReady, randomRival, randomPoolKey]);
+  // Persiste o sorteio; trocar de modo (ou sair da biblioteca, que re-sorteia acima) o limpa.
+  useEffect(() => {
+    writeRandomRivalId(randomRivalId);
+  }, [randomRivalId]);
+  useEffect(() => {
+    if (settings.opponentMode !== "random") setRandomRivalId(undefined);
+  }, [settings.opponentMode]);
   /** BUG2-11: configuração que valeu na partida viva (ver MatchSetup). */
   const matchSetupRef = useRef<MatchSetup | null>(null);
   const aiTurnRef = useRef<string | null>(null);
@@ -2780,7 +2820,9 @@ function App() {
   useEffect(() => {
     let disposed = false;
     void listCachedDecks().then((cached) => {
-      if (disposed || !cached.length) return;
+      if (disposed) return;
+      setLibraryReady(true);
+      if (!cached.length) return;
       setSavedDecks((prev) => {
         const merged = [...prev];
         for (const deck of cached) {
@@ -3190,7 +3232,7 @@ function App() {
     const prompt = pendingPrompt(prev, side, move);
     if (prompt) {
       sound.play("select");
-      setPick({ move, ids: prompt.ids, kind: prompt.kind, max: prompt.max, chosen: [] });
+      setPick({ move, ids: prompt.ids, kind: prompt.kind, max: prompt.max, chosen: [], modeChoice: prompt.choice });
       return;
     }
     // O resumo do turno do Warden morre na primeira ação do jogador.
@@ -3248,6 +3290,13 @@ function App() {
   const confirmPick = useCallback(() => {
     if (pick?.kind === "targets") performHumanMove({ ...pick.move, targets: pick.chosen ?? [] });
   }, [pick, performHumanMove]);
+
+  const pickMode = useCallback(
+    (mode: "a" | "b") => {
+      if (pick?.kind === "mode") performHumanMove({ ...pick.move, mode } as GameMove);
+    },
+    [pick, performHumanMove],
+  );
 
   const pickFlank = useCallback(
     (flank: "left" | "right") => {
@@ -3824,6 +3873,7 @@ function App() {
                   onPickHouse={pickMoveHouse}
                   onConfirmPick={confirmPick}
                   onPickFlank={pickFlank}
+                  onPickMode={pickMode}
                   onSelectHand={selectHandCard}
                   onPlayHand={(card) => performHumanMove({ type: "play", instanceId: card.instanceId })}
                   onSelectBoard={pickBoardCard}

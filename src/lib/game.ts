@@ -200,6 +200,9 @@ export type GameMove = (
   targets?: string[];
   /** Where a `toFlank` act sends its creature (default left). */
   flank?: "left" | "right";
+  /** Lote 8 §8.4/§8.7: the option of a "Choose one:" ("a" first, "b" second) — for a move with `side:"any"`,
+      "a" is the player's own zone and "b" the opponent's. Absent = the engine's default (see defaultMode). */
+  mode?: "a" | "b";
 };
 
 const declines = (move: GameMove) => "decline" in move && move.decline === true;
@@ -568,7 +571,7 @@ export function houseOf(state: GameState, card: CardInstance): string {
     damage instead. A source that already left play does not redirect. */
 function redirectFor(state: GameState, card: CardInstance): CardInstance | undefined {
   const owner = allEffects(state).find(
-    (item) => item.effect.replace?.redirect && item.source !== undefined && effectHits(state, item, card),
+    (item) => item.effect.replace?.redirect === true && item.source !== undefined && effectHits(state, item, card),
   );
   const source = owner?.source;
   if (!source || source === card || controllerOf(state, source) === undefined) return undefined;
@@ -629,11 +632,26 @@ function restricted(state: GameState, side: Side, action: Restrict["action"], ca
     if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
     // "cannot play more than N cards each turn" is a budget, not a ban: it is
     // enforced by playLimit, not here (keyteki Ember Imp).
-    if (restrict.limit) continue;
+    if (restrict.limit || restrict.cost) continue;
     if (restrict.type && (!card || card.face.type !== restrict.type)) continue;
     return true;
   }
   return false;
+}
+
+/** "Your opponent must pay you N in order to use an artifact" (Lote 8 §8.2): the amber `side` owes
+    for using `card`, and who it is paid to. A toll is not a ban — canUseCard only asks that it can be paid. */
+function useTolls(state: GameState, side: Side, card: CardInstance): { payee: Side; cost: number }[] {
+  const tolls: { payee: Side; cost: number }[] = [];
+  for (const owner of allEffects(state)) {
+    const restrict = owner.effect.restrict;
+    if (!restrict?.cost || restrict.action !== "use") continue;
+    if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
+    if (restrict.type && card.face.type !== restrict.type) continue;
+    if (owner.effect.if && !holds(owner.effect.if, state, owner.side, owner.source)) continue;
+    tolls.push({ payee: owner.side, cost: restrict.cost });
+  }
+  return tolls;
 }
 
 /** Tightest "cannot play more than N cards each turn" in force for `side`. */
@@ -755,6 +773,7 @@ interface Prior {
   target?: CardInstance;
   targetHouse?: string;
   wasNeighbors?: CardInstance[];
+  goneCards?: { card: CardInstance; side: Side }[];
 }
 
 export function conditionHolds(
@@ -803,6 +822,7 @@ export function conditionHolds(
         target: previous?.target,
         targetHouse: previous?.targetHouse,
         wasNeighbors: previous?.wasNeighbors,
+        goneCards: previous?.goneCards,
       },
       condition.of,
     );
@@ -870,10 +890,34 @@ let pendingChoice: { card: CardInstance; house: string } | null = null;
 /** A `house` filter value that cannot hold: "chosen" with no choice made. */
 const unchosen = (value: string) => positive(value) === "chosen" && chosenHouse === undefined;
 
-/** One trait token of face.traits ("Knight • Beast" prints two). */
-function traitMatches(card: CardInstance, wanted: string): boolean {
-  return (card.face.traits ?? "").split("•").some((trait) => trait.trim().toLowerCase() === wanted.toLowerCase());
+const splitTraits = (traits: string | undefined) => (traits ?? "").split("•").map((trait) => trait.trim()).filter(Boolean);
+
+/** The traits of a card right now (Lote 8 §8.6): face.traits ("Knight • Beast" prints two) plus the ones a live
+    effect grants. The single reader — everything that asks "is it a Mutant?" goes through here. Like houseOf,
+    a depth guard answers the printed traits while the grants themselves are being resolved, so an effect
+    whose own target filters by trait cannot recurse (the gate rejects those too). */
+let traitDepth = 0;
+export function traitsOf(state: GameState, card: CardInstance): string[] {
+  const traits = splitTraits(card.face.traits);
+  if (traitDepth > 0) return traits;
+  traitDepth += 1;
+  try {
+    for (const owner of allEffects(state)) {
+      if (owner.effect.traits && effectHits(state, owner, card)) traits.push(...splitTraits(owner.effect.traits));
+    }
+  } finally {
+    traitDepth -= 1;
+  }
+  return traits;
 }
+
+function traitMatches(state: GameState, card: CardInstance, wanted: string): boolean {
+  return traitsOf(state, card).some((trait) => trait.toLowerCase() === wanted.toLowerCase());
+}
+
+/** Does a live "may fight" effect let this creature fight outside the active house (Lote 8 §8.8)? */
+const mayFightOutOfHouse = (state: GameState, card: CardInstance): boolean =>
+  allEffects(state).some((owner) => owner.effect.mayFight === true && effectHits(state, owner, card));
 
 /** A `!`/`non-` prefixed filter value negates its test. */
 const negated = (value: string) => value.startsWith("!");
@@ -881,6 +925,10 @@ const positive = (value: string) => (negated(value) ? value.slice(1) : value);
 
 /** The fight currently resolving. Saved and restored so a nested `use via:"fight"` does not leak (Lote 6 §6.2). */
 let fightPair: { attacker: CardInstance; defender: CardInstance } | null = null;
+
+/** "Deals damage to that creature rather than the one it is fighting" (Lote 8 §8.1): the damage the
+    fought creature would take goes to `to` until the fight ends. Same transient scope as fightPair. */
+let fightRedirect: { from: CardInstance; to: CardInstance } | null = null;
 
 function matches(state: GameState, me: Side, source: CardInstance | undefined, card: CardInstance, filter: Filter, scope?: Ctx): boolean {
   const side = controllerOf(state, card);
@@ -908,12 +956,13 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     (filter.powerMax === undefined || effectivePower(state, card) <= filter.powerMax) &&
     (filter.powerMin === undefined || effectivePower(state, card) >= filter.powerMin) &&
     (!filter.weaker || (source !== undefined && effectivePower(state, card) < effectivePower(state, source))) &&
+    (!filter.stronger || (source !== undefined && effectivePower(state, card) > effectivePower(state, source))) &&
     (filter.house === undefined ||
       (!unchosen(filter.house) &&
         (REL_HOUSES.has(positive(filter.house))
           ? relationalHouse(state, card, positive(filter.house), source, scope)
           : houseMatches(state, card, positive(filter.house))) !== negated(filter.house))) &&
-    (filter.trait === undefined || traitMatches(card, positive(filter.trait)) !== negated(filter.trait)) &&
+    (filter.trait === undefined || traitMatches(state, card, positive(filter.trait)) !== negated(filter.trait)) &&
     (filter.exhausted === undefined || !card.ready === filter.exhausted) &&
     (filter.amber === undefined || ((card.amber ?? 0) > 0) === filter.amber) &&
     counterOk
@@ -924,7 +973,8 @@ function everyMatch(state: GameState, me: Side, source: CardInstance | undefined
   const found = [...state.players[me].board, ...state.players[other(me)].board].filter((card) =>
     matches(state, me, source, card, filter, scope),
   );
-  if (filter.top) return found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top);
+  // `most` (Lote 8 §8.3) is the parser's spelling of the same ordering as `top`.
+  if (filter.top || filter.most) return found.sort((a, b) => effectivePower(state, b) - effectivePower(state, a)).slice(0, filter.top ?? filter.most);
   // `least` is the mirror of `top`: ties (no printed power difference) keep the
   // board order, exactly like the `top` sort does.
   if (filter.least) return found.sort((a, b) => effectivePower(state, a) - effectivePower(state, b)).slice(0, filter.least);
@@ -932,7 +982,8 @@ function everyMatch(state: GameState, me: Side, source: CardInstance | undefined
 }
 
 const HARMFUL = new Set<Act["k"]>(["destroy", "purge", "damage", "stun", "exhaust", "enrage", "returnToHand", "returnToDeck", "archive"]);
-const isHarmful = (ability: Ability) => ability.acts.some((act) => HARMFUL.has(act.k));
+/** A chosen-creature redirect (Gabos Longarms) aims its choice at an enemy like any harmful act. */
+const isHarmful = (ability: Ability) => ability.acts.some((act) => HARMFUL.has(act.k) || (act.k === "lasting" && act.e.replace?.redirect === "chosen"));
 /** "Give control … to your opponent" (Lote 4 §4.7): takeControl is not in
     HARMFUL, and with `opp` the auto-pick must take the weakest FRIENDLY card. */
 const givesControl = (ability: Ability) => ability.acts.some((act) => act.k === "takeControl" && act.opp === true);
@@ -993,6 +1044,10 @@ interface Ctx {
   queue?: string[];
   /** Where a `toFlank` act sends the creature. */
   flank?: "left" | "right";
+  /** The cards the previous act sent out of play (Lote 8 §8.5), for `{gone: Filter}`. */
+  goneCards?: { card: CardInstance; side: Side }[];
+  /** The option of the move's "Choose one:" and of a `side:"any"` move (Lote 8 §8.4/§8.7). */
+  mode?: "a" | "b";
 }
 
 /** The ability context proper: an act always runs with its source card. */
@@ -1006,6 +1061,8 @@ interface Choice {
   /** The move's `targets` queue: consumed whole by the first ability that reads it. */
   targets?: string[];
   flank?: "left" | "right";
+  /** The move's chosen option (Lote 8): read by every ability of the move, never consumed. */
+  mode?: "a" | "b";
 }
 
 /** The cards a selection points at. `k` is the act being resolved, which decides
@@ -1058,6 +1115,11 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
 function countOf(scope: Ctx, spec: Count): number {
   if (spec === "did") return scope.did ?? 0;
   if (spec === "gone") return scope.gone ?? 0;
+  if ("gone" in spec) return (scope.goneCards ?? []).filter(({ card, side }) => {
+    // The dead card has no controller any more: `side` was taken before it left play.
+    const { side: want, ...rest } = spec.gone;
+    return (!want || (want === "friendly") === (side === scope.me)) && matches(scope.state, scope.me, scope.source, card, rest, scope);
+  }).length;
   if ("c" in spec) return everyMatch(scope.state, scope.me, scope.source, spec.c, scope).length;
   if ("m" in spec) {
     const moved = (scope.moved ?? []).filter((card) => {
@@ -1085,9 +1147,11 @@ function countOf(scope: Ctx, spec: Count): number {
       const sides: Side[] = spec.any ? [0, 1] : [spec.opp ? other(scope.me) : scope.me];
       return new Set(sides.flatMap((side) => forgedKeyColors(scope.state, side))).size;
     }
-    if (spec.p === "keys" || spec.p === "amber") return player[spec.p];
-    if (spec.p === "plays") return scope.state.plays;
-    return player[spec.p].length;
+    // "one third of the cards in your hand" (Lote 8 §8.9): the floor of the size over `div`.
+    const divide = (value: number) => (spec.div ? Math.floor(value / spec.div) : value);
+    if (spec.p === "keys" || spec.p === "amber") return divide(player[spec.p]);
+    if (spec.p === "plays") return divide(scope.state.plays);
+    return divide(player[spec.p].length);
   }
   return select(scope, spec.s).reduce(
     (sum, card) =>
@@ -1255,8 +1319,13 @@ function makeToken(state: GameState, side: Side, house: string): CardInstance {
     (Onda 4); `allowRedirect` stops a redirected packet from bouncing again. */
 function dealDamage(state: GameState, card: CardInstance, amount: number, poison = false, allowRedirect = true): void {
   if (!isCreature(card) || amount <= 0) return;
-  // "Cannot be dealt damage": no damage instance exists, so there is nothing to
-  // redirect, absorb or ward (Lote 5 §5.6).
+  // Gabos Longarms (Lote 8 §8.1): during the fight the fought creature's damage goes to the chosen one.
+  if (allowRedirect && fightRedirect?.from === card && fightRedirect.to !== card && controllerOf(state, fightRedirect.to) !== undefined) {
+    dealDamage(state, fightRedirect.to, amount, poison, false);
+    return;
+  }
+  // "Cannot be dealt damage" (Lote 5 §5.6) is checked after the Gabos redirect, so the chosen creature (not the
+  // fought one) is the one that may be immune; below it nothing is redirected, absorbed or warded.
   if (damagePrevented(state, card)) return;
   // A redirect is an interrupt on the damage-applied event (keyteki Shadow
   // Self), so it runs before armor and before the target's own ward: a warded
@@ -1346,7 +1415,7 @@ interface Snapshot {
   /** The counters of both players: amber, keys, chains and the five zone sizes. */
   counters: number[];
   /** The act's selection as it was, with the signature each card showed. */
-  cards?: { card: CardInstance; signature: string; inPlay: boolean }[];
+  cards?: { card: CardInstance; signature: string; inPlay: boolean; side?: Side }[];
 }
 
 /** Everything an act can change about a card that stays in play — the signature
@@ -1369,18 +1438,22 @@ const countersOf = (state: GameState): number[] =>
 /** did/gone of the act just run, measured AFTER the sweep: with a selection, the
     cards it affected (changed signature or left play); without one, the largest
     absolute move of the counters. */
-function measured(state: GameState, before: Snapshot): { did: number; gone: number } {
+function measured(state: GameState, before: Snapshot): { did: number; gone: number; goneCards: { card: CardInstance; side: Side }[] } {
   if (!before.cards) {
     const after = countersOf(state);
-    return { did: Math.max(...after.map((value, index) => Math.abs(value - before.counters[index]))), gone: 0 };
+    return { did: Math.max(...after.map((value, index) => Math.abs(value - before.counters[index]))), gone: 0, goneCards: [] };
   }
   let did = 0;
   let gone = 0;
+  const goneCards: { card: CardInstance; side: Side }[] = [];
   for (const entry of before.cards) {
-    if (entry.inPlay && controllerOf(state, entry.card) === undefined) gone += 1;
+    if (entry.inPlay && entry.side !== undefined && controllerOf(state, entry.card) === undefined) {
+      gone += 1;
+      goneCards.push({ card: entry.card, side: entry.side });
+    }
     if (signature(state, entry.card) !== entry.signature) did += 1;
   }
-  return { did, gone };
+  return { did, gone, goneCards };
 }
 
 /** The previous relocating act's cards, with the first card's house taken before leavePlay. */
@@ -1394,10 +1467,13 @@ const iconScore = (card: CardInstance) =>
   (card.amber ?? 0) + (card.face.amber ?? 0) + (card.face.bonusIcons?.amber ?? 0) + (card.face.bonusIcons?.capture ?? 0) + (card.face.bonusIcons?.damage ?? 0) + (card.face.bonusIcons?.draw ?? 0);
 
 function run(context: Context, act: Act): void {
+  // The other option of a "Choose one:" is not a skipped act, it is not part of this move at all.
+  if (act.mode && act.mode !== (context.mode ?? "a")) return;
   // A skipped act did nothing: the did/gone of the act before do not carry on.
   if ((act.optional && context.decline) || (act.if && !holds(act.if, context.state, context.me, context.source, context))) {
     context.did = 0;
     context.gone = 0;
+    context.goneCards = [];
     return;
   }
   const { state, me, source, deterministic } = context;
@@ -1408,17 +1484,20 @@ function run(context: Context, act: Act): void {
   if (who && whoSide === undefined) {
     context.did = 0;
     context.gone = 0;
+    context.goneCards = [];
     return;
   }
-  // `opp` flips the actor of the act (and the player whose zones it reads).
-  const side: Side = whoSide ?? ("opp" in act && act.opp ? other(me) : me);
+  // `opp` flips the actor of the act (and the player whose zones it reads); a move's `side` names the
+  // opponent's zone outright or leaves the player's option to decide it (Lote 8 §8.7).
+  const flipped = ("opp" in act && act.opp) || (act.k === "move" && (act.side === "opponent" || (act.side === "any" && context.mode === "b")));
+  const side: Side = whoSide ?? (flipped ? other(me) : me);
   const player = state.players[side];
   const cards = "s" in act ? select(context, act.s, act.k) : [];
   // Acts whose `did` is a total rather than a card count (moveAmber,
   // removeCounter) record it themselves after the sweep.
   let explicitDid: number | undefined;
   const before: Snapshot = "s" in act
-    ? { counters: [], cards: cards.map((card) => ({ card, signature: signature(state, card), inPlay: controllerOf(state, card) !== undefined })) }
+    ? { counters: [], cards: cards.map((card) => ({ card, signature: signature(state, card), inPlay: controllerOf(state, card) !== undefined, side: controllerOf(state, card) })) }
     : { counters: countersOf(state) };
   // "for each …": the count is read from the state the act starts in. Absent
   // `n` (moveAmber/removeCounter = "all") counts as 0 here; those acts read the
@@ -1816,6 +1895,12 @@ function run(context: Context, act: Act): void {
       break;
     }
     case "lasting": {
+      // Lote 8 §8.1: the redirect lives only as long as the fight, so it is the transient fightRedirect,
+      // not a stored effect. Needs both the fought creature and a living chosen one.
+      if (act.e.replace?.redirect === "chosen") {
+        if (context.fought && context.target && controllerOf(state, context.target) !== undefined) fightRedirect = { from: context.fought, to: context.target };
+        break;
+      }
       // A triggered effect with a duration: stored as plain data (like keyteki's
       // lasting effects) and pruned when the stamp it expires on is reached.
       const until = turnStamp(state) + (act.e.duration === "next" ? 2 : 1);
@@ -1901,7 +1986,7 @@ function fireOwn(
   const live = firing.map((ability) => !ability.if || holds(ability.if, state, me, source, prior));
   for (const [index, ability] of firing.entries()) {
     if (!live[index]) continue;
-    const context: Context = { state, me, source, fought: options.fought, foughtHouse: prior.foughtHouse, actor: options.actor, deterministic: options.deterministic, useVia: options.via, decline: options.decline };
+    const context: Context = { state, me, source, fought: options.fought, foughtHouse: prior.foughtHouse, actor: options.actor, deterministic: options.deterministic, useVia: options.via, decline: options.decline, mode: options.choice?.mode ?? defaultMode(ability) };
     if (ability.target) {
       const legal = everyMatch(state, me, source, ability.target);
       const chosen = legal.find((card) => card.instanceId === options.choice?.id);
@@ -1936,6 +2021,22 @@ function fireOwn(
     for (const act of ability.acts) run(context, act);
   }
 }
+
+/** Does an ability ask the player to choose an option ("Choose one:" or a `side:"any"` move, Lote 8)? */
+const modeCache = new WeakMap<Ability, boolean>();
+function citesMode(ability: Ability): boolean {
+  let cites = modeCache.get(ability);
+  if (cites === undefined) {
+    const text = JSON.stringify(ability.acts);
+    cites = text.includes('"mode":') || text.includes('"side":"any"');
+    modeCache.set(ability, cites);
+  }
+  return cites;
+}
+
+/** The option a move that did not choose one resolves: a `side:"any"` move reads the opponent's zone (the
+    engine's guess for the player's side of the table), a "Choose one:" its first option. */
+const defaultMode = (ability: Ability): "a" | "b" => (JSON.stringify(ability.acts).includes('"side":"any"') ? "b" : "a");
 
 /** Does an ability select with an "up to N" pick (it reads the move's `targets` queue)? */
 const queueCache = new WeakMap<Ability, boolean>();
@@ -1998,7 +2099,7 @@ function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, 
           if (trigger === "discard" && watcher === event) continue;
           if (!ability.of || !ability.on.includes(trigger) || !matches(state, side, watcher, event, ability.of)) continue;
           if (ability.if && !holds(ability.if, state, side, watcher, { actor })) continue;
-          const context: Context = { state, me: side, source: watcher, event, deterministic, actor };
+          const context: Context = { state, me: side, source: watcher, event, deterministic, actor, mode: defaultMode(ability) };
           if (ability.target) {
             context.target = autoPick(state, side, everyMatch(state, side, watcher, ability.target), isHarmful(ability), givesControl(ability));
             if (!context.target) continue;
@@ -2033,11 +2134,14 @@ function reap(state: GameState, me: Side, creature: CardInstance, choice: Choice
     Skirmish, Poison and Splash-attack, then "Fight:" if the attacker survived. */
 function fight(state: GameState, me: Side, attacker: CardInstance, defender: CardInstance, choice: Choice, deterministic: boolean, decline?: boolean): void {
   const savedFight = fightPair;
+  const savedRedirect = fightRedirect;
   fightPair = { attacker, defender };
+  fightRedirect = null;
   try {
   fightBody(state, me, attacker, defender, choice, deterministic, decline);
   } finally {
     fightPair = savedFight;
+    fightRedirect = savedRedirect;
   }
 }
 
@@ -2134,6 +2238,7 @@ export function fightTargets(state: GameState, side: Side, attacker: CardInstanc
 
 function canUseCard(state: GameState, side: Side, card: CardInstance, house: string | null): boolean {
   if (restricted(state, side, "use", card)) return false;
+  if (state.players[side].amber < useTolls(state, side, card).reduce((sum, toll) => sum + toll.cost, 0)) return false;
   return card.ready && !card.stunned && ((houseAllows(state, card, house) && hasAbility(state, card, "action")) || hasAbility(state, card, "omni"));
 }
 
@@ -2144,7 +2249,8 @@ const citesCache = new WeakMap<Ability, boolean>();
 function citesChosen(ability: Ability): boolean {
   let cites = citesCache.get(ability);
   if (cites === undefined) {
-    const text = JSON.stringify(ability);
+    // `redirect:"chosen"` (Lote 8 §8.1) is a creature, not the chosen house.
+    const text = JSON.stringify(ability).replaceAll('"redirect":"chosen"', "");
     cites = text.includes('"chosen"') || text.includes('"!chosen"') || text.includes('"forceHouse"');
     citesCache.set(ability, cites);
   }
@@ -2292,10 +2398,12 @@ function upToSpec(ability: Ability): { pick: Filter; n: number; k: Act["k"] } | 
 
 /** What the move still has to ask the player after the house and the first target. */
 export interface MovePrompt {
-  /** `target2`: one more card (the move's `targets[0]`); `targets`: 0..max cards; `flank`: left or right. */
-  kind: "target2" | "targets" | "flank";
+  /** `target2`: one more card (the move's `targets[0]`); `targets`: 0..max cards; `flank`: left or right;
+      `mode` (Lote 8): "a" or "b" — `choice` says whether they are two zones ("side") or two printed options ("option"). */
+  kind: "target2" | "targets" | "flank" | "mode";
   ids: string[];
   max?: number;
+  choice?: "side" | "option";
 }
 
 /** The next unanswered question of a move, or null when the move is complete. The UI feeds the
@@ -2320,6 +2428,7 @@ export function pendingPrompt(state: GameState, side: Side, move: GameMove): Mov
         if (ids.length) return { kind: "targets" as const, ids, max: Math.min(spec.n, ids.length) };
       }
       if (move.flank === undefined && ability.acts.some((act) => act.k === "toFlank")) return { kind: "flank" as const, ids: [] };
+      if (move.mode === undefined && citesMode(ability)) return { kind: "mode" as const, ids: [], choice: defaultMode(ability) === "b" ? ("side" as const) : ("option" as const) };
     }
     return null;
   });
@@ -2347,6 +2456,16 @@ function queueVariants(state: GameState, side: Side, move: GameMove): GameMove[]
     if (ids.length) return [move, { ...move, targets: ids } as GameMove];
   }
   return [move];
+}
+
+/** The AI's variants of a "Choose one:" / `side:"any"` move: one per option, so the search picks (Lote 8). */
+function modeVariants(state: GameState, side: Side, move: GameMove): GameMove[] {
+  if (move.mode !== undefined) return [move];
+  const origin = moveSource(state, side, move);
+  if (!origin || !abilitiesOf(state, origin).some(citesMode)) return [move];
+  const live = resolvingAbilities(state, side, move);
+  if (!live?.abilities.some(citesMode)) return [move];
+  return [{ ...move, mode: "a" } as GameMove, { ...move, mode: "b" } as GameMove];
 }
 
 /** Every legal move before target expansion: the single legality specification
@@ -2379,7 +2498,10 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
   }
 
   for (const card of player.board) {
-    if (isCreature(card) && houseAllows(state, card, house) && card.ready) {
+    // Lote 8 §8.8: "may fight" opens the fight (and the stun removal that stands for it) outside the house, never the reap.
+    const inHouse = isCreature(card) && houseAllows(state, card, house);
+    const fightOnly = isCreature(card) && !inHouse && card.ready && mayFightOutOfHouse(state, card);
+    if (isCreature(card) && (inHouse || fightOnly) && card.ready) {
       if (card.stunned) {
         moves.push({ type: "unstun", instanceId: card.instanceId });
         continue;
@@ -2389,7 +2511,7 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
       // fight may only fight — its reap and Action/Omni uses are closed. With
       // no legal target it is used normally ("if able").
       const forced = card.enraged && targets.length > 0;
-      if (!forced) {
+      if (!forced && !fightOnly) {
         moves.push({ type: "reap", instanceId: card.instanceId });
         if (hasOptionalTrigger(state, side, card, ["reap"])) moves.push({ type: "reap", instanceId: card.instanceId, decline: true });
       }
@@ -2432,7 +2554,7 @@ export function getLegalMoves(state: GameState, playerIndex: Side, house: string
     const variants = houses.length ? houses.map((choice) => ({ ...base, house: choice }) as GameMove) : [base];
     return variants.flatMap((move) => {
       const choices = targetChoices(state, playerIndex, move);
-      return (choices.length > 1 ? choices.map((target) => ({ ...move, target }) as GameMove) : [move]).flatMap((expanded) => queueVariants(state, playerIndex, expanded));
+      return (choices.length > 1 ? choices.map((target) => ({ ...move, target }) as GameMove) : [move]).flatMap((expanded) => queueVariants(state, playerIndex, expanded)).flatMap((expanded) => modeVariants(state, playerIndex, expanded));
     });
   });
 }
@@ -2506,7 +2628,7 @@ export function applyMove(current: GameState, playerIndex: Side, move: GameMove,
     record(state, "log.archives", { name: player.name }, silent);
     return state;
   }
-  const choice: Choice = { id: "target" in move ? move.target : undefined, targets: move.targets, flank: move.flank };
+  const choice: Choice = { id: "target" in move ? move.target : undefined, targets: move.targets, flank: move.flank, mode: move.mode };
   const source = moveSource(state, playerIndex, move)!;
   // "Choose a house": a move without a valid house still resolves, with the
   // engine's default pick, so replays and old callers never stall.
@@ -2597,6 +2719,11 @@ function resolveMove(state: GameState, playerIndex: Side, move: Exclude<GameMove
     fight(state, playerIndex, source, target, choice, deterministic, decline);
   } else {
     source.ready = false;
+    for (const toll of useTolls(state, playerIndex, source)) {
+      const paid = Math.min(toll.cost, player.amber);
+      player.amber -= paid;
+      state.players[toll.payee].amber += paid;
+    }
     const house = playerIndex === state.activePlayer ? state.activeHouse : null;
     // One use is one event: the in-house Action resolves, otherwise the Omni.
     // Firing both would wake an observer watching "each time you use an

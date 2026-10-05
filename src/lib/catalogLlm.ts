@@ -576,6 +576,121 @@ export const FEW_SHOTS: {
       keywords: {},
     },
   },
+  // Lote 8 (DSL_VERSION 9, docs/DSL_EXPANSION_PLAN_WAVE4.md): redirect "chosen", use toll, most powerful,
+  // "Choose one:" modes, gone filter, granted trait, move side "any", mayFight, div.
+  {
+    type: "Creature",
+    text: "Before Fight: Choose a creature. ~ deals damage to that creature rather than the one it is fighting.",
+    answer: {
+      abilities: [{ on: ["beforeFight"], acts: [{ k: "lasting", e: { target: { fighting: true }, replace: { on: "damage", redirect: "chosen" } } }], target: { type: "Creature" } }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Your opponent must pay you 1<A> in order to use an artifact.",
+    answer: { abilities: [], effects: [{ target: {}, restrict: { who: "opponent", action: "use", type: "Artifact", cost: 1 } }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "Play: Move each <A> from a friendly creature to the most powerful enemy creature.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [{ k: "moveAmber", s: "target", to: "target2" }],
+          target: { type: "Creature", side: "friendly", amber: true },
+          target2: { type: "Creature", side: "enemy", most: 1 },
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Choose one:\nExalt the most powerful creature 3 times.\nThe most powerful friendly creature captures 3<A>.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [
+            { k: "exalt", s: { each: { type: "Creature", most: 1 } }, n: 3, mode: "a" },
+            { k: "capture", s: { each: { type: "Creature", side: "friendly", most: 1 } }, n: 3, mode: "b" },
+          ],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Destroy each creature. You may forge a key at +6<A> current cost, reduced by 1<A> for each Mutant creature destroyed this way. Purge ~.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [
+            { k: "destroy", s: { each: { type: "Creature" } } },
+            { k: "forgeKey", n: 1, mod: 6, less: { gone: { type: "Creature", trait: "Mutant" } }, optional: true },
+            { k: "purge", s: "self" },
+          ],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Artifact",
+    text: "Omni: Destroy ~. For the remainder of the turn, each creature gains the Mutant trait.",
+    answer: {
+      abilities: [{ on: ["omni"], acts: [{ k: "destroy", s: "self" }, { k: "lasting", e: { target: { type: "Creature" }, traits: "Mutant", duration: "turn" } }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Discard the top card of a player's deck. If it is a creature, purge it.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [
+            { k: "move", n: 1, from: "deck", to: "discard", pick: "top", side: "any" },
+            { k: "move", n: 1, from: "discard", to: "purged", pick: "moved", type: "Creature", side: "any" },
+          ],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: For the remainder of the turn, each friendly creature may fight.",
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "lasting", e: { target: { type: "Creature", side: "friendly" }, mayFight: true, duration: "turn" } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "Play: Each player randomly discards one third of their cards from their hand (rounding down).",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [
+            { k: "move", n: 1, from: "hand", to: "discard", pick: "random", per: { p: "hand", div: 3 } },
+            { k: "move", n: 1, from: "hand", to: "discard", opp: true, pick: "random", per: { p: "hand", opp: true, div: 3 } },
+          ],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
 ];
 
 const SYSTEM_RULES = [
@@ -598,6 +713,7 @@ const SYSTEM_RULES = [
   '"Choose a house" resolves no act: the NEXT sentences read it as {"house":"chosen"} ("of that house"). "Your opponent must choose that house next turn" = {"k":"forceHouse"}. "After a player chooses an active house, X" = on ["house"], and "that house" there is {"house":"active"}; "After you choose" adds if {"k":"myTurn"}.',
   '"Forge a key at +N cost, reduced by 1 for each X" = forgeKey with mod N and less = the count of X; "If you do, purge ~" on an Action = {"k":"purge","s":"self","if":<did gte 1>}. "Steal all but N of your opponent\'s <A>" = steal n 1 per {"sub":[{"p":"amber","opp":true},N]}. "an even/odd amount of <A>" = count op "even"/"odd" (n ignored). "If you forged a key on your previous turn" = {"k":"forged"} (opp:true for the opponent).',
   '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. `unless <cond>` = `if: not <cond>` on the effect. A card always goes to its owner\'s zone. A filter without `type` matches any card in play.',
+  'Superlatives: "the most powerful [enemy] creature" = {"each":{...,"most":1}} (mirror of "least": 1). "Choose one:" with two lines = every act of the first line has mode "a", of the second mode "b" (no target). "a player\'s deck" = a move with side:"any" (the player picks whose; a following "If it is a creature, purge it" is a move pick "moved" type Creature with the same side). "Your opponent must pay you N<A> to use an artifact" = effects [{target:{},restrict:{who:"opponent",action:"use",type:"Artifact",cost:N}}]. "for each X destroyed this way" = per {"gone":<filter of X>}. "gains the Mutant trait" = a lasting effect with traits; "each friendly creature may fight" = mayFight:true. "one third of the cards in your hand" = per {"p":"hand","div":3}. "~ deals damage to that creature rather than the one it is fighting" (after "Choose a creature", on Before Fight) = a lasting act with replace {"on":"damage","redirect":"chosen"}.',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",
@@ -725,6 +841,8 @@ const TRIGGER_WORDS: Record<string, RegExp> = {
   forge: /\bforges?\b|\bkey is forged\b/,
   ready: /\breadies\b/,
   enter: /\benters play\b/,
+  // "After a card is discarded from your hand" (observer on the discard event).
+  discard: /\bdiscard(s|ed)?\b/,
 };
 const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const TARGETED = new Set(["target", "targetAndNeighbors", "targetNeighbors"]);
@@ -742,7 +860,8 @@ function actProblem(act: Ability["acts"][number], ability: Ability, face: CardFa
   if (act.k === "use" && act.s === "self" && (ability.on.includes("fight") || ability.on.includes("beforeFight"))) {
     return `use: "self" on a ${ability.on.join("/")} trigger would re-run the ability forever`;
   }
-  if (act.k === "lasting" && !act.e.duration) return "lasting: the effect has no duration";
+  // The chosen redirect lives as long as the fight by construction (game.ts fightRedirect): no duration.
+  if (act.k === "lasting" && !act.e.duration && act.e.replace?.redirect !== "chosen") return "lasting: the effect has no duration";
   // Lote 5: the numbers of a forge/sub must come from the text, and a house
   // reader needs the sentence that makes the choice.
   if (act.k === "forgeKey") {
@@ -751,9 +870,10 @@ function actProblem(act: Ability["acts"][number], ability: Ability, face: CardFa
       if (value !== undefined && value > 1 && !new RegExp(`\\b(${value}|${NUMBER_WORDS[value] ?? "$^"})\\b`).test(text)) return `forgeKey: the number ${value} is not in the card text`;
     }
   }
-  if (act.k === "forceHouse" && !/\bchoose a house\b/.test(text)) return 'forceHouse: the card text never says "choose a house"';
+  if (act.k === "forceHouse" && !/\bchoose (a house|that [^.]*house)/.test(text)) return 'forceHouse: the card text never says "choose a house"';
   if (act.k === "setHouse" && act.house !== "chosen" && !new RegExp(`\\b${act.house.toLowerCase()}\\b`).test(text)) return `setHouse: the house ${act.house} is not in the card text`;
-  if (JSON.stringify(act).includes('"chosen"') && !/\bchoose a house\b/.test(text)) return 'a "chosen" house is read but the card text never says "choose a house"';
+  // `redirect:"chosen"` names the ability's chosen creature, not a house.
+  if (JSON.stringify(act).replaceAll('"redirect":"chosen"', "").includes('"chosen"') && !/\bchoose a house\b/.test(text)) return 'a "chosen" house is read but the card text never says "choose a house"';
   return null;
 }
 

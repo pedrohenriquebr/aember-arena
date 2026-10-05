@@ -155,7 +155,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 8;
+export const PARSER_VERSION = 9;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -352,7 +352,7 @@ function parseFilterWords(phrase: string): Filter | null {
   // counters on it" — presence or absence of worn amber/counters.
   let amberClause: boolean | undefined;
   let counterClause: boolean | undefined;
-  const worn = words.match(/^(.*?) with (no |a |an )?(amber|\+1 power counters?|counters?) on it$/);
+  const worn = words.match(/^(.*?) with (no |a |an )?(amber|\+1 power counters?|counters?) on (?:it|them)$/);
   if (worn) {
     words = worn[1];
     if (worn[3].startsWith("amber")) amberClause = worn[2] !== "no ";
@@ -361,6 +361,7 @@ function parseFilterWords(phrase: string): Filter | null {
   let powerMax: number | undefined;
   let powerMin: number | undefined;
   let weaker: boolean | undefined;
+  let stronger: boolean | undefined;
   const power = words.match(/^(.*?) with power (\d+) or (lower|less|higher|more)$/);
   if (power) {
     words = power[1];
@@ -370,6 +371,10 @@ function parseFilterWords(phrase: string): Filter | null {
   if (/ with lower power than (?:~|this creature|it|this card)$/.test(words)) {
     words = words.replace(/ with lower power than (?:~|this creature|it|this card)$/, "");
     weaker = true;
+  }
+  if (/ with higher power than (?:~|this creature|it|this card)$/.test(words)) {
+    words = words.replace(/ with higher power than (?:~|this creature|it|this card)$/, "");
+    stronger = true;
   }
   let share: string | undefined;
   const shares = words.match(/^(.*?) that (?:(does not|do not) )?shares? a house with (.+)$/);
@@ -403,6 +408,7 @@ function parseFilterWords(phrase: string): Filter | null {
   if (powerMax !== undefined) filter.powerMax = powerMax;
   if (powerMin !== undefined) filter.powerMin = powerMin;
   if (weaker) filter.weaker = true;
+  if (stronger) filter.stronger = true;
   if (share) filter.house = share;
   if (flankClause !== undefined) filter.flank = flankClause;
   if (amberClause !== undefined) filter.amber = amberClause;
@@ -437,6 +443,12 @@ function parseObject(phrase: string, upgrade: boolean, observer = false): { s: S
   if (least) {
     const filter = parseFilterWords(least[1]);
     return filter ? { s: { each: { ...filter, least: 1 } } } : null;
+  }
+  // Lote 8 §8.3: the mirror of "the least powerful": one card, the highest effective power.
+  const most = phrase.match(/^the most powerful (.+)$/);
+  if (most) {
+    const filter = parseFilterWords(most[1]);
+    return filter ? { s: { each: { ...filter, most: 1 } } } : null;
   }
   // Lote 7 §7.1: "up to three creatures" / "any number of friendly creatures" — the player's queue.
   const upTo = phrase.match(/^(?:up to (a|an|one|two|three|four|five|six|seven|eight|nine|ten|\d+)|any number of) (.+)$/);
@@ -512,6 +524,12 @@ function parseCondition(clause: string): Condition | null {
 function parsePer(phrase: string): Count | null {
   if (/^creatures? (?:healed|damaged) this way$/.test(phrase) || /^cards? discarded this way$/.test(phrase)) return "did";
   if (/^creatures? destroyed this way$/.test(phrase)) return "gone";
+  // Lote 8 §8.5: "each Mutant creature destroyed this way" counts only the destroyed cards that match.
+  const destroyed = phrase.match(/^(.+?) destroyed this way$/);
+  if (destroyed) {
+    const filter = parseFilterWords(destroyed[1]);
+    return filter ? { gone: filter } : null;
+  }
   if (/^(?:bonus icons?|.+ counters?) (?:on the discarded card|removed this way)$/.test(phrase)) return phrase.startsWith("bonus") ? { m: "icons" } : "did";
   if (/^the (?:archived|purged|discarded) (?:creature|card)'?s? power$/.test(phrase)) return { m: "power" };
   // Lote 7 §7.2: distinct colors among the forged keys (both sides unless named).
@@ -574,13 +592,14 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
   [/^return a creature from your discard pile to your hand$/, () => ({ k: "fromDiscard", type: "Creature" })],
   // Lote 2 (§2.6): the zone moves of the player, one act for mill, discard,
   // archive and purge. "the top" of a deck is the end of the array (game.move).
-  [/^discard the top(?: (\d+))? cards? of (your|your opponent's) deck$/, (m) => ({
+  // Lote 8 §8.7: "a player's deck" is either one — the move's option decides whose.
+  [/^discard the top(?: (\d+))? cards? of (your|your opponent's|a player's) deck$/, (m) => ({
     k: "move",
     n: m[1] ? Number(m[1]) : 1,
     from: "deck",
     to: "discard",
     pick: "top",
-    ...(m[2] === "your opponent's" ? { opp: true } : {}),
+    ...(m[2] === "your opponent's" ? { opp: true } : m[2] === "a player's" ? { side: "any" as const } : {}),
   })],
   // Lote 4 §4.5: the deck's bottom is the array's start.
   [/^discard the bottom(?: (\d+))? cards? of (your|your opponent's) deck$/, (m) => ({
@@ -621,7 +640,7 @@ const VERBS: [
   [/^destroy (.+)$/, () => ({ k: "destroy", obj: 1 })],
   [/^purge (.+)$/, () => ({ k: "purge", obj: 1 })],
   [/^sacrifice (.+)$/, () => ({ k: "sacrifice", obj: 1 })],
-  [/^exalt (.+?)( twice)?$/, (m) => ({ k: "exalt", n: m[2] ? 2 : 1, obj: 1 })],
+  [/^exalt (.+?)(?: (twice)| (\d+|one|two|three|four|five) times?)?$/, (m) => ({ k: "exalt", n: m[2] ? 2 : m[3] ? (COUNT_WORDS[m[3]] ?? Number(m[3])) : 1, obj: 1 })],
   [/^deal (\d+)(?: damage)? to (.+)$/, (m) => ({ k: "damage", n: +m[1], obj: 2 })],
   [/^stun (.+)$/, () => ({ k: "stun", obj: 1 })],
   [/^exhaust (.+)$/, () => ({ k: "exhaust", obj: 1 })],
@@ -651,7 +670,7 @@ const VERBS: [
   [/^(?:take|gain) control of (.+)$/, () => ({ k: "takeControl", obj: 1 })],
   // Lote 4 §4.7: "Give control of X to your opponent" (the destination side).
   [/^give control of (.+?) to (?:your|their) opponent$/, () => ({ k: "takeControl", obj: 1, opp: true })],
-  [/^(.+?) captures? (\d+) amber$/, (m) => ({ k: "capture", n: +m[2], obj: 1 })],
+  [/^(.+?) captures? (\d+)(?: amber)?$/, (m) => ({ k: "capture", n: +m[2], obj: 1 })],
   // Lote 4 §4.4: capture out of the creature's own side's pool.
   [/^(.+?) captures? (\d+) amber from its own side$/, (m) => ({ k: "capture", n: +m[2], obj: 1, own: true })],
 ];
@@ -663,7 +682,7 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean, qu
   let body = may ? may[1] : sentence;
   // Lote 5 §5.4: "Forge a key at +N current cost, reduced by 1 for each X" is ONE
   // act (`less`), so it is read before the generic "for each" split.
-  const reduced = body.match(/^(forge (?:another )?a? ?key at (?:current cost|\+\d+ amber(?: current cost)?)), reduced by 1 amber for each (.+?)(?:, to a minimum of (\d+) amber)?$/);
+  const reduced = body.match(/^(forge (?:another )?a? ?key at (?:current cost|\+\d+(?: amber)?(?: current cost)?)), reduced by 1(?: amber)? for each (.+?)(?:, to a minimum of (\d+)(?: amber)?)?$/);
   if (reduced) {
     const less = parsePer(reduced[2]);
     const head = less ? parseSentenceBody(reduced[1], upgrade, creature, quoted, observer) : null;
@@ -737,6 +756,33 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
       ],
       target: { type: "Creature", counters: true },
       target2: { type: "Creature" },
+    };
+  }
+  // Lote 8 §8.3: all the amber of one friendly creature goes to the most powerful enemy (the target is the player's pick).
+  const toMost = sentence.match(/^move (?:each|all) amber from (.+?) to the most powerful (.+)$/);
+  if (toMost) {
+    const from = parseObject(toMost[1], upgrade, observer);
+    const to = parseFilterWords(toMost[2]);
+    if (!from || from.s !== "target" || !from.target || !to) return null;
+    return { acts: [{ k: "moveAmber", s: "target", to: "target2" }], target: { ...from.target, amber: true }, target2: { ...to, most: 1 } };
+  }
+  // Lote 8 §8.1 (Gabos Longarms): the choice is the ability's target; the redirect is the fight's own.
+  if (sentence === "choose a creature") return { acts: [], target: { type: "Creature" } };
+  if (/^(?:this card|this creature|~) deals damage to that creature (?:instead|rather than the (?:one|creature) (?:it|this card|this creature) is fighting)$/.test(sentence)) {
+    return { acts: [{ k: "lasting", e: { target: { fighting: true }, replace: { on: "damage", redirect: "chosen" } } }] };
+  }
+  // Lote 8 §8.7: "If it is a creature, purge it" — the card the act before milled (Hamstrung).
+  const purgeIt = sentence.match(/^if it is an? (creature|artifact|action|upgrade), purge it$/);
+  if (purgeIt) return { acts: [{ k: "move", n: 1, from: "discard", to: "purged", pick: "moved", type: RESTRICT_TYPES[purgeIt[1]] }] };
+  // Lote 8 §8.9 (Trihard): a fraction of each hand, rounded down — two acts, me first.
+  const fraction = sentence.match(/^each player randomly discards one (third|half) of their cards from their hand$/);
+  if (fraction) {
+    const div = fraction[1] === "third" ? 3 : 2;
+    return {
+      acts: [
+        { k: "move", n: 1, from: "hand", to: "discard", pick: "random", per: { p: "hand", div } },
+        { k: "move", n: 1, from: "hand", to: "discard", opp: true, pick: "random", per: { p: "hand", opp: true, div } },
+      ],
     };
   }
   const flank = sentence.match(/^move a creature to a flank of its controller's battleline( and exhaust it)?$/);
@@ -932,7 +978,8 @@ function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, cre
     const done = parseAbilityBody(triggers, body, upgrade, creature, quoted, of, headerIf);
     // "Choose a house" and a `chosen` reader must come together: one without the
     // other would claim full coverage for a text the engine cannot resolve.
-    return done && choseHouse === /"(?:chosen|!chosen|forceHouse)"/.test(JSON.stringify(done)) ? done : null;
+    // `redirect:"chosen"` (Lote 8) names the ability's chosen creature, not a house.
+    return done && choseHouse === /"(?:chosen|!chosen|forceHouse)"/.test(JSON.stringify(done).replaceAll('"redirect":"chosen"', "")) ? done : null;
   } finally {
     thatHouse = savedThat;
     choseHouse = savedChose;
@@ -945,9 +992,28 @@ let choseHouse = false;
 function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition): Ability[] | null {
   const done: Ability[] = [];
   const watching = of ? { of } : {};
+  // Lote 8 §8.4: "Choose one:" followed by exactly two options (the printed lines collapse into sentences).
+  const modal = body.trim().match(/^choose one:\s*(.+)$/);
+  if (modal) {
+    const options = modal[1].split(/\.\s*/).map((part) => part.trim()).filter(Boolean);
+    if (options.length !== 2) return null;
+    const modalActs: Act[] = [];
+    for (const [index, option] of options.entries()) {
+      const parsed = parseSentence(option, upgrade, creature, quoted, of !== undefined);
+      if (!parsed || parsed.target || parsed.target2 || parsed.cond || !parsed.acts.length) return null;
+      for (const act of parsed.acts) act.mode = index === 0 ? "a" : "b";
+      modalActs.push(...parsed.acts);
+    }
+    return [{ on: triggers, ...(headerIf ? { if: headerIf } : {}), acts: modalActs, ...watching }];
+  }
   let ability: Ability = { on: triggers, ...(headerIf ? { if: headerIf } : {}), acts: [], ...watching };
   const close = (): boolean => {
     if (!ability.acts.length) return false;
+    // "Discard the top card of a player's deck. If it is a creature, purge it": the second move follows the first one's zone owner (Lote 8 §8.7).
+    ability.acts.forEach((act, index) => {
+      const before = ability.acts[index - 1];
+      if (act.k === "move" && act.pick === "moved" && before?.k === "move" && before.side && !act.side && !act.opp) act.side = before.side;
+    });
     // Every act optional and the whole ability is a single "You may" clause.
     if (ability.acts.every((act) => act.optional)) ability.optional = true;
     // "Sacrifice X. Destroy an artifact." — the sacrifice consumed the source, so
@@ -1109,6 +1175,9 @@ function parseReplacement(sentence: string): PersistentEffect | null {
 
 /** "You cannot play/use/fight …" — a prohibition (keyteki effects.playerCannot). */
 function parseRestriction(sentence: string): Restrict | null {
+  // Lote 8 §8.2 (Tentacus): a toll to use an artifact, paid to the card's controller.
+  const toll = sentence.match(/^your opponent must pay you (\d+) amber in order to use an artifact$/);
+  if (toll) return { who: "opponent", action: "use", type: "Artifact", cost: Number(toll[1]) };
   const head = sentence.match(/^(you|your opponent) cannot (play|use|fight)(.*)$/);
   if (!head) return null;
   const restrict: Restrict = { who: head[1] === "you" ? "you" : "opponent", action: head[2] as Restrict["action"] };
@@ -1228,6 +1297,18 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
     const house = belongs[2] === "all houses" ? "all" : HOUSES[belongs[3]];
     const target = house ? (parseSubject(belongs[1], upgrade) ?? parseFilterWords(belongs[1])) : null;
     return target && target.house === undefined ? [{ target, house, duration, ...gate }] : null;
+  }
+  // Lote 8 §8.6: a granted trait (only a printed proper noun is a trait, like the filters).
+  const trait = body.match(/^(.+?) gains? the ([a-z]+) trait$/);
+  if (trait && properNouns.has(trait[2])) {
+    const target = parseSubject(trait[1], upgrade) ?? parseFilterWords(trait[1]);
+    return target && target.trait === undefined ? [{ target, traits: trait[2][0].toUpperCase() + trait[2].slice(1), duration, ...gate }] : null;
+  }
+  // Lote 8 §8.8: "each friendly creature may fight" (outside the active house).
+  const mayFight = body.match(/^(.+?) may fight$/);
+  if (mayFight) {
+    const target = parseSubject(mayFight[1], upgrade) ?? parseFilterWords(mayFight[1]);
+    return target ? [{ target, mayFight: true, duration, ...gate }] : null;
   }
   const restrict = parseRestriction(body);
   if (restrict) return [{ target: {}, restrict, duration, ...gate }];

@@ -43,7 +43,7 @@ describe("parserVersion", () => {
 
 describe("DSL_VERSION (versioning contract)", () => {
   it("rejects a row written by a newer grammar and copies the version", () => {
-    expect(DSL_VERSION).toBe(8);
+    expect(DSL_VERSION).toBe(9);
     expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION })?.v).toBe(DSL_VERSION);
     expect(normaliseAbilityOverride({ ...row(), v: DSL_VERSION + 1 })).toBeNull();
     expect(normaliseAbilityOverride({ ...row(), v: "2" })).toBeNull();
