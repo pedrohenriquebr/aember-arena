@@ -191,6 +191,14 @@ describe("translateCard — validacao tripla", () => {
     }
   });
 
+  it("schema failure keeps the raw answer for offline root-causing; the import strips it", async () => {
+    const answer = { abilities: [{ on: ["reap"], acts: [{ k: "explode", n: 1 }] }] };
+    const row = await translateCard(reapCard, config, { fetcher: stub(reply(answer)) });
+    expect(row.failure).toContain("abilities[0]");
+    expect(row.raw).toEqual(answer);
+    expect(normaliseAbilityOverride(row)?.raw).toBeUndefined();
+  });
+
   it("(c) sanity: invented triggers, numbers and missing targets fail", () => {
     const reason = (abilities: unknown, card = reapCard) => validateDraft(card, { abilities }, "llm").reason;
     expect(reason([{ on: ["fight"], acts: [{ k: "gainAmber", n: 1 }] }])).toContain('"fight" is not named');

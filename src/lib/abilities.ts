@@ -412,6 +412,11 @@ export interface AbilityOverride {
   /** `reply:` failures only: attempts spent, so a transient bad format is
       retried but never forever (Lote 4 §4.0). */
   tries?: number;
+  /** Schema/sanity/dry-run failures only: the offending answer, kept in the
+      Node-side saves for root-causing. `normaliseAbilityOverride` whitelists
+      its fields, so the raw never reaches the store, the engine or the
+      vendor artifacts. */
+  raw?: unknown;
 }
 
 /** Cards with a DSL stored on disk, keyed by card id (DB v4 `abilities`). The

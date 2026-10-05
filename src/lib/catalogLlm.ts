@@ -1213,7 +1213,7 @@ export function validateDraft(
 
 /** Vanilla + motive: an untrusted row with an empty DSL the queue lists. `tries`
     counts the `reply:` attempts already spent (Lote 4 §4.0). */
-export function failureRow(face: CardFace, reason: string, model?: string, options: { tries?: number } = {}): AbilityOverride {
+export function failureRow(face: CardFace, reason: string, model?: string, options: { tries?: number; raw?: unknown } = {}): AbilityOverride {
   const row: AbilityOverride = {
     cardId: face.id,
     dsl: [],
@@ -1226,6 +1226,7 @@ export function failureRow(face: CardFace, reason: string, model?: string, optio
     ...(model ? { model } : {}),
   };
   if (options.tries !== undefined) row.tries = options.tries;
+  if (options.raw !== undefined) row.raw = options.raw;
   return row;
 }
 
@@ -1254,8 +1255,10 @@ export async function translateCard(
   if (answer.unsupported === true) return failureRow(face, `unsupported: ${typeof answer.reason === "string" ? answer.reason.slice(0, 200) : "not representable"}`, model);
   const result = validateDraft(face, withParserParts(face, answer), "llm", model);
   // Schema, sanity and dry-run failures count like a spent attempt. Without
-  // `tries` the card stays under the draft cap forever (Lote 6 review).
-  return result.ok ? result.row! : failureRow(face, result.reason ?? "invalid", model, { tries: (options.tries ?? 0) + 1 });
+  // `tries` the card stays under the draft cap forever (Lote 6 review). The
+  // offending answer rides along (row.raw) so the failure is root-causeable
+  // offline; normaliseAbilityOverride strips it on any import.
+  return result.ok ? result.row! : failureRow(face, result.reason ?? "invalid", model, { tries: (options.tries ?? 0) + 1, raw: answer });
 }
 
 /** Tries already spent on this version. A row from an older DSL counts as zero
