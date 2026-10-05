@@ -44,3 +44,13 @@ Amostra crua dos títulos: 448c1335, 4CR “Foreseer”, 56252b23, 60f095d7, 652
 | 1 (Beam of Forgetting) | Reveal + agir sobre a carta revelada | família 🔴 (reveal + referência à revelada) |
 | 1 (Lollop the Titanic) | **Prevenir o dano que a criatura DÁ** quando atacada | direção NOVA: Lote 9 só previne dano RECEBIDO (replace/prevent escopa o alvo) |
 | 1 (The Warchest) | Contar criaturas inimigas destruídas EM LUTA neste turno | `gone` existe, mas sem escopo "em luta neste turno" |
+
+## ➕➕ Achados 2 (04/out — continuação da rodada do dono)
+| Linhas | O que falta | Família |
+|---|---|---|
+| 1 (Helper Bot) | **Permissão de JOGAR carta fora da casa** ("may play") | 🟢 espelho do mayFight (Lote 9) — mesmo gancho |
+| 1 (Seismo-entangler) | Restrict **só de reap** (não de todo use) | 🟢 Restrict com escopo de ação |
+| 2 (Z.Y.X. Researcher) | Escolha do jogador entre DUAS FONTES (topo do deck ou topo do descarte) | 🟡 escolha de fonte (geme de Hamstrung any-side) |
+| 1 (Rogue Operation) | Contar CASAS distintas entre cartas descartadas | 🟢 mesmo agregador "distinto" do Glittering Horde (cores de chave) |
+| 1 (Call of the Void) | llm.timeout | ⚙️ transporte (reabrir na próxima rodada) |
+| 1 (Remote Access) | reply: not a JSON object | ⚙️ formato (auto-retry já cobre) |
