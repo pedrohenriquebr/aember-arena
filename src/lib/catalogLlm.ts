@@ -505,7 +505,6 @@ export const FEW_SHOTS: {
   },
   {
     type: "Action",
-    promptOnly: true,
     text: "Play: Deal 2<D> to a creature. If it is not destroyed, its controller must choose that creature's house as their active house on their next turn.",
     answer: {
       abilities: [{

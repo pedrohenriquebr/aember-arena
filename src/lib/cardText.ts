@@ -155,7 +155,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 12;
+export const PARSER_VERSION = 13;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -519,10 +519,17 @@ function parseCondition(clause: string): Condition | null {
   if (houseCard && HOUSES[houseCard[2]]) {
     return count({ c: { house: (houseCard[1] ? "!" : "") + HOUSES[houseCard[2]], target: true } }, houseCard[1] ? "eq" : "gte", houseCard[1] ? 0 : 1);
   }
-  const haunted = clause.match(/^(you|your opponent) (?:is |are )?haunted$/);
-  if (haunted) return { k: "count", of: { p: "discard", ...(haunted[1] === "you" ? {} : { opp: true }) }, op: "gte", n: HAUNTED };
-  if (/^this (?:card|creature) is on a flank$/.test(clause)) return { k: "count", of: { c: { self: true, flank: true } }, op: "gte", n: 1 };
-  if (/^this (?:card|creature) is exhausted$/.test(clause)) return { k: "count", of: { c: { self: true, exhausted: true } }, op: "gte", n: 1 };
+  const haunted = clause.match(/^(you|your opponent) (?:is |are )?(not )?haunted$/);
+  if (haunted) {
+    const count: Condition = { k: "count", of: { p: "discard", ...(haunted[1] === "you" ? {} : { opp: true }) }, op: "gte", n: HAUNTED };
+    return haunted[2] ? { k: "not", c: count } : count;
+  }
+  // Both state words fold into ONE self filter ("exhausted and on a flank"), so no `and` condition is needed.
+  const selfState = clause.match(/^this (?:card|creature) is (exhausted|on a flank)(?: and (exhausted|on a flank))?$/);
+  if (selfState && selfState[1] !== selfState[2]) {
+    const states = [selfState[1], selfState[2]];
+    return { k: "count", of: { c: { self: true, ...(states.includes("on a flank") ? { flank: true } : {}), ...(states.includes("exhausted") ? { exhausted: true } : {}) } }, op: "gte", n: 1 };
+  }
   const none = clause.match(/^there (?:are|is) no (.+)$/);
   const filter = none ? parseFilterWords(none[1]) : null;
   return filter ? { k: "count", of: { c: filter }, op: "eq", n: 0 } : null;
@@ -878,7 +885,8 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
   if (/^your opponent must choose that house(?: as their active house)?(?: (?:on|during))?(?: their)? next turn$/.test(sentence)) {
     return thatHouse === "chosen" ? { acts: [{ k: "forceHouse" }] } : null;
   }
-  if (/^its controller must choose that creature's house as their active house(?: on their next turn)?$/.test(sentence)) {
+  // Mark of Dis: a house read off the target, not chosen (so it never pairs with "Choose a house").
+  if (/^(?:its|that creature's|the creature's) controller must choose (?:that creature's|the creature's|its) house as their active house(?: (?:on|during) their next turn)?$/.test(sentence)) {
     return { acts: [{ k: "forceHouse", house: "target", who: "controller" }] };
   }
 
@@ -1052,7 +1060,7 @@ function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, cre
     // "Choose a house" and a `chosen` reader must come together: one without the
     // other would claim full coverage for a text the engine cannot resolve.
     // `redirect:"chosen"` (Lote 8) names the ability's chosen creature, not a house.
-    return done && choseHouse === /"(?:chosen|!chosen|forceHouse)"/.test(JSON.stringify(done).replaceAll('"redirect":"chosen"', "")) ? done : null;
+    return done && choseHouse === /"(?:chosen|!chosen)"|"forceHouse"\}/.test(JSON.stringify(done).replaceAll('"redirect":"chosen"', "")) ? done : null;
   } finally {
     thatHouse = savedThat;
     choseHouse = savedChose;
@@ -1388,7 +1396,9 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
   }
   // Lote 5 §5.6: only the unqualified immunities ("by Mutant creatures" and
   // "unless" stay out of the grammar).
-  const immune = body.match(/^(.+?) cannot be dealt damage$/);
+  // "Invulnerable" (Seda the Sleeper) reuses the same damage `prevent`: it already cancels fight damage before
+  // ward/armor, so the ward is never spent. "Cannot be destroyed" by non-damage effects is not modelled.
+  const immune = body.match(/^(.+?) (?:cannot be dealt damage|(?:gains?|is|are) invulnerable)$/);
   if (immune) {
     const target = parseSubject(immune[1], upgrade) ?? parseFilterWords(immune[1]);
     return target ? [{ target, replace: { on: "damage", prevent: true }, duration, ...gate }] : null;
