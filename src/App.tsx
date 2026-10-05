@@ -61,6 +61,7 @@ import {
   houseChoices,
   pendingPrompt,
   houseOf,
+  playPermission,
   housesFor,
   isLegalMove,
   keepHand,
@@ -1959,7 +1960,7 @@ function GameBoard({
             {...handDrag.handlers}
           >
             {!handHidden && player.hand.map((card) => {
-              const playable = Boolean(game.activeHouse && houseOf(game, card) === game.activeHouse);
+              const playable = Boolean(game.activeHouse && (houseOf(game, card) === game.activeHouse || playPermission(game, game.activePlayer, card)));
               return (
                 <CardTile
                   key={card.instanceId}

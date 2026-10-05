@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 10; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 11; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -77,6 +77,10 @@ export interface Filter {
   house?: string;
   /** "each Knight creature" (prefix `!` negates): a token of face.traits. */
   trait?: string;
+  /** "Creatures to the left/right of ~ in the battleline" (Lote 11 §G): every creature of the SOURCE's
+      battleline strictly left (lower index) or right of it — not only the neighbors. Needs a source. */
+  leftOf?: boolean;
+  rightOf?: boolean;
   /** "each exhausted creature": NOT the same as `ready` (a stunned card is ready). */
   exhausted?: boolean;
 }
@@ -105,6 +109,12 @@ export type Selection =
 export type Count =
   | "did"
   | "gone"
+  /** Total damage the previous `heal` act removed (Lote 11 §E): "a +1 power counter for each damage healed". `did`
+      keeps counting cards, so "for each creature healed this way" is untouched. */
+  | "healed"
+  /** Creatures destroyed in a fight so far THIS turn that match the filter (Lote 11 §E, The Warchest); `side` is
+      relative to the counting player and was taken when the creature died. */
+  | { slain: Filter }
   /** Cards the previous act sent out of play that match the filter (Lote 8 §8.5): "for each Mutant creature destroyed this way". */
   | { gone: Filter }
   | { c: Filter }
@@ -127,11 +137,18 @@ export type Act = (
   /** `own` takes the captured amber from the creature's controller instead of
       its opponent ("captures N from its own side"). */
   | { k: "capture"; n: number; s: Selection; own?: boolean }
-  | { k: "damage" | "heal" | "exalt"; n: number; s: Selection }
+  | { k: "exalt"; n: number; s: Selection }
+  /** `n` absent = fully heal (Lote 11 §E): every damage the selected creatures carry. */
+  | { k: "heal"; n?: number; s: Selection }
+  /** `divide` (Lote 11 §F, First Blood): n x per is ONE pool split among the selected cards (an `upTo` pick). The
+      move's `targets` queue names the creatures — the pool is divided evenly among them, the first takes the
+      remainder; with no queue the engine allocates greedily (kill what it can on the enemy side). */
+  | { k: "damage"; n: number; s: Selection; divide?: true }
   | { k: "destroy" | "purge" | "sacrifice" | "stun" | "exhaust" | "ready" | "unstun" | "returnToHand" | "archive"; s: Selection }
   /** Use a creature now ("Ready and fight/reap with X"): `via` forces how the
-      creature is used, because its own Action would win otherwise. */
-  | { k: "use"; s: Selection; via?: "fight" | "reap" }
+      creature is used, because its own Action would win otherwise. `asYours` (Lote 11 §B, Remote Access) resolves
+      the used card's Action/Omni with the ACTING side as its controller ("use an opponent's artifact as if it were yours"). */
+  | { k: "use"; s: Selection; via?: "fight" | "reap"; asYours?: true }
   /** +1 power counters ("Give X two +1 power counters"). */
   | { k: "counter"; n: number; s: Selection; name?: string }
   /** "Put X on the bottom of its owner's deck" / "shuffle X into its owner's
@@ -140,7 +157,7 @@ export type Act = (
   /** One act for the player zones: mill, discard/archive from hand, purge from a
       zone, shuffle the discard into the deck. `pick` is how the cards are
       chosen (absent = the controller's choice) and `at` where they land. */
-  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; side?: "opponent" | "any"; pick?: "top" | "bottom" | "random" | "all" | "moved"; at?: "top" | "bottom" | "shuffle"; type?: string; house?: string; until?: { house?: string; type?: string } }
+  | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; side?: "opponent" | "any"; pick?: "top" | "bottom" | "random" | "all" | "moved" | "revealed"; at?: "top" | "bottom" | "shuffle"; type?: string; house?: string; until?: { house?: string; type?: string } }
   /** Set tokens of the set layer (keyteki WardAction/EnrageAction/RemoveWardAction)
       and control changes (game.takeControl). */
   | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection; opp?: boolean }
@@ -171,6 +188,9 @@ export type Act = (
       acting player only (`GameState.peek`); the log records the count, never the identities. `opp` reads the
       opponent's zone, `n` is the deck depth (default 1; a hand is shown whole). */
   | { k: "peek"; from: "hand" | "deck"; n?: number; opp?: boolean }
+  /** The PUBLIC twin of `peek` (Lote 11 §H): the cards are named in the log, and the next `move` with
+      `pick:"revealed"` acts on exactly those still in the zone. `pick` "random" draws from the PRNG (default "top"). */
+  | { k: "reveal"; from: "hand" | "deck"; n?: number; opp?: boolean; pick?: "random" | "top" }
   /** A triggered effect with a duration ("Play: … on their next turn"). */
   | { k: "lasting"; e: PersistentEffect }
 ) & {
@@ -225,7 +245,9 @@ export type Coverage = "full" | "partial" | "vanilla";
     controller. */
 export interface Restrict {
   who: "you" | "opponent";
-  action: "play" | "use" | "fight";
+  /** `reap` (Lote 11 §C): the creatures the effect's `target` filter matches cannot be used to reap — the
+      other actions ignore the filter. (A ban on using artifacts is `use` + `type`.) */
+  action: "play" | "use" | "fight" | "reap";
   /** Only cards of this type are banned; absent bans every card of the action.
       `"moved"` freezes to the type of the card the previous act moved (Lote 6 §6.4). */
   type?: string;
@@ -248,6 +270,9 @@ export interface Replacement {
   redirect?: boolean | "chosen";
   /** The damage is cancelled ("cannot be dealt damage", Lote 5 §5.6). */
   prevent?: boolean;
+  /** With `prevent` (Lote 11 §D): the damage the target DEALS in a fight it is in as `attacking` / `defending` is
+      cancelled — "deals no damage when attacked" (Lollop) — instead of the damage it receives. */
+  when?: "attacking" | "defending";
 }
 
 /** A persistent effect: stat deltas, granted keywords/abilities and prohibitions
@@ -279,6 +304,15 @@ export interface PersistentEffect {
   attackBonus?: number;
   /** Narrows `attackBonus` to defenders matching this filter (`side` relative to the effect's side). */
   whenAttacking?: Filter;
+  /** "~ only deals 2 damage when fighting" (Lote 11 §D): a ceiling on the fight damage the target deals as the
+      ATTACKER, after `attackBonus`. */
+  fightDamageCap?: number;
+  /** "Your creatures enter play ready" / "If you are haunted, ~ enters play ready" (Lote 11 §A): the matching creature
+      comes in ready (condition: the effect's `if`). */
+  entersPlayReady?: true;
+  /** "You may play one non-Logos card this turn" (Lote 11 §B): the matching hand cards may be played outside the active
+      house. `true` = any number, a number = that many plays (spent from the stored lasting copy). */
+  mayPlay?: true | number;
   /** "Your amber cannot be stolen": steals against the effect's side do nothing. */
   noSteal?: boolean;
   /** Clause limiting the stat bonus ("… while it is on a flank"). */
@@ -558,7 +592,7 @@ const ACTS: Record<string, string> = {
   keyCost: "n",
   capture: "ns",
   damage: "ns",
-  heal: "ns",
+  heal: "s",
   exalt: "ns",
   destroy: "s",
   purge: "s",
@@ -589,6 +623,7 @@ const ACTS: Record<string, string> = {
   fromDiscard: "",
   archiveTop: "",
   peek: "",
+  reveal: "",
   lasting: "",
 };
 
@@ -620,6 +655,8 @@ const FILTER_FIELDS: Record<string, 0> = {
   fighting: 0,
   self: 0,
   host: 0,
+  leftOf: 0,
+  rightOf: 0,
   neighborsOfSource: 0,
   house: 0,
   trait: 0,
@@ -677,8 +714,9 @@ function validSelection(value: unknown): boolean {
 /** A dynamic amount. Closed record per variant: a key the engine does not read
     would change the count silently, so it drops the row. */
 function validCount(value: unknown): boolean {
-  if (value === "did" || value === "gone") return true;
+  if (value === "did" || value === "gone" || value === "healed") return true;
   if (!isRecord(value)) return false;
+  if (value.slain !== undefined) return Object.keys(value).every((key) => key === "slain") && validFilter(value.slain);
   if (value.gone !== undefined) return Object.keys(value).every((key) => key === "gone") && validFilter(value.gone);
   if (value.c !== undefined) return Object.keys(value).every((key) => key === "c") && validFilter(value.c);
   if (value.sub !== undefined) {
@@ -763,6 +801,10 @@ function traitEffectLoops(effect: Record<string, unknown>): boolean {
 /** `"chosen"` only makes sense inside a lasting act of an ability with a target; a constant effect never carries it. */
 function validReplacement(value: unknown, allowChosen = false): boolean {
   if (!isRecord(value) || (value.on !== "destroy" && value.on !== "damage")) return false;
+  // `when` (Lote 11 §D) only narrows a plain damage `prevent`: nothing else has a fight role to speak of.
+  if (value.when !== undefined) {
+    return (value.when === "attacking" || value.when === "defending") && value.on === "damage" && value.prevent === true && Object.keys(value).every((key) => key === "on" || key === "prevent" || key === "when");
+  }
   if (value.redirect === "chosen") return allowChosen && value.on === "damage" && Object.keys(value).every((key) => key === "on" || key === "redirect");
   if (value.to !== undefined && !["archives", "hand", "deck", "purged"].includes(value.to as string)) return false;
   return (value.redirect === undefined || typeof value.redirect === "boolean") && (value.prevent === undefined || typeof value.prevent === "boolean");
@@ -775,8 +817,18 @@ function validAttackBonus(effect: Record<string, unknown>): boolean {
   return isFiniteNumber(effect.attackBonus) && effect.attackBonus !== 0 && (effect.whenAttacking === undefined || validFilter(effect.whenAttacking));
 }
 
+/** Lote 11 fields of a persistent effect (also read inside a `lasting` act): all of them are read at event time,
+    never inside effectivePower, so none of them can recurse. */
+function validLote11(effect: Record<string, unknown>, lasting = false): boolean {
+  if (effect.entersPlayReady !== undefined && effect.entersPlayReady !== true) return false;
+  // A numbered permit is spent only as a stored lasting copy: a constant one would never run out (unlimited).
+  if (typeof effect.mayPlay === "number" && !lasting) return false;
+  if (effect.mayPlay !== undefined && effect.mayPlay !== true && !(Number.isInteger(effect.mayPlay) && (effect.mayPlay as number) >= 1)) return false;
+  return effect.fightDamageCap === undefined || (Number.isInteger(effect.fightDamageCap) && (effect.fightDamageCap as number) >= 0);
+}
+
 function validRestrict(value: unknown): boolean {
-  if (!isRecord(value) || (value.who !== "you" && value.who !== "opponent") || !["play", "use", "fight"].includes(value.action as string)) return false;
+  if (!isRecord(value) || (value.who !== "you" && value.who !== "opponent") || !["play", "use", "fight", "reap"].includes(value.action as string)) return false;
   if (value.type !== undefined && typeof value.type !== "string") return false;
   if (value.limit !== undefined && !isFiniteNumber(value.limit)) return false;
   // A toll only exists for using: a play/fight toll has no engine path.
@@ -812,7 +864,7 @@ function validAct(value: unknown): boolean {
     if (value.e.replace !== undefined && !validReplacement(value.e.replace, true)) return false;
     if (value.e.traits !== undefined && (typeof value.e.traits !== "string" || !value.e.traits)) return false;
     if (value.e.mayFight !== undefined && value.e.mayFight !== true) return false;
-    if (!validAttackBonus(value.e)) return false;
+    if (!validAttackBonus(value.e) || !validLote11(value.e, true)) return false;
     return !(value.e.power !== undefined && readsPower(value.e.target)) && !readsPower(value.e.if) && !readsPower(value.e.per);
   }
   if (value.k === "peek") {
@@ -822,6 +874,16 @@ function validAct(value: unknown): boolean {
       Object.keys(value).every((key) => key === "k" || key === "from" || key === "n" || key === "opp" || key === "optional" || key === "mode" || key === "if")
     );
   }
+  if (value.k === "reveal") {
+    return (
+      (value.from === "hand" || value.from === "deck") &&
+      (value.n === undefined || (Number.isInteger(value.n) && (value.n as number) > 0)) &&
+      (value.pick === undefined || value.pick === "random" || value.pick === "top") &&
+      Object.keys(value).every((key) => key === "k" || key === "from" || key === "n" || key === "opp" || key === "pick" || key === "optional" || key === "mode" || key === "if")
+    );
+  }
+  if (value.divide !== undefined && (value.divide !== true || value.k !== "damage")) return false;
+  if (value.asYours !== undefined && (value.asYours !== true || value.k !== "use")) return false;
   if (value.k === "setHouse") return typeof value.house === "string" && value.house.length > 0;
   if (value.k === "forgeKey") {
     if (value.less !== undefined && !validCount(value.less)) return false;
@@ -851,7 +913,7 @@ function validAct(value: unknown): boolean {
       typeof value.to === "string" &&
       ZONES.has(value.from) &&
       ZONES.has(value.to) &&
-      (value.pick === undefined || value.pick === "top" || value.pick === "bottom" || value.pick === "random" || value.pick === "all" || value.pick === "moved") &&
+      (value.pick === undefined || value.pick === "top" || value.pick === "bottom" || value.pick === "random" || value.pick === "all" || value.pick === "moved" || value.pick === "revealed") &&
       (value.type === undefined || typeof value.type === "string") &&
       (value.house === undefined || typeof value.house === "string")
     );
@@ -916,6 +978,7 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.traits === undefined || (typeof effect.traits === "string" && effect.traits.length > 0)) &&
         (effect.mayFight === undefined || effect.mayFight === true) &&
         validAttackBonus(effect) &&
+        validLote11(effect) &&
         !houseEffectLoops(effect) &&
         !traitEffectLoops(effect) &&
         !readsPower(effect.if) &&

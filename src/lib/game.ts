@@ -180,6 +180,9 @@ export interface GameState {
   /** Lote 10 §10.1: what the last "Look at …" showed. Private to `side` (the UI opens it only for a human
       viewer); the log keeps just the count. Replaced by the next move/turn end, plain JSON data. */
   peek?: { side: 0 | 1; owner: 0 | 1; from: "hand" | "deck"; faces: CardFace[] };
+  /** Lote 11 §E: the creatures destroyed in a fight this turn (snapshots taken at death, with the side that
+      controlled them) — what `{slain}` counts. Replaced, never mutated; dropped when the turn ends. */
+  fightDeaths?: { card: CardInstance; side: Side }[];
 }
 
 /** `target` optionally names the card chosen for the triggered ability (or the
@@ -537,7 +540,26 @@ function replacementFor(state: GameState, card: CardInstance, on: Replacement["o
 /** "Cannot be dealt damage" (Lote 5 §5.6): a live `prevent` replacement cancels
     the damage instance before redirect, ward and armor. */
 const damagePrevented = (state: GameState, card: CardInstance): boolean =>
-  allEffects(state).some((owner) => owner.effect.replace?.on === "damage" && owner.effect.replace.prevent === true && effectHits(state, owner, card));
+  allEffects(state).some((owner) => owner.effect.replace?.on === "damage" && owner.effect.replace.prevent === true && !owner.effect.replace.when && effectHits(state, owner, card));
+
+/** "Deals no damage when attacked/attacking" (Lote 11 §D): a live `replace.when` of this role on the card. It cancels the
+    packet at the dealer, before the fight deals anything — so there is nothing left for a Gabos redirect to move. */
+const dealsNoDamage = (state: GameState, card: CardInstance, role: "attacking" | "defending"): boolean =>
+  allEffects(state).some((owner) => owner.effect.replace?.when === role && effectHits(state, owner, card));
+
+/** The ceiling a live `fightDamageCap` puts on the damage `dealer` deals in a fight, attacking or defending (Infinity: none). */
+const fightCap = (state: GameState, dealer: CardInstance): number =>
+  allEffects(state).reduce((cap, owner) => (owner.effect.fightDamageCap !== undefined && effectHits(state, owner, dealer) ? Math.min(cap, owner.effect.fightDamageCap) : cap), Infinity);
+
+/** Does a live "enters play ready" effect cover this creature (Lote 11 §A)? The card must already be on a board
+    (the side filter reads its controller), so it is asked right after the placement. */
+const entersReady = (state: GameState, card: CardInstance): boolean =>
+  allEffects(state).some((owner) => owner.effect.entersPlayReady === true && effectHits(state, owner, card));
+
+/** Hand cards a live `mayPlay` lets `side` play outside the active house (Lote 11 §B): the matching effect, if any. */
+export function playPermission(state: GameState, side: Side, card: CardInstance): ActiveEffect | undefined {
+  return activeEffects(state, side).find((owner) => owner.effect.mayPlay !== undefined && effectHits(state, owner, card));
+}
 
 /** "Your amber cannot be stolen": does `victim` project a live noSteal? */
 const stealBlocked = (state: GameState, victim: Side): boolean =>
@@ -649,6 +671,8 @@ function restricted(state: GameState, side: Side, action: Restrict["action"], ca
     // enforced by playLimit, not here (keyteki Ember Imp).
     if (restrict.limit || restrict.cost) continue;
     if (restrict.type && (!card || card.face.type !== restrict.type)) continue;
+    // `reap` bans the creatures the effect's own filter names (Lote 11 §C), not the whole player.
+    if (restrict.action === "reap" && (!card || !effectHits(state, owner, card))) continue;
     return true;
   }
   return false;
@@ -945,6 +969,16 @@ let fightPair: { attacker: CardInstance; defender: CardInstance } | null = null;
     fought creature would take goes to `to` until the fight ends. Same transient scope as fightPair. */
 let fightRedirect: { from: CardInstance; to: CardInstance } | null = null;
 
+/** "To the left/right of ~ in the battleline" (Lote 11 §G): same battleline as the source, lower/higher index. */
+function beside(state: GameState, source: CardInstance | undefined, card: CardInstance, dir: "left" | "right"): boolean {
+  const side = source ? controllerOf(state, source) : undefined;
+  if (side === undefined || controllerOf(state, card) !== side || !isCreature(card) || !isCreature(source!)) return false;
+  const line = battleline(state.players[side]);
+  const here = line.indexOf(source!);
+  const there = line.indexOf(card);
+  return here >= 0 && there >= 0 && (dir === "left" ? there < here : there > here);
+}
+
 function matches(state: GameState, me: Side, source: CardInstance | undefined, card: CardInstance, filter: Filter, scope?: Ctx): boolean {
   const side = controllerOf(state, card);
   const typeName = filter.type?.startsWith("!") ? filter.type.slice(1) : filter.type;
@@ -965,6 +999,8 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     (!filter.self || card === source) &&
     (!filter.host || card.instanceId === source?.attachedTo) &&
     (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card))) &&
+    (!filter.leftOf || beside(state, source, card, "left")) &&
+    (!filter.rightOf || beside(state, source, card, "right")) &&
     (!filter.neighborsOfTarget || neighborPool.includes(card)) &&
     (!filter.target || card === scope?.target) &&
     (!filter.fighting || card === foe) &&
@@ -1059,6 +1095,10 @@ interface Ctx {
   queue?: string[];
   /** Where a `toFlank` act sends the creature. */
   flank?: "left" | "right";
+  /** Total damage the previous `heal` removed (Lote 11 §E), for `per: "healed"`. */
+  healed?: number;
+  /** The cards the last `peek`/`reveal` showed (Lote 11 §H): a `move` with `pick:"revealed"` takes from these. */
+  revealed?: CardInstance[];
   /** The cards the previous act sent out of play (Lote 8 §8.5), for `{gone: Filter}`. */
   goneCards?: { card: CardInstance; side: Side }[];
   /** The option of the move's "Choose one:" and of a `side:"any"` move (Lote 8 §8.4/§8.7). */
@@ -1130,6 +1170,12 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
 function countOf(scope: Ctx, spec: Count): number {
   if (spec === "did") return scope.did ?? 0;
   if (spec === "gone") return scope.gone ?? 0;
+  if (spec === "healed") return scope.healed ?? 0;
+  if ("slain" in spec) {
+    // Snapshots of creatures that died in a fight this turn: like `gone`, the dead have no controller any more.
+    const { side: want, ...rest } = spec.slain;
+    return (scope.state.fightDeaths ?? []).filter(({ card, side }) => (!want || (want === "friendly") === (side === scope.me)) && matches(scope.state, scope.me, scope.source, card, rest, scope)).length;
+  }
   if ("gone" in spec) return (scope.goneCards ?? []).filter(({ card, side }) => {
     // The dead card has no controller any more: `side` was taken before it left play.
     const { side: want, ...rest } = spec.gone;
@@ -1326,6 +1372,7 @@ function makeToken(state: GameState, side: Side, house: string): CardInstance {
     isToken: true,
   };
   state.players[side].board.push(token);
+  if (entersReady(state, token)) token.ready = true;
   return token;
 }
 
@@ -1488,6 +1535,7 @@ function run(context: Context, act: Act): void {
   if ((act.optional && context.decline) || (act.if && !holds(act.if, context.state, context.me, context.source, context))) {
     context.did = 0;
     context.gone = 0;
+    context.healed = 0;
     context.goneCards = [];
     return;
   }
@@ -1499,6 +1547,7 @@ function run(context: Context, act: Act): void {
   if (who && whoSide === undefined) {
     context.did = 0;
     context.gone = 0;
+    context.healed = 0;
     context.goneCards = [];
     return;
   }
@@ -1511,6 +1560,8 @@ function run(context: Context, act: Act): void {
   // Acts whose `did` is a total rather than a card count (moveAmber,
   // removeCounter) record it themselves after the sweep.
   let explicitDid: number | undefined;
+  // Total damage a `heal` removed (Lote 11 §E): read by the NEXT act's `per: "healed"`.
+  let healed = 0;
   const before: Snapshot = "s" in act
     ? { counters: [], cards: cards.map((card) => ({ card, signature: signature(state, card), inPlay: controllerOf(state, card) !== undefined, side: controllerOf(state, card) })) }
     : { counters: countersOf(state) };
@@ -1565,10 +1616,15 @@ function run(context: Context, act: Act): void {
       }
       break;
     case "damage":
-      for (const card of cards) dealDamage(state, card, amount);
+      if (act.divide) divideDamage(context, act, amount);
+      else for (const card of cards) dealDamage(state, card, amount);
       break;
     case "heal":
-      for (const card of cards) card.damage = Math.max(0, card.damage - amount);
+      for (const card of cards) {
+        const was = card.damage;
+        card.damage = act.n === undefined ? 0 : Math.max(0, was - amount);
+        healed += was - card.damage;
+      }
       break;
     case "destroy": {
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
@@ -1601,8 +1657,8 @@ function run(context: Context, act: Act): void {
       break;
     case "counter":
       // A named counter lives in `marks` and does not change power (Lote 6 §6.6).
-      // Absent `name`, it is the +1 power counter (Onda 5).
-      for (const card of cards) {
+      // Absent `name`, it is the +1 power counter (Onda 5). A zero amount ("for each damage healed" with nothing healed) adds nothing.
+      for (const card of amount > 0 ? cards : []) {
         if (act.name) card.marks = { ...card.marks, [act.name]: (card.marks?.[act.name] ?? 0) + amount };
         else card.counters = (card.counters ?? 0) + amount;
       }
@@ -1837,8 +1893,16 @@ function run(context: Context, act: Act): void {
         fitting.sort((a, b) => iconScore(b) - iconScore(a));
         moved.push(...fitting.slice(0, Math.min(amount, fitting.length)));
       }
+      if (act.pick === "revealed") {
+        // Lote 11 §H: only what the last peek/reveal showed and is still in `from`. Of a larger pile the engine
+        // moves the cheapest cards (the lowest amber + icons) — "discard 1 of them" keeps the best; a real
+        // choice waits for targets[] like the other zone moves.
+        const pool = (context.revealed ?? []).filter((card) => from.includes(card) && (!act.type || card.face.type === act.type));
+        pool.sort((a, b) => iconScore(a) - iconScore(b));
+        moved.push(...pool.slice(0, Math.min(amount, pool.length)));
+      }
       // `all` takes the whole zone, so the bound is read before the picks.
-      const take = act.pick === "moved" ? 0 : act.pick === "all" ? candidates.length : Math.min(amount, candidates.length);
+      const take = act.pick === "moved" || act.pick === "revealed" ? 0 : act.pick === "all" ? candidates.length : Math.min(amount, candidates.length);
       for (let count = 0; count < take; count += 1) {
         const card = choose();
         if (!card) break;
@@ -1874,12 +1938,13 @@ function run(context: Context, act: Act): void {
     case "use":
       for (const card of cards) {
         if (!card.ready || card.stunned) continue;
-        const side = controllerOf(state, card) as Side;
+        // "As if it were yours" (Lote 11 §B): the Action/Omni resolves for the acting side.
+        const side = act.asYours ? me : (controllerOf(state, card) as Side);
         // Using a creature is reap, fight or its Action, the player's choice;
         // until the UI prompts for it the engine resolves the printed Action
         // when there is one, reap otherwise (BUG-11). An explicit `via` of the
         // act wins ("Ready and fight/reap with X").
-        const via = act.via ?? context.useVia ?? (hasAbility(state, card, "action") ? "action" : "reap");
+        const via = act.via ?? context.useVia ?? (hasAbility(state, card, "action") || !isCreature(card) ? "action" : "reap");
         if (via === "fight") {
           // The fight auto-targets like every engine-picked choice; with no
           // legal defender the creature simply stays ready ("if able").
@@ -1888,8 +1953,11 @@ function run(context: Context, act: Act): void {
             context.fought = target;
             fight(state, side, card, target, {}, deterministic, context.decline);
           }
-        } else if (via === "action") fire(state, side, card, "action", { choice: {}, deterministic, decline: context.decline });
-        else reap(state, side, card, {}, deterministic, context.decline);
+        } else if (via === "action") {
+          // A use exhausts the card (an artifact's only Action/Omni has no other door to do it).
+          card.ready = false;
+          fire(state, side, card, hasAbility(state, card, "action") ? "action" : "omni", { choice: {}, deterministic, decline: context.decline });
+        } else if (!restricted(state, side, "reap", card)) reap(state, side, card, {}, deterministic, context.decline);
       }
       break;
     case "fromDiscard": {
@@ -1907,6 +1975,21 @@ function run(context: Context, act: Act): void {
       const zone = act.from === "hand" ? [...player.hand] : player.deck.slice(-(act.n ?? 1)).reverse();
       record(state, "log.peek", { name: state.players[me].name, n: String(zone.length) });
       if (zone.length) state.peek = { side: me, owner: side, from: act.from, faces: zone.map((card) => card.face) };
+      context.revealed = zone;
+      break;
+    }
+    case "reveal": {
+      // The public twin of peek (Lote 11 §H): the identities go to the log. `random` draws from the PRNG unless the
+      // search is deterministic (then the first card, like discardRandom).
+      const count = act.n ?? 1;
+      let shown: CardInstance[];
+      if (act.pick === "random") {
+        const pool = [...(act.from === "hand" ? player.hand : player.deck)];
+        shown = [];
+        for (let step = 0; step < count && pool.length; step += 1) shown.push(pool.splice(deterministic ? 0 : Math.floor(roll(state) * pool.length), 1)[0]);
+      } else shown = act.from === "hand" ? [...player.hand] : player.deck.slice(-count).reverse();
+      if (shown.length) record(state, "log.reveal", { name: state.players[me].name, cards: shown.map((card) => card.face.title).join(", ") });
+      context.revealed = shown;
       break;
     }
     case "archiveTop": {
@@ -1947,7 +2030,41 @@ function run(context: Context, act: Act): void {
   // "did"/"gone" describe what THIS act did: they are read after the sweep, so
   // a creature destroyed by the damage just dealt already counts as gone.
   Object.assign(context, measured(state, before));
+  context.healed = healed;
   if (explicitDid !== undefined) context.did = explicitDid;
+}
+
+/** "Divide this damage among any number of creatures" (Lote 11 §F). The pool is split evenly among the cards the move's
+    queue named (the first takes the remainder); with no queue — the AI, or a human who chose nobody — it is allocated
+    greedily on the enemy side: kill the creatures it can afford, cheapest first, then dump the rest on the strongest
+    survivor. The engine never aims a free allocation at the actor's own board. */
+function divideDamage(context: Context, act: Extract<Act, { k: "damage" }>, pool: number): void {
+  const { state, me, source } = context;
+  if (pool <= 0 || typeof act.s !== "object" || !("pick" in act.s)) return;
+  const legal = everyMatch(state, me, source, act.s.pick, context);
+  const chosen: CardInstance[] = [];
+  for (const id of context.queue ?? []) {
+    const card = legal.find((item) => item.instanceId === id);
+    if (card && !chosen.includes(card)) chosen.push(card);
+  }
+  if (chosen.length) {
+    const share = Math.floor(pool / chosen.length);
+    chosen.forEach((card, index) => dealDamage(state, card, share + (index === 0 ? pool % chosen.length : 0)));
+    return;
+  }
+  const toughness = (card: CardInstance) => effectivePower(state, card) - card.damage + Math.max(0, effectiveArmor(state, card) - (card.armorUsed ?? 0));
+  const foes = legal.filter((card) => controllerOf(state, card) !== me).sort((a, b) => toughness(a) - toughness(b));
+  let left = pool;
+  const survivors: CardInstance[] = [];
+  for (const card of foes) {
+    const need = toughness(card);
+    if (need <= left && need > 0) {
+      dealDamage(state, card, need);
+      left -= need;
+    } else survivors.push(card);
+  }
+  const last = survivors.sort((a, b) => effectivePower(state, b) - effectivePower(state, a))[0];
+  if (last && left > 0) dealDamage(state, last, left);
 }
 
 /** Resolves every ability of `source` bound to `trigger` (keyteki TriggeredAbility).
@@ -2179,14 +2296,21 @@ function fightBody(state: GameState, me: Side, attacker: CardInstance, defender:
   // kill for the other side (assault/hazardous/poison and "Fight:" included).
   // A token killed in the fight leaves the game instead of reaching a discard
   // pile, so "left play" is its mark (Onda 3).
-  // A dead card lands in its OWNER's discard, which differs from the
-  // controller's when control was taken (MX-06): capture the owners up front.
-  const attackerOwner = ownerOf(state, attacker) ?? me;
-  const defenderOwner = ownerOf(state, defender) ?? other(me);
   const credit = () => {
-    const gone = (card: CardInstance) => card.isToken && controllerOf(state, card) === undefined;
-    if (state.players[attackerOwner].discard.includes(attacker) || gone(attacker)) tally(state.players[other(me)], "creaturesDestroyed");
-    if (state.players[defenderOwner].discard.includes(defender) || gone(defender)) tally(state.players[me], "creaturesDestroyed");
+    // Any exit from the board counts (discard, hand, archives, purged, token): a card saved by ward or a replacement that
+    // keeps it in play is still on a board, so it is not a death.
+    const gone = (card: CardInstance) => controllerOf(state, card) === undefined;
+    // Lote 11 §E: the dead are kept (a snapshot and the side that controlled them) for `{slain}` until the turn ends.
+    const dead: { card: CardInstance; side: Side }[] = [];
+    if (gone(attacker)) {
+      tally(state.players[other(me)], "creaturesDestroyed");
+      dead.push({ card: { ...attacker }, side: me });
+    }
+    if (gone(defender)) {
+      tally(state.players[me], "creaturesDestroyed");
+      dead.push({ card: { ...defender }, side: other(me) });
+    }
+    if (dead.length) state.fightDeaths = [...(state.fightDeaths ?? []), ...dead];
   };
   if (!alive()) return credit();
   dealDamage(state, defender, keyword(state, attacker, "assault"));
@@ -2197,8 +2321,11 @@ function fightBody(state: GameState, me: Side, attacker: CardInstance, defender:
   const elusive = keyword(state, defender, "elusive") > 0 && !defender.elusiveUsed;
   defender.elusiveUsed = true;
   if (!elusive) {
-    if (!keyword(state, attacker, "skirmish")) dealDamage(state, attacker, effectivePower(state, defender), keyword(state, defender, "poison") > 0);
-    dealDamage(state, defender, effectivePower(state, attacker) + attackBonusAgainst(state, attacker, defender), keyword(state, attacker, "poison") > 0);
+    // "Deals no damage when attacked/attacking" (Lote 11 §D) cancels the packet at its dealer; a cap clamps what either side deals.
+    if (!keyword(state, attacker, "skirmish") && !dealsNoDamage(state, defender, "defending")) dealDamage(state, attacker, Math.min(effectivePower(state, defender), fightCap(state, defender)), keyword(state, defender, "poison") > 0);
+    if (!dealsNoDamage(state, attacker, "attacking")) {
+      dealDamage(state, defender, Math.min(effectivePower(state, attacker) + attackBonusAgainst(state, attacker, defender), fightCap(state, attacker)), keyword(state, attacker, "poison") > 0);
+    }
   }
   const splash = keyword(state, attacker, "splash-attack");
   if (splash) for (const neighbor of neighbors(state, defender)) dealDamage(state, neighbor, splash);
@@ -2469,7 +2596,8 @@ function queueVariants(state: GameState, side: Side, move: GameMove): GameMove[]
   if (!live) return [move];
   for (const ability of live.abilities) {
     const spec = upToSpec(ability);
-    if (!spec) continue;
+    // A divided pool (Lote 11 §F) is split by the engine's own allocation for the AI, never evenly over every enemy.
+    if (!spec || ability.acts.some((act) => act.k === "damage" && act.divide)) continue;
     const harmful = HARMFUL.has(spec.k);
     const ids = everyMatch(live.view, side, live.card, spec.pick)
       .filter((item) => (controllerOf(live.view, item) === side) !== harmful)
@@ -2508,12 +2636,15 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
   if (mayPlay(state, side)) {
     const limit = playLimit(state, side);
     for (const card of player.hand) {
-      if (!houseAllows(state, card, house)) continue;
+      // Lote 11 §B: "may play" opens the PLAY (never the discard) of a card outside the active house.
+      const inHouse = houseAllows(state, card, house);
+      if (!inHouse && !playPermission(state, side, card)) continue;
       if (state.plays < limit && canPlay(state, side, card)) {
         moves.push({ type: "play", instanceId: card.instanceId });
         // "You may" clauses get a declined variant of the same move.
         if (hasOptionalTrigger(state, side, card, ["play"])) moves.push({ type: "play", instanceId: card.instanceId, decline: true });
       }
+      if (!inHouse) continue;
       moves.push({ type: "discard", instanceId: card.instanceId });
       // "You may" Scrap: clauses get a declined variant of the discard move too.
       if (hasOptionalTrigger(state, side, card, ["scrap"])) moves.push({ type: "discard", instanceId: card.instanceId, decline: true });
@@ -2534,7 +2665,7 @@ function baseMoves(state: GameState, side: Side, house: string | null): GameMove
       // fight may only fight — its reap and Action/Omni uses are closed. With
       // no legal target it is used normally ("if able").
       const forced = card.enraged && targets.length > 0;
-      if (!forced && !fightOnly) {
+      if (!forced && !fightOnly && !restricted(state, side, "reap", card)) {
         moves.push({ type: "reap", instanceId: card.instanceId });
         if (hasOptionalTrigger(state, side, card, ["reap"])) moves.push({ type: "reap", instanceId: card.instanceId, decline: true });
       }
@@ -2676,6 +2807,14 @@ function resolveMove(state: GameState, playerIndex: Side, move: Exclude<GameMove
   const params = { name: player.name, card: source.face.title };
   if (playerIndex === state.activePlayer) state.acted += 1;
 
+  if (move.type === "play" && playerIndex === state.activePlayer && state.activeHouse !== null && !houseAllows(state, source, state.activeHouse)) {
+    // A numbered `mayPlay` is spent by the play it allowed; only the stored lasting copy is ever consumed (a printed one is shared rules data).
+    const permit = playPermission(state, playerIndex, source);
+    if (permit && !permit.source && typeof permit.effect.mayPlay === "number") {
+      if (permit.effect.mayPlay <= 1) state.lasting = (state.lasting ?? []).filter((effect) => effect !== permit.effect);
+      else permit.effect.mayPlay -= 1;
+    }
+  }
   if (move.type === "play" || move.type === "discard") {
     if (playerIndex === state.activePlayer) state.played += 1;
     if (move.type === "play" && playerIndex === state.activePlayer) state.plays += 1;
@@ -2695,6 +2834,7 @@ function resolveMove(state: GameState, playerIndex: Side, move: Exclude<GameMove
     record(state, "log.play", params, silent);
     if (isCreature(source)) {
       placeCreature(state, player, source, move);
+      if (entersReady(state, source)) source.ready = true;
       // The other Gigantic half leaves the hand with its partner: both amber
       // bonuses count, the second half sits "under" and is discarded with the
       // creature (BUG-23). Fidelity note: its power/text are not merged yet.
@@ -2808,6 +2948,8 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   resetAbilityBudgets();
   // A look is private to the turn it happened in: it must not cross the handover or land in a save.
   delete state.peek;
+  // "In a fight this turn" (Lote 11 §E) ends with the turn.
+  delete state.fightDeaths;
 
   const endingPlayer = state.players[playerIndex];
   // Ready step, then draw step (keyteki ReadyPhase + DrawPhase). Entrench

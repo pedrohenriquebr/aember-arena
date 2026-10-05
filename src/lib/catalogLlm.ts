@@ -684,6 +684,110 @@ export const FEW_SHOTS: {
     text: "~ deals +2<D> while attacking an enemy creature on the flank.",
     answer: { abilities: [], effects: [{ target: { self: true }, attackBonus: 2, whenAttacking: { type: "Creature", side: "enemy", flank: true } }], keywords: {} },
   },
+  // Lote 11 (DSL_VERSION 11): enters ready, mayPlay, as-if-yours, reap restrict, fight cap/retaliation, left/right of,
+  // reveal + the shown card, divided damage, slain count, healed count, two sources.
+  {
+    type: "Creature",
+    text: "Friendly creatures enter play ready.",
+    answer: { abilities: [], effects: [{ target: { type: "Creature", side: "friendly" }, entersPlayReady: true }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "Play: You may play one non-Logos card this turn.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "lasting", e: { target: { house: "!Logos" }, mayPlay: 1, duration: "turn" }, optional: true }], optional: true }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Use an opponent's artifact as if it were yours.",
+    answer: { abilities: [{ on: ["play"], target: { type: "Artifact", side: "enemy", ready: true }, acts: [{ k: "use", s: "target", asYours: true }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Artifact",
+    text: "Action: Choose a house. During your opponent's next turn, creatures of the chosen house cannot be used to reap.",
+    answer: {
+      abilities: [{ on: ["action"], acts: [{ k: "lasting", e: { target: { type: "Creature", house: "chosen" }, restrict: { who: "opponent", action: "reap" }, duration: "next" } }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "~ only deals 2<D> when fighting.",
+    answer: { abilities: [], effects: [{ target: { self: true }, fightDamageCap: 2 }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "~ deals no damage when attacked.",
+    answer: { abilities: [], effects: [{ target: { self: true }, replace: { on: "damage", prevent: true, when: "defending" } }], keywords: {} },
+  },
+  {
+    type: "Creature",
+    text: "Creatures to the right of ~ in the battleline get +2 power.",
+    answer: { abilities: [], effects: [{ target: { type: "Creature", rightOf: true }, power: 2 }], keywords: {} },
+  },
+  {
+    type: "Action",
+    text: "Play: Reveal a random card from your opponent's hand. Put that card on the bottom of their deck.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "reveal", from: "hand", opp: true, pick: "random" }, { k: "move", n: 1, from: "hand", to: "deck", pick: "revealed", at: "bottom", opp: true }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Action",
+    text: "Play: Look at the top 2 cards of your deck. Discard 1 of them.",
+    answer: { abilities: [{ on: ["play"], acts: [{ k: "peek", from: "deck", n: 2 }, { k: "move", n: 1, from: "deck", to: "discard", pick: "revealed" }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Action",
+    text: "Play: Deal 2<D> for each friendly Brobnar creature. You may divide this damage among any number of creatures.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [{ k: "damage", n: 2, s: { pick: { type: "Creature" }, n: 99, upTo: true }, divide: true, per: { c: { type: "Creature", side: "friendly", house: "Brobnar" } } }],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Artifact",
+    text: "Action: Gain 1<A> for each enemy creature that was destroyed in a fight this turn.",
+    answer: { abilities: [{ on: ["action"], acts: [{ k: "gainAmber", n: 1, per: { slain: { type: "Creature", side: "enemy" } } }] }], effects: [], keywords: {} },
+  },
+  {
+    type: "Upgrade",
+    text: 'This creature gains, "At the end of your turn, this creature loses a +1 power counter." Play: Fully heal this creature and give it a +1 power counter for each damage healed.',
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "heal", s: "host" }, { k: "counter", n: 1, s: "host", per: "healed" }] }],
+      effects: [{ target: { host: true }, abilities: [{ on: ["endOfTurn"], acts: [{ k: "removeCounter", n: 1, s: "self" }] }] }],
+      keywords: {},
+    },
+  },
+  {
+    type: "Creature",
+    text: "Play: Archive the top card of your deck or the top card of your discard pile.",
+    answer: {
+      abilities: [
+        {
+          on: ["play"],
+          acts: [
+            { k: "move", n: 1, from: "deck", to: "archives", pick: "top", mode: "a" },
+            { k: "move", n: 1, from: "discard", to: "archives", pick: "top", mode: "b" },
+          ],
+        },
+      ],
+      effects: [],
+      keywords: {},
+    },
+  },
   {
     type: "Creature",
     text: "Play: Each player randomly discards one third of their cards from their hand (rounding down).",
@@ -724,6 +828,7 @@ const SYSTEM_RULES = [
   '"Forge a key at +N cost, reduced by 1 for each X" = forgeKey with mod N and less = the count of X; "If you do, purge ~" on an Action = {"k":"purge","s":"self","if":<did gte 1>}. "Steal all but N of your opponent\'s <A>" = steal n 1 per {"sub":[{"p":"amber","opp":true},N]}. "an even/odd amount of <A>" = count op "even"/"odd" (n ignored). "If you forged a key on your previous turn" = {"k":"forged"} (opp:true for the opponent).',
   '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. `unless <cond>` = `if: not <cond>` on the effect. A card always goes to its owner\'s zone. A filter without `type` matches any card in play.',
   'Superlatives: "the most powerful [enemy] creature" = {"each":{...,"most":1}} (mirror of "least": 1). "Choose one:" with two lines = every act of the first line has mode "a", of the second mode "b" (no target). "a player\'s deck" = a move with side:"any" (the player picks whose; a following "If it is a creature, purge it" is a move pick "moved" type Creature with the same side). "Your opponent must pay you N<A> to use an artifact" = effects [{target:{},restrict:{who:"opponent",action:"use",type:"Artifact",cost:N}}]. "for each X destroyed this way" = per {"gone":<filter of X>}. "gains the Mutant trait" = a lasting effect with traits; "each friendly creature may fight" = mayFight:true. "one third of the cards in your hand" = per {"p":"hand","div":3}. "~ deals damage to that creature rather than the one it is fighting" (after "Choose a creature", on Before Fight) = a lasting act with replace {"on":"damage","redirect":"chosen"}. A bare "Look at your opponent\'s hand" = {"k":"peek","from":"hand","opp":true}; "Look at the top N cards of your [opponent\'s] deck" = {"k":"peek","from":"deck","n":N} (+ opp) — only when nothing is done with what was seen (a following sentence that acts on it is not representable). "~ deals +N while attacking <filter>" = effects [{target:{self:true},attackBonus:N,whenAttacking:<filter of the DEFENDER>}], never power.',
+  '"X enters play ready" = effects [{target,entersPlayReady:true}] ("Your/Friendly creatures" = {type:"Creature",side:"friendly"}; "If you are haunted, ~ enters play ready" adds if = count of {"p":"discard"} gte 10). "You may play one non-<House> card this turn" = a lasting act with e {target:{house:"!<House>"},mayPlay:1,duration:"turn"}, optional. "Use an opponent\'s artifact as if it were yours" = target {type:"Artifact",side:"enemy",ready:true} + {"k":"use","s":"target","asYours":true}. "creatures of the chosen house cannot be used to reap [during your opponent\'s next turn]" = restrict {who:"opponent",action:"reap"} on the effect whose target names the creatures (not a ban on the player). "~ only deals N when fighting" = effects [{target:{self:true},fightDamageCap:N}] (caps the damage it deals in a fight, as attacker AND as defender); "~ deals no damage when attacked" = replace {on:"damage",prevent:true,when:"defending"} ("attacking" for the attacker role) — never the plain prevent, that one is "cannot be dealt damage". "Creatures to the left/right of ~ in the battleline" = {type:"Creature",leftOf:true|rightOf:true} (every one on that side, not just the neighbors). "Reveal …" (public, names the card in the log) = {"k":"reveal","from","opp","pick":"random"}; "Look at the top N cards of your deck. Discard 1 of them" / "Put that card on the bottom of their deck" = a move with pick:"revealed" right after the peek/reveal (the engine copies its zone and owner; "of them" keeps the better cards). "Deal N for each X. You may divide this damage among any number of creatures" = ONE damage act with divide:true, s {pick,n:99,upTo:true} and per. "for each enemy creature that was destroyed in a fight this turn" = per {"slain":<filter>}; "for each damage healed" = per "healed" on the act AFTER the heal; "Fully heal X" = {"k":"heal","s":…} with no n. "A or B" between two zones the player picks from (top of the deck or of the discard pile) = two acts with mode "a" and "b".',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",

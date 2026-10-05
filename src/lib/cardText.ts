@@ -155,7 +155,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 10;
+export const PARSER_VERSION = 11;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -506,6 +506,12 @@ function parseCondition(clause: string): Condition | null {
   if (/^(?:it is not|it's not) your turn$/.test(clause)) return { k: "not", c: { k: "myTurn" } };
   if (/^(?:this damage destroys that creature|that creature is destroyed|it is destroyed)$/.test(clause)) return count("gone", "gte", 1);
   if (/^(?:it|that creature) is not destroyed$/.test(clause)) return count("gone", "eq", 0);
+  // Lote 11 §E: "if an enemy creature was destroyed in a fight this turn".
+  const slainNow = clause.match(/^(?:an?|any|at least one) (.+?) (?:was|were) destroyed in a fight this turn$/);
+  if (slainNow) {
+    const filter = parseFilterWords(slainNow[1]);
+    return filter ? count({ slain: filter }, "gte", 1) : null;
+  }
   if (clause === "it was already exhausted" || clause === "it is already exhausted") return count({ c: { target: true, exhausted: true } }, "gte", 1);
   const houseCard = clause.match(/^it is (not )?a ([a-z ]+?) card$/);
   if (houseCard && HOUSES[houseCard[2]]) {
@@ -524,6 +530,13 @@ function parseCondition(clause: string): Condition | null {
 function parsePer(phrase: string): Count | null {
   if (/^creatures? (?:healed|damaged) this way$/.test(phrase) || /^cards? discarded this way$/.test(phrase)) return "did";
   if (/^creatures? destroyed this way$/.test(phrase)) return "gone";
+  // Lote 11 §E: the total damage the heal before removed, and the creatures that died in a fight this turn.
+  if (/^damage healed(?: this way)?$/.test(phrase)) return "healed";
+  const slain = phrase.match(/^(.+?) (?:that (?:was|were) )?destroyed in a fight this turn$/);
+  if (slain) {
+    const filter = parseFilterWords(slain[1]);
+    return filter ? { slain: filter } : null;
+  }
   // Lote 8 §8.5: "each Mutant creature destroyed this way" counts only the destroyed cards that match.
   const destroyed = phrase.match(/^(.+?) destroyed this way$/);
   if (destroyed) {
@@ -589,6 +602,12 @@ const SIMPLE: [RegExp, (m: RegExpMatchArray) => Act][] = [
     ...(m[1] === "card" ? {} : { n: parseInt(m[1], 10) }),
     ...(m[2] === "your" ? {} : { opp: true }),
   })],
+  // Lote 11 §D (Tantadlin): the archives are a zone of the move act like the rest.
+  [/^discard a random card from your opponent's archives$/, () => ({ k: "move", n: 1, from: "archives", to: "discard", opp: true, pick: "random" })],
+  // Lote 11 §H: the public reveal; a following "put/discard that card" reads it (`pick:"revealed"`, see parseAbilityBody).
+  [/^reveal a random card from your opponent's hand$/, () => ({ k: "reveal", from: "hand", opp: true, pick: "random" })],
+  [/^reveal your opponent's hand$/, () => ({ k: "reveal", from: "hand", opp: true })],
+  [/^reveal the top (card|\d+ cards) of your deck$/, (m) => ({ k: "reveal", from: "deck", ...(m[1] === "card" ? {} : { n: parseInt(m[1], 10) }) })],
   // Onda 3: tokens nascem na mesa (keyteki MakeTokenCreatureAction).
   [/^(?:make|create) (a|an|\d+) token creatures?$/, (m) => ({ k: "makeToken", n: num(m[1]) })],
   // Onda 4: forjar/desforjar fora do passo de chave (keyteki ForgeAction e
@@ -656,7 +675,7 @@ const VERBS: [
   [/^ready (.+)$/, () => ({ k: "ready", obj: 1 })],
   [/^unstun (.+)$/, () => ({ k: "unstun", obj: 1 })],
   [/^heal (\d+) damage from (.+)$/, (m) => ({ k: "heal", n: +m[1], obj: 2 })],
-  [/^fully heal (.+)$/, () => ({ k: "heal", n: 99, obj: 1 })],
+  [/^fully heal (.+)$/, () => ({ k: "heal", obj: 1 })],
   [/^return (.+?) to (?:its|their) owners?'s? hands?$/, () => ({ k: "returnToHand", obj: 1 })],
   [/^return (.+?) to your hand$/, () => ({ k: "returnToHand", obj: 1 })],
   [/^put (.+) on top of your deck$/, () => ({ k: "returnToDeck", obj: 1, at: "top" })],
@@ -723,7 +742,7 @@ function parseSentence(sentence: string, upgrade: boolean, creature: boolean, qu
   if (parsed && per) {
     for (const act of parsed.acts) {
       if (act.k === "lasting") act.e.per = per;
-      else act.per = per;
+      else if (!(per === "healed" && act.k === "heal")) act.per = per;
     }
   }
   if (parsed && may) {
@@ -797,6 +816,30 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
   const flank = sentence.match(/^move a creature to a flank of its controller's battleline( and exhaust it)?$/);
   if (flank) {
     return { acts: [{ k: "toFlank", s: "target" }, ...(flank[1] ? [{ k: "exhaust" as const, s: "target" as const }] : [])], target: { type: "Creature" } };
+  }
+
+  // Lote 11 §G: a choice between two sources is the "Choose one:" machinery (mode a/b) inside one sentence.
+  if (sentence === "archive the top card of your deck or the top card of your discard pile") {
+    return {
+      acts: [
+        { k: "move", n: 1, from: "deck", to: "archives", pick: "top", mode: "a" },
+        { k: "move", n: 1, from: "discard", to: "archives", pick: "top", mode: "b" },
+      ],
+    };
+  }
+  // Lote 11 §H: the card(s) the reveal/peek before showed. `from`/`opp` are copied from that act in parseAbilityBody.
+  const putRevealed = sentence.match(/^put that card on (?:the )?(top|bottom) of (?:their|its owner's|your opponent's|your) deck$/);
+  if (putRevealed) return { acts: [{ k: "move", n: 1, from: "hand", to: "deck", pick: "revealed", at: putRevealed[1] as "top" | "bottom" }] };
+  if (/^discard (?:that card|(?:a|1|one) of (?:them|those cards))$/.test(sentence)) return { acts: [{ k: "move", n: 1, from: "deck", to: "discard", pick: "revealed" }] };
+  // Lote 11 §B (Remote Access): the opponent's artifact, used for the acting side.
+  if (/^use an? (?:opponent's|enemy) artifact as if it were yours$/.test(sentence)) {
+    return { acts: [{ k: "use", s: "target", asYours: true }], target: { type: "Artifact", side: "enemy", ready: true } };
+  }
+  // Lote 11 §F (First Blood): one pool divided among the creatures the player names (parseAbilityBody joins the two sentences).
+  const divided = sentence.match(/^deal (\d+) damage divided among (.+)$/);
+  if (divided) {
+    const object = parseObject(divided[2], upgrade, observer);
+    return object && typeof object.s === "object" && "pick" in object.s ? { acts: [{ k: "damage", n: Number(divided[1]), s: object.s, divide: true }] } : null;
   }
 
   // "If you do, X" (keyteki's `then`) is the did-count of the clause before it,
@@ -910,14 +953,20 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
     return object ? { acts: [{ k: "counter", n: COUNT_WORDS[putCounters[1]] ?? Number(putCounters[1]), s: object.s }], target: object.target } : null;
   }
   // Lote 4 §4.10: counters off cards; the number is optional (absent = all).
-  const removeCounter = sentence.match(/^remove (?:each |all |(\d+) )?\+1 power counters? from (.+)$/);
+  const removeCounter = sentence.match(/^remove (?:each |all |(a|an|one|\d+) )?\+1 power counters? from (.+)$/);
   if (removeCounter) {
     const object = parseObject(removeCounter[2], upgrade, observer);
     if (!object) return null;
     return {
-      acts: [{ k: "removeCounter", ...(removeCounter[1] ? { n: Number(removeCounter[1]) } : {}), s: object.s }],
+      acts: [{ k: "removeCounter", ...(removeCounter[1] ? { n: COUNT_WORDS[removeCounter[1]] ?? Number(removeCounter[1]) } : {}), s: object.s }],
       target: object.target,
     };
+  }
+  // Lote 11 §E (Cybergiant Rig): "this creature loses a +1 power counter".
+  const loses = sentence.match(/^(.+?) loses? (a|an|one|\d+) \+1 power counters?$/);
+  if (loses) {
+    const object = parseObject(loses[1], upgrade, observer);
+    return object ? { acts: [{ k: "removeCounter", n: COUNT_WORDS[loses[2]] ?? Number(loses[2]), s: object.s }], target: object.target } : null;
   }
   // Lote 4 §4.9: amber off cards ("to your pool" / "to the common supply").
   const moveAmber = sentence.match(/^(?:move|return) (\d+) amber from (.+?) to your pool$/);
@@ -938,7 +987,8 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
   const conjunction = sentence.match(/^(.+?) and (.+)$/);
   if (conjunction && !/^stun and |^ready and /.test(sentence)) {
     const left = parseSentenceBody(conjunction[1], upgrade, creature, quoted, observer);
-    const right = parseSentenceBody(conjunction[2], upgrade, creature, quoted, observer);
+    // On an upgrade "it" after "this creature" is still the host (Cybergiant Rig), not the upgrade card.
+    const right = parseSentenceBody(upgrade ? conjunction[2].replace(/^give it /, "give this creature ") : conjunction[2], upgrade, creature, quoted, observer);
     if (left && right && left.acts.length && right.acts.length && !left.cond && !right.cond) {
       return { acts: [...left.acts, ...right.acts], target: left.target ?? right.target, ...(left.optional || right.optional ? { optional: true } : {}) };
     }
@@ -1018,6 +1068,18 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
   let ability: Ability = { on: triggers, ...(headerIf ? { if: headerIf } : {}), acts: [], ...watching };
   const close = (): boolean => {
     if (!ability.acts.length) return false;
+    // Lote 11 §H: "put/discard that card" acts on what the act right before showed — same zone, same owner — or it is orphan.
+    let orphan = false;
+    ability.acts.forEach((act, index) => {
+      if (act.k !== "move" || act.pick !== "revealed") return;
+      const shown = ability.acts[index - 1];
+      if (shown?.k !== "reveal" && shown?.k !== "peek") orphan = true;
+      else {
+        act.from = shown.from;
+        if (shown.opp) act.opp = true;
+      }
+    });
+    if (orphan) return false;
     // "Discard the top card of a player's deck. If it is a creature, purge it": the second move follows the first one's zone owner (Lote 8 §8.7).
     ability.acts.forEach((act, index) => {
       const before = ability.acts[index - 1];
@@ -1036,6 +1098,12 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
   // The leading comma of an observer segment ("…reaps, stun it.") belongs to the
   // prefix, not to the sentence.
   const sentences = body.split(/\.\s*/).map((part) => part.trim().replace(/^,\s*/, "")).filter(Boolean);
+  // Lote 11 §F: "Deal 2 for each X. You may divide this damage among any number of creatures." is ONE act.
+  for (let index = 0; index < sentences.length - 1; index += 1) {
+    const pool = sentences[index].match(/^deal (\d+) damage for each (.+)$/);
+    const split = sentences[index + 1].match(/^(?:you may )?divide this damage among (.+)$/);
+    if (pool && split) sentences.splice(index, 2, `deal ${pool[1]} damage divided among ${split[1]} for each ${pool[2]}`);
+  }
   const independent = sentences.filter((part) => /^if (?!you do)/.test(part)).length;
   for (const sentence of sentences) {
     // The branch of an "Otherwise" is only legal right after a conditional
@@ -1098,6 +1166,9 @@ const FLANK_CLAUSE = / while (?:it|this creature|this card) is on a flank$/;
 
 /** Subject of a persistent sentence: the cards the effect applies to. */
 function parseSubject(phrase: string, upgrade: boolean): Filter | null {
+  // Lote 11 §G (Panpaca): every creature to one side of the source in its battleline, not only the neighbors.
+  const beside = phrase.match(/^(?:friendly )?creatures? to the (left|right) of (?:this card|this creature|it|~)(?: in the battleline)?$/);
+  if (beside) return { type: "Creature", ...(beside[1] === "left" ? { leftOf: true } : { rightOf: true }) };
   if (/^(this card|this creature|it|itself)$/.test(phrase)) {
     return upgrade && phrase === "this creature" ? { host: true } : { self: true };
   }
@@ -1127,7 +1198,8 @@ function parseGrant(sentence: string, upgrade: boolean, creature: boolean, quote
   if (grant) {
     const target = parseSubject(grant[1], upgrade);
     if (!target) return null;
-    const abilities = parseQuoted(quoted[Number(grant[2])], upgrade, creature, quoted);
+    // The quoted text runs on the creature that RECEIVES it (the host of an upgrade), so inside it "this creature" is the source (Lote 11 §E).
+    const abilities = upgrade ? parseQuoted(quoted[Number(grant[2])], false, true, quoted) : parseQuoted(quoted[Number(grant[2])], upgrade, creature, quoted);
     return abilities ? { target, abilities } : null;
   }
   const keyword = sentence.match(/^(.+?) gains? ([a-z-]+(?: \d+)?)$/);
@@ -1235,6 +1307,14 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
     body = prefix[1];
     duration = "turn";
   }
+  // Lote 11 §C: "During your opponent's next turn, creatures … cannot reap" (either position) — the lasting duration of the
+  // "on their next turn" tail. Only for this sentence: "Keys cost +N during your opponent's next turn" is the keyCost ACT
+  // of SIMPLE (opp), and reading it here would charge both players.
+  const opponentsTurn = body.match(/^during your opponent's next turn, (.+ (?:cannot be used to reap|cannot reap))$/) ?? body.match(/^(.+ (?:cannot be used to reap|cannot reap)) during your opponent's next turn$/);
+  if (opponentsTurn) {
+    body = opponentsTurn[1];
+    duration = "next";
+  }
   // "While <condition>, X" / "For each <count>, X" gate or scale the effect.
   // A clause that is neither leaves the sentence to the branches below ("If
   // this creature would be destroyed, archive it instead" is a replacement).
@@ -1325,6 +1405,36 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
   if (attack) {
     const defender = parseFilterWords(attack[3].replace(/ on the flank$/, " on a flank"));
     return defender ? [{ target: upgrade ? { host: true } : { self: true }, attackBonus: Number(attack[2]), whenAttacking: defender, duration, ...gate }] : null;
+  }
+  // Lote 11 §D: a fight-damage ceiling of the attacker, and damage cancelled at its dealer by role.
+  const cap = body.match(/^(this card|this creature|it|~) only deals (\d+) damage when (?:fighting|attacking)$/);
+  if (cap) return [{ target: upgrade ? { host: true } : { self: true }, fightDamageCap: Number(cap[2]), duration, ...gate }];
+  const noDamage = body.match(/^(this card|this creature|it|~) deals no damage when (attacked|attacking|fighting)$/);
+  if (noDamage) {
+    const roles: ("attacking" | "defending")[] = noDamage[2] === "attacked" ? ["defending"] : noDamage[2] === "attacking" ? ["attacking"] : ["attacking", "defending"];
+    return roles.map((when) => ({ target: upgrade ? { host: true } : { self: true }, replace: { on: "damage", prevent: true, when }, duration, ...gate }));
+  }
+  // Lote 11 §A: "Your creatures enter play ready" / "If you are haunted, ~ enters play ready" (the `if` is the gate).
+  const entersReady = body.match(/^(.+?) enters? play ready$/);
+  if (entersReady) {
+    const who = entersReady[1].replace(/^(?:each |all )?(?:of )?your /, "friendly ");
+    const target = parseSubject(who, upgrade) ?? parseFilterWords(who);
+    return target ? [{ target, entersPlayReady: true, duration, ...gate }] : null;
+  }
+  // Lote 11 §B (Helper Bot): "play one non-Logos card this turn" opens the play outside the active house.
+  const mayPlay = body.match(/^play (a|an|one|two|three|\d+) (non-)?([a-z ]+?) cards? this turn$/);
+  if (mayPlay) {
+    const house = HOUSES[mayPlay[3]];
+    return house ? [{ target: { house: (mayPlay[2] ? "!" : "") + house }, mayPlay: COUNT_WORDS[mayPlay[1]] ?? Number(mayPlay[1]), duration: duration ?? "turn", ...gate }] : null;
+  }
+  // Lote 11 §C (Seismo-entangler): creatures that cannot be used to reap; the filter names which.
+  const noReap = body.match(/^(.+?) (?:cannot be used to reap|cannot reap)$/);
+  if (noReap) {
+    const target = parseSubject(noReap[1], upgrade) ?? parseFilterWords(noReap[1]);
+    if (!target) return null;
+    // Without a side both players are bound — except "during your opponent's next turn", where only the opponent acts.
+    const who: ("you" | "opponent")[] = target.side === "enemy" || (!target.side && duration === "next") ? ["opponent"] : target.side === "friendly" ? ["you"] : ["you", "opponent"];
+    return who.map((side) => ({ target: { ...target }, restrict: { who: side, action: "reap" }, duration, ...gate }));
   }
   const restrict = parseRestriction(body);
   if (restrict) return [{ target: {}, restrict, duration, ...gate }];

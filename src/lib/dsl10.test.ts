@@ -22,8 +22,8 @@ const FLANK = { type: "Creature", side: "enemy", flank: true };
 
 describe("contract", () => {
   it("bumps both versions and the prompt schema carries the new fields", () => {
-    expect(DSL_VERSION).toBe(10);
-    expect(PARSER_VERSION).toBe(10);
+    expect(DSL_VERSION).toBe(11);
+    expect(PARSER_VERSION).toBe(11);
     expect(DSL_SCHEMA).toContain('k: "peek"');
     expect(DSL_SCHEMA).toContain("attackBonus?: number");
     expect(DSL_SCHEMA).toContain("whenAttacking?: Filter");
@@ -49,7 +49,7 @@ describe("parser", () => {
   it("reads the deck forms, and leaves a peek that is acted upon incomplete", () => {
     expect(parseCardText(face("A", "Play: Look at the top 3 cards of your deck.", "Action")).abilities[0].acts).toEqual([{ k: "peek", from: "deck", n: 3 }]);
     expect(parseCardText(face("A", "Play: Look at the top card of your opponent's deck.", "Action")).abilities[0].acts).toEqual([{ k: "peek", from: "deck", opp: true }]);
-    const acted = parseCardText(face("A", "Play: Look at the top card of your deck. You may discard that card.", "Action"));
+    const acted = parseCardText(face("A", "Play: Look at the top card of your deck. You may play that card.", "Action"));
     expect(acted.coverage).not.toBe("full");
     expect(parseCardText(face("A", "Play: Look at your opponent's hand and play a creature from it.", "Action")).coverage).toBe("vanilla");
   });

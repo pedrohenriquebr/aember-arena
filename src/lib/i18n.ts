@@ -375,6 +375,7 @@ const DICT: Record<string, [string, string]> = {
   "log.discard": ["{name} discarded {card}.", "{name} descartou {card}."],
   "log.unstun": ["{name} removed the stun from {card}.", "{name} removeu o atordoamento de {card}."],
   "log.peek": ["{name} looked at {n} card(s).", "{name} olhou {n} carta(s)."],
+  "log.reveal": ["{name} revealed: {cards}.", "{name} revelou: {cards}."],
   "peek.title": ["Looking at the cards", "Olhando as cartas"],
   "peek.hand": ["Your opponent's hand", "A mão do seu oponente"],
   "peek.deck": ["Top of the deck", "Topo do baralho"],
