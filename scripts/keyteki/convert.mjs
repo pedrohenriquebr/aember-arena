@@ -7,7 +7,7 @@
 // Writes scripts/harvest/keyteki-convert-<set>.json (gitignored): the drafts
 // (`source: "keyteki"`, unreviewed), the coverage report and the golden diffs.
 // Runs under vite-node: it imports validateDraft/parseCardText from src/lib.
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DSL_VERSION } from "../../src/lib/abilities";
@@ -15,54 +15,13 @@ import { validateDraft } from "../../src/lib/catalogLlm";
 import { parseCardText } from "../../src/lib/cardText";
 import { isCLayer, lowerCard } from "./lower.mjs";
 import { Unsupported } from "./lambdas.mjs";
+import { facesOf, indexCorpus, loadPacks } from "./join.mjs";
 import { parseCardFile } from "./parse.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const SOURCE = JSON.parse(readFileSync(resolve(ROOT, "scripts/keyteki/SOURCE.json"), "utf8"));
 const args = process.argv.slice(2);
 const value = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
-
-const norm = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-
-/** slug → { names, keys:"exp_number" } from keyteki-json-data (.kfdata-tmp/packs). */
-function loadPacks() {
-  const dir = resolve(ROOT, ".kfdata-tmp/packs");
-  const slugs = new Map();
-  if (!existsSync(dir)) return slugs;
-  for (const file of readdirSync(dir)) {
-    const pack = JSON.parse(readFileSync(resolve(dir, file), "utf8"));
-    for (const card of pack.cards ?? []) {
-      const entry = slugs.get(card.id) ?? { names: new Set(), keys: new Set() };
-      entry.names.add(norm(card.name));
-      entry.keys.add(`${card.expansion}_${card.number}`);
-      slugs.set(card.id, entry);
-    }
-  }
-  return slugs;
-}
-
-/** Corpus faces indexed by "<expansion>_<number>" (from the image URL) and by title. */
-function loadCorpus() {
-  const faces = JSON.parse(readFileSync(resolve(ROOT, "scripts/harvest/cards-corpus.json"), "utf8"));
-  const byKey = new Map();
-  const byTitle = new Map();
-  const push = (map, key, face) => map.set(key, [...(map.get(key) ?? []), face]);
-  for (const face of faces) {
-    const m = /\/(\d+)_(\d+)_/.exec(face.image ?? "");
-    if (m) push(byKey, `${m[1]}_${m[2]}`, face);
-    push(byTitle, norm(face.title), face);
-  }
-  return { byKey, byTitle, size: faces.length };
-}
-
-function facesOf(slug, packs, corpus) {
-  const entry = packs.get(slug);
-  if (!entry) return null;
-  const found = new Map();
-  for (const key of entry.keys) for (const f of corpus.byKey.get(key) ?? []) found.set(f.id, f);
-  for (const name of entry.names) for (const f of corpus.byTitle.get(name) ?? []) found.set(f.id, f);
-  return [...found.values()];
-}
 
 /** Canonical form for the golden diff: sorted keys, abilities sorted by their JSON. */
 const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
@@ -91,12 +50,12 @@ function main() {
   const dir = resolve(src, "server/game/cards", set);
   const limit = Number(value("--limit") ?? Infinity);
   const only = value("--only");
-  const packs = loadPacks();
-  const corpus = loadCorpus();
+  const packs = loadPacks(ROOT);
+  const corpus = indexCorpus(JSON.parse(readFileSync(resolve(ROOT, "scripts/harvest/cards-corpus.json"), "utf8")));
 
   const files = readdirSync(dir).filter((f) => f.endsWith(".js")).sort().slice(0, limit);
   const model = `keyteki-ast@${SOURCE.commit.slice(0, 7)}`;
-  const report = { set, files: 0, parseErrors: 0, noAbilities: 0, cLayer: 0, unsupported: 0, lowered: 0, noMatch: 0, noPack: 0, converted: 0, rows: 0, gateFail: 0, golden: { eligible: 0, agree: 0, diff: 0, orderOnly: 0, newlyCovered: 0 } };
+  const report = { set, files: 0, parseErrors: 0, noAbilities: 0, cLayer: 0, unsupported: 0, lowered: 0, noMatch: 0, noPack: 0, noText: 0, noFace: 0, noTextMatch: 0, converted: 0, rows: 0, gateFail: 0, golden: { eligible: 0, agree: 0, diff: 0, orderOnly: 0, newlyCovered: 0 } };
   const unsupportedBy = {};
   const cLayerBy = {};
   const gateFailBy = {};
@@ -134,10 +93,10 @@ function main() {
       continue;
     }
     report.lowered += 1;
-    const faces = facesOf(ir.id, packs, corpus);
-    if (faces === null) report.noPack += 1;
-    if (!faces?.length) {
+    const { faces, why } = facesOf(ir.id, ir.header, packs, corpus);
+    if (!faces.length) {
       report.noMatch += 1;
+      report[why] += 1;
       continue;
     }
     let any = false;

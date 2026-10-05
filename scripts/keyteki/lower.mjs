@@ -145,13 +145,15 @@ function targetFilter(node) {
 /** Plain registrar props → Ability. `base` is { on, of?, if? } already decided. */
 function lowerAbility(bag, base) {
   if (!bag || bag.t !== "obj") return fail("registrar", "argument is not an object");
-  const ability = { ...base };
+  const { flags: _flags, ...plain } = base;
+  const ability = { ...plain };
   let acts = null;
   let hasTarget = false;
   for (const [key, v] of Object.entries(bag.props)) {
     if (COSMETIC.has(key) || key === "when") continue;
     if (key === "play" || key === "reap" || key === "fight") {
-      if (lit(v) !== true) fail("prop", key);
+      // Extra triggers exist only on the trigger registrars (extraTriggers adds them); a reaction would lose them.
+      if (!base.flags || lit(v) !== true) fail("prop", key);
       continue;
     }
     switch (key) {
@@ -246,6 +248,7 @@ function lowerPersistent(reg, host) {
         break;
       case "targetController":
         controller = lit(v);
+        if (!["self", "current", "opponent", "any"].includes(controller)) fail("dynamic", "targetController");
         break;
       case "condition":
         {
@@ -294,6 +297,14 @@ function lowerPersistent(reg, host) {
   return { target, ...tail, ...(cond ? { if: cond } : {}) };
 }
 
+/** Fail closed: an object spread (or computed key) hides props the lowering never sees. */
+function rejectSpreads(node) {
+  if (Array.isArray(node)) return node.forEach(rejectSpreads);
+  if (!node || typeof node !== "object") return;
+  if (node.t === "obj" && node.spreads) fail("spread", "object spread or computed key");
+  for (const v of Object.values(node)) rejectSpreads(v);
+}
+
 /** Lowers every registration of a card. Throws Unsupported on the first thing outside the tables. */
 export function lowerCard(ir) {
   const { flags } = ir;
@@ -304,10 +315,12 @@ export function lowerCard(ir) {
   const abilities = [];
   const effects = [];
   for (const reg of ir.regs) {
+    if (reg.args.length > 1) fail("registrar", `${reg.registrar} extra arguments`);
+    rejectSpreads(reg.args);
     const entry = REGISTRARS[reg.registrar];
     if (!entry) fail("registrar", reg.registrar);
     if (entry.unsupported) fail(entry.unsupported.split(":")[0], entry.unsupported.split(":")[1]);
-    if (entry.kind === "trigger") abilities.push(lowerAbility(reg.args[0], { on: [entry.on, ...extraTriggers(reg)] }));
+    if (entry.kind === "trigger") abilities.push(lowerAbility(reg.args[0], { on: [entry.on, ...extraTriggers(reg)], flags: true }));
     else if (entry.kind === "observer") abilities.push(lowerObserver(reg));
     else effects.push(lowerPersistent(reg, entry.host === true));
   }
