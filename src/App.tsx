@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   Activity,
@@ -91,6 +92,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DeckInspector } from "./components/DeckInspector";
 import { FxLayer, captureFx, captureGone, captureLunge } from "./components/FxLayer";
 import { Pagination } from "./components/Pagination";
+import { useHandDrag } from "./components/useHandDrag";
 import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 
@@ -664,6 +666,7 @@ function ConfigScreen({
   onLlmChange,
   llmRun,
   onLlmTranslate,
+  onLlmTranslateDeck,
   onLlmCancel,
   onChange,
   onLanguage,
@@ -689,6 +692,7 @@ function ConfigScreen({
   /** Onda 2: rodada de tradução em andamento (dona: App) + disparo/cancelar. */
   llmRun: RunProgress | null;
   onLlmTranslate: () => void;
+  onLlmTranslateDeck: (faces: DeckInfo["cards"]) => void;
   onLlmCancel: () => void;
   onChange: (settings: AppSettings) => void;
   onLanguage: (language: Language) => void;
@@ -713,6 +717,9 @@ function ConfigScreen({
   // FEAT-13: the two human decks (never the same one twice).
   const [p1Deck, p2Deck] = resolvePassDecks(savedDecks, deck, settings);
   const p2Choices = savedDecks.filter((item) => item.id !== p1Deck.id);
+  // União dos decks da partida (sem duplicar cartas); "random" ainda não sorteou, então entra o pool inteiro.
+  const matchDecks = settings.gameMode === "passAndPlay" ? [p1Deck, p2Deck] : settings.opponentMode === "mirror" ? [deck] : settings.opponentMode === "random" ? [deck, ...opponentChoices] : [deck, pickedOpponent ?? deck];
+  const matchFaces = [...new Map(matchDecks.flatMap((item) => item.cards).map((face) => [face.id, face])).values()];
 
   const chooseMode = (gameMode: GameMode) => {
     sound.play("select");
@@ -1058,6 +1065,13 @@ function ConfigScreen({
                   </ul>
                 </div>
               )}
+              <div className="review-card">
+                <span className="review-label">{t("config.review.translateDecks")}</span>
+                <small>{t("config.review.translateDecksHint")}</small>
+                <button type="button" className="ghost-button" disabled={!!llmRun || !llmReady(llm)} onClick={() => onLlmTranslateDeck(matchFaces)}>
+                  {llmRun ? `${llmRun.done}/${llmRun.total}` : t("config.review.translateDecks")}
+                </button>
+              </div>
               <div className="review-card">
                 <span className="review-label">{t("config.review.interface")}</span>
                 <ul className="review-list">
@@ -1471,6 +1485,7 @@ function GameBoard({
   onConfirmPick = NOOP,
   onPickFlank = NOOP,
   onSelectHand,
+  onPlayHand = NOOP,
   onSelectBoard,
   onEndTurn,
   onRematch,
@@ -1487,7 +1502,10 @@ function GameBoard({
   viewSwitching = false,
   consoleExtra,
   archivesAction,
+  consoleSlot = null,
 }: {
+  /** Rail dockado: o turn-console é portado para o topo da coluna direita. */
+  consoleSlot?: HTMLElement | null;
   game: GameState;
   selected: Selection | null;
   pick: Pick | null;
@@ -1523,6 +1541,8 @@ function GameBoard({
   onConfirmPick?: () => void;
   onPickFlank?: (flank: "left" | "right") => void;
   onSelectHand: (card: CardInstance) => void;
+  /** Drag-to-play: soltar sobre a battleline = o mesmo move do botão Play. */
+  onPlayHand?: (card: CardInstance) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
   onEndTurn: () => void;
   onRematch: () => void;
@@ -1548,6 +1568,14 @@ function GameBoard({
         .map((move) => (move.type === "fight" ? move.attackerId : move.instanceId)),
     );
   }, [game, settings.hints, readOnly, humanSide, handHidden]);
+  // Drag-to-play: só carta com play legal arrasta (a regra é do motor); o drop
+  // chama o mesmo caminho do botão Play, então alvos/flanco abrem depois dele.
+  const handDrag = useHandDrag({
+    canDrag: (iid) => isHumanTurn && !pick && isLegalMove(game, humanSide, { type: "play", instanceId: iid }),
+    faceOf: (iid) => player.hand.find((card) => card.instanceId === iid)?.face,
+    onDrop: (iid) => { const card = player.hand.find((item) => item.instanceId === iid); if (card) onPlayHand(card); },
+    animate: settings.animations && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  });
   // T7d: closures estáveis por lane — sem identidade estável o memo de
   // BoardLane/CardTile não teria efeito.
   const selectOpponentCard = useCallback((card: CardInstance) => onSelectBoard(enemySide, card), [onSelectBoard, enemySide]);
@@ -1572,7 +1600,7 @@ function GameBoard({
 
   return (
     <section
-      className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${viewSwitching ? " game-board--switching" : ""}`}
+      className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${consoleSlot ? " game-board--console-docked" : ""}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
       // H3D-21: a cor do tapete segue a casa do turno e a metade de quem joga.
       style={view3d ? ({ "--turn-house": game.activeHouse ? houseColor(game.activeHouse) : "transparent", "--turn-y": game.activePlayer === humanSide ? "72%" : "28%" } as CSSProperties) : undefined}
@@ -1616,6 +1644,8 @@ function GameBoard({
             />
           </section>
 
+          {(() => {
+            const consoleNode = (
           <div className={`turn-console${isHumanTurn ? " turn-console--human" : ""}`}>
             <div className="turn-console-copy">
               <div className="round-kicker"><span className="round-dot" /> {t("game.round")} {String(game.turn).padStart(2, "0")}</div>
@@ -1657,6 +1687,9 @@ function GameBoard({
             {archivesAction}
             {consoleExtra}
           </div>
+            );
+            return consoleSlot ? createPortal(consoleNode, consoleSlot) : consoleNode;
+          })()}
 
           <section className="battle-zone battle-zone--player" aria-label={t("game.yourLine")}>
             <div className="zone-heading">
@@ -1716,6 +1749,7 @@ function GameBoard({
             /* H3D-06: --n abre o leque no 3D (rotação/arco por carta); no 2D é
                inerte. O GameBoard não é memo — nenhuma prop desce para a mão. */
             style={{ "--n": Math.max(1, player.hand.length) } as CSSProperties}
+            {...handDrag.handlers}
           >
             {!handHidden && player.hand.map((card) => {
               const playable = Boolean(game.activeHouse && houseOf(game, card) === game.activeHouse);
@@ -1736,6 +1770,7 @@ function GameBoard({
             })}
             {!handHidden && !player.hand.length && <div className="empty-hand">{t("game.handEmpty")}</div>}
           </div>
+          {handDrag.ghost}
         </section>
       </div>
 
@@ -3241,13 +3276,14 @@ function App() {
       carta por vez, cada resposta gravada na hora; o Cancelar aborta entre
       cartas. `known` vem do store (rascunhos e falhas contam: cache eterno por
       textHash). Nunca bloqueia a UI. */
-  async function translateCatalogNow() {
+  async function translateNow(faces?: DeckInfo["cards"]) {
     if (llmRun || !llmReady(llm)) return;
     const controller = new AbortController();
     llmAbortRef.current = controller;
     setLlmRun({ done: 0, total: 0, drafted: 0, failed: 0 });
     try {
-      const [cards, overrides] = await Promise.all([listCatalogCards(), loadAbilityOverrides()]);
+      // Sem `faces` = catálogo inteiro; com `faces` = só as cartas dadas (os decks da partida).
+      const [cards, overrides] = await Promise.all([faces ?? listCatalogCards(), loadAbilityOverrides()]);
       const progress = await runTranslation(pendingTranslations(cards, (id) => overrides.get(id)), llm, {
         limit: LLM_RUN_LIMIT,
         // `reply:` re-tentado: a tentativa anterior conta (§4.0).
@@ -3369,6 +3405,7 @@ function App() {
   const [railOpenRaw, setRailOpen] = useState(false);
   const drawerOpen = drawerMode && railOpenRaw && screen === "game";
   const railRef = useDialogFocus<HTMLElement>(drawerOpen);
+  const [railConsoleSlot, setRailConsoleSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setRailOpen(false); };
@@ -3571,7 +3608,8 @@ function App() {
             llm={llm}
             onLlmChange={setLlm}
             llmRun={llmRun}
-            onLlmTranslate={() => { sound.play("click"); void translateCatalogNow(); }}
+            onLlmTranslate={() => { sound.play("click"); void translateNow(); }}
+            onLlmTranslateDeck={(faces) => { sound.play("click"); void translateNow(faces); }}
             onLlmCancel={() => { sound.play("click"); llmAbortRef.current?.abort(); }}
             onChange={setSettings}
             onLanguage={setLanguage}
@@ -3614,6 +3652,7 @@ function App() {
                   onConfirmPick={confirmPick}
                   onPickFlank={pickFlank}
                   onSelectHand={selectHandCard}
+                  onPlayHand={(card) => performHumanMove({ type: "play", instanceId: card.instanceId })}
                   onSelectBoard={pickBoardCard}
                   onEndTurn={endHumanTurn}
                   onRematch={rematch}
@@ -3639,6 +3678,7 @@ function App() {
                       <span className="archives-count">{game.players[humanSide].archives.length}</span>
                     </button>
                   ) : undefined}
+                  consoleSlot={drawerMode ? null : railConsoleSlot}
                   consoleExtra={compactStage || drawerMode ? (
                     <>
                       {compactStage && viewToggle}
@@ -3666,6 +3706,7 @@ function App() {
                 role={drawerOpen ? "dialog" : undefined}
                 aria-modal={drawerOpen ? true : undefined}
               >
+                <div className="rail-console-slot" ref={setRailConsoleSlot} />
                 <div className="rail-topline">
                   <span>{t("rail.notes")}</span>
                   {drawerOpen ? (

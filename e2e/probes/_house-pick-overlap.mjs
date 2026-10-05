@@ -41,7 +41,10 @@ try {
     const before = await probe();
     await page.evaluate(() => document.querySelector(".inspector-section")?.classList.add("inspector-section--yield"));
     const after = await probe();
-    const ok = after.every((v) => v === true);
+    // >= 1041px o console mora no topo da coluna direita (acima das notas); abaixo, no palco.
+    const inRail = await page.evaluate(() => Boolean(document.querySelector(".command-rail > .rail-console-slot > .turn-console .house-picker")));
+    const ok = after.every((v) => v === true) && inRail === (w >= 1041);
+    if (inRail !== (w >= 1041)) console.log(`  console na coluna: ${inRail} (esperado ${w >= 1041})`);
     if (!ok) bad += 1;
     console.log(`${w}x${h} sem yield: ${JSON.stringify(before)} | com yield: ${JSON.stringify(after)} ${ok ? "OK" : "FALHA"}`);
     await page.close();

@@ -104,6 +104,8 @@ const DICT: Record<string, [string, string]> = {
   "config.review.title": ["Ready to forge", "Pronto para forjar"],
   "config.review.sub": ["Review your setup and start the match.", "Revise sua configuração e comece a partida."],
   "config.review.deck": ["Deck", "Baralho"],
+  "config.review.translateDecks": ["Translate match decks", "Traduzir decks da partida"],
+  "config.review.translateDecksHint": ["Uses your LLM key on cards of both decks the parser can't read yet.", "Usa sua chave de LLM nas cartas dos dois decks que o parser ainda não lê."],
   "config.review.opponent": ["Opponent", "Oponente"],
   "config.review.interface": ["Interface", "Interface"],
   // Catálogo dinâmico (DB v4, docs/DYNAMIC_CATALOG_PLAN.md §5).

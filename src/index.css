@@ -915,6 +915,45 @@ button:disabled {
   min-height: 0;
 }
 
+/* Console no rail dockado: no 2D some a linha do palco (o nó vive no topo da coluna direita).
+   No 3D/lite a linha fica como respiro do plano: a geometria calibrada (H3D-14/17) não muda. */
+.game-board--console-docked.game-board--stage:not(.game-board--3d):not(.game-board--lite) .board-content {
+  grid-template-rows:
+    var(--band-h)
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    var(--hand-bar-h)
+    var(--hand-row, var(--hand-h));
+}
+
+:is(.game-board--3d, .game-board--lite).game-board--console-docked .battle-zone--player {
+  grid-row: 3;
+}
+
+.rail-console-slot:empty {
+  display: none;
+}
+
+.command-rail .turn-console {
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 12px 14px;
+  border-top: 0;
+}
+
+.command-rail .turn-console-copy {
+  flex: 1 0 100%;
+}
+
+.command-rail .turn-console > .house-picker {
+  flex: 1 1 100%;
+}
+
+.command-rail .turn-console > .end-turn-button {
+  flex: 1 1 auto;
+}
+
 .game-board--stage .player-band {
   min-height: 0;
   padding-block: 1px;
@@ -8214,8 +8253,8 @@ html .spin {
       margin-inline: calc(-1 * max(0px, (var(--n, 1) - 6) * 4px));
       transform-origin: 50% 130%;
       rotate: calc(var(--d) * 3.5deg);
-      /* VA-03: -8px sobe o leque para o rodapé da carta (custo/poder) caber. */
-      translate: 0 calc(min(calc(var(--d) * var(--d) * 2.2px), 6px) - 8px);
+      /* VA-03: sobe o leque para o rodapé da carta (custo/poder) caber; +2px (era -8px) dá respiro entre a banda do jogador e o topo do leque. */
+      translate: 0 calc(min(calc(var(--d) * var(--d) * 2.2px), 6px) + 2px);
       transition: rotate 200ms var(--ease-out), translate 200ms var(--ease-out), scale 200ms var(--ease-out);
     }
 
@@ -8480,4 +8519,40 @@ html .spin {
 
 @keyframes inspector-in {
   from { opacity: 0; translate: 16px 0; }
+}
+
+/* Drag-to-play: pan-x deixa a mão rolar de lado e entrega o gesto vertical (rumo à mesa) aos
+   pointer events; o fantasma é portado ao body porque a track tem overflow. */
+.hand-track .card-tile {
+  touch-action: pan-x;
+}
+
+.hand-track .card-tile[data-dragging] {
+  opacity: 0.3;
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  display: flex;
+  will-change: transform;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.55));
+}
+
+.drag-ghost > * {
+  width: 100%;
+}
+
+/* Zona válida: realce só com outline/box-shadow (nada de filter/opacity — o 3D achataria). */
+.battle-zone--player[data-drop] {
+  outline: 2px dashed rgba(211, 173, 93, 0.55);
+  outline-offset: -4px;
+  box-shadow: inset 0 0 0 1000px rgba(211, 173, 93, 0.06);
+  transition: outline-color 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
+}
+
+.battle-zone--player[data-drop="over"] {
+  outline: 2px solid rgba(240, 205, 125, 0.95);
+  box-shadow: inset 0 0 0 1000px rgba(211, 173, 93, 0.16);
 }

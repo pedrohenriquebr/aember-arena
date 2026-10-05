@@ -193,7 +193,7 @@ const MEASURE = () => {
     rowsSum: sum,
     contentH: content.clientHeight,
     stage: board.classList.contains("game-board--stage"),
-    plane: { display: planeCs.display, rows: planeCs.gridTemplateRows },
+    plane: { docked: !!document.querySelector(".game-board--console-docked"), display: planeCs.display, rows: planeCs.gridTemplateRows },
     player: piecesOf("player"),
     opp: piecesOf("opponent"),
     lanes: { player: lane("player"), opp: lane("opponent") },
