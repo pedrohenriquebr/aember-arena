@@ -572,3 +572,14 @@ describe("regression: BUG-01 'Fully heal' (docs/BUGS_AND_FEATURES.md)", () => {
     expect(() => getLegalMoves(state, 0, "Brobnar")).not.toThrow();
   });
 });
+
+describe("\"and <verb> it\" after a chosen target", () => {
+  it("resolves \"it\" to the creature the first clause targeted, not the action card", () => {
+    const { abilities } = parseCardText(face("Play: Deal 1<D> to a creature and enrage it.", "Action"));
+    expect(abilities[0].acts).toEqual([
+      { k: "damage", s: "target", n: 1 },
+      { k: "enrage", s: "target" },
+    ]);
+    expect(parseCardText(face("Play: Deal 1<D> to a creature and stun it.", "Action")).abilities[0].acts[1]).toEqual({ k: "stun", s: "target" });
+  });
+});

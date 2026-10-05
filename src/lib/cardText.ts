@@ -1027,6 +1027,10 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
     // On an upgrade "it" after "this creature" is still the host (Cybergiant Rig), not the upgrade card.
     const right = parseSentenceBody(upgrade ? conjunction[2].replace(/^give it /, "give this creature ") : conjunction[2], upgrade, creature, quoted, observer);
     if (left && right && left.acts.length && right.acts.length && !left.cond && !right.cond) {
+      // "Deal 1D to a creature and enrage it": "it" is the creature the left clause chose, not the source card.
+      if (left.target && !right.target && !upgrade && !observer && /(?:^| )it$/.test(conjunction[2])) {
+        for (const act of right.acts) if ("s" in act && act.s === "self") act.s = "target";
+      }
       return { acts: [...left.acts, ...right.acts], target: left.target ?? right.target, ...(left.optional || right.optional ? { optional: true } : {}) };
     }
   }
