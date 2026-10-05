@@ -3646,6 +3646,9 @@ function App() {
       next[index] = { ...deck, favorite: prev[index].favorite };
       return next;
     });
+    // Importing by id only precached (saved:false) and the deck vanished from
+    // the library on reload; using it is what makes it a library deck.
+    void cacheDeck(deck, { saved: true });
     setSelectedDeck(deck);
     setDeckCandidate(null);
     setDeckModalOpen(false);

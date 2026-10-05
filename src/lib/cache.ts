@@ -119,7 +119,16 @@ export async function cacheDeck(deck: DeckInfo, options: { saved?: boolean } = {
   try {
     const database = await openDatabase();
     const transaction = database.transaction([DECK_STORE, CARD_STORE], "readwrite");
-    transaction.objectStore(DECK_STORE).put(cached);
+    const decks = transaction.objectStore(DECK_STORE);
+    // A plain precache (vault page, re-fetch by id) must not demote a deck the
+    // player already saved: keep its library flag and favorite.
+    const existing = decks.get(deck.id);
+    existing.onsuccess = () => {
+      const row = existing.result as CachedDeck | undefined;
+      if (options.saved === undefined && row?.saved === true) cached.saved = true;
+      if (row?.favorite !== undefined && cached.favorite === undefined) cached.favorite = row.favorite;
+      decks.put(cached);
+    };
     const cards = transaction.objectStore(CARD_STORE);
     const syncedAt = Date.now();
     for (const card of deck.cards) cards.put(catalogRow(card, syncedAt));
