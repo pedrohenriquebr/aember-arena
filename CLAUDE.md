@@ -111,6 +111,14 @@ ações, cobertura por set, pendências).
   inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
   de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
   `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
+- **Keyteki como fonte de DSL (pesquisa 05/out)**: `docs/KEYTEKI_DSL_RESEARCH.md` (Opus low) e
+  `_SONNET.md` (Sonnet medium, independente) mediram o sistema de habilidades do keyteki
+  (2.606 arquivos JS, 101 classes de GameAction, 127 helpers usados). Veredito: conversor
+  AST keyteki→DSL (2-4 semanas, sem LLM) gera ~80% das 2.426 cartas que o keyteki
+  implementa (~1.900-1.950 full), cobrindo 46% do corpus MV; híbrido com farm LLM para os
+  sets que o keyteki não cobre (MoMu/VM25/CC/ToC). Top gaps da nossa DSL vs keyteki:
+  interrupt/replace genérico de eventos, modos de alvo (select/house/card-name/trait),
+  search+reveal públicos, until declarativo.
 - **Versão e orçamentos (onda 2)**: `DSL_VERSION` (hoje 6) — linha com `v` maior é
   descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
   `docs/DSL_EXPANSION_PLAN.md`); `did`/`gone` são medidos pós-sweep; orçamentos

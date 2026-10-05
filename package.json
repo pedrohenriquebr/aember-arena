@@ -28,7 +28,8 @@
     "llm-relay": "node scripts/llm-cors-relay.mjs",
     "harvest:cards": "vite-node scripts/catalog-export.mjs --",
     "keyteki:cards": "vite-node scripts/catalog-keyteki.mjs",
-    "merge:cards": "vite-node scripts/catalog-merge.mjs"
+    "merge:cards": "vite-node scripts/catalog-merge.mjs",
+    "relay:go": "node scripts/relay-go.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",
