@@ -127,6 +127,17 @@ ações, cobertura por set, pendências).
   sets que o keyteki não cobre (MoMu/VM25/CC/ToC). Top gaps da nossa DSL vs keyteki:
   interrupt/replace genérico de eventos, modos de alvo (select/house/card-name/trait),
   search+reveal públicos, until declarativo.
+- **Conversor keyteki→AST (híbrido aprovado, `docs/KEYTEKI_CONVERSION_PLAN.md`)**: M1
+  (parse acorn + lambdas + lower IR→DSL, join por texto exato), F0 (source `keyteki`
+  nunca vira regra sem review), lane M (`classify.mjs` classifica lambdas via LLM no
+  relay, retomável), M2 (lambda-map + famílias de tabela no lower) e M3 (golden **97,6%**
+  — 283/290 agree, 16 DIFFs triados, 0 gap de DSL; `--export-queue` gera 73 drafts
+  keyteki válidos em `scripts/harvest/`). Correções de jogo no caminho: `optional` do
+  keyteki propaga para os atos (Legate Scipio), conjunção "and enrage/stun it" herda o
+  alvo da 1ª cláusula (Pestering Blow/Subdue). Full efetivo do corpus: 1.826 → **1.899**
+  faces (+73). Pendente: dono revisar as 73 na tela de revisão → leva T2 vendorizada
+  (recomendação: chave `textHash|type`, 51 pares distintos); M4 = cauda (541 C-layer,
+  1.745 unsupported). Testes do conversor rodam via **vitest**; CLI via **vite-node**.
 - **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 12) — linha com `v` maior é
   descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
   `docs/DSL_EXPANSION_PLAN.md`); falhas `reply:` e transporte usam `tries` com tetos
