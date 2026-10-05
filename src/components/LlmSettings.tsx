@@ -4,7 +4,7 @@ import { mergeAbilityOverrides, type AbilityOverride } from "../lib/abilities";
 import { deleteAbilityOverride, listCatalogCards, loadAbilityOverrides, putAbilityOverride } from "../lib/cache";
 import { parseCardText } from "../lib/cardText";
 import { approvedFailures, reviewQueue, validateQueueRows, type RunProgress } from "../lib/catalogLlm";
-import { applyLlmPreset, LLM_PRESETS, llmReady, type LlmConfig, type LlmPreset } from "../lib/settings";
+import { applyLlmPreset, LLM_PRESETS, llmReady, parseExtraHeaders, type LlmConfig, type LlmPreset } from "../lib/settings";
 import type { Translator } from "../lib/i18n";
 
 const PRESETS: readonly LlmPreset[] = ["openai", "anthropic", "openrouter", "custom"];
@@ -25,6 +25,8 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
   t: Translator;
 }) {
   const ready = llmReady(config);
+  const rawHeaders = (config.extraHeaders ?? "").trim();
+  const headersBad = rawHeaders !== "" && Object.keys(parseExtraHeaders(rawHeaders)).length === 0;
   const keyUrl = config.preset === "custom" ? null : LLM_PRESETS[config.preset].keyUrl;
   const [drafts, setDrafts] = useState<AbilityOverride[]>([]);
   const [approved, setApproved] = useState<AbilityOverride[]>([]);
@@ -127,6 +129,13 @@ export function LlmSettings({ config, onChange, catalogCount, run, onTranslate, 
         <span>{t("config.llm.model")}</span>
         <input type="text" value={config.model} spellCheck={false} autoComplete="off" onChange={(event) => onChange({ ...config, model: event.target.value })} />
       </label>
+      <label>
+        <span>{t("config.llm.extraHeaders")}</span>
+        <input type="text" value={config.extraHeaders ?? ""} spellCheck={false} autoComplete="off" placeholder={'{"x-opencode-session":"..."}'}
+          aria-invalid={headersBad} style={headersBad ? { borderColor: "var(--danger, #e5484d)" } : undefined}
+          onChange={(event) => onChange({ ...config, extraHeaders: event.target.value })} />
+      </label>
+      <p className="deck-input-hint">{t("config.llm.extraHeadersHint")}</p>
       {keyUrl && (
         <a className="llm-link" href={keyUrl} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={13} /> {t("config.llm.getKey")}

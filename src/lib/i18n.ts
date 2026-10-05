@@ -136,6 +136,8 @@ const DICT: Record<string, [string, string]> = {
   "config.llm.baseUrl": ["Base URL", "URL base"],
   "config.llm.key": ["API key", "Chave de API"],
   "config.llm.model": ["Model", "Modelo"],
+  "config.llm.extraHeaders": ["Extra headers (JSON)", "Headers extras (JSON)"],
+  "config.llm.extraHeadersHint": ["Optional. Example: {\"x-opencode-session\": \"aember-arena-game\"}. Invalid JSON is ignored.", "Opcional. Exemplo: {\"x-opencode-session\": \"aember-arena-game\"}. JSON inválido é ignorado."],
   "config.llm.getKey": ["Where to create a key", "Onde criar uma chave"],
   "config.llm.paused": ["No API key: the translation queue is paused.", "Sem chave de API: a fila de tradução está parada."],
   "config.llm.ready": ["Key set. The key is never sent anywhere except your provider.", "Chave configurada. Ela nunca vai a outro lugar além do seu provedor."],

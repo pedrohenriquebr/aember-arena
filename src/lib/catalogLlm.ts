@@ -14,7 +14,7 @@ import { applyMove, canResolve, createMatch, effectivePower, endTurn, getLegalMo
 import { DSL_SCHEMA } from "./generated/dslSchema";
 import { VaultError, withTimeout } from "./keyforgeApi";
 import { ENGINE_KEYWORDS, type Keywords } from "./keywords";
-import { llmReady, redactSecret, type LlmConfig } from "./settings";
+import { llmReady, parseExtraHeaders, redactSecret, type LlmConfig } from "./settings";
 
 /** Teto por requisição ao provedor. 180s: provedores locais (ex. opencode-cli-proxy) têm
  * cold start acima de 60s no primeiro spawn do CLI; provedores remotos respondem bem antes. */
@@ -763,7 +763,10 @@ export async function callProvider(config: LlmConfig, messages: ChatMessage[], o
   if (!llmReady(config)) throw new VaultError("llm.noKey");
   const { signal, clear } = withTimeout(options.timeoutMs ?? LLM_TIMEOUT_MS, options.signal);
   const url = endpoint(config.baseUrl);
-  const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey.trim()}` };
+  const headers: Record<string, string> = { ...parseExtraHeaders(config.extraHeaders), "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey.trim()}` };
+  for (const name of Object.keys(headers)) {
+    if (name !== "Content-Type" && name !== "Authorization" && /^(content-type|authorization)$/i.test(name)) delete headers[name];
+  }
   // Anthropic only answers browsers that say so (its own CORS opt-in header).
   if (/(^|\/\/)api\.anthropic\.com/.test(url)) headers["anthropic-dangerous-direct-browser-access"] = "true";
   try {

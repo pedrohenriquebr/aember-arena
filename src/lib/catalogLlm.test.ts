@@ -101,6 +101,26 @@ describe("provider call", () => {
     expect(JSON.parse(String(init.body))).toMatchObject({ model: "tiny", temperature: 0 });
   });
 
+  it("merges extra headers without overriding Authorization/Content-Type", async () => {
+    const fetcher = stub(reply("ok"));
+    const extraHeaders = JSON.stringify({ "x-opencode-session": "aember-arena-game", authorization: "evil", "Content-Type": "text/plain" });
+    await callProvider({ ...config, extraHeaders }, [], { fetcher });
+    const headers = (fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
+    expect(headers["x-opencode-session"]).toBe("aember-arena-game");
+    expect(headers.Authorization).toBe(`Bearer ${KEY}`);
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(headers.authorization).toBeUndefined();
+  });
+
+  it("invalid extra headers JSON is ignored, the call still happens", async () => {
+    for (const extraHeaders of ["{not json", "[1,2]", "42"]) {
+      const fetcher = stub(reply("ok"));
+      await expect(callProvider({ ...config, extraHeaders }, [], { fetcher })).resolves.toBe("ok");
+      const headers = (fetcher.mock.calls[0] as unknown as [string, RequestInit])[1].headers as Record<string, string>;
+      expect(Object.keys(headers).sort()).toEqual(["Authorization", "Content-Type"]);
+    }
+  });
+
   it("paused without a key, no request made", async () => {
     const fetcher = stub();
     await expect(callProvider({ ...config, apiKey: " " }, [], { fetcher })).rejects.toMatchObject({ key: "llm.noKey" });

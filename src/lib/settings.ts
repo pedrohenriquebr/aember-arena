@@ -119,6 +119,23 @@ export interface LlmConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** Objeto JSON em string (sobrevive no localStorage sem migração). */
+  extraHeaders?: string;
+}
+
+/** Headers extras do BYOK; JSON inválido ou não-objeto = nenhum (a chamada segue). */
+export function parseExtraHeaders(raw: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw?.trim()) return out;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const [name, value] of Object.entries(parsed)) if (typeof value === "string") out[name] = value;
+    }
+  } catch {
+    // Ignorado de propósito: a UI só sinaliza.
+  }
+  return out;
 }
 
 export const LLM_PRESETS: Record<Exclude<LlmPreset, "custom">, { baseUrl: string; model: string; keyUrl: string }> = {
@@ -160,6 +177,7 @@ export function readLlmConfig(): LlmConfig {
       baseUrl: str(parsed.baseUrl, DEFAULT_LLM.baseUrl),
       apiKey: str(parsed.apiKey, ""),
       model: str(parsed.model, DEFAULT_LLM.model),
+      ...(typeof parsed.extraHeaders === "string" && parsed.extraHeaders ? { extraHeaders: parsed.extraHeaders } : {}),
     };
   } catch {
     return DEFAULT_LLM;
