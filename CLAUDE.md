@@ -33,7 +33,7 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 + fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
 (CAT-3.5, `--export-queue`); ETL keyteki (`npm run keyteki:cards` + `merge:cards`
 → corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
-`npm run relay:go` (tier OpenCode Go). Specs: 674+. Este arquivo
+`npm run relay:go` (tier OpenCode Go). Specs: 750+ (Lote 14). Este arquivo
 descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
 MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*,
 DYNAMIC_CATALOG_PLAN).
@@ -138,7 +138,7 @@ ações, cobertura por set, pendências).
   faces (+73). Pendente: dono revisar as 73 na tela de revisão → leva T2 vendorizada
   (recomendação: chave `textHash|type`, 51 pares distintos); M4 = cauda (541 C-layer,
   1.745 unsupported). Testes do conversor rodam via **vitest**; CLI via **vite-node**.
-- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 12) — linha com `v` maior é
+- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 13 — Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey; PARSER_VERSION 15) — linha com `v` maior é
   descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
   `docs/DSL_EXPANSION_PLAN.md`); falhas `reply:` e transporte usam `tries` com tetos
   (3 e 5); `did`/`gone` são medidos pós-sweep (side capturado antes de sair de jogo);
