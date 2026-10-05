@@ -55,6 +55,8 @@ import {
   createMatch,
   createPassAndPlayMatch,
   deckFromState,
+  displayType,
+  isCreatureCard,
   endTurn,
   fightTargets,
   getLegalMoves,
@@ -1529,8 +1531,8 @@ const BoardLane = memo(function BoardLane({
   // battleline order, artifacts/upgrades move to their own strip below
   // (BUG-18 — interleaved artificats made "[C1][Artifact][C2]" look
   // non-adjacent when the engine treats them as neighbours).
-  const creatures = cards.filter((card) => card.face.type === "Creature");
-  const attachments = cards.filter((card) => card.face.type !== "Creature");
+  const creatures = cards.filter((card) => isCreatureCard(card));
+  const attachments = cards.filter((card) => !isCreatureCard(card));
   // H3D-17: upgrade com hospedeiro visível vira tira presa à criatura (--col/--up);
   // o órfão cai no comportamento de artefato.
   const hostCol = new Map(creatures.map((card, index) => [card.instanceId, index + 1]));
@@ -2122,7 +2124,7 @@ function SelectedCardPanel({
             <CardArt face={card.face} size="preview" hoverZoom={settings.hoverZoom} />
             <div className="selected-card-heading">
               <HouseMark house={card.face.house} small />
-              <span className="card-type-label">{houseLabel(card.face.house, t)} / {t(`type.${card.face.type}`)}</span>
+              <span className="card-type-label">{houseLabel(card.face.house, t)} / {t(`type.${displayType(card)}`)}</span>
               <h3>{card.face.title}</h3>
               {card.face.traits && <p className="card-traits">{card.face.traits}</p>}
               <div className="selected-card-stats">
@@ -2162,7 +2164,7 @@ function SelectedCardPanel({
                     )}
                   </>
                 )}
-                {selection.zone === "board" && card.face.type === "Creature" && (card.stunned ? (
+                {selection.zone === "board" && isCreatureCard(card) && (card.stunned ? (
                   <button className="primary-action" type="button" disabled={!legal({ type: "unstun", instanceId: id })} onClick={() => onMove({ type: "unstun", instanceId: id })}>
                     <CircleHelp size={15} /> {t("inspector.unstun")}
                   </button>
@@ -2186,7 +2188,7 @@ function SelectedCardPanel({
                     )}
                   </>
                 ))}
-                {selection.zone === "board" && (card.face.type === "Artifact" || (card.face.type === "Creature" && printsUse && !card.stunned)) && (
+                {selection.zone === "board" && (displayType(card) === "Artifact" || (isCreatureCard(card) && printsUse && !card.stunned)) && (
                   <>
                     <button className="primary-action" type="button" disabled={!canUse} onClick={() => onMove({ type: "use", instanceId: id })}>
                       <Zap size={15} /> {printsUse ? t("inspector.use") : t("inspector.passive")}
@@ -2200,7 +2202,7 @@ function SelectedCardPanel({
                 )}
                 {/* Entrench (§4.2): a escolha de ficar exausta no ready step é do
                     controlador, por carta — o toggle vive no inspetor. */}
-                {selection.zone === "board" && card.face.type === "Creature" && keyword(game, card, "entrench") > 0 && (
+                {selection.zone === "board" && isCreatureCard(card) && keyword(game, card, "entrench") > 0 && (
                   <button
                     className="secondary-action"
                     type="button"
@@ -2215,7 +2217,7 @@ function SelectedCardPanel({
             )}
             {selection.zone === "enemy" && <div className="inspector-hint"><Shield size={14} /> {t("inspector.enemyCard")}</div>}
             {selection.zone === "hand" && isHumanTurn && game.activeHouse && !activeForHouse && <div className="inspector-hint"><Shield size={14} /> {t("inspector.onlyHouse", { house: houseLabel(game.activeHouse, t) })}</div>}
-            {selection.zone === "board" && !card.ready && card.face.type === "Creature" && <div className="inspector-hint"><Clock3 size={14} /> {t("inspector.resting")}</div>}
+            {selection.zone === "board" && !card.ready && isCreatureCard(card) && <div className="inspector-hint"><Clock3 size={14} /> {t("inspector.resting")}</div>}
             {selection.zone === "board" && card.stunned && <div className="inspector-hint"><CircleHelp size={14} /> {t("inspector.stunned")}</div>}
             {selection.zone === "board" && card.hold && <div className="inspector-hint"><Anchor size={14} /> {t("inspector.entrenchHint")}</div>}
           </div>

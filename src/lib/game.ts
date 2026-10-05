@@ -97,6 +97,10 @@ export interface CardInstance {
   /** House an effect gave this card ("belongs to house X", Lote 5 §5.3): wins
       over the printed one while the card is in play, zeroed on leaving. */
   houseAs?: string;
+  /** Lote 12: this artifact is a creature until `boundTo` leaves play. The face stays an artifact (faces are shared). */
+  asCreature?: { power: number; versatile?: true };
+  /** Instance id of the card whose leave ends `asCreature` and foreign control (Animating Force). */
+  boundTo?: string;
 }
 
 /** Key colors (Lote 7 §7.2): a KeyForge player forges one key of each color. */
@@ -441,8 +445,25 @@ const tally = (player: GamePlayer, key: "amberGained" | "amberStolen" | "amberCa
 
 // ---------- board queries ----------
 
-const isCreature = (card: CardInstance) => card.face.type === "Creature";
+/** Printed type, except an artifact Animating Force has turned into a creature: filters, the battleline and the AI read this, never `face.type` alone. */
+export function displayType(card: CardInstance): string {
+  return card.asCreature !== undefined ? "Creature" : card.face.type;
+}
+
+export function isCreatureCard(card: CardInstance): boolean {
+  return displayType(card) === "Creature";
+}
+
+const isCreature = isCreatureCard;
 const battleline = (player: GamePlayer) => player.board.filter(isCreature);
+
+/** Creatures, or artifacts when the upgrade says it enters attached to one (Lote 12). */
+function attachTargets(state: GameState, upgrade: CardInstance): CardInstance[] {
+  if (rulesOf(upgrade.face).effects.some((effect) => effect.hosts === "Artifact")) {
+    return state.players.flatMap((player) => player.board.filter((card) => card.face.type === "Artifact" && card.asCreature === undefined));
+  }
+  return state.players.flatMap((player) => battleline(player));
+}
 
 /** Amber printed on a face: the bonus-icon total when the payload carried
     enhancements (amber icons are bonus icons too), the plain `amber` otherwise
@@ -605,7 +626,7 @@ function redirectFor(state: GameState, card: CardInstance): CardInstance | undef
 
 /** Power including every active modifier (keyteki card.power through effects). */
 export function effectivePower(state: GameState, card: CardInstance): number {
-  let power = card.face.power + (card.counters ?? 0);
+  let power = (card.asCreature?.power ?? card.face.power) + (card.counters ?? 0);
   for (const owner of allEffects(state)) if (owner.effect.power && effectHits(state, owner, card)) power += effectPer(state, owner, owner.effect.power);
   return Math.max(0, power);
 }
@@ -644,6 +665,7 @@ export function canReady(state: GameState, card: CardInstance, step: boolean): b
 /** Keyword value including the granted ones ("Each friendly creature gains Taunt"). */
 export function keyword(state: GameState, card: CardInstance, name: Keyword): number {
   let value = rulesOf(card.face).keywords[name] ?? 0;
+  if (name === "versatile" && card.asCreature?.versatile) value += 1;
   for (const owner of allEffects(state)) {
     const granted = owner.effect.keywords?.[name];
     if (granted && effectHits(state, owner, card)) value += granted;
@@ -670,7 +692,7 @@ function restricted(state: GameState, side: Side, action: Restrict["action"], ca
     // "cannot play more than N cards each turn" is a budget, not a ban: it is
     // enforced by playLimit, not here (keyteki Ember Imp).
     if (restrict.limit || restrict.cost) continue;
-    if (restrict.type && (!card || card.face.type !== restrict.type)) continue;
+    if (restrict.type && (!card || displayType(card) !== restrict.type)) continue;
     // `reap` bans the creatures the effect's own filter names (Lote 11 §C), not the whole player.
     if (restrict.action === "reap" && (!card || !effectHits(state, owner, card))) continue;
     return true;
@@ -686,7 +708,7 @@ function useTolls(state: GameState, side: Side, card: CardInstance): { payee: Si
     const restrict = owner.effect.restrict;
     if (!restrict?.cost || restrict.action !== "use") continue;
     if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
-    if (restrict.type && card.face.type !== restrict.type) continue;
+    if (restrict.type && displayType(card) !== restrict.type) continue;
     if (owner.effect.if && !holds(owner.effect.if, state, owner.side, owner.source)) continue;
     tolls.push({ payee: owner.side, cost: restrict.cost });
   }
@@ -990,7 +1012,7 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     filter.counters === undefined ||
     (typeof filter.counters === "string" ? (card.marks?.[filter.counters] ?? 0) > 0 : ((card.counters ?? 0) > 0) === filter.counters);
   return (
-    (!filter.type || (card.face.type === typeName) !== typeNeg) &&
+    (!filter.type || (displayType(card) === typeName) !== typeNeg) &&
     (!filter.side || (filter.side === "friendly") === (side === me)) &&
     (filter.damaged === undefined || card.damage > 0 === filter.damaged) &&
     (filter.flank === undefined || onFlank(state, card) === filter.flank) &&
@@ -1184,7 +1206,7 @@ function countOf(scope: Ctx, spec: Count): number {
   if ("c" in spec) return everyMatch(scope.state, scope.me, scope.source, spec.c, scope).length;
   if ("m" in spec) {
     const moved = (scope.moved ?? []).filter((card) => {
-      if (spec.type && card.face.type !== spec.type) return false;
+      if (spec.type && displayType(card) !== spec.type) return false;
       if (!spec.house) return true;
       const neg = spec.house.startsWith("!");
       const name = (neg ? spec.house.slice(1) : spec.house).toLowerCase();
@@ -1202,6 +1224,15 @@ function countOf(scope: Ctx, spec: Count): number {
     const [from, less] = spec.sub;
     return Math.max(0, countOf(scope, from) - (typeof less === "number" ? less : countOf(scope, less)));
   }
+  if ("housesOf" in spec) {
+    const cards = scope.moved ?? [];
+    const houses = new Set<string>();
+    for (const card of cards) {
+      const house = card.face.house.trim().toLowerCase();
+      if (house && house !== "all") houses.add(house);
+    }
+    return houses.size;
+  }
   if ("p" in spec) {
     const player = scope.state.players[spec.opp ? other(scope.me) : scope.me];
     if (spec.p === "keyColors") {
@@ -1214,6 +1245,7 @@ function countOf(scope: Ctx, spec: Count): number {
     if (spec.p === "plays") return divide(scope.state.plays);
     return divide(player[spec.p].length);
   }
+  if (!("of" in spec)) return 0;
   return select(scope, spec.s).reduce(
     (sum, card) =>
       sum +
@@ -1244,6 +1276,30 @@ export function canResolve(state: GameState, me: Side, source: CardInstance, abi
 
 // ---------- game actions ----------
 
+function releaseBound(state: GameState, source: CardInstance): void {
+  for (const side of [0, 1] as const) {
+    for (const held of [...state.players[side].board]) {
+      if (held.boundTo !== source.instanceId || held === source) continue;
+      const owner = ownerOf(state, held);
+      held.asCreature = undefined;
+      held.boundTo = undefined;
+      // The artifact returns as it was before the creature form: damage, stun and tokens were of the creature.
+      held.damage = 0;
+      held.stunned = false;
+      held.warded = undefined;
+      held.enraged = undefined;
+      held.ready = true;
+      if (held.controlledBy === undefined || owner === undefined || owner === side) {
+        held.controlledBy = undefined;
+        continue;
+      }
+      state.players[side].board = state.players[side].board.filter((item) => item !== held);
+      state.players[owner].board.push(held);
+      held.controlledBy = undefined;
+    }
+  }
+}
+
 function leavePlay(state: GameState, card: CardInstance, destination: "discard" | "hand" | "deck" | "archives" | "purged"): void {
   const side = controllerOf(state, card);
   if (side === undefined) return;
@@ -1252,6 +1308,8 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   // (keyteki player.moveCard: "card.owner.moveCard(card, targetLocation)").
   const owner = state.players[ownerOf(state, card) ?? side];
   player.board = player.board.filter((item) => item !== card);
+  // Animating Force: control and the creature-form end when the upgrade leaves, before its host is swept.
+  releaseBound(state, card);
   // Captured amber goes to the opponent of the creature's controller.
   if (card.amber) state.players[other(side)].amber += card.amber;
   // Upgrades may be attached by the other player too (BUG-04): scan both boards.
@@ -1282,6 +1340,8 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
     marks: undefined,
     hold: undefined,
     houseAs: undefined,
+    asCreature: undefined,
+    boundTo: undefined,
   });
   // A token creature has no card behind it (isToken): it is removed from the
   // game instead of entering hand/discard/deck, so it can never be drawn or
@@ -1688,6 +1748,7 @@ function run(context: Context, act: Act): void {
       const to: Side = act.opp ? other(me) : me;
       for (const card of cards) {
         const from = controllerOf(state, card);
+        if (act.whileSource) card.boundTo = source.instanceId;
         if (from === undefined || from === to) continue;
         // Control given back to the owner is not foreign control any more.
         const returning = ownerOf(state, card) === to;
@@ -1698,6 +1759,21 @@ function run(context: Context, act: Act): void {
       }
       break;
     }
+    case "materialize":
+      // Same card, creature-shaped: the printed face stays an artifact (it is shared). The left flank is the
+      // engine default, the same one takeControl uses. `boundTo` is what leavePlay of the source undoes.
+      for (const card of cards) {
+        card.asCreature = { power: act.power, ...(act.keyword === "versatile" ? { versatile: true } : {}) };
+        card.boundTo = source.instanceId;
+        const owner = controllerOf(state, card);
+        if (owner === undefined) continue;
+        const rest = state.players[owner].board.filter((item) => item !== card);
+        const line = rest.filter(isCreature);
+        const at = context.flank === "right" ? (line.length ? rest.indexOf(line[line.length - 1]) + 1 : rest.length) : line.length ? rest.indexOf(line[0]) : 0;
+        rest.splice(at, 0, card);
+        state.players[owner].board = rest;
+      }
+      break;
     case "moveAmber": {
       // Takes `n` (absent = all) from each selected card; "pool" pays the
       // resolving side (`opp` the other one), "supply" discards it. `did` is
@@ -1848,7 +1924,7 @@ function run(context: Context, act: Act): void {
       // ignores n. Without `pick` the controller chooses — from a hidden hand
       // that means the first card outside the active house, elsewhere the top.
       const from = player[act.from];
-      const candidates = act.type ? from.filter((card) => card.face.type === act.type) : [...from];
+      const candidates = act.type ? from.filter((card) => displayType(card) === act.type) : [...from];
       const choose = () =>
         act.pick === "random"
           ? candidates[Math.floor(roll(state) * candidates.length)]
@@ -1863,7 +1939,7 @@ function run(context: Context, act: Act): void {
         // pile) or the deck runs out. The deck is finite, UNTIL_LIMIT is the belt over the braces.
         const stops = (card: CardInstance) => {
           const wanted = act.until!;
-          if (wanted.type && card.face.type !== wanted.type) return false;
+          if (wanted.type && displayType(card) !== wanted.type) return false;
           if (!wanted.house) return true;
           const neg = wanted.house.startsWith("!");
           const name = (neg ? wanted.house.slice(1) : wanted.house).toLowerCase();
@@ -1883,7 +1959,7 @@ function run(context: Context, act: Act): void {
         // when `n` is smaller than the pile (Lote 6 §6.4); a real choice waits for targets[].
         const pool = (context.moved ?? []).filter((card) => from.includes(card));
         const fitting = pool.filter((card) => {
-          if (act.type && card.face.type !== act.type) return false;
+          if (act.type && displayType(card) !== act.type) return false;
           if (!act.house) return true;
           const neg = act.house.startsWith("!");
           const name = (neg ? act.house.slice(1) : act.house).toLowerCase();
@@ -1897,7 +1973,7 @@ function run(context: Context, act: Act): void {
         // Lote 11 §H: only what the last peek/reveal showed and is still in `from`. Of a larger pile the engine
         // moves the cheapest cards (the lowest amber + icons) — "discard 1 of them" keeps the best; a real
         // choice waits for targets[] like the other zone moves.
-        const pool = (context.revealed ?? []).filter((card) => from.includes(card) && (!act.type || card.face.type === act.type));
+        const pool = (context.revealed ?? []).filter((card) => from.includes(card) && (!act.type || displayType(card) === act.type));
         pool.sort((a, b) => iconScore(a) - iconScore(b));
         moved.push(...pool.slice(0, Math.min(amount, pool.length)));
       }
@@ -1961,7 +2037,7 @@ function run(context: Context, act: Act): void {
       }
       break;
     case "fromDiscard": {
-      const card = [...player.discard].reverse().find((item) => !act.type || item.face.type === act.type);
+      const card = [...player.discard].reverse().find((item) => !act.type || displayType(item) === act.type);
       if (card) player.discard = player.discard.filter((item) => item !== card);
       if (card) {
         player.hand.push(card);
@@ -2364,7 +2440,7 @@ function mayPlay(state: GameState, side: Side): boolean {
 function canPlay(state: GameState, side: Side, card: CardInstance): boolean {
   if (restricted(state, side, "play", card)) return false;
   if (keyword(state, card, "alpha") && side === state.activePlayer && state.acted > 0) return false;
-  if (card.face.type === "Upgrade") return state.players.some((player) => battleline(player).length > 0);
+  if (card.face.type === "Upgrade") return attachTargets(state, card).length > 0;
   // Gigantic creatures are one creature printed on two cards: both halves must
   // be in hand and they leave the hand together (BUG-23). The reminder text is
   // in parentheses, which normalise() strips — read the raw text.
@@ -2483,7 +2559,7 @@ export function targetChoices(state: GameState, side: Side, move: GameMove): str
   const source = moveSource(state, side, move);
   if (!source) return [];
   if (move.type === "play" && source.face.type === "Upgrade") {
-    return state.players.flatMap((player) => battleline(player)).map((item) => item.instanceId);
+    return attachTargets(state, source).map((item) => item.instanceId);
   }
   // Read-only view with the creature already on its flank (no deep clone needed).
   let view = state;
@@ -2848,8 +2924,8 @@ function resolveMove(state: GameState, playerIndex: Side, move: Exclude<GameMove
         }
       }
     } else if (source.face.type === "Upgrade") {
-      const creatures = state.players.flatMap((side) => battleline(side));
-      const host = creatures.find((card) => card.instanceId === choice.id) ?? autoPick(state, playerIndex, creatures, false);
+      const hosts = attachTargets(state, source);
+      const host = hosts.find((card) => card.instanceId === choice.id) ?? autoPick(state, playerIndex, hosts, false);
       choice.id = undefined;
       source.attachedTo = host?.instanceId;
       player.board.push(source);

@@ -4,8 +4,10 @@ import {
   chooseHouse,
   conditionHolds,
   effectiveArmor,
+  displayType,
   effectivePower,
   endTurn,
+  isCreatureCard,
   getLegalMoves,
   housesFor,
   keyCost,
@@ -53,7 +55,7 @@ const SIM = { silent: true, deterministic: true } as const;
 function scoreForPlayer(state: GameState, index: 0 | 1, abilityAware: boolean): number {
   const player = state.players[index];
   const creatureScore = player.board.reduce((sum, card) => {
-    if (card.face.type !== "Creature") return sum + (card.face.type === "Artifact" ? 0.65 : 0.25);
+    if (!isCreatureCard(card)) return sum + (displayType(card) === "Artifact" ? 0.65 : 0.25);
     const power = effectivePower(state, card);
     const healthLeft = Math.max(0, power - card.damage) + effectiveArmor(state, card);
     const readiness = card.ready && !card.stunned ? 0.85 : 0;

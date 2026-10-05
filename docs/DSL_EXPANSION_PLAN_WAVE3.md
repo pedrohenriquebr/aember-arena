@@ -237,3 +237,52 @@ Desvios do desenho da seção 4:
 - **Fora (declarado):** `{p:"discards"}` (Giant Sloth, Earthbind) — o gatilho `discard` dispara por ocorrência, mas não há contador de cartas descartadas no estado; contar exigiria novo campo em `GameState`/saves. Fica para o lote seguinte; as duas cartas seguem fora do `full`.
 - **Guarda de auto-observação:** só o gatilho `discard` ignora `watcher === event` (a carta descartada já saiu de jogo). Reap/fight/ready seguem se auto-observando ("Each time a friendly creature reaps" vale para a própria); specs em `dsl8.test.ts`.
 - **Limitação conhecida da IA:** a IA só ganha variantes para "até N" (nenhuma/melhor). Ela nunca escolhe flanco (`toFlank`: Barrel Roll vai sempre à esquerda) nem `target2` (auto-pick). O humano escolhe de verdade; a IA aproxima.
+
+## 9. Lote 8 (DSL_VERSION 9) — correções da review
+
+- **`{gone: Filter}` com `side`:** a carta morta não tem controlador, então o lado é gravado no snapshot do act ANTES de sair de jogo (`Snapshot.cards[].side` → `goneCards[].side`) e o `side` do filtro é comparado com esse lado guardado; os demais campos do filtro continuam via `matches`. Mesa 2 aliadas + 3 inimigas destruídas: friendly=2, enemy=3 (spec em `dsl9.test.ts`). Campos que dependem de estar em jogo (flank, damaged...) seguem sem sentido num `gone` e não foram tratados.
+- **Gabos:** `dealDamage` aplica o `fightRedirect` ANTES do "cannot be dealt damage"; quem pode ser imune é o destino. O gate só aceita `redirect:"chosen"` em `beforeFight` (em `fight` ele seria gravado depois do dano e zerado no fim: inerte), e a exigência de `duration` no `lasting` isenta esse redirect (vive o tempo da luta).
+- **Few-shots × gate:** nova spec roda TODOS os few-shots por `validateDraft`. Ela pegou, além do Gabos, dois few-shots antigos que o gate rejeitava: o gatilho `discard` (faltava em `TRIGGER_WORDS`) e `forceHouse` com "choose that creature's house" (regex do gate aceitava só "choose a house"). Ambos corrigidos.
+- **Contagem:** são 9 few-shots novos (não 10), um por carta.
+- **Regex afrouxadas fora das 9 mecânicas** (necessárias para os textos reais; mudam parses antigos, e o bump de `PARSER_VERSION` já invalida os congelados): `captures N` sem âmbar, `exalt N times`, `on it/them`, `reduced by 1` sem âmbar.
+- `dsl8.test.ts`: `DSL_VERSION >= 8` é piso proposital (bumps posteriores preservam os literais do lote 7).
+
+## 10. Lote 10 (DSL_VERSION 10, PARSER_VERSION 10) — `peek` e `attackBonus`
+
+Os textos reais do corpus diferem dos do pedido: Psychic Bug é "Play/Reap: Look at your opponent's hand." (não há "reveals their hand" no Psychic Bug) e Valdr é "Valdr deals +2 while attacking an enemy creature on the flank." (também na grafia `+2<D> … enemy flank creature`).
+
+**`peek`** — `{ k:"peek", from:"hand"|"deck", n?:number, opp?:boolean }`.
+- Desvio do pedido: o act NÃO leva `s: Selection` (Selection só aponta cartas da mesa); segue o desenho zonal do `move` (`from` + `opp`). `n` é a profundidade do deck (default 1, o topo primeiro); a mão é mostrada inteira.
+- Motor: grava `GameState.peek = { side, owner, from, faces[] }` (JSON puro, `side` = quem olha). `applyMove` apaga o `peek` anterior depois da checagem de legalidade, então ele vive até o próximo movimento. O log recebe SÓ `log.peek {name, n}` ("olhou N carta(s)") — nunca identidades; nada é movido ou embaralhado. Mão/deck vazios: loga `n = 0` e não abre nada.
+- UI: `PeekDialog` (App.tsx) abre um modal privado ("Olhando as cartas") com as cartas em `CardArt`; fecha no clique/Esc/backdrop (o descarte é local: o objeto `peek` é guardado como "visto"). Só abre para o humano que olhou (`peek.side === humanSide` no solo; `passAndPlay` abre para o jogador ativo, que é quem segura o aparelho).
+- Pass-and-play (limitação documentada, escolha simples): como o log só tem a contagem e o `peek` é apagado no movimento seguinte, o outro jogador não vê nada pelo log; o único vazamento possível é fisicamente olhar a tela enquanto o ativo está com o modal aberto — igual a qualquer mão aberta no aparelho. A tela de "passe o aparelho" só aparece depois do fim do turno, que é um movimento (o `peek` já foi trocado).
+- Parser: só as formas TERMINAIS (a frase "Look at …" sozinha): `look at your opponent's hand`, `look at the top (card|N cards) of (your|your opponent's) deck`. Frases que agem sobre o que foi visto ("… and put them back", "… choose a card from it", "You may discard that card") ficam como sentença não suportada ao lado — a carta vira `partial`/`vanilla`, nunca `full` errado.
+- Few-shot: Psychic Bug → `{"on":["play","reap"],"acts":[{"k":"peek","from":"hand","opp":true}]}`.
+
+**`attackBonus`** — `PersistentEffect { attackBonus?: number; whenAttacking?: Filter }`.
+- Desvio do pedido: `whenAttacking` é um **Filter** do defensor (não uma `Condition` de contagem): Valdr = `{ target:{self:true}, attackBonus:2, whenAttacking:{ type:"Creature", side:"enemy", flank:true } }`. `side` é relativo ao lado do efeito; sem `whenAttacking` o bônus vale contra qualquer defensor.
+- Motor: `attackBonusAgainst(state, attacker, defender)` (exportada) soma os efeitos ativos que acertam o atacante e cujo filtro casa com o defensor. É lida SÓ no passo de dano da luta (`fightBody`, junto de `effectivePower(attacker)`), depois do teste de Elusive — Elusive continua cancelando o dano inteiro (o bônus não passa por `beforeFight`). Nunca entra em `effectivePower` (o poder exibido e o dano devolvido por quem defende não mudam); a IA o enxerga porque simula `applyMove`.
+- Recursão: o bônus é lido fora de `allEffects → effectivePower`, então um filtro de defensor que lê poder (`most`, `powerMin`…) não recursiona; o gate (`validAttackBonus`) exige `attackBonus` finito ≠ 0, `whenAttacking` só junto dele e com os campos fechados de `Filter`; vale também no `lasting`. Não há `readsPower` aplicável porque nada é guardado em `effectivePower`.
+- Few-shot: `~ deals +2<D> while attacking an enemy creature on the flank.` (a regex também aceita `~`).
+
+Testes: `dsl10.test.ts` (18 specs). Efeito colateral nos specs antigos: o fixture "Look at the top card of your deck" (usado como texto não suportado) virou "… and name it."; `fx.test` usa Tocsin como atacante (Valdr agora tem bônus); o snapshot do starter sobe de 49→51 full (Psychic Bug, Valdr).
+
+## 12. Lote 12 (DSL_VERSION 12, PARSER_VERSION 12) — casas distintas e Animating Force
+
+**`Count { housesOf: "moved" }`** — Rogue Operation: "Steal 1A for each house represented among the discarded cards."
+- A seleção `"moved"` é simbólica: não é uma carta da mesa. `countOf` lê `scope.moved` (o Lote 6 grava esse snapshot no `move` que descartou o topo do deck) e devolve `new Set` das `face.house` impressas, ignorando vazio e `"all"`. Outras seleções passam por `select`.
+- O fallthrough antigo de `countOf` assumia `{of, s}`. Com a variante nova ele discrimina `"housesOf"` e só soma `{of}` quando `"of" in spec`.
+- Grafia: `houses represented among the discarded cards` → `per: { housesOf: "moved" }`.
+
+**Animating Force** — três mecanismos, a forma mínima:
+- **Host artefato:** `PersistentEffect.hosts?: "Artifact"` no efeito constante da própria carta (`target: { self: true }`). `canPlay` / `targetChoices` / o play só oferecem artefatos ainda não materializados. Não é um bônus de poder.
+- **Controle enquanto a fonte está em jogo:** `takeControl.whileSource?: true` grava `CardInstance.boundTo` (instance id da upgrade). `leavePlay` da fonte devolve a carta ao dono e zera `controlledBy`. Não é `PersistentEffect.control`: controle é uma mudança de zona, não uma estatística relida a cada consulta.
+- **Criatura 4 / versatile:** `Act { k: "materialize", s, power, keyword?: "versatile" }` no MESMO card (`asCreature`), sem token e sem mutar `face` (a face é compartilhada). O poder impresso do artefato fica de lado enquanto `asCreature` existe; `versatile` entra em `keyword()`. O flanco default é o esquerdo, o mesmo do `takeControl`. `boundTo` também é gravado aqui, então a forma de criatura acaba no mesmo `leavePlay` da fonte.
+- Trade-off: a carta é uma. Não há cópia-token, então âmbar, id e upgrades anexados continuam no artefato. Quando a upgrade sai, o artefato volta a ser artefato no board do dono (não fica criatura).
+- Grafia única, antes do split em "and": "take control of this artifact and put it on a flank … with N power and versatile". "Scrap: Gain 1" já era `gainAmber`.
+
+**Review do lote (fechado):**
+- **Tipo visível.** `displayType` / `isCreatureCard` devolvem `"Creature"` enquanto `asCreature` está ativo. Filtros (`matches`, restrições, contagem `m`), a battleline, os botões do inspetor e o placar da IA leem esse tipo. "Destroy a creature" atinge o artefato materializado; "Destroy an artifact" não.
+- **Estado limpo.** `releaseBound` zera `damage`, `stunned`, `warded` e `enraged` e deixa `ready` verdadeiro. Uma segunda Animating Force não reanima o artefato já ferido.
+- **`moved` só em `housesOf`.** Não é uma `Selection`: `s:"moved"` no gate é rejeitado (não devolve cartas do descarte para um ato de mesa). `countOf` lê `scope.moved` direto. `hosts` e chaves extras de `materialize` no ato ou na ability também são rejeitados — `hosts` só existe no efeito.
+

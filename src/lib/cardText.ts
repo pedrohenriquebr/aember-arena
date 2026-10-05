@@ -155,7 +155,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 11;
+export const PARSER_VERSION = 12;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -428,7 +428,9 @@ function parseObject(phrase: string, upgrade: boolean, observer = false): { s: S
   // Inside an observer ability the event card is the subject: "stun it" stuns
   // the creature that caused the event, not the watcher.
   if (observer && (phrase === "it" || phrase === "~")) return { s: "event" };
-  if (/^(this card|this creature|itself|it|~)$/.test(phrase)) return { s: upgrade && phrase === "this creature" ? "host" : "self" };
+  if (/^(this card|this creature|this artifact|itself|it|~)$/.test(phrase)) {
+    return { s: upgrade && (phrase === "this creature" || phrase === "this artifact") ? "host" : "self" };
+  }
   if (phrase === "a creature and each of its neighbors") return { s: "targetAndNeighbors", target: { type: "Creature" } };
   if (/^each neighbor of the creature this card fights$/.test(phrase)) return { s: "neighborsOfFought" };
   // "The creature ~ fights" (Before Fight): the defender of the fight in progress.
@@ -546,6 +548,8 @@ function parsePer(phrase: string): Count | null {
   if (/^(?:bonus icons?|.+ counters?) (?:on the discarded card|removed this way)$/.test(phrase)) return phrase.startsWith("bonus") ? { m: "icons" } : "did";
   if (/^the (?:archived|purged|discarded) (?:creature|card)'?s? power$/.test(phrase)) return { m: "power" };
   // Lote 7 §7.2: distinct colors among the forged keys (both sides unless named).
+  // Lote 12: distinct houses on the cards the previous act moved (the discard that filled `scope.moved`).
+  if (/^houses? represented among the discarded cards$/.test(phrase)) return { housesOf: "moved" };
   const colors = phrase.match(/^colors? represented among (?:(your opponent's|your) )?forged keys$/);
   if (colors) return { p: "keyColors", ...(colors[1] === "your" ? {} : colors[1] ? { opp: true } : { any: true }) };
   const zone = phrase.match(/^cards? in your (hand|deck|discard(?: pile)?|archives|purged)$/);
@@ -810,6 +814,16 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
       acts: [
         { k: "move", n: 1, from: "hand", to: "discard", pick: "random", per: { p: "hand", div } },
         { k: "move", n: 1, from: "hand", to: "discard", opp: true, pick: "random", per: { p: "hand", opp: true, div } },
+      ],
+    };
+  }
+  // Lote 12 (Animating Force): one sentence, two acts. The "and" split would stop at "and versatile".
+  const animate = sentence.match(/^take control of this artifact and put it on a flank of your battleline as a creature with (\d+) power and versatile$/);
+  if (animate) {
+    return {
+      acts: [
+        { k: "takeControl", s: "host", whileSource: true },
+        { k: "materialize", s: "host", power: Number(animate[1]), keyword: "versatile" },
       ],
     };
   }
@@ -1281,6 +1295,8 @@ function parseRestriction(sentence: string): Restrict | null {
     of the sentence it understood, or null when the wording is outside the
     grammar. */
 function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, quoted: string[]): PersistentEffect[] | null {
+  // Lote 12: the upgrade's legal host is an artifact. Read at play time (`hosts`), not as a stat.
+  if (sentence === "this upgrade enters play attached to an artifact instead of a creature") return [{ target: { self: true }, hosts: "Artifact" }];
   let body = sentence;
   let duration: PersistentEffect["duration"];
   const untilNext = body.match(/^until the start of your next turn, (.+)$/);

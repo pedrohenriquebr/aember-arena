@@ -805,6 +805,27 @@ export const FEW_SHOTS: {
       keywords: {},
     },
   },
+  {
+    type: "Action",
+    text: "Play: Discard the top 2 cards of your deck. Steal 1<A> for each house represented among the discarded cards.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "move", n: 2, from: "deck", to: "discard", pick: "top" }, { k: "steal", n: 1, per: { housesOf: "moved" } }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
+    type: "Upgrade",
+    text: "This upgrade enters play attached to an artifact instead of a creature. Play: Take control of this artifact and put it on a flank of your battleline as a creature with 4 power and versatile. Scrap: Gain 1<A>.",
+    answer: {
+      abilities: [
+        { on: ["play"], acts: [{ k: "takeControl", s: "host", whileSource: true }, { k: "materialize", s: "host", power: 4, keyword: "versatile" }] },
+        { on: ["scrap"], acts: [{ k: "gainAmber", n: 1 }] },
+      ],
+      effects: [{ target: { self: true }, hosts: "Artifact" }],
+      keywords: {},
+    },
+  },
 ];
 
 const SYSTEM_RULES = [
@@ -829,6 +850,7 @@ const SYSTEM_RULES = [
   '"This creature belongs to all houses" = effects [{target, house:"all"}]. "X cannot be dealt damage" = effects [{target, replace:{on:"damage",prevent:true}}]; "your <A> cannot be stolen" = effects [{target:{},noSteal:true}]. `unless <cond>` = `if: not <cond>` on the effect. A card always goes to its owner\'s zone. A filter without `type` matches any card in play.',
   'Superlatives: "the most powerful [enemy] creature" = {"each":{...,"most":1}} (mirror of "least": 1). "Choose one:" with two lines = every act of the first line has mode "a", of the second mode "b" (no target). "a player\'s deck" = a move with side:"any" (the player picks whose; a following "If it is a creature, purge it" is a move pick "moved" type Creature with the same side). "Your opponent must pay you N<A> to use an artifact" = effects [{target:{},restrict:{who:"opponent",action:"use",type:"Artifact",cost:N}}]. "for each X destroyed this way" = per {"gone":<filter of X>}. "gains the Mutant trait" = a lasting effect with traits; "each friendly creature may fight" = mayFight:true. "one third of the cards in your hand" = per {"p":"hand","div":3}. "~ deals damage to that creature rather than the one it is fighting" (after "Choose a creature", on Before Fight) = a lasting act with replace {"on":"damage","redirect":"chosen"}. A bare "Look at your opponent\'s hand" = {"k":"peek","from":"hand","opp":true}; "Look at the top N cards of your [opponent\'s] deck" = {"k":"peek","from":"deck","n":N} (+ opp) — only when nothing is done with what was seen (a following sentence that acts on it is not representable). "~ deals +N while attacking <filter>" = effects [{target:{self:true},attackBonus:N,whenAttacking:<filter of the DEFENDER>}], never power.',
   '"X enters play ready" = effects [{target,entersPlayReady:true}] ("Your/Friendly creatures" = {type:"Creature",side:"friendly"}; "If you are haunted, ~ enters play ready" adds if = count of {"p":"discard"} gte 10). "You may play one non-<House> card this turn" = a lasting act with e {target:{house:"!<House>"},mayPlay:1,duration:"turn"}, optional. "Use an opponent\'s artifact as if it were yours" = target {type:"Artifact",side:"enemy",ready:true} + {"k":"use","s":"target","asYours":true}. "creatures of the chosen house cannot be used to reap [during your opponent\'s next turn]" = restrict {who:"opponent",action:"reap"} on the effect whose target names the creatures (not a ban on the player). "~ only deals N when fighting" = effects [{target:{self:true},fightDamageCap:N}] (caps the damage it deals in a fight, as attacker AND as defender); "~ deals no damage when attacked" = replace {on:"damage",prevent:true,when:"defending"} ("attacking" for the attacker role) — never the plain prevent, that one is "cannot be dealt damage". "Creatures to the left/right of ~ in the battleline" = {type:"Creature",leftOf:true|rightOf:true} (every one on that side, not just the neighbors). "Reveal …" (public, names the card in the log) = {"k":"reveal","from","opp","pick":"random"}; "Look at the top N cards of your deck. Discard 1 of them" / "Put that card on the bottom of their deck" = a move with pick:"revealed" right after the peek/reveal (the engine copies its zone and owner; "of them" keeps the better cards). "Deal N for each X. You may divide this damage among any number of creatures" = ONE damage act with divide:true, s {pick,n:99,upTo:true} and per. "for each enemy creature that was destroyed in a fight this turn" = per {"slain":<filter>}; "for each damage healed" = per "healed" on the act AFTER the heal; "Fully heal X" = {"k":"heal","s":…} with no n. "A or B" between two zones the player picks from (top of the deck or of the discard pile) = two acts with mode "a" and "b".',
+  '"for each house represented among the discarded cards" = per {"housesOf":"moved"} (distinct printed houses on the cards the previous act moved). "This upgrade enters play attached to an artifact instead of a creature" = effects [{target:{self:true},hosts:"Artifact"}]. "Take control of this artifact and put it on a flank of your battleline as a creature with N power and versatile" = [{"k":"takeControl","s":"host","whileSource":true},{"k":"materialize","s":"host","power":N,"keyword":"versatile"}] — control and the creature form end when the upgrade leaves play.',
   "Constant text (+/- power, armor, granted keywords, 'cannot' clauses) goes in `effects`; triggered text goes in `abilities`.",
   `Keywords = an object whose keys are among: ${ENGINE_KEYWORDS.join(", ")}; values are numbers.`,
   "Types:",

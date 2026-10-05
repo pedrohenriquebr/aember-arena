@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 11; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 12; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -126,7 +126,9 @@ export type Count =
   /** Cards the previous act moved (Lote 6 §6.4): how many, their bonus icons, or their printed power. */
   | { m: "cards" | "icons" | "power"; house?: string; type?: string }
   /** max(0, a - b): "all but 6" (Lote 5 §5.5). */
-  | { sub: [Count, Count | number] };
+  | { sub: [Count, Count | number] }
+  /** Distinct printed houses among the cards the previous act moved (Rogue Operation). Not a Selection: `"moved"` must not select board cards. */
+  | { housesOf: "moved" };
 
 export type Act = (
   /** `who` (Lote 4 §4.6) resolves the player from the reference card of the
@@ -160,7 +162,11 @@ export type Act = (
   | { k: "move"; n: number; from: Zone; to: Zone; opp?: boolean; side?: "opponent" | "any"; pick?: "top" | "bottom" | "random" | "all" | "moved" | "revealed"; at?: "top" | "bottom" | "shuffle"; type?: string; house?: string; until?: { house?: string; type?: string } }
   /** Set tokens of the set layer (keyteki WardAction/EnrageAction/RemoveWardAction)
       and control changes (game.takeControl). */
-  | { k: "ward" | "removeWard" | "enrage" | "removeEnrage" | "takeControl"; s: Selection; opp?: boolean }
+  | { k: "ward" | "removeWard" | "enrage" | "removeEnrage"; s: Selection }
+  /** `whileSource` (Lote 12, Animating Force): control lasts while the resolving card stays in play and returns to the owner when it leaves. Not a PersistentEffect — control is a zone move, re-checked only at leave. */
+  | { k: "takeControl"; s: Selection; opp?: boolean; whileSource?: true }
+  /** The selected artifact becomes a creature (same card, not a token copy) with this power until the source leaves play. `versatile` is granted the same way. */
+  | { k: "materialize"; s: Selection; power: number; keyword?: "versatile" }
   /** Move amber off cards ("Move 1 from X to the common supply"): `n` absent
       takes everything, `to:"pool"` adds to the resolving side's pool (`opp`
       flips it, "supply" discards it). */
@@ -310,6 +316,8 @@ export interface PersistentEffect {
   /** "Your creatures enter play ready" / "If you are haunted, ~ enters play ready" (Lote 11 §A): the matching creature
       comes in ready (condition: the effect's `if`). */
   entersPlayReady?: true;
+  /** "This upgrade enters play attached to an artifact instead of a creature" (Lote 12). Read at play time, not as a stat. */
+  hosts?: "Artifact";
   /** "You may play one non-Logos card this turn" (Lote 11 §B): the matching hand cards may be played outside the active
       house. `true` = any number, a number = that many plays (spent from the stored lasting copy). */
   mayPlay?: true | number;
@@ -614,6 +622,7 @@ const ACTS: Record<string, string> = {
   enrage: "s",
   removeEnrage: "s",
   takeControl: "s",
+  materialize: "s",
   makeToken: "n",
   forgeKey: "n",
   setHouse: "s",
@@ -739,6 +748,7 @@ function validCount(value: unknown): boolean {
       (value.div === undefined || (Number.isInteger(value.div) && (value.div as number) >= 2 && value.p !== "keyColors"))
     );
   }
+  if (value.housesOf !== undefined) return Object.keys(value).every((key) => key === "housesOf") && value.housesOf === "moved";
   return (
     value.m === "cards" || value.m === "icons" || value.m === "power"
       ? Object.keys(value).every((key) => key === "m" || key === "house" || key === "type") &&
@@ -884,6 +894,19 @@ function validAct(value: unknown): boolean {
   }
   if (value.divide !== undefined && (value.divide !== true || value.k !== "damage")) return false;
   if (value.asYours !== undefined && (value.asYours !== true || value.k !== "use")) return false;
+  if (value.whileSource !== undefined && (value.whileSource !== true || value.k !== "takeControl")) return false;
+  // `hosts` belongs on a persistent effect. An act that carries it would be stored and ignored.
+  if (value.hosts !== undefined) return false;
+  if (value.k === "materialize") {
+    const allowed = new Set(["k", "s", "power", "keyword", "optional", "mode", "if", "per"]);
+    return (
+      Object.keys(value).every((key) => allowed.has(key)) &&
+      Number.isInteger(value.power) &&
+      (value.power as number) > 0 &&
+      (value.keyword === undefined || value.keyword === "versatile")
+    );
+  }
+  if (value.keyword !== undefined) return false;
   if (value.k === "setHouse") return typeof value.house === "string" && value.house.length > 0;
   if (value.k === "forgeKey") {
     if (value.less !== undefined && !validCount(value.less)) return false;
@@ -923,6 +946,8 @@ function validAct(value: unknown): boolean {
 
 function validAbility(value: unknown): value is Ability {
   if (!isRecord(value)) return false;
+  // `hosts` / `materialize` are effect and act fields. On the ability they would be stored and ignored.
+  if (value.hosts !== undefined || value.materialize !== undefined) return false;
   if (!Array.isArray(value.on) || !value.on.length || !value.on.every((trigger) => typeof trigger === "string" && ABILITY_TRIGGERS.has(trigger))) return false;
   if (!Array.isArray(value.acts) || !value.acts.length || !value.acts.every(validAct)) return false;
   if (value.if !== undefined && !validCondition(value.if)) return false;
@@ -979,6 +1004,7 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.mayFight === undefined || effect.mayFight === true) &&
         validAttackBonus(effect) &&
         validLote11(effect) &&
+        (effect.hosts === undefined || effect.hosts === "Artifact") &&
         !houseEffectLoops(effect) &&
         !traitEffectLoops(effect) &&
         !readsPower(effect.if) &&
