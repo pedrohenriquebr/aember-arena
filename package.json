@@ -29,7 +29,8 @@
     "harvest:cards": "vite-node scripts/catalog-export.mjs --",
     "keyteki:cards": "vite-node scripts/catalog-keyteki.mjs",
     "merge:cards": "vite-node scripts/catalog-merge.mjs",
-    "relay:go": "node scripts/relay-go.mjs"
+    "relay:go": "node scripts/relay-go.mjs",
+    "keyteki:convert": "vite-node scripts/keyteki/convert.mjs --"
   },
   "dependencies": {
     "lucide-react": "^1.48.0",
@@ -41,6 +42,7 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.1",
+    "acorn": "^8.19.0",
     "playwright-core": "^1.63.0",
     "terser": "^5.51.2",
     "typescript": "5.9.3",
