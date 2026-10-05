@@ -1,0 +1,146 @@
+{
+  "_doc": "Lane G. Famílias de lambda de CONDIÇÃO da camada C → Condition em src/lib/abilities.ts. Mesmo denominador de counts.json (1972 usos / 1394 lambdas distintas não convertidas, 2606 arquivos). Uma lambda pode cair numa família de counts.json e numa daqui (isHaunted é as duas). mapeamento null = família vista no corpus e sem Condition.",
+  "familias": [
+    {
+      "id": "haunted",
+      "canon-exemplo": "(p0)=>p0.player.isHaunted()",
+      "mapeamento": "{ k: \"count\", of: { p: \"discard\", opp?: true }, op: \"gte\", n: 10 }",
+      "notas": "Negação !isHaunted → { k: \"not\", c: … }. Controller da fonte vs player.opponent escolhe opp. usos 111, distintos 50. grep 112.",
+      "usos": 111,
+      "distintos": 50,
+      "grep": 112
+    },
+    {
+      "id": "moreFewerCreatures",
+      "canon-exemplo": "(p0)=>(!!p0.player.opponent&&(p0.player.opponent.creaturesInPlay.length>p0.player.creaturesInPlay.length))",
+      "mapeamento": "{ k: \"moreCreatures\" } | { k: \"fewerCreatures\" }",
+      "notas": "Os dois lengths de creaturesInPlay comparados entre jogador e oponente. moreCreatures = oponente tem mais. Empate (===) não tem k próprio: { k: \"count\", of: { c }, op: \"eq\", n } não compara dois counts. usos 24, distintos 17.",
+      "usos": 24,
+      "distintos": 17,
+      "grep": null
+    },
+    {
+      "id": "amberThreshold",
+      "canon-exemplo": "(p0,p1)=>((p1.player===this.game.activePlayer)&&(p1.player.amber<=4))",
+      "mapeamento": "{ k: \"amber\", opp: boolean, op: \"eq\" | \"gte\", n: number }",
+      "notas": "Pool comparado a um literal. op da DSL é só eq|gte; <= e < saem como not+gte do limiar seguinte, > como gte n+1. usos do spine (player|opponent|controller|activePlayer).amber: 157 / 112, a maioria já listada em counts.json poolAmber.",
+      "usos": 157,
+      "distintos": 112,
+      "grep": 277
+    },
+    {
+      "id": "amberVsOpponent",
+      "canon-exemplo": "(p0)=>(p0.player.opponent&&(p0.player.amber<p0.player.opponent.amber))",
+      "mapeamento": null,
+      "notas": "SEM Condition. Os dois pools são contagens vivas; amber só compara com n literal e count também. Não colapsar para um limiar fixo.",
+      "usos": 157,
+      "distintos": 112,
+      "grep": null
+    },
+    {
+      "id": "forged",
+      "canon-exemplo": "(p0)=>(p0.player.opponent&&(p0.player.opponent.getForgedKeys()>0))",
+      "mapeamento": "{ k: \"forged\", opp?: true }",
+      "notas": "getForgedKeys()>0. Contagem exata (===1, ===2) é { k: \"count\", of: { p: \"keys\", opp? }, op: \"eq\", n }. Mais chaves que o oponente não tem k (mesmo buraco de amberVsOpponent). usos 34, distintos 27. grep 36.",
+      "usos": 34,
+      "distintos": 27,
+      "grep": 36
+    },
+    {
+      "id": "keyColor",
+      "canon-exemplo": "()=>preThenContext.game.isKeyForged(\"blue\")",
+      "mapeamento": "{ k: \"key\", color: \"red\" | \"yellow\" | \"blue\", opp?: true, any?: true }",
+      "notas": "isKeyForged(cor). any quando o jogo inteiro forjou essa cor; opp quando é a do oponente. usos 8, distintos 8. grep isKeyForged( = 6 (o dump conta a cor também dentro de expressões maiores).",
+      "usos": 8,
+      "distintos": 8,
+      "grep": 6
+    },
+    {
+      "id": "myTurn",
+      "canon-exemplo": "(p0,p1)=>(p1.player===this.game.activePlayer)",
+      "mapeamento": "{ k: \"myTurn\" } | { k: \"not\", c: { k: \"myTurn\" } }",
+      "notas": "activePlayer === controller da habilidade, ou o oposto. Não distingue fase (ready/key/draw) — ver fora phase. usos do spine activePlayer: 129 lambdas no recorte que também cita .game (o grep do texto inteiro é 282). Distintos 66 no recorte estrito activePlayer===.",
+      "usos": 129,
+      "distintos": 66,
+      "grep": 282
+    },
+    {
+      "id": "zoneCount",
+      "canon-exemplo": "(p0)=>(p0.player.deck.length>0)",
+      "mapeamento": "{ k: \"count\", of: { p: \"hand\" | \"deck\" | \"discard\" | \"archives\" | \"keys\" | \"amber\" | \"plays\", opp?: true }, op: \"eq\" | \"gte\" | \"lte\" | \"even\" | \"odd\", n: number }",
+      "notas": "length de zona comparado a N, inclusive ===0 e >0. lte não está no op de amber, mas está no op de count. Paridade (%2) usa even|odd. usos de paridade no dump: 12 / 10.",
+      "usos": 12,
+      "distintos": 10,
+      "grep": null
+    },
+    {
+      "id": "someExists",
+      "canon-exemplo": "(p0)=>p0.player.creaturesInPlay.some((p0)=>p0.isToken())",
+      "mapeamento": "{ k: \"count\", of: { c: Filter }, op: \"gte\", n: 1 }",
+      "notas": "Array.some(predicado local de carta) = existe ao menos um. some() sobre preThenEvents, getHouses() ou when: não é Filter de carta. usos do spine .some(: 178 / 155. grep .some( = 146.",
+      "usos": 178,
+      "distintos": 155,
+      "grep": 146
+    },
+    {
+      "id": "every",
+      "canon-exemplo": "(p0)=>(p0.preThenEvents&&p0.preThenEvents.every((p0)=>!p0.cancelled))",
+      "mapeamento": null,
+      "notas": "SEM Condition de 'todos'. every em eventos do then não é contagem de cartas. Sobre uma lista de cartas seria count eq ao tamanho, e a DSL não tem essa igualdade de dois counts. usos 12, distintos 11. grep .every( = 9.",
+      "usos": 12,
+      "distintos": 11,
+      "grep": 9
+    },
+    {
+      "id": "tide",
+      "canon-exemplo": "(p0)=>p0.player.isTideHigh()",
+      "mapeamento": null,
+      "notas": "SEM Condition. isTideHigh 73 ocorrências no texto, isTideLow 12; lambdas no dump 84 usos / 31 distintos (bate com o grep 84). Maré está fora da DSL v12.",
+      "usos": 84,
+      "distintos": 31,
+      "grep": 84
+    },
+    {
+      "id": "phase",
+      "canon-exemplo": "()=>((context.source.controller!==context.game.activePlayer)&&(context.game.currentPhase===\"ready\"))",
+      "mapeamento": null,
+      "notas": "SEM Condition de fase. myTurn não distingue ready/draw/key. usos 7, distintos 7. grep currentPhase = 5.",
+      "usos": 7,
+      "distintos": 7,
+      "grep": 5
+    },
+    {
+      "id": "actor",
+      "canon-exemplo": "(p0)=>(p0.event.player===p0.player)",
+      "mapeamento": "{ k: \"actor\", opp?: true }",
+      "notas": "Quem causou o evento de jogador (event.player vs o controller). A maior parte de event.* é seleção da carta (event.card), não esta condição. Não separada no histograma: entra no spine event.* (169 usos / 115 distintos no primeiro recorte C).",
+      "usos": null,
+      "distintos": null,
+      "grep": null
+    }
+  ],
+  "cobertura": {
+    "denominador": "lambdas não convertidas da camada C no dump dos 2606 arquivos",
+    "usos": 1972,
+    "distintos": 1394,
+    "cobertasPorFamiliaComMapeamento": { "usos": 1026, "distintos": 741, "pctUsos": 52.03, "pctDistintos": 53.16 },
+    "nota": "União das famílias com mapeamento não-nulo (counts + conditions), sobre as 1972 lambdas C. Reconhecimento de família, não lowering 1:1. 1067 do relatório Sonnet é contagem de ARQUIVOS, não de lambdas. fora[] é partição exclusiva do resto (946 usos = 1972-1026) e soma 946.",
+    "fora": [
+      { "id": "sel.boardList", "usos": 393, "distintos": 302, "notas": "creaturesInPlay/cardsInPlay como target, sem .length. Seleção." },
+      { "id": "sel.event", "usos": 155, "distintos": 102, "notas": "event.card como alvo. Selection event, não Count." },
+      { "id": "sel.deckSlice", "usos": 127, "distintos": 59, "notas": "deck[0] / deck.slice. peek/reveal/move." },
+      { "id": "tide", "usos": 80, "distintos": 27, "notas": "Recorte exclusivo; a família inteira é 84 usos / 31 distintos." },
+      { "id": "preThen", "usos": 56, "distintos": 48, "notas": "preThenEvents. Sem Count." },
+      { "id": "sel.hand", "usos": 33, "distintos": 25, "notas": "Mão como zona-alvo." },
+      { "id": "sel.archives", "usos": 24, "distintos": 16, "notas": "Arquivos como target." },
+      { "id": "imperative", "usos": 22, "distintos": 22, "notas": "Bloco com if/forEach. Camada D." },
+      { "id": "sel.discard", "usos": 21, "distintos": 21, "notas": "Descarte como zona-alvo." },
+      { "id": "upgrades", "usos": 7, "distintos": 6, "notas": "flatMap de upgrades." },
+      { "id": "neighborLength", "usos": 7, "distintos": 7, "notas": "Só o que sobrou depois dos .length já cobertos por filteredLength. A família inteira é 49/42 e não tem Count." },
+      { "id": "keyCost", "usos": 3, "distintos": 1, "notas": "Resto exclusivo; a família getCurrentKeyCost é 6/4." },
+      { "id": "housesInPlay", "usos": 2, "distintos": 2, "notas": "Resto exclusivo; a família getHousesInPlay é 20/19." },
+      { "id": "phase", "usos": 2, "distintos": 2, "notas": "Resto exclusivo; a família currentPhase é 7/7." },
+      { "id": "outros", "usos": 14, "distintos": 13, "notas": "discard(deck), getPlayers, alvos compostos." }
+    ]
+  }
+}

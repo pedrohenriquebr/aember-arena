@@ -1,0 +1,158 @@
+{
+  "_doc": "Lane G (KEYTEKI_CONVERSION_PLAN.md §2.2 item 4). Famílias de lambda de CONTAGEM/ESTADO da camada C → Count em src/lib/abilities.ts. Medido no dump AST de 2606 arquivos (npm run keyteki:convert -- --all --dump lambdas, clone d9b239b): lambdas não convertidas cujo canon casa com context.game / player.deck|hand / event.* / .filter|.some / creaturesInPlay|cardsInPlay|archives|isHaunted|getForgedKeys|isKeyForged|isTide|cardsPlayed|getCurrentKeyCost|getHousesInPlay|currentPhase. Denominador: 1972 usos, 1394 distintos. usos/distintos = nós lambda no dump; grep = ocorrências cruas no texto dos 2606 .js (inclui fora de arrow). did/gone/healed/slain/housesOf/m medem o ato anterior, não uma leitura de context.game — 0 lambdas desta forma. Sem código de conversão.",
+  "familias": [
+    {
+      "id": "poolAmber",
+      "canon-exemplo": "(p0)=>(p0.player.opponent&&(p0.player.amber<p0.player.opponent.amber))",
+      "mapeamento": "{ p: \"amber\", opp?: true }",
+      "notas": "Âmbar do pool do jogador (player|opponent|controller|activePlayer).amber. opp quando o receptor é o oponente. Comparar dois pools dinâmicos não cabe em Condition.amber (só eq|gte contra literal) — ver conditions.json amberVsOpponent. usos 157, distintos 112. grep .amber no corpus é 277 e mistura âmbar em carta.",
+      "usos": 157,
+      "distintos": 112,
+      "grep": 277
+    },
+    {
+      "id": "handLength",
+      "canon-exemplo": "(p0)=>(p0.player.opponent&&(p0.player.opponent.hand.length>0))",
+      "mapeamento": "{ p: \"hand\", opp?: true }",
+      "notas": "Tamanho da mão. A comparação vira Condition count. A mão inteira como alvo (target: player.hand) não é Count. usos 25, distintos 22. grep .hand.length = 28.",
+      "usos": 25,
+      "distintos": 22,
+      "grep": 28
+    },
+    {
+      "id": "deckLength",
+      "canon-exemplo": "(p0)=>(p0.player.deck.length>0)",
+      "mapeamento": "{ p: \"deck\", opp?: true }",
+      "notas": "Cartas no deck. deck[0] / deck.slice é seleção (peek/reveal/move), não esta família. usos 113, distintos 75. grep .deck.length = 146 (o texto conta também blocos que o parser não isolou como fn).",
+      "usos": 113,
+      "distintos": 75,
+      "grep": 146
+    },
+    {
+      "id": "discardLength",
+      "canon-exemplo": "(p0)=>(p0.player.discard.length>0)",
+      "mapeamento": "{ p: \"discard\", opp?: true }",
+      "notas": "Tamanho do descarte. isHaunted é este count >= 10, não um contador à parte. usos 28, distintos 20. grep .discard.length = 36.",
+      "usos": 28,
+      "distintos": 20,
+      "grep": 36
+    },
+    {
+      "id": "archivesLength",
+      "canon-exemplo": "(p0)=>{amount:p0.player.archives.length}",
+      "mapeamento": "{ p: \"archives\", opp?: true }",
+      "notas": "Cartas nos arquivos, usadas como amount. A zona inteira como target de shuffle não é Count. usos 20, distintos 16. grep archives.length = 21.",
+      "usos": 20,
+      "distintos": 16,
+      "grep": 21
+    },
+    {
+      "id": "haunted",
+      "canon-exemplo": "(p0)=>p0.player.isHaunted()",
+      "mapeamento": "{ p: \"discard\", opp?: true }",
+      "notas": "isHaunted() no keyteki é discard.length >= 10 (player.js). O predicado mora em conditions.json; aqui fica a leitura de estado. Quase sempre no controller da fonte ou em player/opponent. usos 111, distintos 50. grep isHaunted( = 112.",
+      "usos": 111,
+      "distintos": 50,
+      "grep": 112
+    },
+    {
+      "id": "forgedKeys",
+      "canon-exemplo": "(p0)=>(p0.player.opponent&&(p0.player.opponent.getForgedKeys()>0))",
+      "mapeamento": "{ p: \"keys\", opp?: true, any?: true }",
+      "notas": "getForgedKeys() = número de chaves forjadas. any quando soma os dois lados. Cor da chave é isKeyForged, não este count. usos 34, distintos 27. grep getForgedKeys( = 36.",
+      "usos": 34,
+      "distintos": 27,
+      "grep": 36
+    },
+    {
+      "id": "creaturesInPlay",
+      "canon-exemplo": "(p0)=>(p0.game.creaturesInPlay.length>0)",
+      "mapeamento": "{ c: Filter }",
+      "notas": "creaturesInPlay.length e creaturesInPlay.filter(predicado local).length. Filter.side friendly|enemy conforme controller/opponent; sem side = os dois (game.creaturesInPlay). Predicado local (hasHouse, hasTrait, flank, exhausted, hasToken) é a camada A/B. A lista sem .length é seleção, não Count. usos 178, distintos 133. grep creaturesInPlay = 683 (a maior parte é a lista-alvo).",
+      "usos": 178,
+      "distintos": 133,
+      "grep": 683
+    },
+    {
+      "id": "cardsInPlay",
+      "canon-exemplo": "()=>this.game.cardsInPlay.filter((p0)=>(p0.type===\"artifact\")).length",
+      "mapeamento": "{ c: Filter }",
+      "notas": "cardsInPlay é o board sem filtro de tipo; o tipo vai no Filter (Artifact/Creature/Upgrade). usos 10, distintos 10. grep cardsInPlay = 114.",
+      "usos": 10,
+      "distintos": 10,
+      "grep": 114
+    },
+    {
+      "id": "filteredLength",
+      "canon-exemplo": "(p0)=>(p0.player.hand.filter((p0)=>p0.hasHouse(\"sanctum\")).length>0)",
+      "mapeamento": "{ c: Filter } ou { p: Zone } quando o filtro é a zona inteira",
+      "notas": "Qualquer .filter(fn).length cujo sujeito é zona ou board. preThenEvents.filter.length NÃO é Count de carta — fica de fora (eventos do then). usos do spine .filter().length: 194 / 165. grep .filter( = 670.",
+      "usos": 194,
+      "distintos": 165,
+      "grep": 670
+    },
+    {
+      "id": "sumAmberOnCards",
+      "canon-exemplo": "(p0,p1)=>p1.source.controller.creaturesInPlay.reduce((p0,p1)=>(p0+p1.amber),0)",
+      "mapeamento": "{ of: \"amber\", s: { each: Filter } }",
+      "notas": "Soma de âmbar capturado nas criaturas, não o pool. usos 11, distintos 11.",
+      "usos": 11,
+      "distintos": 11,
+      "grep": null
+    },
+    {
+      "id": "sumPowerOrCounters",
+      "canon-exemplo": "(p0)=>(p0.game.activePlayer.creaturesInPlay.reduce((p0,p1)=>(p0+p1.power),0)>=20)",
+      "mapeamento": "{ of: \"power\" | \"counters\", s: { each: Filter }, name?: \"power\" }",
+      "notas": "reduce de .power (impresso/efetivo no keyteki) ou powerCounters. of:\"damage\" não apareceu como reduce no dump (0). usos 7, distintos 7. grep powerCounters = 14 (inclui leitura de uma carta só, que é filtro e não soma).",
+      "usos": 7,
+      "distintos": 7,
+      "grep": 14
+    },
+    {
+      "id": "cardsPlayed",
+      "canon-exemplo": "()=>(this.game.cardsPlayed.filter((p0)=>(p0.type===\"action\")).length>0)",
+      "mapeamento": "{ p: \"plays\", opp?: true }",
+      "notas": "Cartas jogadas neste turno. O filtro por tipo não existe em p:\"plays\" (conta tudo). \"No turno anterior\" (Lifeweb) também não. usos 22, distintos 17. grep cardsPlayed = 27.",
+      "usos": 22,
+      "distintos": 17,
+      "grep": 27
+    },
+    {
+      "id": "floorDiv",
+      "canon-exemplo": "(p0)=>{amount:Math.floor((p0.player.opponent.amber/2))}",
+      "mapeamento": "{ p: \"amber\" | Zone | \"keys\", opp?: true, div: N }",
+      "notas": "Math.floor(count/N) cabe em div no Count de zona/âmbar/chaves. floor de uma soma of: não tem div hoje. usos 26, distintos 23. grep Math.floor = 28.",
+      "usos": 26,
+      "distintos": 23,
+      "grep": 28
+    },
+    {
+      "id": "neighborLength",
+      "canon-exemplo": "(p0)=>{amount:p0.source.neighbors.filter((p0)=>!p0.hasHouse(\"staralliance\")).length}",
+      "mapeamento": null,
+      "notas": "SEM Count. neighbors.length não é {c} (filtro de board não ancorado no source) nem Selection. Vizinho do source existe como Filter de seleção, não como quantidade. usos 49, distintos 42. grep .neighbors = 439 (quase tudo é includes/seleção).",
+      "usos": 49,
+      "distintos": 42,
+      "grep": 439
+    },
+    {
+      "id": "housesInPlay",
+      "canon-exemplo": "(p0)=>(p0.game.getHousesInPlay(p0.player.creaturesInPlay).length>=3)",
+      "mapeamento": null,
+      "notas": "SEM Count. housesOf só lê casas distintas das cartas que o ato anterior moveu, não as casas em jogo. usos 20, distintos 19. grep getHousesInPlay = 20.",
+      "usos": 20,
+      "distintos": 19,
+      "grep": 20
+    },
+    {
+      "id": "keyCost",
+      "canon-exemplo": "(p0)=>{modifier:-p0.player.getCurrentKeyCost()}",
+      "mapeamento": null,
+      "notas": "SEM Count. getCurrentKeyCost() é o custo corrente da chave; o ato {k:\"keyCost\"} paga, não lê o número. usos 6, distintos 4. grep getCurrentKeyCost( = 7.",
+      "usos": 6,
+      "distintos": 4,
+      "grep": 7
+    }
+  ]
+}
