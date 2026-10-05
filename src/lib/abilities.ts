@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 12; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 13; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -308,7 +308,10 @@ export interface PersistentEffect {
   /** "~ deals +2 while attacking …" (Lote 10 §10.2): extra damage the source deals in a fight it starts. Only the
       attacker gets it (never when defending) and it is NOT power: effectivePower stays untouched. */
   attackBonus?: number;
-  /** Narrows `attackBonus` to defenders matching this filter (`side` relative to the effect's side). */
+  /** "~ gains poison while attacking an enemy flank creature" (onda 4, Spyyyder): keywords the target holds only
+      during the fights it starts against a matching defender (`whenAttacking`), read at fight time like `attackBonus`. */
+  attackKeywords?: Keywords;
+  /** Narrows `attackBonus`/`attackKeywords` to defenders matching this filter (`side` relative to the effect's side). */
   whenAttacking?: Filter;
   /** "~ only deals 2 damage when fighting" (Lote 11 §D): a ceiling on the fight damage the target deals as the
       ATTACKER, after `attackBonus`. */
@@ -338,6 +341,10 @@ export interface PersistentEffect {
   opp?: boolean;
   /** Added to the draw-step refill size (negative = fewer cards). */
   hand?: number;
+  /** "Your opponent skips the 'forge a key' step during their next turn" (onda 4, Miasma): the affected side's NEXT
+      key step is skipped once — the engine consumes the copy there, so the step after runs normally. `opp` flips the
+      side, as with `keyCost`. Only the step: "forge a key" acts still forge. */
+  skipForgeStep?: true;
   /** Printed duration of a triggered effect: end of this turn, or of the
       opponent's next turn (keyteki duringOpponentNextTurn). Trap: "next" is
       stamp + 2, correct ONLY for "the opponent's next turn"; a "your next
@@ -825,11 +832,14 @@ function validReplacement(value: unknown, allowChosen = false): boolean {
   return (value.redirect === undefined || typeof value.redirect === "boolean") && (value.prevent === undefined || typeof value.prevent === "boolean");
 }
 
-/** `whenAttacking` only narrows an `attackBonus`. The bonus is read at fight time, outside effectivePower, so a
-    defender filter that reads power (`most`, `powerMin`…) cannot recurse (Lote 10 §10.2). */
+/** `whenAttacking` only narrows a fight-time grant (`attackBonus` / `attackKeywords`). Both are read at fight time,
+    outside effectivePower, so a defender filter that reads power (`most`, `powerMin`…) cannot recurse (Lote 10 §10.2). */
 function validAttackBonus(effect: Record<string, unknown>): boolean {
-  if (effect.attackBonus === undefined) return effect.whenAttacking === undefined;
-  return isFiniteNumber(effect.attackBonus) && effect.attackBonus !== 0 && (effect.whenAttacking === undefined || validFilter(effect.whenAttacking));
+  const granted = effect.attackKeywords;
+  if (effect.attackBonus === undefined && granted === undefined) return effect.whenAttacking === undefined;
+  if (effect.attackBonus !== undefined && (!isFiniteNumber(effect.attackBonus) || effect.attackBonus === 0)) return false;
+  if (granted !== undefined && !validKeywords(granted)) return false;
+  return effect.whenAttacking === undefined || validFilter(effect.whenAttacking);
 }
 
 /** Lote 11 fields of a persistent effect (also read inside a `lasting` act): all of them are read at event time,
@@ -879,6 +889,7 @@ function validAct(value: unknown): boolean {
     if (value.e.replace !== undefined && !validReplacement(value.e.replace, true)) return false;
     if (value.e.traits !== undefined && (typeof value.e.traits !== "string" || !value.e.traits)) return false;
     if (value.e.mayFight !== undefined && value.e.mayFight !== true) return false;
+    if (value.e.skipForgeStep !== undefined && value.e.skipForgeStep !== true) return false;
     if (!validAttackBonus(value.e) || !validLote11(value.e, true)) return false;
     return !(value.e.power !== undefined && readsPower(value.e.target)) && !readsPower(value.e.if) && !readsPower(value.e.per);
   }
@@ -999,6 +1010,7 @@ function validEffects(value: unknown): value is PersistentEffect[] {
         (effect.keyCost === undefined || isFiniteNumber(effect.keyCost)) &&
         (effect.opp === undefined || typeof effect.opp === "boolean") &&
         (effect.hand === undefined || isFiniteNumber(effect.hand)) &&
+        (effect.skipForgeStep === undefined || effect.skipForgeStep === true) &&
         !(effect.power !== undefined && readsPower(effect.target)) &&
         (effect.noReady === undefined || effect.noReady === true || effect.noReady === "step") &&
         (effect.house === undefined || (typeof effect.house === "string" && effect.house.length > 0)) &&

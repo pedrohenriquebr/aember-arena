@@ -170,7 +170,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 14;
+export const PARSER_VERSION = 15;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -329,6 +329,8 @@ function applyModifier(filter: Filter, token: string): boolean {
   else if (token === "ready") filter.ready = true;
   else if (token === "exhausted") filter.exhausted = true;
   else if (token === "flank") filter.flank = true;
+  // "Archive each neighboring creature" (onda 4, Code Monkey): the source's own neighbors.
+  else if (token === "neighboring") filter.neighborsOfSource = true;
   else if (NOT_TRAITS.has(token)) return false;
   else {
     const negation = /^(?:non-|!)/.test(token);
@@ -545,6 +547,11 @@ function parseCondition(clause: string): Condition | null {
     const states = [selfState[1], selfState[2]];
     return { k: "count", of: { c: { self: true, ...(states.includes("on a flank") ? { flank: true } : {}), ...(states.includes("exhausted") ? { exhausted: true } : {}) } }, op: "gte", n: 1 };
   }
+  // Onda 4 (Code Monkey): "If those creatures share a house" — the cards the
+  // previous act moved hold one distinct printed house between them (Rogue
+  // Operation's `housesOf`). A single moved creature shares its own house; none
+  // moved shares nothing.
+  if (/^those (?:creatures|cards) share a house$/.test(clause)) return count({ housesOf: "moved" }, "eq", 1);
   const none = clause.match(/^there (?:are|is) no (.+)$/);
   const filter = none ? parseFilterWords(none[1]) : null;
   return filter ? { k: "count", of: { c: filter }, op: "eq", n: 0 } : null;
@@ -1246,6 +1253,16 @@ function parseGrant(sentence: string, upgrade: boolean, creature: boolean, quote
     const abilities = upgrade ? parseQuoted(quoted[Number(grant[2])], false, true, quoted) : parseQuoted(quoted[Number(grant[2])], upgrade, creature, quoted);
     return abilities ? { target, abilities } : null;
   }
+  // Onda 4 (Spyyyder): "gains poison while attacking an enemy flank creature" —
+  // the keyword exists only during the fights the target starts, against the
+  // defenders its filter matches (`whenAttacking`, like the attack bonus).
+  const fighting = sentence.match(/^(.+?) gains? ([a-z-]+(?: \d+)?) while attacking (?:an? |the )?(.+)$/);
+  if (fighting) {
+    const target = parseSubject(fighting[1], upgrade);
+    const parsed = readKeyword(fighting[2]);
+    const defender = parseFilterWords(fighting[3].replace(/ on the flank$/, " on a flank"));
+    return target && parsed && defender ? { target, attackKeywords: { [parsed[0]]: parsed[1] }, whenAttacking: defender } : null;
+  }
   const keyword = sentence.match(/^(.+?) gains? ([a-z-]+(?: \d+)?)$/);
   if (!keyword) return null;
   const target = parseSubject(keyword[1], upgrade);
@@ -1407,6 +1424,11 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
     const effects: PersistentEffect[] = keys[1] ? [{ ...effect, opp: true }] : [effect, { ...effect, opp: true }];
     return effects.map((item) => ({ ...item, duration }));
   }
+  // Onda 4 (Miasma): "Your opponent skips the 'forge a key' step during their
+  // next turn" — a one-shot lasting: the engine consumes it at the opponent's
+  // next key step ("on/during their next turn" already set the duration).
+  const skipForge = body.match(/^your opponent skips the "?forge a key"? step$/);
+  if (skipForge) return [{ target: {}, opp: true, skipForgeStep: true, duration: duration ?? "next", ...gate }];
   // Lote 4 §4.2: "This creature cannot ready" (always) / "does not ready during
   // your 'ready cards' step" (step only). The subject is the host of an upgrade
   // or the card itself.

@@ -670,6 +670,18 @@ export function keyword(state: GameState, card: CardInstance, name: Keyword): nu
     const granted = owner.effect.keywords?.[name];
     if (granted && effectHits(state, owner, card)) value += granted;
   }
+  // "~ gains poison while attacking …" (onda 4, Spyyyder): a keyword the card
+  // holds only while it is the ATTACKER of the fight being resolved, and only
+  // against a defender its `whenAttacking` filter matches. Outside a fight the
+  // grant is not there — like `attackBonus`, it is fight-time state.
+  if (fightPair?.attacker === card) {
+    for (const owner of allEffects(state)) {
+      const granted = owner.effect.attackKeywords?.[name];
+      if (!granted || !effectHits(state, owner, card)) continue;
+      if (owner.effect.whenAttacking && !matches(state, owner.side, owner.source, fightPair.defender, owner.effect.whenAttacking)) continue;
+      value += granted;
+    }
+  }
   return value;
 }
 
@@ -3061,7 +3073,17 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   for (const card of [...nextPlayer.board]) fire(state, nextIndex, card, "startOfTurn", { deterministic: false });
 
   // Key step: forging is mandatory when affordable (keyteki KeyPhase/forgeKey).
-  forge(state, nextIndex);
+  // Miasma (onda 4): a `skipForgeStep` lasting aimed at this side cancels its
+  // NEXT key step once — the copy is consumed there, so the step after runs
+  // normally (two Miasmas still skip a single step). Only the step: a card's
+  // "forge a key" act is not the step and keeps working.
+  const aimed = (effect: PersistentEffect): Side | undefined =>
+    effect.side === undefined ? undefined : effect.opp ? other(effect.side) : effect.side;
+  const skipped = (state.lasting ?? []).filter(
+    (effect) => effect.skipForgeStep && aimed(effect) === nextIndex && (effect.until ?? 0) > turnStamp(state),
+  );
+  if (skipped.length) state.lasting = (state.lasting ?? []).filter((effect) => !skipped.includes(effect));
+  else forge(state, nextIndex);
 
   return state;
 }

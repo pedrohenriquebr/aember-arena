@@ -476,9 +476,9 @@ describe("5.6 imunidades", () => {
 describe("DSL_VERSION 6", () => {
   it("a stored row above the running version is rejected, the current one accepted", () => {
     const row = { cardId: "c", dsl: [], textHash: "h", source: "manual" };
-    expect(DSL_VERSION).toBe(12);
+    expect(DSL_VERSION).toBe(13);
     expect(normaliseAbilityOverride({ ...row, v: 9 })?.v).toBe(9);
-    expect(normaliseAbilityOverride({ ...row, v: 13 })).toBeNull();
+    expect(normaliseAbilityOverride({ ...row, v: 14 })).toBeNull();
   });
 
   it("draft and failure rows carry v:6", () => {
@@ -486,8 +486,8 @@ describe("DSL_VERSION 6", () => {
     const parsed = parseCardText(face);
     const result = validateDraft(face, { abilities: parsed.abilities, keywords: parsed.keywords }, "llm");
     expect(result.reason).toBeUndefined();
-    expect(result.row?.v).toBe(12);
-    expect(failureRow(face, "reply: nope").v).toBe(12);
+    expect(result.row?.v).toBe(13);
+    expect(failureRow(face, "reply: nope").v).toBe(13);
   });
 
   it("the sanity gate wants the sentence behind a chosen house and a house trigger needs its text", () => {
