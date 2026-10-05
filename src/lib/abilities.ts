@@ -392,7 +392,7 @@ export interface AbilityOverride {
   keywords?: Keywords;
   /** card_text identity (cardText.textHash) the DSL was written for. */
   textHash: string;
-  source: "parser" | "llm" | "manual";
+  source: "parser" | "llm" | "keyteki" | "manual";
   reviewed: boolean;
   generatedAt: number;
   model?: string;
@@ -520,7 +520,7 @@ function storedAbility(face: CardFace): AbilityOverride | null {
   if (!entry || entry.textHash !== textHash(face.text ?? "")) return null;
   // A frozen parser output is only valid for the grammar that wrote it.
   if (entry.source === "parser" && entry.parserVersion !== PARSER_VERSION) return null;
-  const trusted = entry.source === "manual" || entry.source === "parser" || (entry.source === "llm" && entry.reviewed === true);
+  const trusted = entry.source === "manual" || entry.source === "parser" || ((entry.source === "llm" || entry.source === "keyteki") && entry.reviewed === true);
   return trusted ? entry : null;
 }
 
@@ -685,7 +685,7 @@ const CONDITION_FIELDS: Record<string, string> = {
 };
 const COUNT_OPS: ReadonlySet<string> = new Set(["eq", "gte", "lte", "even", "odd"]);
 const KEYWORD_NAMES: ReadonlySet<string> = new Set(ENGINE_KEYWORDS);
-const OVERRIDE_SOURCES: ReadonlySet<string> = new Set(["parser", "llm", "manual"]);
+const OVERRIDE_SOURCES: ReadonlySet<string> = new Set(["parser", "llm", "keyteki", "manual"]);
 /** `from`/`to` of a stored `move` act, and the `p` of a `{p}` count. */
 const ZONES: ReadonlySet<string> = new Set<Zone>(["hand", "deck", "discard", "archives", "purged"]);
 const COUNT_SOURCES: ReadonlySet<string> = new Set(["keys", "amber", "plays", "keyColors"]);

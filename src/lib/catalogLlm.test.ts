@@ -487,6 +487,44 @@ describe("prompt-only rules — Lote 4 §4.3", () => {
   });
 });
 
+describe("keyteki source (F0)", () => {
+  const card = face("Play: Gain 1<A>.", { id: "kt-1" });
+  const row = (patch: Record<string, unknown> = {}) => ({
+    cardId: "kt-1",
+    dsl: [{ on: ["reap"], acts: [{ k: "gainAmber", n: 1 }] }],
+    textHash: textHash(card.text),
+    source: "keyteki",
+    reviewed: false,
+    generatedAt: 0,
+    v: DSL_VERSION,
+    model: "keyteki-ast@d9b239b",
+    ...patch,
+  });
+
+  it("passes the shape gate", () => {
+    expect(normaliseAbilityOverride(row())?.source).toBe("keyteki");
+  });
+
+  it("enters the review queue, the approved failures and the queue import", () => {
+    const draft = normaliseAbilityOverride(row())!;
+    expect(reviewQueue([draft]).map((item) => item.cardId)).toEqual(["kt-1"]);
+    const failure = normaliseAbilityOverride(row({ reviewed: true, failure: "unsupported: x" }))!;
+    expect(approvedFailures([failure]).map((item) => item.cardId)).toEqual(["kt-1"]);
+    expect(exportableRows([draft], [card])).toHaveLength(1);
+    expect(validateQueueRows([row()], [card]).rejected).toEqual([]);
+  });
+
+  it("never becomes a rule without review", () => {
+    const opaque = face("Play: Look at the top card of your deck and name it.", { id: "kt-2" });
+    const own = (patch: Record<string, unknown>) => normaliseAbilityOverride(row({ cardId: "kt-2", textHash: textHash(opaque.text), ...patch }))!;
+    setAbilityOverrides(new Map([[opaque.id, own({})]]));
+    expect(rulesOf(opaque).abilities).toEqual([]);
+    setAbilityOverrides(new Map([[opaque.id, own({ reviewed: true })]]));
+    expect(rulesOf(opaque).abilities).toHaveLength(1);
+    setAbilityOverrides(new Map());
+  });
+});
+
 describe("harvest queue import", () => {
   const card = face("Play: Gain 1<A>.", { id: "q-1" });
   const row = (patch: Record<string, unknown> = {}) => ({

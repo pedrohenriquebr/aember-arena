@@ -1322,13 +1322,16 @@ export function exportableRows(rows: AbilityOverride[], cards: CardFace[]): Abil
   });
 }
 
+/** Rows a generator (LLM or the keyteki converter) wrote: they wait for review like any draft. */
+const isGenerated = (row: AbilityOverride): boolean => row.source === "llm" || row.source === "keyteki";
+
 /** The review queue's open rows (onda 2): `llm` answers a human has not ruled on
     yet — valid drafts and failures (vanilla + motive) — newest first. `covered`
     prunes the zombies (§4.0): a failure whose card the parser reads fully today
     is stale, so neither the queue nor the export keeps showing it. */
 export function reviewQueue(rows: AbilityOverride[], covered: (cardId: string) => boolean = () => false): AbilityOverride[] {
   return rows
-    .filter((row) => row.source === "llm" && !row.reviewed)
+    .filter((row) => isGenerated(row) && !row.reviewed)
     .filter((row) => !(row.failure && covered(row.cardId)))
     .sort((a, b) => b.generatedAt - a.generatedAt);
 }
@@ -1337,7 +1340,7 @@ export function reviewQueue(rows: AbilityOverride[], covered: (cardId: string) =
     worth reopening — a validated draft became a rule on purpose. */
 export function approvedFailures(rows: AbilityOverride[]): AbilityOverride[] {
   return rows
-    .filter((row) => row.source === "llm" && row.reviewed && row.failure)
+    .filter((row) => isGenerated(row) && row.reviewed && row.failure)
     .sort((a, b) => b.generatedAt - a.generatedAt);
 }
 
@@ -1375,12 +1378,12 @@ export function validateQueueRows(
       row = null;
     }
     if (!row) { reject("shape"); continue; }
-    if (row.source !== "llm") { reject("source"); continue; }
+    if (!isGenerated(row)) { reject("source"); continue; }
     const face = byId.get(row.cardId);
     if (!face) { reject("unknownCard"); continue; }
     if (row.textHash !== textHash(face.text ?? "")) { reject("hash"); continue; }
     const current = existing.get(row.cardId);
-    if (current && (current.source !== "llm" || (current.reviewed && !row.reviewed))) { reject("protected"); continue; }
+    if (current && (!isGenerated(current) || (current.reviewed && !row.reviewed))) { reject("protected"); continue; }
     valid.push(row);
   }
   return { valid, rejected };
