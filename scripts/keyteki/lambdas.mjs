@@ -10,6 +10,8 @@
 // Selection expressions (`target:` of an action): context.source / .target /
 //   context.game|player|player.opponent .creaturesInPlay [.filter(fn)] / source.neighbors.
 
+import { isEnabled, lookup, markMap, markTable } from "./lambdaMap.mjs";
+
 export class Unsupported extends Error {
   constructor(code, detail = "") {
     super(detail ? `${code}: ${detail}` : code);
@@ -196,21 +198,98 @@ export function selectionOf(n, ctx = "context") {
   return null;
 }
 
+const ZONES = new Set(["hand", "deck", "discard", "archives"]);
+const CMP = { ">": (n) => ({ op: "gte", n: n + 1 }), ">=": (n) => ({ op: "gte", n }), "<=": (n) => ({ op: "lte", n }), "<": (n) => ({ op: "lte", n: n - 1 }), "===": (n) => ({ op: "eq", n }), "==": (n) => ({ op: "eq", n }) };
+
+/** Comparison of a Count with a literal as a `count` Condition (`!==` = not eq). */
+function countCmp(of, op, v) {
+  if (op === "!==" || op === "!=") return { k: "not", c: { k: "count", of, op: "eq", n: v } };
+  const f = CMP[op];
+  if (!f) return null;
+  const c = f(v);
+  if (c.n < 0) return null;
+  return { k: "count", of, ...c };
+}
+
+/** Lane G families (conditions.json) as structural recognisers; null = not one of them. */
+function tableCondition(n, ctx) {
+  const side = (p) => (p === `${ctx}.player` || p === `${ctx}.source.controller` ? false : p === `${ctx}.player.opponent` ? true : null);
+  const flag = (opp) => (opp ? { opp: true } : {});
+  if (n.t === "un" && n.op === "!") {
+    const inner = tableCondition(n.arg, ctx);
+    return inner ? { k: "not", c: inner } : null;
+  }
+  // haunted: the discard pile holds 10 or more cards
+  if (n.t === "call" && n.callee.t === "member" && n.callee.prop === "isHaunted" && n.args.length === 0) {
+    const opp = side(path(n.callee.obj));
+    return opp === null ? null : { k: "count", of: { p: "discard", ...flag(opp) }, op: "gte", n: 10 };
+  }
+  if (n.t !== "bin") return null;
+  const lp = path(n.l);
+  if (lp === `${ctx}.game.activePlayer` || path(n.r) === `${ctx}.game.activePlayer`) {
+    const other = path(n.l) === `${ctx}.game.activePlayer` ? path(n.r) : path(n.l);
+    if (other !== `${ctx}.player` && other !== `${ctx}.source.controller`) return null;
+    if (n.op === "===" || n.op === "==") return { k: "myTurn" };
+    if (n.op === "!==" || n.op === "!=") return { k: "not", c: { k: "myTurn" } };
+    return null;
+  }
+  // moreFewerCreatures: opponent vs player battleline lengths
+  const mine = `${ctx}.player.creaturesInPlay.length`;
+  const theirs = `${ctx}.player.opponent.creaturesInPlay.length`;
+  const rp = path(n.r);
+  if ((lp === mine && rp === theirs) || (lp === theirs && rp === mine)) {
+    const youBigger = (lp === mine) === (n.op === ">");
+    if (n.op !== ">" && n.op !== "<") return null;
+    return { k: youBigger ? "moreCreatures" : "fewerCreatures" };
+  }
+  const v = lit(n.r);
+  if (typeof v !== "number") return null;
+  const rel = n.l.t === "call" ? null : lp;
+  // forgedKeys: `<player>.getForgedKeys()`
+  if (n.l.t === "call" && n.l.callee.t === "member" && n.l.callee.prop === "getForgedKeys" && n.l.args.length === 0) {
+    const opp = side(path(n.l.callee.obj));
+    return opp === null ? null : countCmp({ p: "keys", ...flag(opp) }, n.op, v);
+  }
+  if (!rel?.startsWith(`${ctx}.`)) return null;
+  // <game|player[.opponent]>.<zone|creaturesInPlay>.length
+  const parts = rel.slice(ctx.length + 1).split(".");
+  if (parts.pop() !== "length") return null;
+  const prop = parts.pop();
+  const who = parts.join(".");
+  if (ZONES.has(prop) && (who === "player" || who === "player.opponent")) return countCmp({ p: prop, ...flag(who !== "player") }, n.op, v);
+  if (prop === "creaturesInPlay" && (who === "game" || who === "player" || who === "player.opponent")) {
+    return countCmp({ c: who === "game" ? { type: "Creature" } : { type: "Creature", side: who === "player" ? "friendly" : "enemy" } }, n.op, v);
+  }
+  return null;
+}
+
 /** `(context) => context.player.opponent.amber >= 3` → Condition (null = always true, e.g. the opponent-exists guard). */
 export function conditionOf(fnNode) {
   const nope = () => new Unsupported("condition", `no pattern ${render(fnNode)}`);
   if (!fnNode || fnNode.t !== "fn") throw nope();
+  // lane G/M map first: an exact canon hit is a reviewed mapping (Counts do not belong in a condition slot).
+  const hit = lookup(fnNode);
+  if (hit?.kind === "condition") {
+    markMap();
+    return hit.value;
+  }
   const ctx = fnNode.params[0] ?? "context";
   const isGuard = (n) => path(n) === `${ctx}.player.opponent` || (n.t === "un" && n.op === "!" && n.arg.t === "un" && n.arg.op === "!" && path(n.arg.arg) === `${ctx}.player.opponent`);
   // A two-player game always has an opponent: the guard says nothing.
   let body = fnNode.body;
   while (body.t === "logic" && body.op === "&&" && isGuard(body.l)) body = body.r;
   if (isGuard(body)) return null;
-  if (body.t !== "bin") throw nope();
+  const viaTable = () => {
+    const c = isEnabled() ? tableCondition(body, ctx) : null;
+    if (!c) throw nope();
+    markTable();
+    return c;
+  };
+  if (body.t !== "bin") return viaTable();
   const { l, r, op } = body;
   const lp = path(l);
   const v = lit(r);
-  if (typeof v !== "number" || (lp !== `${ctx}.player.amber` && lp !== `${ctx}.player.opponent.amber`)) throw nope();
+  if (typeof v !== "number" || (lp !== `${ctx}.player.amber` && lp !== `${ctx}.player.opponent.amber`)) return viaTable();
   const opp = lp.includes("opponent");
   if (op === ">=") return { k: "amber", opp, op: "gte", n: v };
   if (op === ">") return { k: "amber", opp, op: "gte", n: v + 1 };

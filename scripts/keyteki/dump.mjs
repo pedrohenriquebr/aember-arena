@@ -5,53 +5,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { conditionOf, filterOf, selectionOf } from "./lambdas.mjs";
+import { canonOf } from "./canon.mjs";
 import { parseCardFile } from "./parse.mjs";
 
-const EXAMPLES = 4;
+export { canonOf };
 
-/** Canonical source-like text: params renamed positionally (p0, p1…), whitespace-free, literals kept. */
-export function canonOf(n, env = {}) {
-  if (!n) return "";
-  switch (n.t) {
-    case "lit":
-      return JSON.stringify(n.v) ?? "undefined";
-    case "id":
-      return env[n.name] ?? n.name;
-    case "member":
-      return `${canonOf(n.obj, env)}.${n.prop}`;
-    case "index":
-      return `${canonOf(n.obj, env)}[${canonOf(n.prop, env)}]`;
-    case "call":
-      return `${canonOf(n.callee, env)}(${n.args.map((a) => canonOf(a, env)).join(",")})`;
-    case "action":
-    case "effect":
-      return `${n.t}.${n.name}(${n.args.map((a) => canonOf(a, env)).join(",")})`;
-    case "bin":
-    case "logic":
-      return `(${canonOf(n.l, env)}${n.op}${canonOf(n.r, env)})`;
-    case "un":
-      return `${n.op}${canonOf(n.arg, env)}`;
-    case "cond":
-      return `(${canonOf(n.test, env)}?${canonOf(n.then, env)}:${canonOf(n.else, env)})`;
-    case "obj":
-      return `{${Object.keys(n.props).sort().map((k) => `${k}:${canonOf(n.props[k], env)}`).join(",")}}`;
-    case "arr":
-      return `[${n.items.map((a) => canonOf(a, env)).join(",")}]`;
-    case "fn": {
-      const inner = { ...env };
-      n.params.forEach((p, i) => (inner[p] = `p${i}`));
-      return `(${n.params.map((_, i) => `p${i}`).join(",")})=>${canonOf(n.body, inner)}`;
-    }
-    case "block": {
-      // Block bodies stay textual: rename params by word, drop whitespace.
-      let s = n.src.replace(/\s+/g, " ");
-      for (const [from, to] of Object.entries(env)) s = s.replace(new RegExp(`\\b${from}\\b`, "g"), to);
-      return s;
-    }
-    default:
-      return String(n.src ?? n.t).replace(/\s+/g, " ").slice(0, 120);
-  }
-}
+const EXAMPLES = 4;
 
 /** True when some library entry (filter, condition or selection) takes the lambda. */
 function isConverted(fnNode) {

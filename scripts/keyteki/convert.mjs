@@ -18,6 +18,7 @@ import { Unsupported } from "./lambdas.mjs";
 import { facesOf, indexCorpus, loadPacks } from "./join.mjs";
 import { parseCardFile } from "./parse.mjs";
 import { runDump } from "./dump.mjs";
+import { setEnabled } from "./lambdaMap.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const SOURCE = JSON.parse(readFileSync(resolve(ROOT, "scripts/keyteki/SOURCE.json"), "utf8"));
@@ -44,7 +45,16 @@ function bump(map, key, example) {
   map[key] = slot;
 }
 
+/** Numeric report fields summed across sets (--all); golden is one level deeper. */
+function addReports(into, r) {
+  for (const [k, v] of Object.entries(r)) {
+    if (typeof v === "number") into[k] = (into[k] ?? 0) + v;
+    else if (v && typeof v === "object") addReports((into[k] ??= {}), v);
+  }
+}
+
 function main() {
+  if (args.includes("--baseline")) setEnabled(false);
   const dump = value("--dump");
   if (dump) {
     const src = value("--src") ?? SOURCE.defaultSrc;
@@ -53,18 +63,29 @@ function main() {
     runDump(dump, { sets, src, root: ROOT });
     return;
   }
-  const set = value("--set");
-  if (!set) throw new Error("usage: keyteki:convert -- --set <01-Core> [--limit N] [--src <clone>] [--only <slug>]");
   const src = value("--src") ?? SOURCE.defaultSrc;
+  const packs = loadPacks(ROOT);
+  const corpus = indexCorpus(JSON.parse(readFileSync(resolve(ROOT, "scripts/harvest/cards-corpus.json"), "utf8")));
+  if (args.includes("--all")) {
+    const sets = readdirSync(resolve(src, "server/game/cards"), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+    const total = {};
+    for (const set of sets) addReports(total, convertSet(set, src, packs, corpus, { quiet: true, write: !args.includes("--baseline") }));
+    console.log(JSON.stringify({ sets: sets.length, ...total }, null, 1));
+    return;
+  }
+  const set = value("--set");
+  if (!set) throw new Error("usage: keyteki:convert -- --set <01-Core> | --all [--baseline] [--limit N] [--src <clone>] [--only <slug>]");
+  convertSet(set, src, packs, corpus, { quiet: false, write: true });
+}
+
+function convertSet(set, src, packs, corpus, { quiet, write }) {
   const dir = resolve(src, "server/game/cards", set);
   const limit = Number(value("--limit") ?? Infinity);
   const only = value("--only");
-  const packs = loadPacks(ROOT);
-  const corpus = indexCorpus(JSON.parse(readFileSync(resolve(ROOT, "scripts/harvest/cards-corpus.json"), "utf8")));
 
   const files = readdirSync(dir).filter((f) => f.endsWith(".js")).sort().slice(0, limit);
   const model = `keyteki-ast@${SOURCE.commit.slice(0, 7)}`;
-  const report = { set, files: 0, parseErrors: 0, noAbilities: 0, cLayer: 0, unsupported: 0, lowered: 0, noMatch: 0, noPack: 0, noText: 0, noFace: 0, noTextMatch: 0, converted: 0, rows: 0, gateFail: 0, golden: { eligible: 0, agree: 0, diff: 0, orderOnly: 0, newlyCovered: 0 } };
+  const report = { set, files: 0, parseErrors: 0, noAbilities: 0, cLayer: 0, unsupported: 0, lowered: 0, noMatch: 0, noPack: 0, noText: 0, noFace: 0, noTextMatch: 0, converted: 0, viaLambdaMap: 0, viaTable: 0, rows: 0, gateFail: 0, golden: { eligible: 0, agree: 0, diff: 0, orderOnly: 0, newlyCovered: 0 } };
   const unsupportedBy = {};
   const cLayerBy = {};
   const gateFailBy = {};
@@ -131,13 +152,21 @@ function main() {
         }
       } else report.golden.newlyCovered += 1;
     }
-    if (any) report.converted += 1;
+    if (any) {
+      report.converted += 1;
+      // A card counts under the lambda-map when ANY of its lambdas came from there; otherwise under the tables.
+      if (lowered.via.map > 0) report.viaLambdaMap += 1;
+      else if (lowered.via.table > 0) report.viaTable += 1;
+    }
   }
   report.rows = rows.length;
 
   const out = resolve(ROOT, `scripts/harvest/keyteki-convert-${set}.json`);
-  mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, JSON.stringify({ meta: { set, commit: SOURCE.commit, v: DSL_VERSION, corpus: corpus.size }, report, unsupportedBy, cLayerBy, gateFailBy, diffs, rows }, null, 1));
+  if (write) {
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, JSON.stringify({ meta: { set, commit: SOURCE.commit, v: DSL_VERSION, corpus: corpus.size }, report, unsupportedBy, cLayerBy, gateFailBy, diffs, rows }, null, 1));
+  }
+  if (quiet) return report;
 
   console.log(JSON.stringify(report, null, 1));
   const top = (m) => Object.entries(m).sort((a, b) => b[1].n - a[1].n).slice(0, 25).map(([k, v]) => `  ${String(v.n).padStart(4)}  ${k}   e.g. ${v.examples.slice(0, 2).join(", ")}`).join("\n");
@@ -145,6 +174,7 @@ function main() {
   console.log("\nC-layer:\n" + top(cLayerBy));
   console.log("\nGate fail:\n" + top(gateFailBy));
   console.log(`\n→ ${out}`);
+  return report;
 }
 
 main();

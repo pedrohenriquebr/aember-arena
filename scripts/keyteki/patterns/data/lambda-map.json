@@ -1,0 +1,230 @@
+{
+ "()=>true": null,
+ "(p0)=>{target:p0.source}": null,
+ "(p0,p1)=>(p1.player===this.game.activePlayer)": {
+  "mapeamento": "{\"k\":\"myTurn\"}",
+  "notas": "Comparação com activePlayer = turno do ator."
+ },
+ "(p0)=>p0.power": null,
+ "(p0,p1)=>p1.source.neighbors.includes(p0)": null,
+ "(p0)=>[p0.target]": null,
+ "(p0)=>!p0.cancelled": null,
+ "(p0)=>p0.player.isTideHigh()": null,
+ "(p0)=>[context.player,context.source,p0]": null,
+ "(p0)=>{target:p0.game.creaturesInPlay}": null,
+ "(p0)=>p0.card": null,
+ "(p0)=>p0.player.isHaunted()": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"discard\"},\"op\":\"gte\",\"n\":10}",
+  "notas": "isHaunted = discard do controller >= 10."
+ },
+ "(p0)=>p0.source.controller.isHaunted()": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"discard\"},\"op\":\"gte\",\"n\":10}",
+  "notas": "Mesma leitura, via controller da fonte (sem opp)."
+ },
+ "(p0)=>{target:p0.player}": null,
+ "(p0)=>[p0.player.opponent]": null,
+ "(p0)=>{card:p0.source}": null,
+ "(p0)=>p0.isToken()": null,
+ "(p0)=>{duration:\"lastingEffect\",effect:effect.takeControl(p0.player)}": null,
+ "(p0)=>((p0.preThenEvent.destroyEvent&&p0.preThenEvent.destroyEvent.destroyedByDamageDealt)&&p0.preThenEvent.destroyEvent.resolved)": null,
+ "(p0)=>{target:p0.player.deck.0}": null,
+ "(p0)=>{target:p0.player.opponent}": null,
+ "(p0)=>(p0.player.deck.length>0)": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"deck\"},\"op\":\"gte\",\"n\":1}",
+  "notas": "deck.length > 0 vira count gte 1."
+ },
+ "(p0)=>[Object.values(p0.targets)]": null,
+ "(p0)=>{target:p0.event.card}": null,
+ "(p0)=>card.hasHouse(p0)": null,
+ "()=>!!preThenContext.target": null,
+ "(p0)=>[p0.source]": null,
+ "(p0)=>{target:p0.source.neighbors}": null,
+ "(p0)=>[p0.player,p0.source]": null,
+ "(p0,p1)=>(p0.card===p1.source)": null,
+ "(p0)=>{destination:\"hand\",promptWithHandlerMenu:{activePromptTitle:\"Choose a card to add to hand\",cards:p0.player.deck.slice(0,3)}}": null,
+ "(p0)=>{promptWithHandlerMenu:{activePromptTitle:\"Choose a card to move to bottom of deck\",cards:p0.player.deck.slice(0,2),message:\"{0} adds a card to their hand and moves a card to bottom of deck\"}}": null,
+ "(p0)=>{target:p0.source.parent}": null,
+ "(p0)=>p0.source.isInCenter()": null,
+ "(p0,p1)=>(p0.destroyedFighting&&(p0.damageEvent.damageSource===p1.source))": null,
+ "(p0)=>!p0.source.isOnFlank()": null,
+ "(p0)=>{amount:1,target:p0.player.opponent}": null,
+ "(p0)=>{amount:2,target:p0.player}": null,
+ "(p0)=>{amount:p0.preThenEvent.amount}": null,
+ "(p0)=>{target:p0.target}": null,
+ "(p0)=>[p0.player.opponent,p0.house]": null,
+ "(p0)=>{target:p0.player.creaturesInPlay}": null,
+ "(p0)=>p0.amber": null,
+ "(p0)=>p0.hasHouse(context.house)": null,
+ "(p0)=>p0.source.isOnFlank()": null,
+ "(p0,p1)=>(p0.player!==p1.player)": null,
+ "(p0,p1)=>(p0.player===p1.player)": null,
+ "(p0)=>((p0.destroyEvent&&p0.destroyEvent.destroyedByDamageDealt)&&p0.destroyEvent.resolved)": null,
+ "(p0)=>(p0.game.creaturesInPlay.length>0)": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"c\":{\"type\":\"Creature\"}},\"op\":\"gte\",\"n\":1}",
+  "notas": "CORRIGIDO no M2: era Count {c:{}} (filtro vazio inclui artefatos) numa posicao de condicao."
+ },
+ "(p0)=>(p0===\"amber\")": null,
+ "(p0)=>[p0.player,p0.source,p0.target]": null,
+ "(p0)=>{amount:p0.preThenEvents.filter((p0)=>!p0.cancelled).length}": null,
+ "(p0)=>{target:((p0.player.deck.length>0)?p0.player.deck.0:[])}": null,
+ "(p0,p1)=>(p0+p1.amber)": {
+  "mapeamento": "{\"of\":\"amber\",\"s\":{\"each\":{}}}",
+  "notas": "Reducer de âmbar capturado em cartas; coleção/filtro não vem no corpo do lambda."
+ },
+ "(p0,p1)=>(p1.player===p1.game.activePlayer)": {
+  "mapeamento": "{\"k\":\"myTurn\"}",
+  "notas": "Player do contexto é o activePlayer; não distingue fase."
+ },
+ "(p0)=>!p0.isOnFlank()": null,
+ "(p0)=>!p0.player.isTideHigh()": null,
+ "(p0)=>(p0.amber>0)": null,
+ "(p0)=>(p0.player.opponent&&(p0.player.amber<p0.player.opponent.amber))": {
+  "mapeamento": "{\"p\":\"amber\",\"opp\":true}",
+  "notas": "Leitura de Count do pool do oponente; a comparação viva entre dois pools não vira Condition."
+ },
+ "(p0)=>{amount:2,target:p0.player.opponent}": null,
+ "(p0)=>{player:p0.player}": null,
+ "()=>this.exhausted": null,
+ "(p0,p1)=>((p0.card.type===\"creature\")&&(p0.card.controller!==p1.source.controller))": null,
+ "(p0,p1)=>(p0+p1.amount)": null,
+ "(p0,p1)=>(p0+p1.bonusIcons.filter((p0)=>(p0===\"amber\")).length)": null,
+ "(p0)=>(!p0.cancelled&&(p0.amount>0))": null,
+ "(p0)=>(p0.card.type===\"creature\")": null,
+ "(p0)=>[p0.house]": null,
+ "(p0)=>{amount:1,target:p0.player}": null,
+ "(p0)=>{amount:2,target:p0.source}": null,
+ "(p0)=>{effect:\"archive {1}\",target:p0.source}": null,
+ "(p0)=>{location:\"hand\",target:p0.player}": null,
+ "(p0)=>{parent:p0.source}": null,
+ "(p0)=>context.source.moribund = false": null,
+ "(p0)=>p0.event.card": null,
+ "(p0)=>p0.player.isTideLow()": null,
+ "(p0)=>(!p0.cancelled&&(p0.clone.controller===context.player.opponent))": null,
+ "(p0)=>(!p0.cancelled&&(p0.clone.controller===context.player))": null,
+ "(p0)=>(p0.game.creaturesInPlay.length>1)": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"c\":{\"type\":\"Creature\"}},\"op\":\"gte\",\"n\":2}",
+  "notas": "CORRIGIDO no M2: filtro vazio contaria artefatos."
+ },
+ "(p0)=>(p0.player.discard.length>0)": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"discard\"},\"op\":\"gte\",\"n\":1}",
+  "notas": "Tamanho do descarte do controller > 0; forma Count seria {p:\"discard\"}."
+ },
+ "(p0)=>(p0.source.type===\"creature\")": null,
+ "(p0)=>[((!p0.select||(p0.select===\"Mine\"))?p0.player:p0.player.opponent)]": null,
+ "(p0)=>[preContext.player,preContext.source,p0]": null,
+ "(p0)=>{amount:1,target:p0.event.card}": null,
+ "(p0)=>{target:p0.game.creaturesInPlay.filter((p0)=>p0.hasHouse(p0.house))}": null,
+ "(p0)=>{target:p0.preThenEvent.card}": null,
+ "()=>this": null,
+ "(p0)=>-p0.power": null,
+ "(p0)=>!!p0.card": null,
+ "(p0)=>!p0.hasToken(\"damage\")": null,
+ "(p0)=>(!!p0.player.opponent&&(p0.player.opponent.deck.length>0))": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"deck\",\"opp\":true},\"op\":\"gte\",\"n\":1}",
+  "notas": "Deck do oponente > 0."
+ },
+ "(p0)=>((p0.player===context.player)&&(p0.card!==context.source))": null,
+ "(p0)=>((p0.type===\"creature\")&&(p0.amber>0))": null,
+ "(p0)=>((p0.type===\"creature\")||(p0.type===\"artifact\"))": null,
+ "(p0)=>(p0!==preContext.target)": null,
+ "(p0)=>(p0.source.amber>0)": null,
+ "(p0)=>(p0.type===\"action\")": null,
+ "(p0)=>(p0.upgrades||[])": null,
+ "(p0)=>{all:true,recipient:p0.player}": null,
+ "(p0)=>{amount:1,target:p0.game.creaturesInPlay.filter((p0)=>(p0.controller!==p0.player))}": null,
+ "(p0)=>{amount:p0.player.amber,target:p0.player}": {
+  "mapeamento": "{\"p\":\"amber\"}",
+  "notas": "amount é o pool de âmbar do controller; o target (o player) é seleção, não Count."
+ },
+ "(p0)=>{amount:p0.player.opponent.amber}": {
+  "mapeamento": "{\"p\":\"amber\",\"opp\":true}",
+  "notas": "Pool de âmbar do oponente usado como amount."
+ },
+ "(p0)=>{amount:p0.source.amber}": {
+  "mapeamento": "{\"of\":\"amber\",\"s\":\"self\"}",
+  "notas": "CORRIGIDO no M2: Selection do proprio card e a string \"self\" (o gate rejeitava {self:true})."
+ },
+ "(p0)=>{duration:\"lastingEffect\",effect:effect.takeControl(p0.player.opponent)}": null,
+ "(p0)=>{gameAction:action.placeAmber({promptForSelect:{activePromptTitle:\"Choose another creature\",cardCondition:(p0)=>(p0!==p0.target),cardType:\"creature\",message:\"{0} uses {1} to place 1 amber on {2}\",messageArgs:(p0)=>[p0.player,p0.source,p0]}})}": null,
+ "(p0)=>{target:p0.game.cardsInPlay.filter((p0)=>(p0.type===\"artifact\"))}": null,
+ "(p0)=>{target:p0.game.creaturesInPlay.filter((p0)=>p0.hasHouse(\"mars\"))}": null,
+ "(p0)=>{target:p0.player.hand}": null,
+ "(p0)=>p0.hasHouse(house)": null,
+ "(p0)=>p0.isPlay()": null,
+ "(p0)=>p0.player.isOverwhelmed()": null,
+ "()=>[]": null,
+ "(p0,p1,p2)=>(p0===p2.source)": null,
+ "(p0,p1)=>((p1.player===this.game.activePlayer)&&p1.source.exhausted)": null,
+ "(p0,p1)=>(p0.card===p1.source.parent)": null,
+ "(p0,p1)=>(p0.player===p1.player.opponent)": {
+  "mapeamento": "{\"k\":\"actor\",\"opp\":true}",
+  "notas": "O causador do evento de jogador é o oponente do controller."
+ },
+ "(p0)=>(!!p0.player.opponent&&(p0.player.opponent.creaturesInPlay.length>p0.player.creaturesInPlay.length))": {
+  "mapeamento": "{\"k\":\"fewerCreatures\"}",
+  "notas": "CORRIGIDO no M2: no engine moreCreatures = VOCE tem mais; aqui o oponente tem mais = fewerCreatures."
+ },
+ "(p0)=>(!!p0.player.opponent&&p0.player.opponent.isHaunted())": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"discard\",\"opp\":true},\"op\":\"gte\",\"n\":10}",
+  "notas": "isHaunted() do oponente = discard >= 10."
+ },
+ "(p0)=>((p0.type===\"creature\")&&p0.allowGameAction(\"destroy\"))": null,
+ "(p0)=>((p0.type===\"creature\")&&p0.hasHouse(context.house))": null,
+ "(p0)=>(p0!==preThenContext.target)": null,
+ "(p0)=>(p0.card===context.source)": null,
+ "(p0)=>(p0.clone.type===\"creature\")": null,
+ "(p0)=>(p0.game.cardsUsed.filter((p0)=>(p0===p0.source)).length===1)": null,
+ "(p0)=>(p0.name===\"Nautilixian\")": null,
+ "(p0)=>(p0.player.creaturesInPlay.length===0)": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"c\":{\"type\":\"Creature\",\"side\":\"friendly\"}},\"op\":\"eq\",\"n\":0}",
+  "notas": "Criaturas do controller === 0."
+ },
+ "(p0)=>(p0.player.creaturesInPlay.length>0)": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"c\":{\"type\":\"Creature\",\"side\":\"friendly\"}},\"op\":\"gte\",\"n\":1}",
+  "notas": "Existe ao menos uma criatura própria."
+ },
+ "(p0)=>(p0.player.opponent&&(p0.player.amber>p0.player.opponent.amber))": null,
+ "(p0)=>(p0.player.opponent&&(p0.player.opponent.amber>p0.player.amber))": null,
+ "(p0)=>(p0.player.opponent&&(p0.player.opponent.creaturesInPlay.length>0))": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"c\":{\"type\":\"Creature\",\"side\":\"enemy\"}},\"op\":\"gte\",\"n\":1}",
+  "notas": "Oponente tem criatura em jogo."
+ },
+ "(p0)=>(p0.player.opponent&&(p0.player.opponent.creaturesInPlay.length>p0.player.creaturesInPlay.length))": {
+  "mapeamento": "{\"k\":\"fewerCreatures\"}",
+  "notas": "CORRIGIDO no M2: no engine moreCreatures = VOCE tem mais; aqui o oponente tem mais = fewerCreatures."
+ },
+ "(p0)=>(p0.player.opponent&&(p0.player.opponent.deck.length>0))": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"deck\",\"opp\":true},\"op\":\"gte\",\"n\":1}",
+  "notas": "Deck do oponente não vazio."
+ },
+ "(p0)=>(p0.player.opponent&&(p0.player.opponent.getForgedKeys()>0))": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"keys\",\"opp\":true},\"op\":\"gte\",\"n\":1}",
+  "notas": "CORRIGIDO no M2: Condition forged = forjou no turno anterior; getForgedKeys()>0 = tem chave forjada."
+ },
+ "(p0)=>(p0.player.opponent&&p0.player.opponent.isHaunted())": {
+  "mapeamento": "{\"k\":\"count\",\"of\":{\"p\":\"discard\",\"opp\":true},\"op\":\"gte\",\"n\":10}",
+  "notas": "isHaunted() = discard do oponente >= 10."
+ },
+ "(p0)=>(p0.source.controller===p0.game.activePlayer)": {
+  "mapeamento": "{\"k\":\"myTurn\"}",
+  "notas": "Controller da fonte é o jogador ativo."
+ },
+ "(p0)=>(p0.source.damage>0)": null,
+ "(p0)=>[p0.house,p0.player.deck.0]": null,
+ "(p0)=>{allowedLocations:\"any\",effect:effect.entersPlayReady(),target:p0.event.card}": null,
+ "(p0)=>{amount:(p0.player.opponent?p0.player.opponent.amber:0)}": {
+  "mapeamento": "{\"p\":\"amber\",\"opp\":true}",
+  "notas": "amount = âmbar do pool do oponente."
+ },
+ "(p0)=>{amount:0,event:p0.event}": null,
+ "(p0)=>{amount:p0.preThenEvent.amount,target:p0.game.activePlayer}": null,
+ "(p0)=>{cancel:true,event:p0.event,postHandler:(p0)=>context.source.moribund = false}": null,
+ "(p0)=>{cancel:true,event:p0.event}": null,
+ "(p0)=>{location:\"discard\",target:p0.source}": null,
+ "(p0)=>{refill:true,target:p0.player.opponent}": null,
+ "(p0)=>{shuffle:true,shufflePlayer:p0.player.opponent,target:(p0.player.opponent?p0.player.opponent.discard:[])}": null,
+ "(p0)=>{shuffle:true,target:p0.player.discard}": null,
+ "(p0)=>{target:((p0.event.card.location===\"play area\")?p0.event.card:[])}": null,
+ "(p0)=>{target:(p0.target?p0.target.neighbors.concat(p0.target):[])}": null,
+ "(p0)=>{target:p0.player.deck.slice(0,1)}": null
+}

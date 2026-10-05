@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { conditionOf, filterOf, path, selectionOf, Unsupported } from "./lambdas.mjs";
+import { lookup, markMap, readUsage, resetUsage } from "./lambdaMap.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const table = (name) => JSON.parse(readFileSync(resolve(here, "tables", name), "utf8"));
@@ -29,7 +30,17 @@ const fail = (code, detail) => {
 function optionsOf(node) {
   if (!node) return { props: {}, ctx: "context" };
   if (node.t === "obj") return { props: node.props, ctx: "context" };
-  if (node.t === "fn" && node.body.t === "obj") return { props: node.body.props, ctx: node.params[0] ?? "context" };
+  if (node.t === "fn" && node.body.t === "obj") {
+    const ctx = node.params[0] ?? "context";
+    // lane G/M map: a dynamic `amount` the map knows becomes n x per (the Count is still gated by validateDraft).
+    const hit = node.body.props.amount ? lookup(node) : null;
+    if (hit?.kind === "count") {
+      const { amount: _amount, ...props } = node.body.props;
+      markMap();
+      return { props, ctx, per: hit.value };
+    }
+    return { props: node.body.props, ctx };
+  }
   return fail("dynamic", "action arguments");
 }
 
@@ -64,10 +75,14 @@ function lowerAction(node, sel, env) {
     if (node.args.length !== 1 || node.args[0].t !== "arr") return fail("gameAction", `${node.name} args`);
     return lowerAction(node.args[0], sel, env);
   }
-  const { props, ctx } = optionsOf(node.args[0]);
+  const { props, ctx, per } = optionsOf(node.args[0]);
   const act = { k: entry.k };
   for (const [f, v] of Object.entries(entry.defaults ?? {})) act[f] = v;
   applyProps(act, entry, props, node.name);
+  if (per) {
+    if (entry.props?.amount?.field !== "n") return fail("dynamic", `${node.name}.amount`);
+    act.per = per;
+  }
 
   if (entry.kind === "token") return [act];
   if (entry.kind === "card") {
@@ -307,6 +322,13 @@ function rejectSpreads(node) {
 
 /** Lowers every registration of a card. Throws Unsupported on the first thing outside the tables. */
 export function lowerCard(ir) {
+  resetUsage();
+  const out = lowerCardInner(ir);
+  // Non-enumerable: usage stats for the report, not part of the lowered shape specs compare.
+  return Object.defineProperty(out, "via", { value: readUsage() });
+}
+
+function lowerCardInner(ir) {
   const { flags } = ir;
   // No setupCardAbilities and no code of its own = a vanilla creature (keywords live in the card data).
   if (flags.noSetup && !flags.customMethods && !flags.registrar) return { abilities: [], effects: [] };
