@@ -202,6 +202,11 @@ function lowerAbility(bag, base) {
   if (!acts || (bag.props.gameAction && hasTarget)) fail("empty", "gameAction/target missing or both");
   ability.acts = lowerAction(acts.node, acts.sel, acts);
   if (!ability.acts.length) fail("empty", "no acts");
+  // keyteki `optional: true` is the whole "You may" clause; the engine offers the decline move only when an act is optional.
+  if (ability.optional) for (const a of ability.acts) a.optional = true;
+  // "creaturesInPlay.length > 0" guarding a creature target says nothing the target itself does not (no creature = no target).
+  const c = ability.if;
+  if (c && c.k === "count" && c.op === "gte" && c.n === 1 && ability.target && Object.keys(c.of?.c ?? {}).length === 1 && c.of.c.type && ability.target.type === c.of.c.type && Object.keys(ability.target).length === 1) delete ability.if;
   // keyteki `use` only affects a READY creature, so the chosen target must be ready.
   // Using an ENEMY card only works "as if it were yours": keyteki's default `use` resolves it for the
   // user, which our DSL spells `asYours`.
@@ -308,6 +313,8 @@ function lowerPersistent(reg, host) {
       }
     }
   }
+  // Keywords and power/armor only mean something on creatures: the text says "Mutant creature", keyteki's match just omits the type.
+  if ((out.keywords || out.power !== undefined || out.armor !== undefined) && out.target && !out.target.self && !out.target.host && !out.target.type) out.target = { type: "Creature", ...out.target };
   const { target, if: cond, ...tail } = out;
   return { target, ...tail, ...(cond ? { if: cond } : {}) };
 }

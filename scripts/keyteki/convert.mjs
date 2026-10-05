@@ -11,7 +11,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DSL_VERSION } from "../../src/lib/abilities";
-import { validateDraft } from "../../src/lib/catalogLlm";
+import { validateDraft, validateQueueRows } from "../../src/lib/catalogLlm";
 import { parseCardText } from "../../src/lib/cardText";
 import { isCLayer, lowerCard } from "./lower.mjs";
 import { Unsupported } from "./lambdas.mjs";
@@ -27,6 +27,22 @@ const value = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : un
 
 /** Canonical form for the golden diff: sorted keys, abilities sorted by their JSON. */
 const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
+/** Same-effect rewrites the parser and keyteki spell differently: abilities with the same body merge their `on`; adjacent identical exalts sum. */
+const equivalent = (list) => {
+  const merged = new Map();
+  for (const a of list ?? []) {
+    const { on, ...body } = a;
+    const acts = [];
+    for (const act of body.acts ?? []) {
+      const last = acts[acts.length - 1];
+      if (last && act.k === "exalt" && last.k === "exalt" && JSON.stringify({ ...last, n: 0 }) === JSON.stringify({ ...act, n: 0 })) last.n = (last.n ?? 1) + (act.n ?? 1);
+      else acts.push({ ...act });
+    }
+    const key = JSON.stringify(sortKeys({ ...body, acts }));
+    merged.set(key, { ...JSON.parse(key), on: [...new Set([...(merged.get(key)?.on ?? []), ...on])] });
+  }
+  return [...merged.values()];
+};
 /** `on` is a set ("Play/Fight/Reap"); `acts` order is kept unless `loose` (diff triage: same acts in another order). */
 const canon = (list, loose = false) =>
   (list ?? [])
@@ -37,6 +53,10 @@ const canon = (list, loose = false) =>
       return JSON.stringify(c);
     })
     .sort();
+
+/** Drafts for faces the parser does NOT read fully (T1 = parser already full: no row). Filled by convertSet. */
+const queue = [];
+const queueFaces = [];
 
 function bump(map, key, example) {
   const slot = map[key] ?? { n: 0, examples: [] };
@@ -71,11 +91,22 @@ function main() {
     const total = {};
     for (const set of sets) addReports(total, convertSet(set, src, packs, corpus, { quiet: true, write: !args.includes("--baseline") }));
     console.log(JSON.stringify({ sets: sets.length, ...total }, null, 1));
+    if (args.includes("--export-queue")) exportQueue(corpus);
     return;
   }
   const set = value("--set");
   if (!set) throw new Error("usage: keyteki:convert -- --set <01-Core> | --all [--baseline] [--limit N] [--src <clone>] [--only <slug>]");
   convertSet(set, src, packs, corpus, { quiet: false, write: true });
+}
+
+/** Drafts of the faces the converter newly covers → scripts/harvest/queue-export-keyteki.json (Config > Revisão). */
+function exportQueue(corpus) {
+  const faces = [...corpus.byTitle.values()].flat();
+  const { valid, rejected } = validateQueueRows(queue, faces);
+  const out = resolve(ROOT, "scripts/harvest/queue-export-keyteki.json");
+  writeFileSync(out, JSON.stringify(valid, null, 1) + "\n");
+  const sigs = new Set(queueFaces.map((f) => `${f.text}|${f.type}`));
+  console.log(JSON.stringify({ queueRows: queue.length, validateQueueRows: { valid: valid.length, rejected: rejected.length, reasons: rejected.map((r) => r.reason) }, distinctTextType: sigs.size, out }, null, 1));
 }
 
 function convertSet(set, src, packs, corpus, { quiet, write }) {
@@ -85,7 +116,7 @@ function convertSet(set, src, packs, corpus, { quiet, write }) {
 
   const files = readdirSync(dir).filter((f) => f.endsWith(".js")).sort().slice(0, limit);
   const model = `keyteki-ast@${SOURCE.commit.slice(0, 7)}`;
-  const report = { set, files: 0, parseErrors: 0, noAbilities: 0, cLayer: 0, unsupported: 0, lowered: 0, noMatch: 0, noPack: 0, noText: 0, noFace: 0, noTextMatch: 0, converted: 0, viaLambdaMap: 0, viaTable: 0, rows: 0, gateFail: 0, golden: { eligible: 0, agree: 0, diff: 0, orderOnly: 0, newlyCovered: 0 } };
+  const report = { set, files: 0, parseErrors: 0, noAbilities: 0, cLayer: 0, unsupported: 0, lowered: 0, noMatch: 0, noPack: 0, noText: 0, noFace: 0, noTextMatch: 0, converted: 0, viaLambdaMap: 0, viaTable: 0, rows: 0, gateFail: 0, golden: { eligible: 0, agree: 0, diff: 0, orderOnly: 0, equivalent: 0, newlyCovered: 0, fromPartial: 0, fromVanilla: 0 } };
   const unsupportedBy = {};
   const cLayerBy = {};
   const gateFailBy = {};
@@ -146,11 +177,19 @@ function convertSet(set, src, packs, corpus, { quiet, write }) {
         if (same) report.golden.agree += 1;
         else {
           report.golden.diff += 1;
-          const order = JSON.stringify(canon(parsed.abilities, true)) === JSON.stringify(canon(lowered.abilities, true)) && JSON.stringify(canon(parsed.effects)) === JSON.stringify(canon(lowered.effects));
+          const sameEffects = JSON.stringify(canon(parsed.effects)) === JSON.stringify(canon(lowered.effects));
+          const order = JSON.stringify(canon(parsed.abilities, true)) === JSON.stringify(canon(lowered.abilities, true)) && sameEffects;
+          const equiv = !order && JSON.stringify(canon(equivalent(parsed.abilities), true)) === JSON.stringify(canon(equivalent(lowered.abilities), true)) && sameEffects;
           if (order) report.golden.orderOnly += 1;
-          diffs.push({ kind: order ? "order-only" : "semantic", card: ir.id, title: face.title, text: face.text, parser: { abilities: parsed.abilities, effects: parsed.effects }, keyteki: lowered });
+          if (equiv) report.golden.equivalent += 1;
+          diffs.push({ kind: order ? "order-only" : equiv ? "equivalent" : "semantic", card: ir.id, title: face.title, text: face.text, parser: { abilities: parsed.abilities, effects: parsed.effects }, keyteki: lowered });
         }
-      } else report.golden.newlyCovered += 1;
+      } else {
+        report.golden.newlyCovered += 1;
+        report.golden[parsed.coverage === "partial" ? "fromPartial" : "fromVanilla"] += 1;
+        queue.push({ ...result.row, source: "keyteki", reviewed: false, generatedAt: 0, v: DSL_VERSION, model });
+        queueFaces.push(face);
+      }
     }
     if (any) {
       report.converted += 1;

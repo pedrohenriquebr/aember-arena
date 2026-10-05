@@ -58,3 +58,21 @@ describe("lowering fails closed (lower.mjs)", () => {
     expect(reject(body("'opponent'"))).not.toBe("dynamic:targetController");
   });
 });
+
+describe("lowering matches the engine's reading (M3 triage)", () => {
+  it("whole-ability optional marks every act, or the engine never offers the decline move", () => {
+    const l = lower("        this.play({ optional: true, gameAction: ability.actions.draw() });").abilities[0];
+    expect(l.optional).toBe(true);
+    expect(l.acts.every((a) => a.optional)).toBe(true);
+  });
+
+  it("keywords granted by a trait match only reach creatures", () => {
+    const e = lower("        this.persistentEffect({ targetController: 'any', match: (card) => card.hasTrait('mutant'), effect: ability.effects.addKeyword({ elusive: 1 }) });").effects[0];
+    expect(e.target).toEqual({ type: "Creature", trait: "Mutant" });
+  });
+
+  it("drops the creaturesInPlay guard that the creature target already implies", () => {
+    const l = lower("        this.action({ condition: (context) => context.game.creaturesInPlay.length > 0, target: { cardType: 'creature', gameAction: ability.actions.enrage() } });").abilities[0];
+    expect(l.if).toBeUndefined();
+  });
+});
