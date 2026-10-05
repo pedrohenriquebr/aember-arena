@@ -376,6 +376,9 @@ ações, cobertura por set, pendências).
 - Toggle de animações = classe `reduce-motion` no `<html>` (alcança portais no body).
 - Tokens: `--faint` (texto terciário AA), `--radius-*`, `--ease-out`, `--tabbar-h`.
 - Erros do Master Vault são `VaultError` (chave `vault.*`), texto via `vaultErrorText(e, t)`.
+- **Importação de deck por id**: gravar SEMPRE com `saved: true` (cacheDeck) — sem o flag o
+  deck some da biblioteca ao recarregar (só `saved:true` volta em listCachedDecks), e
+  `cacheDeck` preserva `saved`/`favorite` já existentes na regravação (não rebaixar).
 - Em aberto: sombras ainda ad-hoc; emblemas de casas novas caem em iniciais; a 1280×800
   a mão começa perto da dobra (lanes com min-height para não pular).
 - Imagens de carta LOCALIZADAS: o S3 oficial tem **9 idiomas** (en, pt, es, fr,
