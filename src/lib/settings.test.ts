@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { aiHoldScale, readSettings } from "./settings";
+import { aiHoldScale, drawDeck, readSettings } from "./settings";
 
 function seed(saved: unknown) {
   vi.stubGlobal("localStorage", { getItem: () => JSON.stringify(saved) });
@@ -27,5 +27,21 @@ describe("aiDelayMs", () => {
     expect(aiHoldScale(4000)).toBe(3);
     expect(aiHoldScale(400)).toBe(1);
     expect(aiHoldScale(200)).toBe(0.5);
+  });
+});
+
+describe("drawDeck", () => {
+  const pool = ["a", "b", "c"];
+
+  it("is deterministic for an injected rng and covers the whole pool", () => {
+    expect(drawDeck(pool, () => 0)).toBe("a");
+    expect(drawDeck(pool, () => 0.34)).toBe("b");
+    expect(drawDeck(pool, () => 0.999)).toBe("c");
+  });
+
+  it("never reads past the pool and returns undefined when it is empty", () => {
+    expect(drawDeck(pool, () => 1)).toBe("c");
+    expect(drawDeck([], () => 0)).toBeUndefined();
+    expect(pool).toContain(drawDeck(pool));
   });
 });

@@ -61,6 +61,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tableView: "2d",
 };
 
+/** Sorteio do baralho do Warden no modo "random"; `rng` injetável para os specs. */
+export function drawDeck<T>(pool: readonly T[], rng: () => number = Math.random): T | undefined {
+  if (!pool.length) return undefined;
+  return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+}
+
 export function readSettings(fallbackLanguage: Language): AppSettings {
   const base = { ...DEFAULT_SETTINGS, language: fallbackLanguage };
   try {

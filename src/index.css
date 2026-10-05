@@ -5399,8 +5399,244 @@ button:disabled {
   background: rgba(255, 255, 255, 0.015);
 }
 
-.review-card--deck {
+.review-card--deck,
+.review-card--wide {
   grid-column: 1 / -1;
+}
+
+/* Dois lados com o mesmo peso; no celular empilham (o default). */
+.review-sides {
+  display: grid;
+  gap: 10px;
+  align-items: start;
+}
+
+@media (min-width: 701px) {
+  .review-sides:not(.review-sides--single) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.review-side {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(225, 216, 194, 0.1);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.review-side--rival {
+  background: rgba(130, 170, 135, 0.045);
+}
+
+.review-sides--single .review-side {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.review-side-role {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.review-side-role .review-label {
+  margin-bottom: 0;
+}
+
+.review-badge {
+  padding: 3px 8px;
+  border: 1px solid rgba(211, 173, 93, 0.45);
+  border-radius: var(--radius-pill);
+  color: var(--gold-bright);
+  font-size: var(--fs-3xs);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.review-deck > div {
+  min-width: 0;
+}
+
+.review-deck .deck-card-houses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-deck-name {
+  display: block;
+  margin-bottom: 7px;
+  color: #ece6d7;
+  font-family: Georgia, serif;
+  font-size: var(--fs-base);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.review-deck .meta-chip {
+  margin-top: 8px;
+  white-space: normal;
+}
+
+.review-note {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+}
+
+.review-pending {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.review-pending-icon {
+  display: grid;
+  width: 70px;
+  height: 98px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px dashed rgba(226, 218, 196, 0.28);
+  border-radius: var(--radius-md);
+  color: var(--gold);
+}
+
+.review-pending strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #ece6d7;
+  font-family: Georgia, serif;
+  font-size: var(--fs-base);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.review-side .ghost-button {
+  width: 100%;
+}
+
+@media (min-width: 701px) {
+  .review-sides--single .review-side .ghost-button {
+    width: auto;
+  }
+}
+
+.review-houses {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px solid rgba(225, 216, 194, 0.1);
+}
+
+@media (min-width: 701px) {
+  .review-sides--single .review-houses {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.review-house-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.review-house-name {
+  min-width: 0;
+  color: #ece6d7;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.review-card-row:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.review-house-head small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.review-house-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.review-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: #ece6d7;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  text-align: start;
+}
+
+.review-card-row strong {
+  min-width: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.review-card-row small {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+}
+
+@media (hover: hover) {
+  .review-card-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+}
+
+.review-translate {
+  display: grid;
+  gap: 12px;
+  align-items: center;
+}
+
+.review-translate .review-label {
+  margin-bottom: 4px;
+}
+
+.review-translate small {
+  display: block;
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  line-height: 1.45;
+}
+
+.review-translate .ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (min-width: 701px) {
+  .review-translate {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
 }
 
 .review-label {
@@ -5421,15 +5657,6 @@ button:disabled {
 .review-deck .card-art {
   width: 70px;
   flex: 0 0 auto;
-}
-
-.review-deck strong {
-  display: block;
-  margin-bottom: 7px;
-  color: #ece6d7;
-  font-family: Georgia, serif;
-  font-size: var(--fs-base);
-  font-weight: 500;
 }
 
 .review-deck small {

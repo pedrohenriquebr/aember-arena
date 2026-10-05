@@ -13,6 +13,7 @@ import {
   CircleHelp,
   Crosshair,
   Clock3,
+  Copy,
   Cpu,
   Crown,
   ExternalLink,
@@ -79,7 +80,7 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, syncCatalog, vaultErrorText, type CatalogProgress } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
-import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, llmReady, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
+import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, drawDeck, llmReady, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
@@ -632,24 +633,177 @@ const PASS_CONFIG_STEPS = ["mode", "decks", "experience", "review"] as const;
 type ConfigStep = (typeof MODE_CONFIG_STEPS)[number] | (typeof PASS_CONFIG_STEPS)[number];
 const OPPONENT_MODES = ["mirror", "deck", "random"] as const;
 
-/** One review-step deck card (shared by the solo deck, the two 2P decks). */
-function ConfigDeckCard({ label, deck, t }: { label: string; deck: DeckInfo; t: Translator }) {
+type ReviewSide =
+  | { kind: "deck"; key: string; role: string; deck: DeckInfo; badge?: string; note?: string }
+  | { kind: "pending"; key: string; role: string; title: string; note: string };
+
+/** Deck order, one group per house. A house missing from `deck.houses` still shows. */
+function cardsByHouse(deck: DeckInfo): { house: string; cards: DeckInfo["cards"] }[] {
+  const order = deck.houses.length ? [...deck.houses] : [];
+  for (const card of deck.cards) {
+    if (!order.includes(card.house)) order.push(card.house);
+  }
+  return order
+    .map((house) => ({ house, cards: deck.cards.filter((card) => card.house === house) }))
+    .filter((group) => group.cards.length > 0);
+}
+
+/** Inline card list: DeckInspector is its own screen and would drop the wizard step. */
+function ReviewHouseList({ deck, t, id }: { deck: DeckInfo; t: Translator; id: string }) {
+  const [face, setFace] = useState<DeckInfo["cards"][number] | null>(null);
+  const groups = cardsByHouse(deck);
   return (
-    <div className="review-card review-card--deck">
-      <span className="review-label">{label}</span>
-      <div className="review-deck">
-        <CardArt face={deck.cards[0]} size="preview" />
-        <div>
-          <strong>{deck.name}</strong>
-          <div className="deck-card-houses">
-            {deck.houses.map((house) => <HouseMark key={house} house={house} small />)}
+    <div id={id} className="review-houses" role="region" aria-label={t("config.review.cardsByHouse", { name: deck.name })}>
+      {groups.map((group) => (
+        <div key={group.house}>
+          <div className="review-house-head">
+            <span aria-hidden="true"><HouseMark house={group.house} small /></span>
+            <span className="review-house-name">{houseLabel(group.house, t)}</span>
+            <small>{group.cards.length}</small>
           </div>
-          <small>{deck.cards.length} {t("common.cards")}</small>
-          <DeckCoverageChip deck={deck} t={t} />
+          <ul className="review-house-list">
+            {group.cards.map((card, index) => (
+              <li key={`${card.id}-${index}`}>
+                <button
+                  type="button"
+                  className="review-card-row"
+                  onClick={() => { sound.play("select"); setFace(card); }}
+                  aria-label={`${card.title}, ${houseLabel(card.house, t)}, ${cardTypeLabel(card.type, t)}`}
+                >
+                  <strong>{card.title}</strong>
+                  <small>{cardTypeLabel(card.type, t)}</small>
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
+      ))}
+      <CardLightbox face={face} t={t} onClose={() => setFace(null)} />
     </div>
   );
+}
+
+function ReviewMatchDecks({ single, sides, t }: { single: boolean; sides: ReviewSide[]; t: Translator }) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const toggle = (key: string) => {
+    sound.play("click");
+    setOpenKey((current) => (current === key ? null : key));
+  };
+  return (
+    <section className="review-card review-card--deck" aria-labelledby="review-decks-heading">
+      <h3 className="review-label" id="review-decks-heading">{t("config.review.decks")}</h3>
+      <div className={`review-sides${single ? " review-sides--single" : ""}`}>
+        {sides.map((side) => {
+          const open = side.kind === "deck" && openKey === side.key;
+          const panelId = `review-cards-${side.key}`;
+          return (
+            <article key={side.key} className={`review-side${side.key === "rival" ? " review-side--rival" : ""}`}>
+              <div className="review-side-role">
+                <span className="review-label">{side.role}</span>
+                {side.kind === "deck" && side.badge && <span className="review-badge">{side.badge}</span>}
+              </div>
+              {side.kind === "deck" ? (
+                <div className="review-deck">
+                  {side.deck.cards[0] && <CardArt face={side.deck.cards[0]} size="preview" />}
+                  <div>
+                    <strong className="review-deck-name">{side.deck.name}</strong>
+                    <div className="deck-card-houses">
+                      {side.deck.houses.map((house) => <HouseMark key={house} house={house} small />)}
+                    </div>
+                    <small>{side.deck.cards.length} {t("common.cards")}</small>
+                    <DeckCoverageChip deck={side.deck} t={t} />
+                  </div>
+                </div>
+              ) : (
+                <div className="review-pending">
+                  <span className="review-pending-icon" aria-hidden="true">
+                    <Copy size={22} />
+                  </span>
+                  <div>
+                    <strong>{side.title}</strong>
+                    <p className="review-note">{side.note}</p>
+                  </div>
+                </div>
+              )}
+              {side.kind === "deck" && side.note && <p className="review-note">{side.note}</p>}
+              {side.kind === "deck" && (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  aria-label={t(open ? "config.review.hideAria" : "config.review.inspectAria", { name: side.deck.name })}
+                  onClick={() => toggle(side.key)}
+                >
+                  <Eye size={15} /> {open ? t("config.review.hide") : t("config.review.inspect")}
+                </button>
+              )}
+              {open && side.kind === "deck" && <ReviewHouseList id={panelId} deck={side.deck} t={t} />}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function buildReviewSides(
+  t: Translator,
+  settings: AppSettings,
+  deck: DeckInfo,
+  pickedOpponent: DeckInfo | undefined,
+  randomRival: DeckInfo | undefined,
+  p1Deck: DeckInfo,
+  p2Deck: DeckInfo,
+): { single: boolean; sides: ReviewSide[] } {
+  if (settings.gameMode === "passAndPlay") {
+    return {
+      single: false,
+      sides: [
+        { kind: "deck", key: "p1", role: t("game.player1"), deck: p1Deck },
+        { kind: "deck", key: "p2", role: t("game.player2"), deck: p2Deck },
+      ],
+    };
+  }
+  const you: ReviewSide = { kind: "deck", key: "you", role: t("common.you"), deck };
+  if (settings.opponentMode === "mirror") {
+    return {
+      single: true,
+      sides: [{ kind: "deck", key: "you", role: t("config.review.sharedRole"), deck, badge: t("config.review.mirrorBadge"), note: t("config.review.mirrorNote") }],
+    };
+  }
+  // O sorteio já aconteceu (App): a revisão mostra o MESMO baralho que a partida vai usar.
+  if (settings.opponentMode === "random" && randomRival) {
+    return {
+      single: false,
+      sides: [
+        you,
+        { kind: "deck", key: "rival", role: t("log.warden"), deck: randomRival, badge: t("config.review.randomBadge"), note: t("config.review.randomNote") },
+      ],
+    };
+  }
+  if (settings.opponentMode === "deck" && pickedOpponent) {
+    return {
+      single: false,
+      sides: [
+        you,
+        { kind: "deck", key: "rival", role: t("log.warden"), deck: pickedOpponent },
+      ],
+    };
+  }
+  return {
+    single: false,
+    sides: [
+      you,
+      {
+        kind: "pending",
+        key: "rival",
+        role: t("log.warden"),
+        title: t("config.review.mirrorBadge"),
+        note: t("config.opponent.none"),
+      },
+    ],
+  };
 }
 
 function ConfigScreen({
@@ -657,6 +811,7 @@ function ConfigScreen({
   settings,
   deck,
   savedDecks,
+  randomRival,
   hasHover,
   catalogCount,
   catalogSync,
@@ -679,6 +834,8 @@ function ConfigScreen({
   deck: DeckInfo;
   /** FEAT-11: the opponent picker draws from the same library as the Home list. */
   savedDecks: LibraryDeck[];
+  /** Modo aleatório: o baralho já sorteado para o Warden (dono: App). */
+  randomRival: DeckInfo | undefined;
   /** T5 — sem "(hover: hover)" o toggle hoverZoom não faz sentido e some. */
   hasHover: boolean;
   /** DB v4: catálogo em disco + sync em curso (n/total) para o passo Catálogo. */
@@ -708,17 +865,12 @@ function ConfigScreen({
   // falls back to the mirror in launchMatch (a deleted deck must not break it).
   const opponentChoices = savedDecks.filter((item) => item.id !== deck.id);
   const pickedOpponent = opponentChoices.find((item) => item.id === settings.opponentDeckId);
-  const opponentLabel =
-    settings.opponentMode === "mirror"
-      ? deck.name
-      : settings.opponentMode === "random"
-        ? t("config.opponent.random")
-        : (pickedOpponent ?? deck).name;
   // FEAT-13: the two human decks (never the same one twice).
   const [p1Deck, p2Deck] = resolvePassDecks(savedDecks, deck, settings);
+  const review = buildReviewSides(t, settings, deck, pickedOpponent, randomRival, p1Deck, p2Deck);
   const p2Choices = savedDecks.filter((item) => item.id !== p1Deck.id);
-  // União dos decks da partida (sem duplicar cartas); "random" ainda não sorteou, então entra o pool inteiro.
-  const matchDecks = settings.gameMode === "passAndPlay" ? [p1Deck, p2Deck] : settings.opponentMode === "mirror" ? [deck] : settings.opponentMode === "random" ? [deck, ...opponentChoices] : [deck, pickedOpponent ?? deck];
+  // União dos decks da partida (sem duplicar cartas); "random" entra com o baralho já sorteado.
+  const matchDecks = settings.gameMode === "passAndPlay" ? [p1Deck, p2Deck] : settings.opponentMode === "mirror" ? [deck] : settings.opponentMode === "random" ? [deck, randomRival ?? deck] : [deck, pickedOpponent ?? deck];
   const matchFaces = [...new Map(matchDecks.flatMap((item) => item.cards).map((face) => [face.id, face])).values()];
 
   const chooseMode = (gameMode: GameMode) => {
@@ -1047,31 +1199,33 @@ function ConfigScreen({
               <p>{t("config.review.sub")}</p>
             </div>
             <div className="review-grid">
-              {settings.gameMode === "passAndPlay" ? (
-                <>
-                  <ConfigDeckCard label={t("config.decks.p1")} deck={p1Deck} t={t} />
-                  <ConfigDeckCard label={t("config.decks.p2")} deck={p2Deck} t={t} />
-                </>
-              ) : (
-                <ConfigDeckCard label={t("config.review.deck")} deck={deck} t={t} />
-              )}
+              <ReviewMatchDecks single={review.single} sides={review.sides} t={t} />
+              <div className="review-card review-card--wide">
+                <div className="review-translate">
+                  <div>
+                    <span className="review-label">{t("config.review.translateDecks")}</span>
+                    <small>{t("config.review.translateDecksHint")}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={!!llmRun || !llmReady(llm)}
+                    aria-label={llmRun ? `${t("config.review.translateDecks")} ${llmRun.done}/${llmRun.total}` : t("config.review.translateDecks")}
+                    onClick={() => onLlmTranslateDeck(matchFaces)}
+                  >
+                    {llmRun ? `${llmRun.done}/${llmRun.total}` : t("config.review.translateAction")}
+                  </button>
+                </div>
+              </div>
               {settings.gameMode === "solo" && (
                 <div className="review-card">
                   <span className="review-label">{t("config.review.opponent")}</span>
                   <ul className="review-list">
                     <li><span>{t("config.step.difficulty")}</span><strong>{t(`difficulty.${settings.difficulty}`)}</strong></li>
                     <li><span>{t("config.step.thinking")}</span><strong>{settings.thinkingDepth} / 6</strong></li>
-                    <li><span>{t("config.review.deck")}</span><strong>{opponentLabel}</strong></li>
                   </ul>
                 </div>
               )}
-              <div className="review-card">
-                <span className="review-label">{t("config.review.translateDecks")}</span>
-                <small>{t("config.review.translateDecksHint")}</small>
-                <button type="button" className="ghost-button" disabled={!!llmRun || !llmReady(llm)} onClick={() => onLlmTranslateDeck(matchFaces)}>
-                  {llmRun ? `${llmRun.done}/${llmRun.total}` : t("config.review.translateDecks")}
-                </button>
-              </div>
               <div className="review-card">
                 <span className="review-label">{t("config.review.interface")}</span>
                 <ul className="review-list">
@@ -2164,6 +2318,9 @@ function App() {
   // FEAT-15: deck que aguarda a confirmação de abandono da partida em curso
   // (o modo viaja junto: o 2P também confirma antes de substituir a partida).
   const [pendingDeck, setPendingDeck] = useState<{ mode: GameMode; deck: DeckInfo; opponent?: DeckInfo } | null>(null);
+  // Modo aleatório: o sorteio do Warden acontece ANTES da partida (a revisão mostra
+  // e inspeciona o baralho); launchMatch consome este id e o limpa para a próxima.
+  const [randomRivalId, setRandomRivalId] = useState<string | undefined>(undefined);
   const [currentDeck, setCurrentDeck] = useState<DeckInfo>(DEMO_DECK);
   const [game, setGame] = useState<GameState | null>(null);
   // FEAT-13: the mode the LIVE match was created with (settings.gameMode only
@@ -2222,6 +2379,16 @@ function App() {
   const matchModeRef = useRef<GameMode>("solo");
   /** FEAT-11: the rival a rematch replays against (random mode does not reroll). */
   const opponentRef = useRef<DeckInfo | null>(null);
+  const randomPool = settings.opponentMode === "random" ? savedDecks.filter((item) => item.id !== selectedDeck.id) : [];
+  const randomRival = randomPool.find((item) => item.id === randomRivalId);
+  const randomPoolKey = randomPool.map((item) => item.id).join("|");
+  useEffect(() => {
+    if (randomRival || !randomPool.length) return;
+    // Não repete o rival da partida anterior quando há alternativa.
+    const fresh = randomPool.filter((item) => item.id !== opponentRef.current?.id);
+    setRandomRivalId(drawDeck(fresh.length ? fresh : randomPool)?.id);
+    // randomPoolKey resume o pool (o array é novo a cada render).
+  }, [randomRival, randomPoolKey]);
   /** BUG2-11: configuração que valeu na partida viva (ver MatchSetup). */
   const matchSetupRef = useRef<MatchSetup | null>(null);
   const aiTurnRef = useRef<string | null>(null);
@@ -2947,7 +3114,8 @@ function App() {
       const pool = savedDecks.filter((item) => item.id !== deck.id);
       const picked = pool.find((item) => item.id === settingsRef.current.opponentDeckId);
       if (mode === "deck" && picked) return picked;
-      if (mode === "random" && pool.length) return pool[Math.floor(Math.random() * pool.length)];
+      // O baralho já sorteado na revisão; sem ele (deck trocado/removido) sorteia aqui.
+      if (mode === "random") return pool.find((item) => item.id === randomRivalId) ?? drawDeck(pool) ?? deck;
     }
     return deck;
   }
@@ -2957,6 +3125,8 @@ function App() {
     // so the opening hands can be replayed.
     const seed = Math.floor(Math.random() * 4294967296);
     const rival = opponent ?? resolveOpponent(deck);
+    // "Um baralho diferente a cada partida": o sorteio consumido não vale para a seguinte.
+    if (mode === "solo") setRandomRivalId(undefined);
     cancelFx();
     // BUG2-11: registra a configuração com que a partida nasce; o modo efetivo
     // vira "mirror" quando o deck pedido caiu no espelho (removido/igual).
@@ -3286,6 +3456,8 @@ function App() {
       const [cards, overrides] = await Promise.all([faces ?? listCatalogCards(), loadAbilityOverrides()]);
       const progress = await runTranslation(pendingTranslations(cards, (id) => overrides.get(id)), llm, {
         limit: LLM_RUN_LIMIT,
+        // 2 em paralelo = max_concurrency do proxy local do dono (metade do tempo por rodada).
+        concurrency: 2,
         // `reply:` re-tentado: a tentativa anterior conta (§4.0).
         previous: (id) => translationTries(overrides.get(id)),
         save: putAbilityOverride,
@@ -3600,6 +3772,7 @@ function App() {
             settings={settings}
             deck={selectedDeck}
             savedDecks={savedDecks}
+            randomRival={randomRival}
             hasHover={hasHover}
             catalogCount={catalogCount}
             catalogSync={catalogSync}
