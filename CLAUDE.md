@@ -137,8 +137,8 @@ ações, cobertura por set, pendências).
   GameMove) + `canReady`; efeitos `noReady` bloqueiam pelo mesmo `canReady`.
   RunTranslation tem pool de concorrência (`--concurrency`/HARVEST_CONCURRENCY,
   saves serializados em cadeia, flush no abort).
-- **Cobertura do catálogo**: full ~1.800/4.809 (37,4%) + 276 partial no corpus
-  MV+keyteki (`npm run merge:cards`), crashes 0. Pendente (cortes de
+- **Cobertura do catálogo**: full ~1.864/4.809 (38,8%) + partial no corpus
+  MV+keyteki (`npm run merge:cards`), crashes 0 (medições pós-v13). Pendente (cortes de
   `docs/DSL_EXPANSION_PLAN_WAVE3.md` + `docs/WAVE4_BACKLOG.md`): "any number"/
   "up to N" (pede `GameMove.targets[]`), look/reveal/search de zonas ocultas,
   Fate/Prophecy completo, cor de chave, Tide/Treachery/Invulnerable.
