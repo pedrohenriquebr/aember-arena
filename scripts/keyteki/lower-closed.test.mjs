@@ -348,3 +348,37 @@ describe("lowering maps 'exactly 1' as the single target (Lote 15c)", () => {
     expect(two.acts).toEqual([{ k: "returnToHand", s: { pick: { type: "Creature", side: "enemy" }, n: 2 } }]);
   });
 });
+
+// Lote 15d (lasting-effects): as ações de duração do keyteki viram o ato
+// `lasting` com a janela certa (turn/next/nextTurn do motor v16).
+describe("lowering maps the lasting durations (Lote 15d)", () => {
+  it("untilPlayerTurnEnd / duringOpponentNextTurn / untilPlayerNextTurnEnd carry their window", () => {
+    const turn = lower("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ match: (card) => card.type === 'creature', effect: ability.effects.modifyPower(2) }) });").abilities[0];
+    expect(turn.acts).toEqual([{ k: "lasting", e: { target: { type: "Creature", side: "friendly" }, power: 2, duration: "turn" } }]);
+    const next = lower("        this.play({ gameAction: ability.actions.untilPlayerNextTurnEnd({ match: (card) => card.type === 'creature', effect: ability.effects.modifyArmor(1) }) });").abilities[0];
+    expect(next.acts).toEqual([{ k: "lasting", e: { target: { type: "Creature", side: "friendly" }, armor: 1, duration: "nextTurn" } }]);
+  });
+
+  it("cardCannot + targetController is the restrict row (Fogbank shape)", () => {
+    const l = lower(
+      "        this.play({ gameAction: ability.actions.duringOpponentNextTurn({ targetController: 'opponent', effect: ability.effects.cardCannot('fight') }) });",
+    ).abilities[0];
+    expect(l.acts).toEqual([{ k: "lasting", e: { target: {}, restrict: { action: "fight", who: "opponent" }, duration: "next" } }]);
+  });
+
+  it("lastingEffect reads a duration prop and the effect table (modifyKeyCost/changeHouse)", () => {
+    const l = lower("        this.play({ gameAction: ability.actions.lastingEffect({ duration: 'untilPlayerNextTurnStart', match: (card) => card.type === 'creature', effect: ability.effects.modifyKeyCost(1) }) });").abilities[0];
+    expect(l.acts).toEqual([{ k: "lasting", e: { target: { type: "Creature", side: "friendly" }, keyCost: 1, duration: "next" } }]);
+    const house = lower("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ match: (card) => card.type === 'creature', effect: ability.effects.changeHouse('mars') }) });").abilities[0];
+    expect(house.acts).toEqual([{ k: "lasting", e: { target: { type: "Creature", side: "friendly" }, house: "Mars", duration: "turn" } }]);
+  });
+
+  it("rejects the lasting shapes the mapping would guess about", () => {
+    // lasting COM gatilho ("gain 1 each time a creature reaps") — fora
+    expect(reject("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd((context) => ({ when: { onReap: () => true }, gameAction: ability.actions.gainAmber() })) });")).toBe("prop:lasting.when");
+    // duração fora do mapa (untilLeavesPlay) não vira achismo
+    expect(reject("        this.play({ gameAction: ability.actions.cardLastingEffect({ match: (card) => card.type === 'creature', until: 'untilLeavesPlay', effect: ability.effects.modifyPower(1) }) });")).toBe("lasting:until untilLeavesPlay");
+    // efeito sem entrada na tabela
+    expect(reject("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ effect: ability.effects.takeControl() }) });")).toBe("effect:takeControl");
+  });
+});

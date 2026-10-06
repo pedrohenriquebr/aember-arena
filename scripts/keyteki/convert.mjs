@@ -63,6 +63,23 @@ const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === 
       condicional e "Then," sequencial puro saem iguais no parser.
     Fora do golden: Key Abduction (`modifier: 9 - hand` = `dynamic:
     forgeKey.modifier`, unsupported). */
+/** Lote 15c — triagem dos diffs abertos pelo pacote de tabelas:
+    • [a] wurm-tunnel ×3: `target: {mode:'exactly', numCards:1}` virava pick
+      engine-auto; a escolha singular do print é o alvo clássico → corrigido em
+      targetFilter (spec: lower-closed "exactly 1 is the classic target").
+    • [c] mother-northelle / library-of-polliasaurus: "Move 1A from a creature
+      to your pool" = supply + gainAmber(if did) no keyteki ≡ `to:"pool"` no
+      parser; o `amber: true` do alvo é implicado pelo ato. Normalizado acima.
+    Lote 15d — triagem dos diffs do pacote de lasting-effects:
+    • [a] kelping-hands ×3: `match` sem targetController é o escopo do LADO que
+      resolve no keyteki ("each friendly creature gains poison") → side default
+      "friendly" em lastingActOf (spec: lower-closed "carry their window").
+    • [c] opposition-research: `who` do restrict já escopa o lado e o reap é
+      sempre com criatura do ator — o `e.target` {type:Creature, side:enemy} do
+      print é o mesmo escopo. Normalizado no ato lasting (acima).
+    • [d] sow-salt: "creatures cannot reap" (keyteki `targetController: 'any'`)
+      — `Restrict.who` só tem "you"/"opponent", sem "ambos": o parser aproxima
+      para "opponent" e o conversor para "you". Gap listado no relatório 15d. */
 /** Same-effect rewrites the parser and keyteki spell differently: abilities with the same body merge their `on`; adjacent identical exalts sum; the `then` link on a `moved`-anaphora act is redundant (Lote 15b, triagem [c]); "to your pool" spelled as supply + gainAmber (Lote 15c, triagem [c]). */
 const equivalent = (list) => {
   const merged = new Map();
@@ -75,6 +92,17 @@ const equivalent = (list) => {
       else {
         const copy = { ...act };
         if (copy.then === true && copy.s === "moved") delete copy.then;
+        // Lote 15d (triagem [c]): num restrict de "reap" o `who` já escopa o
+        // lado e o reap sempre é com uma criatura do ator — o print "Enemy
+        // creatures cannot reap" só repete esse escopo no `e.target` (a casa e
+        // os demais filtros continuam sendo lidos).
+        if (copy.k === "lasting" && copy.e?.restrict?.action === "reap" && copy.e.target) {
+          const t = copy.e.target;
+          if ((t.type === "Creature" || t.type === undefined) && Object.keys(t).every((key) => key === "type" || key === "side")) {
+            const { type: _type, side: _side, ...rest } = t;
+            copy.e = { ...copy.e, target: Object.keys(rest).length ? rest : {} };
+          }
+        }
         // Lote 15c: "Move 1A from a creature to your pool" — o keyteki escreve
         // supply + gainAmber(if did); o parser move direto para o pool.
         const prev = acts[acts.length - 1];

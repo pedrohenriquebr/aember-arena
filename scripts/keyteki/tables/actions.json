@@ -1,5 +1,5 @@
 {
-  "_doc": "ability.actions.<name>(props) → our Act. kind: card = acts on the ability's selection (default context.source → s:\"self\"; inside a `target` block → s:\"target\"); player = acts on a player (default: `default`; explicit `target: context.player[.opponent]` flips `opp` when the DSL k has `oppField`); token = no selection (makeToken); flow = sequential/joint, flattened. defaults = fields written when the prop is absent (keyteki setDefaultProperties). props: every keyteki prop the entry understands — {field} copies a literal, {ifTrue}/{ifFalse} merge fields on a boolean literal (null deletes a field). Anything not listed (and not cosmetic) is Unsupported(\"prop:<name>\"): fail closed. pending/unsupported entries only document the reason; the code is always action:<name>. Lote 15c (action-zones): archive/removeStun/removeAmber espelham atos que o motor ja tem (archive/unstun/moveAmber->supply). placeAmber (supply -> criatura) NAO tem ato (o capture debita um pool) = engineGap do relatorio; putIntoArchives/moveCard/discard de zona seguem o move do DSL em entradas futuras.",
+  "_doc": "ability.actions.<name>(props) → our Act. kind: card = acts on the ability's selection (default context.source → s:\"self\"; inside a `target` block → s:\"target\"); player = acts on a player (default: `default`; explicit `target: context.player[.opponent]` flips `opp` when the DSL k has `oppField`); token = no selection (makeToken); flow = sequential/joint, flattened. defaults = fields written when the prop is absent (keyteki setDefaultProperties). props: every keyteki prop the entry understands — {field} copies a literal, {ifTrue}/{ifFalse} merge fields on a boolean literal (null deletes a field). Anything not listed (and not cosmetic) is Unsupported(\"prop:<name>\"): fail closed. pending/unsupported entries only document the reason; the code is always action:<name>. Lote 15c (action-zones): archive/removeStun/removeAmber espelham atos que o motor ja tem (archive/unstun/moveAmber->supply). placeAmber (supply -> criatura) NAO tem ato (o capture debita um pool) = engineGap do relatorio; putIntoArchives/moveCard/discard de zona seguem o move do DSL em entradas futuras. Lote 15d (lasting-effects): kind lasting = ability.actions.<duracao>(props) → {k:\"lasting\", e:{target, …, duration}}. Durações: untilPlayerTurnEnd→turn, duringOpponentNextTurn/untilPlayerNextTurnStart→next, untilPlayerNextTurnEnd→nextTurn (motor v16). Efeitos suportados dentro: os de tables/effects.json (modifyPower/modifyArmor/addKeyword/modifyKeyCost/changeHouse); takeControl/canUse/canPlayNonHouse/gainAbility/changeType/playerCannot/cardCannot como efeito ficam de fora (engineGap).",
   "gainAmber": {
     "k": "gainAmber",
     "kind": "player",
@@ -303,22 +303,46 @@
     "pending": "zones (G): move deck→discard"
   },
   "cardLastingEffect": {
-    "pending": "lasting (M2): needs effects table"
+    "k": "lasting",
+    "kind": "lasting",
+    "duration": "turn",
+    "props": {},
+    "notas": "Lote 15d: lasting por carta (29 usos); match → e.target. when/gameAction (lasting com gatilho) e until: untilLeavesPlay ficam de fora."
   },
   "lastingEffect": {
-    "pending": "lasting (M2)"
+    "k": "lasting",
+    "kind": "lasting",
+    "duration": "turn",
+    "props": {},
+    "notas": "Lote 15d: duração default untilPlayerTurnEnd; o prop duration/until pode sobrescrever (só as chaves do mapa DURATIONS)."
   },
   "untilPlayerTurnEnd": {
-    "pending": "lasting (M2)"
+    "k": "lasting",
+    "kind": "lasting",
+    "duration": "turn",
+    "props": {},
+    "notas": "Lote 15d: \"For the remainder of the turn\" (74 usos)."
   },
   "duringOpponentNextTurn": {
-    "pending": "lasting (M2)"
+    "k": "lasting",
+    "kind": "lasting",
+    "duration": "next",
+    "props": {},
+    "notas": "Lote 15d: \"during their next turn\" (31 usos) — janela stamp+2."
   },
   "untilPlayerNextTurnStart": {
-    "pending": "lasting (M2, DSL gap: until)"
+    "k": "lasting",
+    "kind": "lasting",
+    "duration": "next",
+    "props": {},
+    "notas": "Lote 15d: \"until the start of your next turn\" (6 usos)."
   },
   "untilPlayerNextTurnEnd": {
-    "pending": "lasting (M2, DSL gap: until)"
+    "k": "lasting",
+    "kind": "lasting",
+    "duration": "nextTurn",
+    "props": {},
+    "notas": "Lote 15d: \"until the end of your next turn\" (1 uso) — janela stamp+3."
   },
   "conditional": {
     "pending": "conditional (M2)"

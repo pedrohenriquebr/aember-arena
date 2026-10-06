@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { conditionOf, filterOf, path, selectionOf, Unsupported } from "./lambdas.mjs";
+import { conditionOf, filterOf, houseName, path, selectionOf, Unsupported } from "./lambdas.mjs";
 import { lookup, markMap, readUsage, resetUsage } from "./lambdaMap.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -90,6 +90,9 @@ function lowerAction(node, sel, env) {
     if (node.args.length !== 1 || node.args[0].t !== "arr") return fail("gameAction", `${node.name} args`);
     return lowerAction(node.args[0], sel, env);
   }
+  // Lote 15d: as ações de duração (untilPlayerTurnEnd & cia.) viram o ato
+  // `lasting` com a janela certa.
+  if (entry.kind === "lasting") return lastingActOf(node, entry);
   const { props, ctx, per } = optionsOf(node.args[0]);
   const act = { k: entry.k };
   for (const [f, v] of Object.entries(entry.defaults ?? {})) act[f] = v;
@@ -201,6 +204,108 @@ function targetFilter(node) {
     return { filter, acts, pick: { n: numCards, ...(mode === "upTo" ? { upTo: true } : {}) } };
   }
   return { filter, acts };
+}
+
+/** The `effect:` list of a persistent/lasting registrar → PersistentEffect fields. */
+function effectFields(effects, out) {
+  for (const e of effects) {
+    if (e.t !== "effect") fail("effect", e.t);
+    const spec = EFFECTS[e.name];
+    if (!spec) fail("effect", e.name);
+    if (spec.number) {
+      const n = lit(e.args[0]);
+      if (typeof n !== "number" || spec.number in out) fail("dynamic", `effect ${e.name}`);
+      out[spec.number] = n;
+    } else if (spec.house) {
+      // changeHouse('mars') → o campo `house` do efeito (nome canônico).
+      const h = lit(e.args[0]);
+      const name = typeof h === "string" ? houseName(h) : null;
+      if (!name || out.house !== undefined) fail("dynamic", `effect ${e.name}`);
+      out.house = name;
+    } else if (spec.restrict) {
+      // cardCannot('fight') → `restrict: {action}`; o `who` vem do
+      // targetController da ação durável (lowerPersistent/lastingActOf).
+      const action = lit(e.args[0]);
+      if (!action || out.restrict || e.args[1]) fail("dynamic", `effect ${e.name}`);
+      if (!["play", "use", "fight", "reap"].includes(action)) fail("effect", `${e.name} ${action}`);
+      out.restrict = { action };
+    } else {
+      const o = e.args[0];
+      if (!o || o.t !== "obj" || out.keywords) fail("dynamic", `effect ${e.name}`);
+      out.keywords = {};
+      for (const [kw, val] of Object.entries(o.props)) {
+        const n = lit(val);
+        if (n !== true && typeof n !== "number") fail("dynamic", `keyword ${kw}`);
+        out.keywords[kw] = n === true ? 1 : n;
+      }
+    }
+  }
+}
+
+/** keyteki's lasting durations → our `duration` (game.turnStamp windows). */
+const DURATIONS = {
+  untilPlayerTurnEnd: "turn",
+  duringOpponentNextTurn: "next",
+  untilPlayerNextTurnStart: "next",
+  untilPlayerNextTurnEnd: "nextTurn",
+};
+
+/** Lote 15d: `ability.actions.<lasting>(props)` → `{k:"lasting", e}`. A duração
+    vem do wrapper (actions.json) ou do prop `duration`/`until`; o `effect` passa
+    pelo mesmo leitor dos persistentes. `when`/`gameAction` (o lasting COM
+    gatilho, "gain 1 each time a creature reaps") fica de fora. */
+function lastingActOf(node, entry) {
+  const { props } = optionsOf(node.args[0]);
+  const out = {};
+  let effects = [];
+  let match = null;
+  let controller = null;
+  for (const [key, v] of Object.entries(props)) {
+    if (key === "message" || key === "messageArgs" || key === "effectArgs" || key === "preferActionPromptMessage" || key === "multipleTrigger" || key === "triggeredAbilityType") continue;
+    switch (key) {
+      case "effect":
+        effects = v.t === "arr" ? v.items : [v];
+        break;
+      case "match":
+        match = v;
+        break;
+      case "targetController":
+        controller = lit(v);
+        if (!["self", "current", "opponent", "any"].includes(controller)) fail("dynamic", "targetController");
+        break;
+      case "condition":
+        {
+          const c = conditionOf(v);
+          if (c) out.if = c;
+        }
+        break;
+      case "duration":
+      case "until": {
+        const d = DURATIONS[lit(v)];
+        if (!d) fail("lasting", `${key} ${lit(v)}`);
+        out.duration = d;
+        break;
+      }
+      default:
+        fail("prop", `lasting.${key}`);
+    }
+  }
+  if (!effects.length) fail("empty", "lasting without effect");
+  effectFields(effects, out);
+  if (match) {
+    const f = filterOf(match);
+    // Escopo default do keyteki (match sem targetController é do lado que
+    // resolve — "each friendly creature gains poison"); `any` deixa sem lado.
+    if (f.side === undefined && controller !== "any") f.side = controller === "opponent" ? "enemy" : "friendly";
+    out.target = f;
+  } else if (controller && !out.restrict) fail("persistent", "player scope");
+  else out.target = {};
+  // O `who` do restrict vem do targetController (a restrição é de jogador).
+  if (out.restrict) out.restrict = { ...out.restrict, who: controller === "opponent" ? "opponent" : "you" };
+  if ((out.keywords || out.power !== undefined || out.armor !== undefined) && out.target && !out.target.type) out.target = { type: "Creature", ...out.target };
+  if (out.duration === undefined && entry.duration) out.duration = entry.duration;
+  const { target, if: cond, ...tail } = out;
+  return [{ k: "lasting", e: { target, ...tail, ...(cond ? { if: cond } : {}) } }];
 }
 
 /** Plain registrar props → Ability. `base` is { on, of?, if? } already decided. */
@@ -448,25 +553,7 @@ function lowerPersistent(reg, host) {
     out.target = f;
   } else if (controller) fail("persistent", "player scope");
   else out.target = { self: true };
-  for (const e of effects) {
-    if (e.t !== "effect") fail("effect", e.t);
-    const spec = EFFECTS[e.name];
-    if (!spec) fail("effect", e.name);
-    if (spec.number) {
-      const n = lit(e.args[0]);
-      if (typeof n !== "number" || spec.number in out) fail("dynamic", `effect ${e.name}`);
-      out[spec.number] = n;
-    } else {
-      const o = e.args[0];
-      if (!o || o.t !== "obj" || out.keywords) fail("dynamic", `effect ${e.name}`);
-      out.keywords = {};
-      for (const [kw, val] of Object.entries(o.props)) {
-        const n = lit(val);
-        if (n !== true && typeof n !== "number") fail("dynamic", `keyword ${kw}`);
-        out.keywords[kw] = n === true ? 1 : n;
-      }
-    }
-  }
+  effectFields(effects, out);
   // Keywords and power/armor only mean something on creatures: the text says "Mutant creature", keyteki's match just omits the type.
   if ((out.keywords || out.power !== undefined || out.armor !== undefined) && out.target && !out.target.self && !out.target.host && !out.target.type) out.target = { type: "Creature", ...out.target };
   const { target, if: cond, ...tail } = out;
