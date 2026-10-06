@@ -19,8 +19,8 @@ const HAUNTED_COUNT = { k: "count", of: { p: "discard" }, op: "gte", n: 10 };
 
 describe("contract", () => {
   it("bumps the parser and keeps the DSL version (invulnerable reuses prevent)", () => {
-    expect(PARSER_VERSION).toBe(18);
-    expect(DSL_VERSION).toBe(15);
+    expect(PARSER_VERSION).toBe(19);
+    expect(DSL_VERSION).toBe(16);
   });
 });
 

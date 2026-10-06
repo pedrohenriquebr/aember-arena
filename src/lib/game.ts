@@ -527,7 +527,11 @@ export function activeEffects(state: GameState, side: Side): ActiveEffect[] {
   }
   const stamp = turnStamp(state);
   for (const effect of state.lasting ?? []) {
-    if (effect.side === side && (effect.until ?? 0) > stamp) result.push({ side, effect });
+    if (effect.side === side && (effect.until ?? 0) > stamp) {
+      // Lote 15d: o `self` do efeito guardado é a fonte do ato que o criou.
+      const source = effect.sourceId ? [...state.players[0].board, ...state.players[1].board].find((item) => item.instanceId === effect.sourceId) : undefined;
+      result.push({ side, source, effect });
+    }
   }
   return result;
 }
@@ -2139,7 +2143,8 @@ function run(context: Context, act: Act): void {
       }
       // A triggered effect with a duration: stored as plain data (like keyteki's
       // lasting effects) and pruned when the stamp it expires on is reached.
-      const until = turnStamp(state) + (act.e.duration === "next" ? 2 : 1);
+      // Lote 15d: "nextTurn" (fim do seu próximo turno) é stamp + 3.
+      const until = turnStamp(state) + (act.e.duration === "next" ? 2 : act.e.duration === "nextTurn" ? 3 : 1);
       // A "chosen" house is only known now: freeze it into the stored copy.
       const stored = structuredClone(act.e);
       if (stored.target.house !== undefined && positive(stored.target.house) === "chosen") {
@@ -2152,7 +2157,12 @@ function run(context: Context, act: Act): void {
         if (!type) break;
         stored.restrict = { ...stored.restrict, type };
       }
-      state.lasting = [...(state.lasting ?? []), { ...stored, side: me, until }];
+      state.lasting = [
+        ...(state.lasting ?? []),
+        // Lote 15d: `self` num efeito guardado é a FONTE do ato — guardado como
+        // id (o lasting é dado puro) e resolvido em activeEffects.
+        { ...stored, side: me, until, ...(stored.target?.self && context.source ? { sourceId: context.source.instanceId } : {}) },
+      ];
       break;
     }
   }

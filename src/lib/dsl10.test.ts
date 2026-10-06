@@ -22,8 +22,8 @@ const FLANK = { type: "Creature", side: "enemy", flank: true };
 
 describe("contract", () => {
   it("bumps both versions and the prompt schema carries the new fields", () => {
-    expect(DSL_VERSION).toBe(15);
-    expect(PARSER_VERSION).toBe(18);
+    expect(DSL_VERSION).toBe(16);
+    expect(PARSER_VERSION).toBe(19);
     expect(DSL_SCHEMA).toContain('k: "peek"');
     expect(DSL_SCHEMA).toContain("attackBonus?: number");
     expect(DSL_SCHEMA).toContain("whenAttacking?: Filter");

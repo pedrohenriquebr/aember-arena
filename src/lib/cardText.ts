@@ -174,7 +174,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 18;
+export const PARSER_VERSION = 19;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -1485,6 +1485,14 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
     body = untilNext[1];
     duration = "next";
   }
+  // Lote 15d (lasting-effects): "during/on your next turn" e "until the end of
+  // your next turn" são a janela do SEU próximo turno (keyteki
+  // untilPlayerNextTurnEnd) — aplicada desde já e podada no fim dele.
+  const yourNext = body.match(/^(?:until the end of|during|on) your next turn, (.+)$/);
+  if (yourNext) {
+    body = yourNext[1];
+    duration = "nextTurn";
+  }
   const refill = body.match(
     /^during (your|their) "?draw cards"? step, (you|your opponent|each player) refills? (?:your|their) hands? to (\d+) (additional|less) cards?$/,
   ) ?? body.match(/^(you|your opponent|each player) refills? (?:your|their) hands? to (\d+) (additional|less) cards? during (your|their) "?draw cards"? step$/);
@@ -1525,9 +1533,9 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
       body = clause[3];
     }
   }
-  const tail = body.match(/ (for the remainder of the turn|on their next turn|during their next turn|each turn)$/);
+  const tail = body.match(/ (for the remainder of the turn|on their next turn|during their next turn|on your next turn|during your next turn|until the end of your next turn|each turn)$/);
   if (tail) {
-    if (tail[1] !== "each turn") duration = tail[1].includes("next turn") ? "next" : "turn";
+    if (tail[1] !== "each turn") duration = tail[1].includes("your next turn") ? "nextTurn" : tail[1].includes("next turn") ? "next" : "turn";
     body = body.slice(0, -tail[0].length);
   }
   const scaled = body.match(/ for each (.+)$/);

@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 15; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 16; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -367,12 +367,18 @@ export interface PersistentEffect {
   /** Printed duration of a triggered effect: end of this turn, or of the
       opponent's next turn (keyteki duringOpponentNextTurn). Trap: "next" is
       stamp + 2, correct ONLY for "the opponent's next turn"; a "your next
-      turn" text would be pruned as that turn starts. Branch on `side` first. */
-  duration?: "turn" | "next";
+      turn" text would be pruned as that turns starts — Lote 15d: `nextTurn`
+      (stamp + 3) é a janela "during/until the end of your next turn"
+      (keyteki untilPlayerNextTurnEnd), aplicada desde já e podada no fim do
+      próximo turno do dono, como o LastingEffectAction do keyteki. */
+  duration?: "turn" | "next" | "nextTurn";
   /** Lasting effects: the turn stamp (game.turnStamp) at which they expire. */
   until?: number;
   /** Lasting effects: the side that created them. */
   side?: 0 | 1;
+  /** Lasting effects: the instanceId of the source whose `self` the stored copy
+      reads (Lote 15d — the stored effect is plain data). */
+  sourceId?: string;
 }
 
 export interface CardRules {
@@ -916,6 +922,10 @@ function validAct(value: unknown): boolean {
     // The stored effect is read by effectivePower the same way a printed one is.
     // A power modifier whose target filters by power recurses (Lote 6 review).
     if (!isRecord(value.e) || !isRecord(value.e.target) || houseEffectLoops(value.e) || traitEffectLoops(value.e)) return false;
+    // Lote 15d: a duração é uma escolha fechada — um valor de outra gramática
+    // mudaria a janela em que o efeito expira.
+    if (value.e.duration !== undefined && value.e.duration !== "turn" && value.e.duration !== "next" && value.e.duration !== "nextTurn") return false;
+    if (value.e.until !== undefined && !isFiniteNumber(value.e.until)) return false;
     if (value.e.restrict !== undefined && !validRestrict(value.e.restrict)) return false;
     if (value.e.replace !== undefined && !validReplacement(value.e.replace, true)) return false;
     if (value.e.traits !== undefined && (typeof value.e.traits !== "string" || !value.e.traits)) return false;
