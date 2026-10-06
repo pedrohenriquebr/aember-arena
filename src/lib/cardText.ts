@@ -170,7 +170,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 16;
+export const PARSER_VERSION = 17;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -365,6 +365,17 @@ function parseFilterWords(phrase: string): Filter | null {
     words = tail[1];
     flankClause = !tail[2];
   }
+  // Lote 15b (target-select): "a creature with the highest power" / "each
+  // creature with the lowest power" — o extremo do stat ENTRE OS MATCHES,
+  // empates incluídos (`mostStat`); `lowest` espelha a direção.
+  let extreme: "power" | "armor" | undefined;
+  let extremeLow = false;
+  const superlative = words.match(/^(.*?) with (?:the )?(highest|lowest) (power|armor)$/);
+  if (superlative) {
+    words = superlative[1];
+    extreme = superlative[3] as "power" | "armor";
+    extremeLow = superlative[2] === "lowest";
+  }
   // Lote 4 §4.9/§4.10: "creature with amber on it" / "with (no) +1 power
   // counters on it" — presence or absence of worn amber/counters.
   let amberClause: boolean | undefined;
@@ -424,6 +435,10 @@ function parseFilterWords(phrase: string): Filter | null {
   };
   if (powerMax !== undefined) filter.powerMax = powerMax;
   if (powerMin !== undefined) filter.powerMin = powerMin;
+  if (extreme) {
+    filter.mostStat = extreme;
+    if (extremeLow) filter.lowest = true;
+  }
   if (weaker) filter.weaker = true;
   if (stronger) filter.stronger = true;
   if (share) filter.house = share;
@@ -432,9 +447,14 @@ function parseFilterWords(phrase: string): Filter | null {
   if (counterClause !== undefined) filter.counters = counterClause;
   if (houseClause) filter.house = houseClause;
   for (let index = 0; index < tokens.length; index += 1) {
-    const pair = tokens[index + 1] ? HOUSES[`${tokens[index]} ${tokens[index + 1]}`] : undefined;
+    // Lote 15b (triagem M3, Séance Scanner): "non-Star Alliance creature" — a
+    // negação atravessa o par de palavras da casa: sem isso o "non-star" caía no
+    // ramo de traits (vira trait "Star") e o "alliance" seguinte sobrescrevia.
+    const negation = /^(?:non-|!)/.test(tokens[index]);
+    const bare = tokens[index].replace(/^(?:non-|!)/, "");
+    const pair = tokens[index + 1] ? HOUSES[`${bare} ${tokens[index + 1]}`] : undefined;
     if (pair) {
-      filter.house = pair;
+      filter.house = (negation ? "!" : "") + pair;
       index += 1;
     } else if (!applyModifier(filter, tokens[index])) return null;
   }
@@ -445,6 +465,10 @@ function parseFilterWords(phrase: string): Filter | null {
     creature, then ready it"): "it" é o resultado dela, não a própria carta. */
 let madeToken = false;
 
+/** Lote 15b (target-select): a cláusula "Choose up to N …" abriu uma escolha do
+    jogador — "each chosen creature" das frases seguintes lê este pick. */
+let chosenCards: { n: number; filter: Filter } | null = null;
+
 function parseObject(phrase: string, upgrade: boolean, observer = false): { s: Selection; target?: Filter } | null {
   // Inside an observer ability the event card is the subject: "stun it" stuns
   // the creature that caused the event, not the watcher.
@@ -452,6 +476,12 @@ function parseObject(phrase: string, upgrade: boolean, observer = false): { s: S
   // Lote 15a: depois de um makeToken, "it"/"that card" é o token criado
   // (keyteki `preThenEvent.card`) — o resultado do ato anterior.
   if (madeToken && /^(?:it|that card|that creature)$/.test(phrase)) return { s: "moved" };
+  // Lote 15b (target-select): "each chosen creature" é a escolha do JOGADOR que
+  // a cláusula "Choose up to N …" abriu — o pick `upTo` da fila `targets` do
+  // movimento ("Choose up to 2 creatures. Shuffle each chosen creature…").
+  if (/^each (?:of (?:the|those) )?chosen (?:creature|card|artifact)s?$/.test(phrase)) {
+    return chosenCards ? { s: { pick: chosenCards.filter, n: chosenCards.n, upTo: true } } : null;
+  }
   // Lote 15a: "…, ward that creature" — a anáfora da cláusula anterior é o alvo
   // escolhido da ability ("Move 1 amber from a creature…, ward that creature").
   if (/^(?:that|the chosen) (?:card|creature|artifact)$/.test(phrase)) return { s: "target" };
@@ -839,6 +869,17 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
   }
   // Lote 8 §8.1 (Gabos Longarms): the choice is the ability's target; the redirect is the fight's own.
   if (sentence === "choose a creature") return { acts: [], target: { type: "Creature" } };
+  // Lote 15b (target-select): "Choose up to 2 creatures." — a escolha do
+  // jogador (fila `targets` do movimento) vira o pick `upTo` que as frases
+  // seguintes leem como "each chosen creature"; sozinha não resolve ato nenhum.
+  const chooseUpTo = sentence.match(/^choose up to (a|an|one|two|three|four|five|six|seven|eight|nine|ten|\d+) (.+)$/);
+  if (chooseUpTo) {
+    const n = COUNT_WORDS[chooseUpTo[1]] ?? Number(chooseUpTo[1]);
+    const filter = parseFilterWords(chooseUpTo[2]);
+    if (!filter || !n) return null;
+    chosenCards = { n, filter };
+    return { acts: [] };
+  }
   if (/^(?:this card|this creature|~) deals damage to that creature (?:instead|rather than the (?:one|creature) (?:it|this card|this creature) is fighting)$/.test(sentence)) {
     return { acts: [{ k: "lasting", e: { target: { fighting: true }, replace: { on: "damage", redirect: "chosen" } } }] };
   }
@@ -1052,6 +1093,20 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
       }
       return { acts: [...left.acts, ...right.acts], target: left.target ?? right.target, ...(left.optional || right.optional ? { optional: true } : {}) };
     }
+    // Lote 15b (target-select): "Destroy each creature with the lowest power and
+    // each creature with the highest power" — o lado direito é OBJETO puro do
+    // mesmo verbo (sem verbo próprio): o ato da esquerda se repete com a nova
+    // seleção. Só quando o ato da esquerda também é seleção de CONJUNTO
+    // (each/pick) — "stun a creature and each of its neighbors" continua sendo o
+    // composto de um objeto só (`targetAndNeighbors`) e "a X and an Y" pediria um
+    // segundo alvo escolhido, ambos fora.
+    if (left && (!right || !right.acts.length) && left.acts.length === 1 && !left.cond) {
+      const [head] = left.acts;
+      const object = parseObject(conjunction[2], upgrade, observer);
+      if ("s" in head && typeof head.s === "object" && object && typeof object.s === "object") {
+        return { acts: [...left.acts, { ...head, s: object.s } as Act], ...(left.target ? { target: left.target } : {}), ...(left.optional ? { optional: true } : {}) };
+      }
+    }
   }
 
   for (const [pattern, build] of VERBS) {
@@ -1109,6 +1164,9 @@ function parseAbilities(triggers: Trigger[], body: string, upgrade: boolean, cre
 let choseHouse = false;
 
 function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, creature: boolean, quoted: string[], of?: Filter, headerIf?: Condition, selfWatch = false): Ability[] | null {
+  // Lote 15b: a escolha do jogador ("Choose up to N …") é por ability — uma
+  // ability seguinte não herda o pick da anterior.
+  chosenCards = null;
   const done: Ability[] = [];
   const watching = of ? { of } : {};
   // `of` marks an observer, whose "it" is the event card. A self ready-watch still
@@ -1177,6 +1235,10 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
     });
   }
   const independent = clauses.filter((part) => /^if (?!you do)/.test(part.text)).length;
+  // Lote 15b: uma cláusula condicional que não resolve ato próprio ("If you do,
+  // choose a house.") guarda o gate para a frase seguinte — "Enrage each
+  // creature of that house" tem de morrer com o "You may" recusado (Draco Praeco).
+  let carryCond: Condition | null = null;
   for (const { text: sentence, link } of clauses) {
     // The branch of an "Otherwise" is only legal right after a conditional
     // clause, and it negates the condition printed BEFORE it.
@@ -1220,6 +1282,11 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
       if (!ability.acts.length && !ability.if && independent < 2) ability.if = parsed.cond;
       else for (const act of parsed.acts) act.if = parsed.cond;
     }
+    // O gate de uma cláusula sem atos acompanha a próxima cláusula com atos.
+    if (carryCond && parsed.acts.length && !parsed.cond) {
+      for (const act of parsed.acts) if (act.if === undefined) act.if = carryCond;
+    }
+    carryCond = parsed.cond && !parsed.acts.length ? parsed.cond : null;
     madeToken = parsed.acts.some((act) => act.k === "makeToken");
     ability.acts.push(...parsed.acts);
   }
@@ -1569,6 +1636,7 @@ function parseCardBody(face: CardFace): CardRules {
   properNouns = collectProperNouns(face.text ?? "");
   cardHouse = (face.house ?? "").toLowerCase();
   madeToken = false;
+  chosenCards = null;
   const { text, quoted } = maskQuotes(normalise(face.text ?? ""));
   // Self references only inside ability text, so a card named like a keyword keeps its keywords.
   // The title is also a ready-prefix ("After you ready Seda the Sleeper"); splicing it into

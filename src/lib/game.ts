@@ -1063,6 +1063,18 @@ function everyMatch(state: GameState, me: Side, source: CardInstance | undefined
   // `least` is the mirror of `top`: ties (no printed power difference) keep the
   // board order, exactly like the `top` sort does.
   if (filter.least) return found.sort((a, b) => effectivePower(state, a) - effectivePower(state, b)).slice(0, filter.least);
+  // Lote 15b (target-select): o extremo do stat ENTRE OS MATCHES, empates
+  // incluídos ("each creature with the highest power" = todos os empatados no
+  // máximo; `lowest` espelha). É uma decisão de CONJUNTO: `matches` (por carta)
+  // não lê o campo — quem resolve o `mostStat` é sempre esta função.
+  if (filter.mostStat) {
+    const stat = (card: CardInstance) =>
+      filter.mostStat === "power" ? effectivePower(state, card) : filter.mostStat === "armor" ? effectiveArmor(state, card) : (card.amber ?? 0) + (card.face.amber ?? 0);
+    const values = found.map(stat);
+    if (!values.length) return found;
+    const extreme = filter.lowest ? Math.min(...values) : Math.max(...values);
+    return found.filter((card) => stat(card) === extreme);
+  }
   return found;
 }
 

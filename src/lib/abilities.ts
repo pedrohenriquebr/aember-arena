@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 14; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 15; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -49,6 +49,12 @@ export interface Filter {
   least?: number;
   /** "the most powerful enemy creature" (Lote 8 §8.3): the N most powerful matching creatures, the superlative the parser reads. */
   most?: number;
+  /** "a creature with the highest power" / "each creature with the lowest power"
+      (Lote 15b, target-select): o extremo do stat ENTRE OS MATCHES, empates
+      incluídos — diferente de `most`/`least`, que cortam numa contagem e
+      desempatam pela ordem do board. `lowest` inverte para o mínimo. */
+  mostStat?: "power" | "armor" | "amber";
+  lowest?: boolean;
   /** "creature with amber on it": worn amber (exalt/capture) present/absent. */
   amber?: boolean;
   /** "creature with a +1 power counter on it" (boolean) or a named counter present (string, Lote 6 §6.6). */
@@ -678,6 +684,8 @@ const FILTER_FIELDS: Record<string, 0> = {
   top: 0,
   least: 0,
   most: 0,
+  mostStat: 0,
+  lowest: 0,
   amber: 0,
   counters: 0,
   powerMin: 0,
@@ -727,7 +735,14 @@ function isFiniteNumber(value: unknown): value is number {
 /** A stored Filter is a closed record: a key the engine does not know is not
     "ignored", it is a reason to drop the row. */
 function validFilter(value: unknown): boolean {
-  return isRecord(value) && Object.keys(value).every((key) => Object.hasOwn(FILTER_FIELDS, key));
+  return (
+    isRecord(value) &&
+    Object.keys(value).every((key) => Object.hasOwn(FILTER_FIELDS, key)) &&
+    // Lote 15b: o modo de seleção mais/extremo é uma escolha fechada — um valor
+    // de outra gramática mudaria o stat lido sem avisar, então a linha cai.
+    (value.mostStat === undefined || value.mostStat === "power" || value.mostStat === "armor" || value.mostStat === "amber") &&
+    (value.lowest === undefined || typeof value.lowest === "boolean")
+  );
 }
 
 function validSelection(value: unknown): boolean {
@@ -810,7 +825,7 @@ function validCondition(value: unknown): boolean {
 function readsPower(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   return Object.entries(value).some(
-    ([key, inner]) => key === "top" || key === "least" || key === "most" || key === "powerMin" || key === "powerMax" || key === "weaker" || key === "stronger" || (key === "of" && inner === "power") || readsPower(inner),
+    ([key, inner]) => key === "top" || key === "least" || key === "most" || key === "mostStat" || key === "powerMin" || key === "powerMax" || key === "weaker" || key === "stronger" || (key === "of" && inner === "power") || readsPower(inner),
   );
 }
 
