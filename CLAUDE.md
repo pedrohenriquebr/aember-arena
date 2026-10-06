@@ -33,15 +33,18 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 + fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
 (CAT-3.5, `--export-queue`); ETL keyteki (`npm run keyteki:cards` + `merge:cards`
 → corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
-`npm run relay:go` (tier OpenCode Go). Specs: 750+ (Lote 14).
+`npm run relay:go` (tier OpenCode Go). Specs: 819+ (Lote 15b).
 
-**Lote 15a FECHADO (05/out noite, commits 74f8107 app + a541906 conversor, mimo-v2.6-pro):** then-chains
-  (DSL v14: `Act.then`, Selection "moved", Ctx.chain/gate de bloco, anáforas "it/that card" pós-makeToken;
-  parser v16: "Then,/X, then Y/If you do, X, and Y"; 15 specs dsl15) + canon do join (canonDeTexto/canonRigoroso
-  com fallback após texto exato — **+106 linhas grátis, noTextMatch 71→13**) + then-chains no lower.mjs
-  (stub M2 fechado, 18 specs). Gates: 781/781 + tsc + FIT + probe 10/10 then-chain full; **converted 221→313,
-  golden agree 371→406**. Pendente próximo: triar 15 semantic DIFFs novos do golden (cobertura nova do
-  then-chains), lote 15b = target-select (431 faces).
+**Lotes 15a/15b FECHADOS (05/out noite, commits 74f8107/a541906/0a5da70/04a525e, mimo-v2.6-pro):**
+  15a = then-chains (DSL v14 `Act.then`, Selection "moved", Ctx.chain; parser v16; canon do join +106 linhas
+  grátis, noTextMatch 71→13; stub M2 fechado). 15b = target-select (DSL v15 `Filter.mostStat`/`lowest`,
+  pick upTo/exactly/house, casa escolhida REUSADA do Lote 5; parser v17 mostStat/lowest/carryCond; 34 specs
+  dsl16) + triagem dos 15 DIFFs (10 = `alwaysTriggers` do keyteki é ANTI-GATE: ThenAbility dispara no vácuo —
+  lower emite follow-up sem gate; 1 parser "non-Star Alliance"; 3 equivalentes; 1 documentado).
+  **converted 221→330, golden agree 371→447, 0 diff sem triagem.** Semântica em aberto p/ o dono: "Then,
+  you may X" do parser segue com gate (case vácuo não oferece X) enquanto o keyteki nunca gateia — o
+  comportamento de referência está specado no lado do conversor (Key Abduction). Pendente: noTextMatch 15
+  (faces lowered sem face no corpus), Festering Touch (replacement por alvo fora do vocabulário).
 
 ## Stack
 
@@ -143,7 +146,7 @@ ações, cobertura por set, pendências).
   faces (+73). Pendente: dono revisar as 73 na tela de revisão → leva T2 vendorizada
   (recomendação: chave `textHash|type`, 51 pares distintos); M4 = cauda (541 C-layer,
   1.745 unsupported). Testes do conversor rodam via **vitest**; CLI via **vite-node**.
-- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 13 — Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey; PARSER_VERSION 15) — linha com `v` maior é
+- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 15 — Lote 15b: `Filter.mostStat`/`lowest`, pick `upTo`/`exactly`/`house`, casa escolhida reusada do Lote 5; Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey; PARSER_VERSION 15) — linha com `v` maior é
   descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
   `docs/DSL_EXPANSION_PLAN.md`); falhas `reply:` e transporte usam `tries` com tetos
   (3 e 5); `did`/`gone` são medidos pós-sweep (side capturado antes de sair de jogo);
