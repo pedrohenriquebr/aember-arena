@@ -35,10 +35,13 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 → corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
 `npm run relay:go` (tier OpenCode Go). Specs: 750+ (Lote 14).
 
-**PAUSA 05/out (dono desligou): Lote 15a (then-chains + canon do join) NO STASH** — `git stash pop` para retomar. Estado (relatório do agente): Parte 1 (canonDeTexto no join.mjs) COMPLETA — rows 363→469, converted 221→279, golden 285→371, queue-cauda 2.724 linhas; Parte 2 motor+parser COMPLETA (DSL v14 `Act.then`+Selection "moved", parser v16 com "Then/If you do/anáforas", smoke 7 prints reais full); `dsl15.test.ts` (14 testes) criado mas **1 falha conhecida**: Key Abduction — `optional` do then-link não chega ao ato (mesmo padrão do bug Legate Scipio: propagar optional para o ato). FALTA: consertar essa 1 asserção/propagação, fechar stub `fail("then","M2")` em scripts/keyteki/lower.mjs + spec, gates tsc/FIT/probe, convert --all final. Retomar com o agente interno `mimo` começando por `git stash pop`. Este arquivo
-descreve o estado ATUAL — histórico em `docs/` (CODE_REVIEW, WORKFLOW,
-MECHANICS_REPORT, ROADMAP_REVIEW, GAME_ROADMAP, UX_FIT_PLAN, VIEW3D_*,
-DYNAMIC_CATALOG_PLAN).
+**Lote 15a FECHADO (05/out noite, commits 74f8107 app + a541906 conversor, mimo-v2.6-pro):** then-chains
+  (DSL v14: `Act.then`, Selection "moved", Ctx.chain/gate de bloco, anáforas "it/that card" pós-makeToken;
+  parser v16: "Then,/X, then Y/If you do, X, and Y"; 15 specs dsl15) + canon do join (canonDeTexto/canonRigoroso
+  com fallback após texto exato — **+106 linhas grátis, noTextMatch 71→13**) + then-chains no lower.mjs
+  (stub M2 fechado, 18 specs). Gates: 781/781 + tsc + FIT + probe 10/10 then-chain full; **converted 221→313,
+  golden agree 371→406**. Pendente próximo: triar 15 semantic DIFFs novos do golden (cobertura nova do
+  then-chains), lote 15b = target-select (431 faces).
 
 ## Stack
 
