@@ -170,7 +170,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 15;
+export const PARSER_VERSION = 16;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -441,10 +441,20 @@ function parseFilterWords(phrase: string): Filter | null {
   return filter;
 }
 
+/** Lote 15a: a cláusula anterior acabou de criar token(s) ("make a token
+    creature, then ready it"): "it" é o resultado dela, não a própria carta. */
+let madeToken = false;
+
 function parseObject(phrase: string, upgrade: boolean, observer = false): { s: Selection; target?: Filter } | null {
   // Inside an observer ability the event card is the subject: "stun it" stuns
   // the creature that caused the event, not the watcher.
   if (observer && (phrase === "it" || phrase === "~")) return { s: "event" };
+  // Lote 15a: depois de um makeToken, "it"/"that card" é o token criado
+  // (keyteki `preThenEvent.card`) — o resultado do ato anterior.
+  if (madeToken && /^(?:it|that card|that creature)$/.test(phrase)) return { s: "moved" };
+  // Lote 15a: "…, ward that creature" — a anáfora da cláusula anterior é o alvo
+  // escolhido da ability ("Move 1 amber from a creature…, ward that creature").
+  if (/^(?:that|the chosen) (?:card|creature|artifact)$/.test(phrase)) return { s: "target" };
   if (/^(this card|this creature|this artifact|itself|it|~)$/.test(phrase)) {
     return { s: upgrade && (phrase === "this creature" || phrase === "this artifact") ? "host" : "self" };
   }
@@ -1028,9 +1038,11 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
       : null;
   }
 
-  const conjunction = sentence.match(/^(.+?) and (.+)$/);
+  // Lote 15a: o "and" com vírgula ("purge Art Project, and your opponent draws
+  // 10 cards") é o composto de sempre — a vírgula só sobra no lado esquerdo.
+  const conjunction = sentence.match(/^(.+?),? and (.+)$/);
   if (conjunction && !/^stun and |^ready and /.test(sentence)) {
-    const left = parseSentenceBody(conjunction[1], upgrade, creature, quoted, observer);
+    const left = parseSentenceBody(conjunction[1].replace(/,$/, ""), upgrade, creature, quoted, observer);
     // On an upgrade "it" after "this creature" is still the host (Cybergiant Rig), not the upgrade card.
     const right = parseSentenceBody(upgrade ? conjunction[2].replace(/^give it /, "give this creature ") : conjunction[2], upgrade, creature, quoted, observer);
     if (left && right && left.acts.length && right.acts.length && !left.cond && !right.cond) {
@@ -1155,8 +1167,17 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
     const split = sentences[index + 1].match(/^(?:you may )?divide this damage among (.+)$/);
     if (pool && split) sentences.splice(index, 2, `deal ${pool[1]} damage divided among ${split[1]} for each ${pool[2]}`);
   }
-  const independent = sentences.filter((part) => /^if (?!you do)/.test(part)).length;
+  // Lote 15a: "…, then …" / "Then, …" abrem um link sequencial (`then`); cada
+  // vírgula-then vira uma cláusula própria, com o gate no ato anterior.
+  const clauses: { text: string; link: boolean }[] = [];
   for (const sentence of sentences) {
+    sentence.split(/\s*,\s*then\s+|\s+then,\s+/).forEach((part, index) => {
+      const text = (index === 0 ? part.replace(/^then,\s+/, "") : part).trim();
+      if (text) clauses.push({ text, link: index > 0 || /^then[,\s]/.test(sentence) });
+    });
+  }
+  const independent = clauses.filter((part) => /^if (?!you do)/.test(part.text)).length;
+  for (const { text: sentence, link } of clauses) {
     // The branch of an "Otherwise" is only legal right after a conditional
     // clause, and it negates the condition printed BEFORE it.
     const otherwise = sentence.match(/^otherwise,? (.+)$/);
@@ -1167,9 +1188,10 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
     }
     const parsed = parseSentence(otherwise ? otherwise[1] : sentence, upgrade, creature, quoted, observer);
     if (!parsed) return null;
+    const ifYouDo = !otherwise && /^if you do,? /.test(sentence);
     // "You may X. If you do, Y.": declining X declines Y too, so the dependent
     // clause inherits the optional flag of the clause before it.
-    if (!otherwise && /^if you do,? /.test(sentence) && ability.acts.length && ability.acts.every((act) => act.optional)) {
+    if (ifYouDo && ability.acts.length && ability.acts.every((act) => act.optional)) {
       for (const act of parsed.acts) act.optional = true;
     }
     if (parsed.target2) ability.target2 = parsed.target2;
@@ -1180,7 +1202,16 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
         for (const act of parsed.acts) if ("s" in act && act.s === "target") act.s = { pick: parsed.target };
       } else ability.target = parsed.target;
     }
-    if (parsed.cond) {
+    // Lote 15a: o link sequencial marca os atos da cláusula com `then` — o bloco
+    // de um "If you do, X, and Y" (mais de um ato) compartilha o gate do ato
+    // anterior, como o `then: {gameAction: […]}` do keyteki. "If you do" de um
+    // ato só continua sendo `if: count did` (o did do ato imediatamente antes).
+    const linked = link || (ifYouDo && parsed.acts.length > 1);
+    if (linked) {
+      for (const act of parsed.acts) act.then = true;
+      // "Then, if <cond>, X": o `then` é o gate; o `if` é a condição impressa.
+      if (parsed.cond && !ifYouDo) for (const act of parsed.acts) act.if = parsed.cond;
+    } else if (parsed.cond) {
       // The condition the ability OPENS with gates the whole ability (it keeps
       // the AI's pruning); one printed in a later clause gates only its own
       // acts — "Damage a creature. If it is not destroyed, draw a card."
@@ -1189,6 +1220,7 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
       if (!ability.acts.length && !ability.if && independent < 2) ability.if = parsed.cond;
       else for (const act of parsed.acts) act.if = parsed.cond;
     }
+    madeToken = parsed.acts.some((act) => act.k === "makeToken");
     ability.acts.push(...parsed.acts);
   }
   return close() ? done : null;
@@ -1536,6 +1568,7 @@ export function parseCardText(face: CardFace): CardRules {
 function parseCardBody(face: CardFace): CardRules {
   properNouns = collectProperNouns(face.text ?? "");
   cardHouse = (face.house ?? "").toLowerCase();
+  madeToken = false;
   const { text, quoted } = maskQuotes(normalise(face.text ?? ""));
   // Self references only inside ability text, so a card named like a keyword keeps its keywords.
   // The title is also a ready-prefix ("After you ready Seda the Sleeper"); splicing it into

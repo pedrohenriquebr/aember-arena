@@ -1114,6 +1114,11 @@ interface Ctx {
   /** What the previous act of this ability did (`per:"did"`/`"gone"`). */
   did?: number;
   gone?: number;
+  /** Lote 15a: o gate do bloco `then` — o último ato SEM `then` aconteceu (did ≥ 1,
+      ou um ato informativo que mostrou/revelou algo). Atos com `then` não renovam
+      o gate (os atos de uma cláusula encadeada compartilham o gate do ato anterior
+      ao bloco) e um link pulado zera o gate (o bloco morre com ele). */
+  chain?: boolean;
   /** Cards the previous relocating act moved, and the house of the first (Lote 6 §6.4). */
   moved?: CardInstance[];
   movedHouse?: string;
@@ -1172,6 +1177,9 @@ function select(context: Ctx, selection: Selection, k?: Act["k"]): CardInstance[
   if (selection === "neighborsOfFought") return fought ? neighbors(state, fought) : [];
   if (selection === "fought") return fought ? [fought] : [];
   if (selection === "event") return event ? [event] : [];
+  // Lote 15a: "…, then ready it" — os cards que o ato anterior colocou em algum
+  // lugar (o token de um makeToken, os cards de um relocate).
+  if (selection === "moved") return context.moved ?? [];
   if ("pick" in selection) {
     // Up to `n` DISTINCT cards, chosen as the engine auto-targets: the strongest
     // enemy (or weakest friend) for a harmful act, the strongest friend for a
@@ -1603,26 +1611,25 @@ const iconScore = (card: CardInstance) =>
 function run(context: Context, act: Act): void {
   // The other option of a "Choose one:" is not a skipped act, it is not part of this move at all.
   if (act.mode && act.mode !== (context.mode ?? "a")) return;
-  // A skipped act did nothing: the did/gone of the act before do not carry on.
-  if ((act.optional && context.decline) || (act.if && !holds(act.if, context.state, context.me, context.source, context))) {
+  // A skipped act did nothing: the did/gone of the act before do not carry on,
+  // and the `then` block it would have opened (or continued) is dead (Lote 15a).
+  const skip = () => {
     context.did = 0;
     context.gone = 0;
     context.healed = 0;
     context.goneCards = [];
-    return;
-  }
+    context.chain = false;
+  };
+  // Lote 15a: um link `then` só resolve se o gate do bloco aconteceu — o último
+  // ato SEM `then` da ability.
+  if (act.then !== undefined && !context.chain) return skip();
+  if ((act.optional && context.decline) || (act.if && !holds(act.if, context.state, context.me, context.source, context))) return skip();
   const { state, me, source, deterministic } = context;
   // `who` (Lote 4 §4.6) names the actor dynamically from the reference card
   // captured when the ability started; with no reference the act is skipped.
   const who = "who" in act ? act.who : undefined;
   const whoSide = who === "owner" ? context.whoOwner : who === "controller" ? context.whoController : undefined;
-  if (who && whoSide === undefined) {
-    context.did = 0;
-    context.gone = 0;
-    context.healed = 0;
-    context.goneCards = [];
-    return;
-  }
+  if (who && whoSide === undefined) return skip();
   // `opp` flips the actor of the act (and the player whose zones it reads); a move's `side` names the
   // opponent's zone outright or leaves the player's option to decide it (Lote 8 §8.7).
   const flipped = ("opp" in act && act.opp) || (act.k === "move" && (act.side === "opponent" || (act.side === "any" && context.mode === "b")));
@@ -1848,19 +1855,27 @@ function run(context: Context, act: Act): void {
         if (!forge(state, me, { free: act.free, mod: act.mod, less, min: act.min, deterministic })) break;
       }
       break;
-    case "setHouse":
+    case "setHouse": {
       // The card counts as that house until it leaves play (leavePlay zeroes it).
+      let assigned = 0;
       for (const card of cards) {
         const house = act.house === "chosen" ? chosenHouse : act.house;
-        if (house) card.houseAs = house;
+        if (house) {
+          card.houseAs = house;
+          assigned += 1;
+        }
       }
+      // Lote 15a: houseAs não entra na assinatura do measured — did explícito.
+      explicitDid = assigned;
       break;
+    }
     case "forceHouse": {
       // The next active house of `who` (default: the opponent). `house` reads a
       // reference card captured when the ability started (Lote 6 §6.3).
       const house = act.house === "target" ? context.targetHouse : act.house === "fought" ? context.foughtHouse : act.house === "moved" ? context.movedHouse : chosenHouse;
       const whoSide = act.who === "owner" ? context.whoOwner : act.who === "controller" ? context.whoController : other(me);
       if (house && whoSide !== undefined) state.players[whoSide].mustChoose = house;
+      explicitDid = house && whoSide !== undefined ? 1 : 0;
       break;
     }
     case "unforgeKey":
@@ -1875,12 +1890,20 @@ function run(context: Context, act: Act): void {
         record(state, "log.unforge", { name: foe.name });
       }
       break;
-    case "makeToken":
+    case "makeToken": {
+      // Lote 15a: os tokens criados são o "resultado do ato" ("make a token
+      // creature, then ready it" lê `s:"moved"`); sem seleção o measured não os
+      // enxerga, então o did é explícito.
+      const made: CardInstance[] = [];
       for (let count = 0; count < amount; count += 1) {
         const token = makeToken(state, me, source.face.house);
+        made.push(token);
         fireObservers(state, token, "enter", deterministic);
       }
+      remember(context, made);
+      explicitDid = made.length;
       break;
+    }
     case "stun":
       for (const card of cards.filter(isCreature)) card.stunned = true;
       break;
@@ -2064,6 +2087,9 @@ function run(context: Context, act: Act): void {
       record(state, "log.peek", { name: state.players[me].name, n: String(zone.length) });
       if (zone.length) state.peek = { side: me, owner: side, from: act.from, faces: zone.map((card) => card.face) };
       context.revealed = zone;
+      // Lote 15a: ato informativo não muda contadores — o did do link seguinte
+      // ("…look at X. If you do, …") é o que foi visto (0 = nada para ver).
+      explicitDid = zone.length;
       break;
     }
     case "reveal": {
@@ -2078,6 +2104,8 @@ function run(context: Context, act: Act): void {
       } else shown = act.from === "hand" ? [...player.hand] : player.deck.slice(-count).reverse();
       if (shown.length) record(state, "log.reveal", { name: state.players[me].name, cards: shown.map((card) => card.face.title).join(", ") });
       context.revealed = shown;
+      // Lote 15a: o reveal é o gate do link seguinte ("…reveal X. If you do, …").
+      explicitDid = shown.length;
       break;
     }
     case "archiveTop": {
@@ -2089,6 +2117,8 @@ function run(context: Context, act: Act): void {
       break;
     }
     case "lasting": {
+      // Lote 15a: armazenar o efeito é o "acontecer" do ato (did para o link).
+      explicitDid = 1;
       // Lote 8 §8.1: the redirect lives only as long as the fight, so it is the transient fightRedirect,
       // not a stored effect. Needs both the fought creature and a living chosen one.
       if (act.e.replace?.redirect === "chosen") {
@@ -2120,6 +2150,10 @@ function run(context: Context, act: Act): void {
   Object.assign(context, measured(state, before));
   context.healed = healed;
   if (explicitDid !== undefined) context.did = explicitDid;
+  // Lote 15a: só um ato SEM `then` renova o gate do bloco — os atos de uma
+  // cláusula encadeada ("If you do, X, and Y") compartilham o gate do ato antes
+  // do bloco, como o `then: {gameAction: […]}` do keyteki.
+  if (act.then === undefined) context.chain = (context.did ?? 0) > 0;
 }
 
 /** "Divide this damage among any number of creatures" (Lote 11 §F). The pool is split evenly among the cards the move's

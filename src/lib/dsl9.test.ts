@@ -28,7 +28,7 @@ const TRIHARD = "Play: Each player randomly discards one third of their cards fr
 
 describe("DSL_VERSION 9", () => {
   it("accepts the new literals and rejects what would loop or dangle", () => {
-    expect(DSL_VERSION).toBe(13);
+    expect(DSL_VERSION).toBe(14);
     const row = (dsl: unknown[], extra: object = {}) => ({ cardId: "c", dsl, textHash: "h", source: "manual" as const, v: 9, ...extra });
     const redirect = { k: "lasting", e: { target: { fighting: true }, replace: { on: "damage", redirect: "chosen" } } };
     const good: unknown[][] = [
@@ -45,7 +45,7 @@ describe("DSL_VERSION 9", () => {
     for (const dsl of good) expect(normaliseAbilityOverride(row(dsl))?.v).toBe(9);
     expect(normaliseAbilityOverride(row([], { effects: [{ target: {}, restrict: { who: "opponent", action: "use", type: "Artifact", cost: 1 } }] }))?.v).toBe(9);
     expect(normaliseAbilityOverride(row([], { effects: [{ target: { type: "Creature" }, traits: "Mutant", mayFight: true }] }))?.v).toBe(9);
-    expect(normaliseAbilityOverride(row(good[0], { v: 14 }))).toBeNull();
+    expect(normaliseAbilityOverride(row(good[0], { v: 15 }))).toBeNull();
 
     const bad: unknown[][] = [
       // the chosen redirect reads the ability's target and a fight

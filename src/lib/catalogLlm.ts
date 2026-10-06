@@ -62,6 +62,15 @@ export const FEW_SHOTS: {
     answer: { abilities: [{ on: ["destroyed"], acts: [{ k: "draw", n: 1 }] }], effects: [], keywords: { elusive: 1 } },
   },
   {
+    type: "Action",
+    text: "Play: Make a token creature, then ready it.",
+    answer: {
+      abilities: [{ on: ["play"], acts: [{ k: "makeToken", n: 1 }, { k: "ready", s: "moved", then: true }] }],
+      effects: [],
+      keywords: {},
+    },
+  },
+  {
     type: "Creature",
     text: "Skirmish. This creature gets +2 power while it is on a flank. Play: Capture 1<A>.",
     answer: {

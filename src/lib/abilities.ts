@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 13; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 14; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -98,6 +98,10 @@ export type Selection =
   | "fought"
   | "event"
   | "target2"
+  /** "…, then ready it" (Lote 15a): os cards que o ato anterior colocou em algum
+      lugar — o token que um `makeToken` acabou de criar (keyteki
+      `preThenEvent.card`), ou os cards que um move/relocate levou. */
+  | "moved"
   | { each: Filter }
   /** `upTo` (Lote 7 §7.1): the player picks 0..n from the move's `targets` queue
       instead of the engine auto-picking exactly n; an empty queue is zero cards. */
@@ -207,6 +211,15 @@ export type Act = (
   /** "If you do, …" / "if this damage destroys that creature": gates THIS act
       on the state left by the act before it. */
   if?: Condition;
+  /** Lote 15a — link sequencial de Then ("…, then …" / "Then, …" / o bloco de um
+      "If you do, X, and Y"): o ato só resolve se o gate do bloco aconteceu — o
+      último ato ANTES do bloco (um ato com `then` não renova o gate, então os
+      atos de uma mesma cláusula encadeada compartilham o gate, como o
+      `then: {gameAction: […]}` do keyteki). Um link pulado (gate falso, `if`
+      falso ou "You may" recusado) mata o bloco: os `then` seguintes não
+      resolvem. Diferente de `if: {k:"count", of:"did"}` (o did do ato
+      imediatamente anterior), que continua valendo para o caso de um ato só. */
+  then?: true;
   /** "… for each <count>" (dynamic amount: n × count). */
   per?: Count;
 };
@@ -648,7 +661,7 @@ const ACTS: Record<string, string> = {
   lasting: "",
 };
 
-const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "targetNeighbors", "neighborsOfFought", "fought", "event", "target2"]);
+const SELECTIONS: ReadonlySet<string> = new Set(["self", "host", "target", "targetAndNeighbors", "targetNeighbors", "neighborsOfFought", "fought", "event", "target2", "moved"]);
 
 /** Fields a stored Filter may carry. A key outside the list means the row was
     written by a NEWER grammar whose narrowing field this engine would silently
@@ -866,6 +879,9 @@ function validAct(value: unknown): boolean {
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
   if (value.mode !== undefined && value.mode !== "a" && value.mode !== "b") return false;
   if (value.if !== undefined && !validCondition(value.if)) return false;
+  // Lote 15a: o link `then` é booleano puro — um valor escrito por uma gramática
+  // mais nova seria lido como ausente e o ato resolveria sem gate.
+  if (value.then !== undefined && value.then !== true) return false;
   if (value.per !== undefined && !validCount(value.per)) return false;
   if (value.n !== undefined && !isFiniteNumber(value.n)) return false;
   if (need.includes("n") && !isFiniteNumber(value.n)) return false;
@@ -897,7 +913,7 @@ function validAct(value: unknown): boolean {
     return (
       (value.from === "hand" || value.from === "deck") &&
       (value.n === undefined || (Number.isInteger(value.n) && (value.n as number) > 0)) &&
-      Object.keys(value).every((key) => key === "k" || key === "from" || key === "n" || key === "opp" || key === "optional" || key === "mode" || key === "if")
+      Object.keys(value).every((key) => key === "k" || key === "from" || key === "n" || key === "opp" || key === "optional" || key === "mode" || key === "if" || key === "then")
     );
   }
   if (value.k === "reveal") {
@@ -905,7 +921,7 @@ function validAct(value: unknown): boolean {
       (value.from === "hand" || value.from === "deck") &&
       (value.n === undefined || (Number.isInteger(value.n) && (value.n as number) > 0)) &&
       (value.pick === undefined || value.pick === "random" || value.pick === "top") &&
-      Object.keys(value).every((key) => key === "k" || key === "from" || key === "n" || key === "opp" || key === "pick" || key === "optional" || key === "mode" || key === "if")
+      Object.keys(value).every((key) => key === "k" || key === "from" || key === "n" || key === "opp" || key === "pick" || key === "optional" || key === "mode" || key === "if" || key === "then")
     );
   }
   if (value.divide !== undefined && (value.divide !== true || value.k !== "damage")) return false;
@@ -914,7 +930,7 @@ function validAct(value: unknown): boolean {
   // `hosts` belongs on a persistent effect. An act that carries it would be stored and ignored.
   if (value.hosts !== undefined) return false;
   if (value.k === "materialize") {
-    const allowed = new Set(["k", "s", "power", "keyword", "optional", "mode", "if", "per"]);
+    const allowed = new Set(["k", "s", "power", "keyword", "optional", "mode", "if", "per", "then"]);
     return (
       Object.keys(value).every((key) => allowed.has(key)) &&
       Number.isInteger(value.power) &&
@@ -966,6 +982,9 @@ function validAbility(value: unknown): value is Ability {
   if (value.hosts !== undefined || value.materialize !== undefined) return false;
   if (!Array.isArray(value.on) || !value.on.length || !value.on.every((trigger) => typeof trigger === "string" && ABILITY_TRIGGERS.has(trigger))) return false;
   if (!Array.isArray(value.acts) || !value.acts.length || !value.acts.every(validAct)) return false;
+  // Lote 15a: um `then` no primeiro ato não tem gate (nada antes dele para
+  // acontecer) — linha de gramática mais nova, descartada como as outras.
+  if ((value.acts as { then?: unknown }[])[0].then !== undefined) return false;
   if (value.if !== undefined && !validCondition(value.if)) return false;
   if (value.of !== undefined && !validFilter(value.of)) return false;
   if (value.target !== undefined && !validFilter(value.target)) return false;

@@ -49,8 +49,8 @@ function passTo(state: GameState, house: string): GameState {
 
 describe("contract", () => {
   it("bumps both versions, the prompt schema carries every new field and each mechanic has a few-shot", () => {
-    expect(DSL_VERSION).toBe(13);
-    expect(PARSER_VERSION).toBe(15);
+    expect(DSL_VERSION).toBe(14);
+    expect(PARSER_VERSION).toBe(16);
     for (const needle of ['k: "reveal"', "fightDamageCap?: number", "entersPlayReady?: true", "mayPlay?: true | number", "leftOf?: boolean", "divide?: true", "asYours?: true", '"healed"', "slain: Filter", '"reap"', 'when?: "attacking" | "defending"', '"revealed"']) {
       expect(DSL_SCHEMA).toContain(needle);
     }
@@ -141,7 +141,7 @@ describe("shape gate", () => {
       { restrict: { who: "opponent", action: "reap" }, target: { type: "Creature", house: "Mars" } },
       { target: { type: "Creature", leftOf: true }, keywords: { skirmish: 1 } },
     ]) {
-      expect(normaliseAbilityOverride(e(effect))?.v).toBe(13);
+      expect(normaliseAbilityOverride(e(effect))?.v).toBe(14);
     }
     for (const act of [
       { k: "reveal", from: "hand", opp: true, pick: "random" },
@@ -152,7 +152,7 @@ describe("shape gate", () => {
       { k: "gainAmber", n: 1, per: { slain: { type: "Creature", side: "enemy" } } },
       { k: "counter", n: 1, s: "self", per: "healed" },
     ]) {
-      expect(normaliseAbilityOverride(row([{ on: ["action"], target: { type: "Artifact" }, acts: [act] }]))?.v).toBe(13);
+      expect(normaliseAbilityOverride(row([{ on: ["action"], target: { type: "Artifact" }, acts: [act] }]))?.v).toBe(14);
     }
   });
 
@@ -188,7 +188,7 @@ describe("shape gate", () => {
     }
     // a lasting mayPlay / cap is read by the same gate
     expect(normaliseAbilityOverride(row([{ on: ["play"], acts: [{ k: "lasting", e: { target: {}, mayPlay: 0, duration: "turn" } }] }]))).toBeNull();
-    expect(normaliseAbilityOverride(row([{ on: ["play"], acts: [{ k: "lasting", e: { target: {}, mayPlay: 1, duration: "turn" } }] }]))?.v).toBe(13);
+    expect(normaliseAbilityOverride(row([{ on: ["play"], acts: [{ k: "lasting", e: { target: {}, mayPlay: 1, duration: "turn" } }] }]))?.v).toBe(14);
   });
 });
 

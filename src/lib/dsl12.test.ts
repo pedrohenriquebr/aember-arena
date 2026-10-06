@@ -22,8 +22,8 @@ const play = (state: GameState, id: string, target?: string) => applyMove(state,
 
 describe("contract", () => {
   it("bumps both versions and the schema carries the new fields", () => {
-    expect(DSL_VERSION).toBe(13);
-    expect(PARSER_VERSION).toBe(15);
+    expect(DSL_VERSION).toBe(14);
+    expect(PARSER_VERSION).toBe(16);
     for (const needle of ['housesOf: "moved"', "whileSource?: true", 'k: "materialize"', 'hosts?: "Artifact"']) {
       expect(DSL_SCHEMA).toContain(needle);
     }
@@ -178,7 +178,7 @@ describe("Animating Force", () => {
     expect(back.asCreature).toBeUndefined();
   });
 
-  it("rejects moved as a selection and hosts outside an effect", () => {
+  it("accepts moved as the previous act's result and still rejects hosts outside an effect", () => {
     const row = (dsl: unknown) => ({
       cardId: "gate-12",
       dsl,
@@ -187,7 +187,10 @@ describe("Animating Force", () => {
       reviewed: true,
       generatedAt: 1,
     });
-    expect(normaliseAbilityOverride(row([{ on: ["play"], acts: [{ k: "damage", n: 1, s: "moved" }] }]))).toBeNull();
+    // Lote 15a: "moved" deixou de ser dangling e virou Selection de verdade — o
+    // resultado do ato anterior (o token de um makeToken, os cards de um
+    // relocate); sem nada movido, o ato não afeta cards (o engine devolve []).
+    expect(normaliseAbilityOverride(row([{ on: ["play"], acts: [{ k: "damage", n: 1, s: "moved" }] }]))).not.toBeNull();
     expect(normaliseAbilityOverride(row([{ on: ["play"], acts: [{ k: "steal", n: 1, per: { housesOf: "moved" } }] }]))).not.toBeNull();
     expect(
       normaliseAbilityOverride(row([{ on: ["play"], acts: [{ k: "materialize", s: "host", power: 4, keyword: "versatile", hosts: "Artifact" }] }])),
