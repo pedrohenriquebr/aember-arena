@@ -39,7 +39,7 @@ function passTo(state: GameState, house: string): GameState {
 describe("contract", () => {
   it("bumps both versions, the prompt schema carries the new fields and each mechanic has a few-shot", () => {
     expect(DSL_VERSION).toBe(17);
-    expect(PARSER_VERSION).toBe(21);
+    expect(PARSER_VERSION).toBe(22);
     for (const needle of ["attackKeywords?: Keywords", "skipForgeStep?: true"]) {
       expect(DSL_SCHEMA).toContain(needle);
     }

@@ -182,7 +182,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 21;
+export const PARSER_VERSION = 22;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -335,7 +335,7 @@ const NOT_TRAITS: ReadonlySet<string> = new Set([
 /** One modifier before the noun of a filter phrase. Returns false when the word
     is outside every closed list. */
 function applyModifier(filter: Filter, token: string): boolean {
-  if (token === "other") filter.other = true;
+  if (token === "other" || token === "another") filter.other = true;
   else if (token === "friendly" || token === "enemy") filter.side = token;
   else if (token === "damaged" || token === "undamaged") filter.damaged = token === "damaged";
   else if (token === "ready") filter.ready = true;
@@ -536,6 +536,13 @@ function parseObject(phrase: string, upgrade: boolean, observer = false): { s: S
   if (many) {
     const filter = parseFilterWords(many[2]);
     return filter ? { s: { pick: filter, n: Number(many[1]) } } : null;
+  }
+  // Lote 15f: "purge another creature that shares a house with it" — o alvo
+  // é OUTRO que a própria fonte (Filter.other).
+  const another = phrase.match(/^another (.+)$/);
+  if (another) {
+    const filter = parseFilterWords(another[1]);
+    return filter ? { s: "target", target: { ...filter, other: true } } : null;
   }
   const m = phrase.match(/^(a|an|each)\s+(.+)$/);
   if (!m) return null;
@@ -773,6 +780,8 @@ const VERBS: [
   [/^put (.+?) on (?:the )?bottom of (?:its|their) owners?'s? de(?:ck)s?$/, () => ({ k: "returnToDeck", obj: 1, at: "bottom" })],
   [/^shuffle (.+?) into (?:its|their) owners?'s? de(?:ck)s?$/, () => ({ k: "returnToDeck", obj: 1, at: "shuffle" })],
   [/^archive (.+)$/, () => ({ k: "archive", obj: 1 })],
+  // Lote 15f: "put this creature into its owner's archives" (Biomatrix Backup).
+  [/^put (.+?) into (?:its|their|your) owner's archives$/, () => ({ k: "archive", obj: 1 })],
   [/^use (.+)$/, () => ({ k: "use", obj: 1 })],
   // Onda 4: tokens de set e troca de controle ("Ward a creature", "Ward each
   // creature", "Enrage a creature", "Take control of an enemy creature",
@@ -1404,6 +1413,15 @@ function parseGrant(sentence: string, upgrade: boolean, creature: boolean, quote
     const parsed = readKeyword(fighting[2]);
     const defender = parseFilterWords(fighting[3].replace(/ on the flank$/, " on a flank"));
     return target && parsed && defender ? { target, attackKeywords: { [parsed[0]]: parsed[1] }, whenAttacking: defender } : null;
+  }
+  // Lote 15f (gain-ability): "gains hazardous 2 and, 'Destroyed: …'" — keyword
+  // E ability concedida no mesmo efeito (Armageddon Cloak).
+  const combo = sentence.match(/^(.+?) gains? ([a-z-]+(?: \d+)?) and,? \u0001(\d+)\u0001$/);
+  if (combo) {
+    const target = parseSubject(combo[1], upgrade);
+    const parsed = readKeyword(combo[2]);
+    const abilities = upgrade ? parseQuoted(quoted[Number(combo[3])], false, true, quoted) : parseQuoted(quoted[Number(combo[3])], upgrade, creature, quoted);
+    return target && parsed && abilities ? { target, keywords: { [parsed[0]]: parsed[1] }, abilities } : null;
   }
   const keyword = sentence.match(/^(.+?) gains? ([a-z-]+(?: \d+)?)$/);
   if (!keyword) return null;

@@ -50,7 +50,7 @@ function passTo(state: GameState, house: string): GameState {
 describe("contract", () => {
   it("bumps both versions, the prompt schema carries every new field and each mechanic has a few-shot", () => {
     expect(DSL_VERSION).toBe(17);
-    expect(PARSER_VERSION).toBe(21);
+    expect(PARSER_VERSION).toBe(22);
     for (const needle of ['k: "reveal"', "fightDamageCap?: number", "entersPlayReady?: true", "mayPlay?: true | number", "leftOf?: boolean", "divide?: true", "asYours?: true", '"healed"', "slain: Filter", '"reap"', 'when?: "attacking" | "defending"', '"revealed"']) {
       expect(DSL_SCHEMA).toContain(needle);
     }

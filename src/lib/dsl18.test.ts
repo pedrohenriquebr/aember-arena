@@ -41,7 +41,7 @@ const passTurn = (state: GameState, side: 0 | 1, house?: string) => {
 describe("contract", () => {
   it("bumps both versions; the schema carries the any/control windows", () => {
     expect(DSL_VERSION).toBe(17);
-    expect(PARSER_VERSION).toBe(21);
+    expect(PARSER_VERSION).toBe(22);
     expect(DSL_SCHEMA).toContain('"any"');
     expect(DSL_SCHEMA).toContain('control?: "you" | "opponent"');
   });

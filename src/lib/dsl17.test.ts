@@ -50,7 +50,7 @@ const passTurn = (state: GameState, side: 0 | 1) => {
 describe("contract", () => {
   it("bumps both versions; the schema carries the new window", () => {
     expect(DSL_VERSION).toBe(17);
-    expect(PARSER_VERSION).toBe(21);
+    expect(PARSER_VERSION).toBe(22);
     expect(DSL_SCHEMA).toContain('"nextTurn"');
     expect(DSL_SCHEMA).toContain('"turn" | "next" | "nextTurn"');
   });
