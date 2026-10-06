@@ -1,50 +1,360 @@
 {
-  "_doc": "ability.actions.<name>(props) → our Act. kind: card = acts on the ability's selection (default context.source → s:\"self\"; inside a `target` block → s:\"target\"); player = acts on a player (default: `default`; explicit `target: context.player[.opponent]` flips `opp` when the DSL k has `oppField`); token = no selection (makeToken); flow = sequential/joint, flattened. defaults = fields written when the prop is absent (keyteki setDefaultProperties). props: every keyteki prop the entry understands — {field} copies a literal, {ifTrue}/{ifFalse} merge fields on a boolean literal (null deletes a field). Anything not listed (and not cosmetic) is Unsupported(\"prop:<name>\"): fail closed. pending/unsupported entries only document the reason; the code is always action:<name>.",
-  "gainAmber": { "k": "gainAmber", "kind": "player", "default": "self", "oppField": true, "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "loseAmber": { "k": "loseAmber", "kind": "player", "default": "opp", "oppField": true, "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "steal": { "k": "steal", "kind": "player", "default": "opp", "oppField": false, "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "draw": { "k": "draw", "kind": "player", "default": "self", "oppField": true, "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "gainChains": { "k": "gainChains", "kind": "player", "default": "self", "oppField": true, "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "discardAtRandom": { "k": "discardRandom", "kind": "player", "default": "opp", "oppField": true, "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } }, "notes": "location other than hand is not declared → unsupported" },
-  "forgeKey": { "k": "forgeKey", "kind": "player", "default": "self", "oppField": false, "defaults": { "n": 1 }, "props": { "atNoCost": { "ifTrue": { "free": true } }, "modifier": { "field": "mod" } } },
-  "dealDamage": { "k": "damage", "kind": "card", "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } }, "notes": "splash/ignoreArmor/fightEvent not declared; amountForCard (dynamic) is M2" },
-  "capture": { "k": "capture", "kind": "card", "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "heal": { "k": "heal", "kind": "card", "defaults": { "n": 1 }, "props": { "amount": { "field": "n" }, "fully": { "ifTrue": { "n": null } } }, "notes": "upTo not declared" },
-  "exalt": { "k": "exalt", "kind": "card", "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "addPowerCounter": { "k": "counter", "kind": "card", "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "destroy": { "k": "destroy", "kind": "card", "props": {} },
-  "sacrifice": { "k": "sacrifice", "kind": "card", "props": {} },
-  "purge": { "k": "purge", "kind": "card", "props": {} },
-  "stun": { "k": "stun", "kind": "card", "props": {} },
-  "exhaust": { "k": "exhaust", "kind": "card", "props": {} },
-  "ready": { "k": "ready", "kind": "card", "props": {} },
-  "ward": { "k": "ward", "kind": "card", "props": {} },
-  "enrage": { "k": "enrage", "kind": "card", "props": {} },
-  "returnToHand": { "k": "returnToHand", "kind": "card", "props": {} },
-  "returnToDeck": { "k": "returnToDeck", "kind": "card", "defaults": { "at": "top" }, "props": { "shuffle": { "ifTrue": { "at": "shuffle" } }, "bottom": { "ifTrue": { "at": "bottom" } } } },
-  "moveToBottom": { "k": "returnToDeck", "kind": "card", "defaults": { "at": "bottom" }, "props": {} },
-  "moveToFlank": { "k": "toFlank", "kind": "card", "props": {} },
-  "use": { "k": "use", "kind": "card", "props": {} },
-  "fight": { "k": "use", "kind": "card", "defaults": { "via": "fight" }, "props": {} },
-  "reap": { "k": "use", "kind": "card", "defaults": { "via": "reap" }, "props": {} },
-  "makeTokenCreature": { "k": "makeToken", "kind": "token", "defaults": { "n": 1 }, "props": { "amount": { "field": "n" } } },
-  "sequential": { "kind": "flow" },
-  "jointAction": { "kind": "flow" },
-  "archive": { "pending": "zones (G): archive from hand vs board" },
-  "putIntoArchives": { "pending": "zones (G)" },
-  "discard": { "pending": "zones (G): move hand→discard" },
-  "discardTopOfDeck": { "pending": "zones (G): move deck→discard" },
-  "cardLastingEffect": { "pending": "lasting (M2): needs effects table" },
-  "lastingEffect": { "pending": "lasting (M2)" },
-  "untilPlayerTurnEnd": { "pending": "lasting (M2)" },
-  "duringOpponentNextTurn": { "pending": "lasting (M2)" },
-  "untilPlayerNextTurnStart": { "pending": "lasting (M2, DSL gap: until)" },
-  "untilPlayerNextTurnEnd": { "pending": "lasting (M2, DSL gap: until)" },
-  "conditional": { "pending": "conditional (M2)" },
-  "chooseAction": { "pending": "chooseAction (M2: mode a/b)" },
-  "sequentialForEach": { "pending": "forEach (M2: per)" },
-  "removeAmber": { "pending": "tokens (G)" },
-  "placeAmber": { "pending": "tokens (G)" },
-  "search": { "unsupported": "search: DSL gap (corte 🔴)" },
-  "changeEvent": { "unsupported": "generic event replacement: DSL gap" }
+  "_doc": "ability.actions.<name>(props) → our Act. kind: card = acts on the ability's selection (default context.source → s:\"self\"; inside a `target` block → s:\"target\"); player = acts on a player (default: `default`; explicit `target: context.player[.opponent]` flips `opp` when the DSL k has `oppField`); token = no selection (makeToken); flow = sequential/joint, flattened. defaults = fields written when the prop is absent (keyteki setDefaultProperties). props: every keyteki prop the entry understands — {field} copies a literal, {ifTrue}/{ifFalse} merge fields on a boolean literal (null deletes a field). Anything not listed (and not cosmetic) is Unsupported(\"prop:<name>\"): fail closed. pending/unsupported entries only document the reason; the code is always action:<name>. Lote 15c (action-zones): archive/removeStun/removeAmber espelham atos que o motor ja tem (archive/unstun/moveAmber->supply). placeAmber (supply -> criatura) NAO tem ato (o capture debita um pool) = engineGap do relatorio; putIntoArchives/moveCard/discard de zona seguem o move do DSL em entradas futuras.",
+  "gainAmber": {
+    "k": "gainAmber",
+    "kind": "player",
+    "default": "self",
+    "oppField": true,
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "loseAmber": {
+    "k": "loseAmber",
+    "kind": "player",
+    "default": "opp",
+    "oppField": true,
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "steal": {
+    "k": "steal",
+    "kind": "player",
+    "default": "opp",
+    "oppField": false,
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "draw": {
+    "k": "draw",
+    "kind": "player",
+    "default": "self",
+    "oppField": true,
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "gainChains": {
+    "k": "gainChains",
+    "kind": "player",
+    "default": "self",
+    "oppField": true,
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "discardAtRandom": {
+    "k": "discardRandom",
+    "kind": "player",
+    "default": "opp",
+    "oppField": true,
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    },
+    "notes": "location other than hand is not declared → unsupported"
+  },
+  "forgeKey": {
+    "k": "forgeKey",
+    "kind": "player",
+    "default": "self",
+    "oppField": false,
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "atNoCost": {
+        "ifTrue": {
+          "free": true
+        }
+      },
+      "modifier": {
+        "field": "mod"
+      }
+    }
+  },
+  "dealDamage": {
+    "k": "damage",
+    "kind": "card",
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    },
+    "notes": "splash/ignoreArmor/fightEvent not declared; amountForCard (dynamic) is M2"
+  },
+  "capture": {
+    "k": "capture",
+    "kind": "card",
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "heal": {
+    "k": "heal",
+    "kind": "card",
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      },
+      "fully": {
+        "ifTrue": {
+          "n": null
+        }
+      }
+    },
+    "notes": "upTo not declared"
+  },
+  "exalt": {
+    "k": "exalt",
+    "kind": "card",
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "addPowerCounter": {
+    "k": "counter",
+    "kind": "card",
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "destroy": {
+    "k": "destroy",
+    "kind": "card",
+    "props": {}
+  },
+  "sacrifice": {
+    "k": "sacrifice",
+    "kind": "card",
+    "props": {}
+  },
+  "purge": {
+    "k": "purge",
+    "kind": "card",
+    "props": {}
+  },
+  "stun": {
+    "k": "stun",
+    "kind": "card",
+    "props": {}
+  },
+  "exhaust": {
+    "k": "exhaust",
+    "kind": "card",
+    "props": {}
+  },
+  "ready": {
+    "k": "ready",
+    "kind": "card",
+    "props": {}
+  },
+  "ward": {
+    "k": "ward",
+    "kind": "card",
+    "props": {}
+  },
+  "enrage": {
+    "k": "enrage",
+    "kind": "card",
+    "props": {}
+  },
+  "returnToHand": {
+    "k": "returnToHand",
+    "kind": "card",
+    "props": {}
+  },
+  "returnToDeck": {
+    "k": "returnToDeck",
+    "kind": "card",
+    "defaults": {
+      "at": "top"
+    },
+    "props": {
+      "shuffle": {
+        "ifTrue": {
+          "at": "shuffle"
+        }
+      },
+      "bottom": {
+        "ifTrue": {
+          "at": "bottom"
+        }
+      }
+    }
+  },
+  "moveToBottom": {
+    "k": "returnToDeck",
+    "kind": "card",
+    "defaults": {
+      "at": "bottom"
+    },
+    "props": {}
+  },
+  "moveToFlank": {
+    "k": "toFlank",
+    "kind": "card",
+    "props": {}
+  },
+  "use": {
+    "k": "use",
+    "kind": "card",
+    "props": {}
+  },
+  "fight": {
+    "k": "use",
+    "kind": "card",
+    "defaults": {
+      "via": "fight"
+    },
+    "props": {}
+  },
+  "reap": {
+    "k": "use",
+    "kind": "card",
+    "defaults": {
+      "via": "reap"
+    },
+    "props": {}
+  },
+  "makeTokenCreature": {
+    "k": "makeToken",
+    "kind": "token",
+    "defaults": {
+      "n": 1
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    }
+  },
+  "sequential": {
+    "kind": "flow"
+  },
+  "jointAction": {
+    "kind": "flow"
+  },
+  "archive": {
+    "k": "archive",
+    "kind": "card",
+    "props": {},
+    "notas": "Lote 15c: ArchiveAction em carta em jogo -> archive do DSL."
+  },
+  "putIntoArchives": {
+    "pending": "zones (G)"
+  },
+  "discard": {
+    "pending": "zones (G): move hand→discard"
+  },
+  "discardTopOfDeck": {
+    "pending": "zones (G): move deck→discard"
+  },
+  "cardLastingEffect": {
+    "pending": "lasting (M2): needs effects table"
+  },
+  "lastingEffect": {
+    "pending": "lasting (M2)"
+  },
+  "untilPlayerTurnEnd": {
+    "pending": "lasting (M2)"
+  },
+  "duringOpponentNextTurn": {
+    "pending": "lasting (M2)"
+  },
+  "untilPlayerNextTurnStart": {
+    "pending": "lasting (M2, DSL gap: until)"
+  },
+  "untilPlayerNextTurnEnd": {
+    "pending": "lasting (M2, DSL gap: until)"
+  },
+  "conditional": {
+    "pending": "conditional (M2)"
+  },
+  "chooseAction": {
+    "pending": "chooseAction (M2: mode a/b)"
+  },
+  "sequentialForEach": {
+    "pending": "forEach (M2: per)"
+  },
+  "removeAmber": {
+    "k": "moveAmber",
+    "kind": "card",
+    "defaults": {
+      "to": "supply"
+    },
+    "props": {
+      "amount": {
+        "field": "n"
+      }
+    },
+    "notas": "Lote 15c: RemoveTokenAction(amber) = moveAmber para o supply comum."
+  },
+  "placeAmber": {
+    "pending": "tokens (G)"
+  },
+  "search": {
+    "unsupported": "search: DSL gap (corte 🔴)"
+  },
+  "changeEvent": {
+    "unsupported": "generic event replacement: DSL gap"
+  },
+  "removeStun": {
+    "k": "unstun",
+    "kind": "card",
+    "props": {},
+    "notas": "Lote 15c: removeStun -> unstun."
+  }
 }

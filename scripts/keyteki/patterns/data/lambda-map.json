@@ -226,5 +226,85 @@
  "(p0)=>{shuffle:true,target:p0.player.discard}": null,
  "(p0)=>{target:((p0.event.card.location===\"play area\")?p0.event.card:[])}": null,
  "(p0)=>{target:(p0.target?p0.target.neighbors.concat(p0.target):[])}": null,
- "(p0)=>{target:p0.player.deck.slice(0,1)}": null
+ "(p0)=>{target:p0.player.deck.slice(0,1)}": null,
+ "(p0)=>{amount:(p0.player.opponent?p0.player.opponent.getForgedKeys():0)}": {
+  "mapeamento": "{\"p\":\"keys\",\"opp\":true}",
+  "notas": "Lote 15c: \"Gain/Steal 1A for each forged key your opponent has\" (Dr Escotera, Bo Nithing) — n:1 x keys do oponente."
+ },
+ "(p0)=>{amount:p0.player.opponent.getForgedKeys()}": {
+  "mapeamento": "{\"p\":\"keys\",\"opp\":true}",
+  "notas": "Lote 15c: mesma leitura sem o guard do oponente."
+ },
+ "(p0)=>{amount:p0.player.amber}": {
+  "mapeamento": "{\"p\":\"amber\"}",
+  "notas": "Lote 15c: \"Gain amber equal to the amber in your pool\" (Volax) — n:1 x pool proprio."
+ },
+ "(p0)=>{amount:Math.floor((p0.player.opponent.amber/2))}": {
+  "mapeamento": "{\"p\":\"amber\",\"opp\":true,\"div\":2}",
+  "notas": "Lote 15c: \"lose half (rounding down the loss)\" (Rant and Rive) — div ja arredonda para baixo."
+ },
+ "(p0)=>{amount:p0.player.archives.length}": {
+  "mapeamento": "{\"p\":\"archives\"}",
+  "notas": "Lote 15c: \"for each card in your archives\" (Memrox) — tamanho da zona."
+ },
+ "(p0)=>{amount:p0.source.neighbors.filter((p0)=>!p0.hasHouse(\"staralliance\")).length}": {
+  "mapeamento": "{\"c\":{\"neighborsOfSource\":true,\"house\":\"!Star Alliance\"}}",
+  "notas": "Lote 15c: \"for each of this creature non-Star-Alliance neighbors\" (Uplink, CR Officer Hawkins)."
+ },
+ "(p0)=>p0.player.amber": {
+  "mapeamento": "{\"p\":\"amber\"}",
+  "notas": "Lote 15c: amount nu do pool proprio (Volax)."
+ },
+ "(p0)=>p0.player.opponent.amber": {
+  "mapeamento": "{\"p\":\"amber\",\"opp\":true}",
+  "notas": "Lote 15c: amount nu do pool do oponente (Drumble, Envy)."
+ },
+ "(p0)=>p0.player.opponent.getForgedKeys()": {
+  "mapeamento": "{\"p\":\"keys\",\"opp\":true}",
+  "notas": "Lote 15c: amount nu = chaves forjadas do oponente."
+ },
+ "(p0)=>(p0.player.opponent?p0.player.opponent.getForgedKeys():0)": {
+  "mapeamento": "{\"p\":\"keys\",\"opp\":true}",
+  "notas": "Lote 15c: a mesma leitura com o guard do oponente (Dr Escotera, Bo Nithing)."
+ },
+ "(p0)=>(p0.player.opponent?p0.player.opponent.amber:0)": {
+  "mapeamento": "{\"p\":\"amber\",\"opp\":true}",
+  "notas": "Lote 15c: pool do oponente com guard."
+ },
+ "(p0)=>Math.floor((p0.player.opponent.amber/2))": {
+  "mapeamento": "{\"p\":\"amber\",\"opp\":true,\"div\":2}",
+  "notas": "Lote 15c: metade arredondada para baixo (Rant and Rive)."
+ },
+ "(p0)=>p0.player.archives.length": {
+  "mapeamento": "{\"p\":\"archives\"}",
+  "notas": "Lote 15c: tamanho dos archives proprios (Memrox)."
+ },
+ "(p0)=>p0.player.hand.length": {
+  "mapeamento": "{\"p\":\"hand\"}",
+  "notas": "Lote 15c: tamanho da mao propria."
+ },
+ "(p0)=>p0.player.deck.length": {
+  "mapeamento": "{\"p\":\"deck\"}",
+  "notas": "Lote 15c: tamanho do deck proprio."
+ },
+ "(p0)=>p0.player.discard.length": {
+  "mapeamento": "{\"p\":\"discard\"}",
+  "notas": "Lote 15c: tamanho do descarte proprio."
+ },
+ "(p0)=>p0.player.opponent.archives.length": {
+  "mapeamento": "{\"p\":\"archives\",\"opp\":true}",
+  "notas": "Lote 15c: tamanho dos archives do oponente."
+ },
+ "(p0)=>p0.source.neighbors.filter((p0)=>!p0.hasHouse(\"staralliance\")).length": {
+  "mapeamento": "{\"c\":{\"neighborsOfSource\":true,\"house\":\"!Star Alliance\"}}",
+  "notas": "Lote 15c: vizinhos nao-Star-Alliance (Uplink)."
+ },
+ "(p0)=>{amount:Math.max((p0.player.opponent.cardsInPlay.filter((p0)=>(p0.type===\"creature\")).length-p0.player.cardsInPlay.filter((p0)=>(p0.type===\"creature\")).length),0)}": {
+  "mapeamento": "{\"sub\":[{\"c\":{\"type\":\"Creature\",\"side\":\"enemy\"}},{\"c\":{\"type\":\"Creature\",\"side\":\"friendly\"}}]}",
+  "notas": "Lote 15c: \"for each creature your opponent controls in excess of you\" (Glorious Few) — sub = max(0, inimigas - proprias)."
+ },
+ "(p0)=>Math.max((p0.player.opponent.cardsInPlay.filter((p0)=>(p0.type===\"creature\")).length-p0.player.cardsInPlay.filter((p0)=>(p0.type===\"creature\")).length),0)": {
+  "mapeamento": "{\"sub\":[{\"c\":{\"type\":\"Creature\",\"side\":\"enemy\"}},{\"c\":{\"type\":\"Creature\",\"side\":\"friendly\"}}]}",
+  "notas": "Lote 15c: \"for each creature your opponent controls in excess of you\" (Glorious Few) — sub = max(0, inimigas - proprias)."
+ }
 }

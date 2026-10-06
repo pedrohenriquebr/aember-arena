@@ -188,6 +188,9 @@ export function selectionOf(n, ctx = "context") {
   // Lote 15a: "…, then ready it" — `preThenEvent.card` é o resultado do ato
   // anterior (o token que o makeToken criou): a Selection "moved" do DSL v14.
   if (p === `${ctx}.preThenEvent.card`) return "moved";
+  // Lote 15c: `context.event.card` é o card que causou o evento do observador
+  // ("Deal 1D to each creature after it enters play" — Selection "event").
+  if (p === `${ctx}.event.card`) return "event";
   if (p === `${ctx}.source.neighbors`) return { each: { neighborsOfSource: true } };
   const base = (q) => {
     if (q === `${ctx}.game.creaturesInPlay`) return { type: "Creature" };

@@ -255,3 +255,96 @@ describe("lowering maps keyteki target modes (Lote 15b)", () => {
     expect(reject("        this.play({ target: { mode: 'house', cardType: 'creature', gameAction: ability.actions.returnToHand() } });")).toBe("target:house mode with card target");
   });
 });
+
+// Lote 15c (pacote de tabelas): dynamic-amount (o map de lambdas resolve o
+// `amount` dinâmico em n x per), triggers-novos (gatilhos que o MOTOR já
+// dispara: wakePlayer/fire/fireObservers em game.ts) e action-zones.
+describe("lowering maps dynamic amounts (Lote 15c)", () => {
+  it("an amount the lambda map knows becomes n x per (fn body and bare expr)", () => {
+    // corpo-fn: (context) => ({ amount: … }) — Dr Escotera ("for each forged key")
+    const fn = lower(
+      "        this.play({ gameAction: ability.actions.gainAmber((context) => ({ amount: context.player.opponent ? context.player.opponent.getForgedKeys() : 0 })) });",
+    ).abilities[0];
+    expect(fn.acts).toEqual([{ k: "gainAmber", n: 1, per: { p: "keys", opp: true } }]);
+    // expr nu no objeto: { amount: … } — Drumble/Envy (pool do oponente)
+    const bare = lower("        this.play({ gameAction: ability.actions.gainAmber({ amount: context.player.amber }) });").abilities[0];
+    expect(bare.acts).toEqual([{ k: "gainAmber", n: 1, per: { p: "amber" } }]);
+    // metade arredondada para baixo — Rant and Rive ("lose half their amber")
+    const half = lower(
+      "        this.play({ gameAction: ability.actions.loseAmber((context) => ({ target: context.player.opponent, amount: Math.floor(context.player.opponent.amber / 2) })) });",
+    ).abilities[0];
+    expect(half.acts).toEqual([{ k: "loseAmber", n: 1, opp: true, per: { p: "amber", opp: true, div: 2 } }]);
+  });
+
+  it("an amount the map does not know still fails closed", () => {
+    expect(reject("        this.play({ gameAction: ability.actions.gainAmber((context) => ({ amount: context.player.opponent.getForgedKeys() + 1 })) });")).toMatch(/^dynamic:gainAmber\.amount/);
+    expect(reject("        this.play({ gameAction: ability.actions.gainAmber({ amount: context.player.opponent.hand.length * 2 }) });")).toMatch(/^dynamic:gainAmber\.amount/);
+  });
+});
+
+describe("lowering maps the triggers the engine already fires (Lote 15c)", () => {
+  it("onChooseActiveHouse with the house literal is the self+active gate (Jehu shape)", () => {
+    const l = lower(
+      "        this.reaction({ when: { onChooseActiveHouse: (event, context) => event.player === context.player && event.house === 'sanctum' }, gameAction: ability.actions.gainAmber({ amount: 2 }) });",
+    ).abilities[0];
+    expect(l.on).toEqual(["house"]);
+    expect(l.if).toEqual({ k: "count", of: { c: { self: true, house: "active" } }, op: "gte", n: 1 });
+    expect(l.acts).toEqual([{ k: "gainAmber", n: 2 }]);
+  });
+
+  it("onTurnStart reads this.game.activePlayer and the player shape (Liam Say)", () => {
+    const turn = lower("        this.reaction({ when: { onTurnStart: (_, context) => context.player === this.game.activePlayer }, gameAction: ability.actions.draw() });").abilities[0];
+    expect(turn.on).toEqual(["startOfTurn"]);
+    expect(turn.if).toBeUndefined();
+    const player = lower("        this.reaction({ when: { onTurnStart: (event, context) => event.player === context.player }, gameAction: ability.actions.draw() });").abilities[0];
+    expect(player.on).toEqual(["startOfTurn"]);
+  });
+
+  it("onCardEntersPlay filters the event card and reaches s: \"event\" (Autocannon shape)", () => {
+    const l = lower(
+      "        this.reaction({ when: { onCardEntersPlay: (event) => event.card.type === 'creature' }, gameAction: ability.actions.dealDamage((context) => ({ amount: 1, target: context.event.card })) });",
+    ).abilities[0];
+    expect(l.on).toEqual(["enter"]);
+    expect(l.of).toEqual({ type: "Creature" });
+    expect(l.acts).toEqual([{ k: "damage", n: 1, s: "event" }]);
+  });
+
+  it("rejects the trigger keys the engine has no event for (engineGap)", () => {
+    expect(reject("        this.reaction({ when: { onUseCard: (event) => event.card === context.source }, gameAction: ability.actions.draw() });")).toBe("event:onUseCard");
+    expect(reject("        this.reaction({ when: { onDamageApplied: (event) => event.card === context.source }, gameAction: ability.actions.draw() });")).toBe("event:onDamageApplied");
+    // variante do oponente de um gatilho preso ao turno: sem evento
+    expect(reject("        this.reaction({ when: { onTurnStart: (event, context) => event.player === context.player.opponent }, gameAction: ability.actions.draw() });")).toBe("event:onTurnStart (opponent turn)");
+  });
+});
+
+describe("lowering maps the zone actions (Lote 15c)", () => {
+  it("archive/unstun/removeAmber mirror acts the engine already has", () => {
+    const arch = lower("        this.play({ target: { cardType: 'creature', gameAction: ability.actions.archive() } });").abilities[0];
+    expect(arch.acts).toEqual([{ k: "archive", s: "target" }]);
+    const unstun = lower("        this.play({ gameAction: ability.actions.removeStun((context) => ({ target: context.player.creaturesInPlay })) });").abilities[0];
+    expect(unstun.acts).toEqual([{ k: "unstun", s: { each: { type: "Creature", side: "friendly" } } }]);
+    const amber = lower("        this.play({ target: { cardType: 'creature', gameAction: ability.actions.removeAmber({ amount: 1 }) } });").abilities[0];
+    expect(amber.acts).toEqual([{ k: "moveAmber", n: 1, s: "target", to: "supply" }]);
+  });
+
+  it("placeAmber (supply -> creature) stays unsupported (engineGap: o capture debita um pool)", () => {
+    expect(reject("        this.play({ target: { cardType: 'creature', gameAction: ability.actions.placeAmber({ amount: 2 }) } });")).toBe("action:placeAmber");
+  });
+});
+
+describe("lowering maps 'exactly 1' as the single target (Lote 15c)", () => {
+  it("a one-card exact pick is the classic target, not the engine-auto pick (Wurm Tunnel shape)", () => {
+    // regressão: o pick {n:1} fazia o ENGINE escolher; o print "Move 1A from a
+    // creature" é escolha do jogador (s:"target" + ability.target).
+    const l = lower(
+      "        this.play({ target: { mode: 'exactly', numCards: 1, cardType: 'creature', gameAction: ability.actions.removeAmber({ amount: 1 }) } });",
+    ).abilities[0];
+    expect(l.target).toEqual({ type: "Creature" });
+    expect(l.acts).toEqual([{ k: "moveAmber", n: 1, s: "target", to: "supply" }]);
+    // dois ou mais continua pick (a escolha do engine)
+    const two = lower(
+      "        this.play({ target: { mode: 'exactly', numCards: 2, controller: 'opponent', cardType: 'creature', gameAction: ability.actions.returnToHand() } });",
+    ).abilities[0];
+    expect(two.acts).toEqual([{ k: "returnToHand", s: { pick: { type: "Creature", side: "enemy" }, n: 2 } }]);
+  });
+});

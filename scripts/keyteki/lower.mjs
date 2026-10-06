@@ -29,11 +29,26 @@ const fail = (code, detail) => {
 /** `{...}` or `(context) => ({...})` → { props, ctx }. */
 function optionsOf(node) {
   if (!node) return { props: {}, ctx: "context" };
-  if (node.t === "obj") return { props: node.props, ctx: "context" };
+  if (node.t === "obj") {
+    // Lote 15c (dynamic-amount): `amount: <expr>` / `amount: (context) => …` —
+    // o map de lambdas resolve o Count; o expr vira o corpo de um fn sintético
+    // para reaproveitar a chave de canon do map.
+    const amt = node.props.amount;
+    if (amt && amt.t !== "lit") {
+      const hit = lookup(amt.t === "fn" ? amt : { t: "fn", params: ["context"], body: amt });
+      if (hit?.kind === "count") {
+        const { amount: _amount, ...props } = node.props;
+        markMap();
+        return { props, ctx: "context", per: hit.value };
+      }
+    }
+    return { props: node.props, ctx: "context" };
+  }
   if (node.t === "fn" && node.body.t === "obj") {
     const ctx = node.params[0] ?? "context";
-    // lane G/M map: a dynamic `amount` the map knows becomes n x per (the Count is still gated by validateDraft).
-    const hit = node.body.props.amount ? lookup(node) : null;
+    // lane G/M map: a dynamic `amount` the map knows becomes n x per (the Count is still gated by validateDraft). A chave do map pode ser o fn inteiro ou só o expr do amount (com outros props no corpo).
+    const amt = node.body.props.amount;
+    const hit = amt && amt.t !== "lit" ? (lookup(node) ?? lookup(amt.t === "fn" ? amt : { t: "fn", params: node.params, body: amt })) : null;
     if (hit?.kind === "count") {
       const { amount: _amount, ...props } = node.body.props;
       markMap();
@@ -177,9 +192,12 @@ function targetFilter(node) {
   if (!acts) fail("target", "no gameAction");
   // 'exactly'/'upTo' + numCards: a escolha vira o pick do ato (a grafia do
   // parser: "Return 2 enemy creatures" = `{pick, n}`, "Choose up to N" =
-  // `{pick, n, upTo: true}`).
+  // `{pick, n, upTo: true}`). "exactly 1" é a escolha SINGULAR do print
+  // ("Move 1A from a creature to the common supply"): o alvo clássico, não o
+  // pick (que é engine-auto).
   if (mode) {
     if (!numCards) fail("target", `${mode} without numCards`);
+    if (mode === "exactly" && numCards === 1) return { filter, acts };
     return { filter, acts, pick: { n: numCards, ...(mode === "upTo" ? { upTo: true } : {}) } };
   }
   return { filter, acts };
@@ -336,18 +354,50 @@ function lowerObserver(reg) {
   if (f.t !== "fn" || f.body.t === "block") return fail("lambda", "when");
   const [ev, ctx] = [f.params[0] ?? "event", f.params[1] ?? "context"];
   if (trig.turn) {
-    // "At the start/end of your turn": only the controller's own turn is a card-bound trigger.
-    if (path(f.body.t === "bin" ? f.body.l : null) !== `${ctx}.player` || path(f.body.r) !== `${ctx}.game.activePlayer` || f.body.op !== "===") return fail("lambda", "turn owner");
+    // "At the start/end of your turn": only the controller's own turn is a card-bound trigger. `this.game` (Liam Say) names the same game as `context.game`.
+    const owner = (n) => path(n) === `${ctx}.game.activePlayer` || path(n) === "this.game.activePlayer";
+    if (path(f.body.t === "bin" ? f.body.l : null) !== `${ctx}.player` || !owner(f.body.r) || f.body.op !== "===") return fail("lambda", "turn owner");
     return lowerAbility(bag, { on: [trig.on] });
   }
-  if (trig.player) {
+  // Lote 15c: turnBound (onTurnStart) aceita as DUAS grafias do keyteki — a
+  // comparação com o activePlayer ("At the start of your turn", Liam Say) e a
+  // `event.player === context.player` (o evento de turno). O motor só dispara no
+  // turno do próprio controller, então a checagem é o default; a variante do
+  // oponente não tem evento.
+  if (trig.turnBound || trig.player) {
     const b = f.body;
+    const owner = (n) => path(n) === `${ctx}.game.activePlayer` || path(n) === "this.game.activePlayer";
+    if (trig.turnBound && b.t === "bin" && b.op === "===" && path(b.l) === `${ctx}.player` && owner(b.r)) return lowerAbility(bag, { on: [trig.on] });
     if (b.t !== "bin" || path(b.l) !== `${ev}.player` || (b.op !== "===" && b.op !== "!==")) return fail("lambda", "event.player");
     const r = path(b.r);
     if (r !== `${ctx}.player` && r !== `${ctx}.player.opponent`) return fail("lambda", "event.player");
     const opp = (r === `${ctx}.player.opponent`) === (b.op === "===");
+    if (trig.turnBound) {
+      if (opp) return fail("event", `${name} (opponent turn)`);
+      return lowerAbility(bag, { on: [trig.on] });
+    }
     return lowerAbility(bag, { on: [trig.on], if: opp ? { k: "actor", opp: true } : { k: "actor" } });
   }
+  // Lote 15c: onChooseActiveHouse — `event.house === '<casa>'` (com o par
+  // `event.player === <ctx>.player` opcional) é "After you choose <casa> as your
+  // active house": a casa escolhida vira a ativa quando o gatilho dispara, e a
+  // gramática do texto só lê a casa da PRÓRIA carta — o literal é assumido igual
+  // (ver notas da tabela; literal estranho = fora da gramática).
+  if (trig.house) {
+    let parts = [f.body];
+    if (f.body.t === "logic" && f.body.op === "&&") parts = [f.body.l, f.body.r];
+    let houseLit = null;
+    for (const part of parts) {
+      if (part.t === "bin" && part.op === "===" && path(part.l) === `${ev}.house`) {
+        houseLit = lit(part.r);
+      } else if (part.t === "bin" && part.op === "===" && path(part.l) === `${ev}.player` && path(part.r) === `${ctx}.player`) {
+        // "you choose" — o default (o motor acorda os dois lados)
+      } else return fail("lambda", "chooseHouse shape");
+    }
+    if (typeof houseLit !== "string") return fail("lambda", "chooseHouse shape");
+    return lowerAbility(bag, { on: ["house"], if: { k: "count", of: { c: { self: true, house: "active" } }, op: "gte", n: 1 } });
+  }
+  if (f.body.t === "lit" && f.body.v === true) return lowerAbility(bag, { on: [trig.on] });
   const subject = trig.subject.replace(/^event/, ev);
   const filter = filterOf(f, { subject, ctxName: ctx });
   if (sameFilter(filter, { self: true })) return lowerAbility(bag, { on: [trig.on] });

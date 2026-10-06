@@ -1,30 +1,117 @@
 {
-  "_doc": "keyteki `when: { onXxx: (event, context) => … }` keys → our Trigger. subject = the expression that names the card (or player) the event is about; the lambda is read against it with the filter library (lambdas.mjs). status: ok = lowered in M1; pending = recognised, lowered in M2 (patterns/events).",
-  "onReap": { "on": "reap", "subject": "event.card", "status": "ok" },
-  "onFight": { "on": "fight", "subject": "event.attacker", "status": "ok" },
-  "onCardPlayed": { "on": "play", "subject": "event.card", "status": "ok" },
-  "onCardDestroyed": { "on": "destroyed", "subject": "event.card", "status": "ok" },
-  "onForgeKey": { "on": "forge", "subject": "event.player", "player": true, "status": "ok" },
-  "onBeginRound": { "on": "startOfTurn", "turn": true, "status": "ok" },
-  "onRoundEnded": { "on": "endOfTurn", "turn": true, "status": "ok" },
-  "onCardDiscarded": { "on": "discard", "subject": "event.card", "status": "pending" },
-  "onCardReadied": { "on": "ready", "subject": "event.card", "status": "pending" },
-  "onChooseActiveHouse": { "on": "house", "status": "pending" },
-  "onCardLeavesPlay": { "status": "pending" },
-  "onUseCard": { "status": "pending" },
-  "onDamageDealt": { "status": "pending" },
-  "onDamageApplied": { "status": "pending" },
-  "onCardEntersPlay": { "on": "enter", "subject": "event.card", "status": "pending" },
-  "onTurnEnd": { "status": "pending" },
-  "onTurnStart": { "status": "pending" },
-  "onCardAttached": { "status": "pending" },
-  "onAmberStolen": { "status": "pending" },
-  "onCardArchived": { "status": "pending" },
-  "onCardExalted": { "status": "pending" },
-  "onCardStunned": { "status": "pending" },
-  "onCardCaptured": { "status": "pending" },
-  "onCardHealed": { "status": "pending" },
-  "onCardReturnedToHand": { "status": "pending" },
-  "onPhaseEnded": { "status": "pending" },
-  "onChooseHouse": { "status": "pending" }
+  "_doc": "keyteki `when: { onXxx: (event, context) => … }` keys → our Trigger. subject = the expression that names the card (or player) the event is about; the lambda is read against it with the filter library (lambdas.mjs). status: ok = lowered in M1; pending = recognised, lowered in M2 (patterns/events). Lote 15c: status ok = lowered (gatilhos que o MOTOR ja dispara: fire()/fireObservers()/wakePlayer em game.ts). turnBound = gatilho proprio do turno do controller (startOfTurn/endOfTurn); house = a escolha de casa (cond self+active). Os que ficam pending NAO tem evento no motor (engineGap do relatorio 15c): onUseCard, onDamageApplied, onDamageDealt, onStealAmber, onModifyAmber, onCardPlaced, onCardAttached, onCardLeavesPlay, onCardExalted, onCardStunned, onCardCaptured, onCardHealed, onCardReturnedToHand, onCardArchived, onAmberStolen, onPhaseEnded, onTurnEnd, onChooseHouse.",
+  "onReap": {
+    "on": "reap",
+    "subject": "event.card",
+    "status": "ok"
+  },
+  "onFight": {
+    "on": "fight",
+    "subject": "event.attacker",
+    "status": "ok"
+  },
+  "onCardPlayed": {
+    "on": "play",
+    "subject": "event.card",
+    "status": "ok"
+  },
+  "onCardDestroyed": {
+    "on": "destroyed",
+    "subject": "event.card",
+    "status": "ok"
+  },
+  "onForgeKey": {
+    "on": "forge",
+    "subject": "event.player",
+    "player": true,
+    "status": "ok"
+  },
+  "onBeginRound": {
+    "on": "startOfTurn",
+    "turn": true,
+    "status": "ok"
+  },
+  "onRoundEnded": {
+    "on": "endOfTurn",
+    "turn": true,
+    "status": "ok"
+  },
+  "onCardDiscarded": {
+    "on": "discard",
+    "subject": "event.card",
+    "status": "ok"
+  },
+  "onCardReadied": {
+    "on": "ready",
+    "subject": "event.card",
+    "status": "ok"
+  },
+  "onChooseActiveHouse": {
+    "on": "house",
+    "house": true,
+    "status": "ok",
+    "notas": "Lote 15c: literal da casa = casa impressa da propria carta (a gramatica do texto so le a casa propria); o filtro vira self+active."
+  },
+  "onCardLeavesPlay": {
+    "status": "pending"
+  },
+  "onUseCard": {
+    "status": "pending"
+  },
+  "onDamageDealt": {
+    "status": "pending"
+  },
+  "onDamageApplied": {
+    "status": "pending"
+  },
+  "onCardEntersPlay": {
+    "on": "enter",
+    "subject": "event.card",
+    "status": "ok"
+  },
+  "onTurnEnd": {
+    "status": "pending"
+  },
+  "onTurnStart": {
+    "on": "startOfTurn",
+    "turnBound": true,
+    "status": "ok",
+    "notas": "Lote 15c: o motor so dispara no turno do controller — event.player === context.player e o default."
+  },
+  "onCardAttached": {
+    "status": "pending"
+  },
+  "onAmberStolen": {
+    "status": "pending"
+  },
+  "onCardArchived": {
+    "status": "pending"
+  },
+  "onCardExalted": {
+    "status": "pending"
+  },
+  "onCardStunned": {
+    "status": "pending"
+  },
+  "onCardCaptured": {
+    "status": "pending"
+  },
+  "onCardHealed": {
+    "status": "pending"
+  },
+  "onCardReturnedToHand": {
+    "status": "pending"
+  },
+  "onPhaseEnded": {
+    "status": "pending"
+  },
+  "onChooseHouse": {
+    "status": "pending"
+  },
+  "onCardsReadied": {
+    "on": "ready",
+    "subject": "event.card",
+    "status": "ok",
+    "notas": "grafias plural do keyteki"
+  }
 }

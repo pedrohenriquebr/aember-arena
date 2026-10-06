@@ -63,7 +63,7 @@ const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === 
       condicional e "Then," sequencial puro saem iguais no parser.
     Fora do golden: Key Abduction (`modifier: 9 - hand` = `dynamic:
     forgeKey.modifier`, unsupported). */
-/** Same-effect rewrites the parser and keyteki spell differently: abilities with the same body merge their `on`; adjacent identical exalts sum; the `then` link on a `moved`-anaphora act is redundant (Lote 15b, triagem [c]). */
+/** Same-effect rewrites the parser and keyteki spell differently: abilities with the same body merge their `on`; adjacent identical exalts sum; the `then` link on a `moved`-anaphora act is redundant (Lote 15b, triagem [c]); "to your pool" spelled as supply + gainAmber (Lote 15c, triagem [c]). */
 const equivalent = (list) => {
   const merged = new Map();
   for (const a of list ?? []) {
@@ -75,10 +75,20 @@ const equivalent = (list) => {
       else {
         const copy = { ...act };
         if (copy.then === true && copy.s === "moved") delete copy.then;
+        // Lote 15c: "Move 1A from a creature to your pool" — o keyteki escreve
+        // supply + gainAmber(if did); o parser move direto para o pool.
+        const prev = acts[acts.length - 1];
+        if (copy.k === "gainAmber" && copy.if?.k === "count" && copy.if.of === "did" && prev?.k === "moveAmber" && prev.to === "supply") {
+          acts[acts.length - 1] = { ...prev, to: "pool", n: copy.n ?? 1 };
+          continue;
+        }
         acts.push(copy);
       }
     }
-    const key = JSON.stringify(sortKeys({ ...body, acts }));
+    // `amber: true` no alvo de um moveAmber é implicado pelo ato (só se move
+    // âmbar de quem tem) — o parser não o escreve.
+    const target = body.target?.amber === true && acts.some((x) => x.k === "moveAmber") ? (({ amber: _amber, ...rest }) => rest)(body.target) : body.target;
+    const key = JSON.stringify(sortKeys({ ...body, ...(target ? { target } : {}), acts }));
     merged.set(key, { ...JSON.parse(key), on: [...new Set([...(merged.get(key)?.on ?? []), ...on])] });
   }
   return [...merged.values()];
