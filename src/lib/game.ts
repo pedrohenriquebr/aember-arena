@@ -704,7 +704,7 @@ function restricted(state: GameState, side: Side, action: Restrict["action"], ca
   for (const owner of allEffects(state)) {
     const restrict = owner.effect.restrict;
     if (!restrict || restrict.action !== action) continue;
-    if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
+    if (restrict.who !== "any" && (restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
     // "cannot play more than N cards each turn" is a budget, not a ban: it is
     // enforced by playLimit, not here (keyteki Ember Imp).
     if (restrict.limit || restrict.cost) continue;
@@ -723,7 +723,7 @@ function useTolls(state: GameState, side: Side, card: CardInstance): { payee: Si
   for (const owner of allEffects(state)) {
     const restrict = owner.effect.restrict;
     if (!restrict?.cost || restrict.action !== "use") continue;
-    if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
+    if (restrict.who !== "any" && (restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
     if (restrict.type && displayType(card) !== restrict.type) continue;
     if (owner.effect.if && !holds(owner.effect.if, state, owner.side, owner.source)) continue;
     tolls.push({ payee: owner.side, cost: restrict.cost });
@@ -737,7 +737,7 @@ function playLimit(state: GameState, side: Side): number {
   for (const owner of allEffects(state)) {
     const restrict = owner.effect.restrict;
     if (!restrict?.limit || restrict.action !== "play") continue;
-    if ((restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
+    if (restrict.who !== "any" && (restrict.who === "opponent" ? other(owner.side) : owner.side) !== side) continue;
     limit = Math.min(limit, restrict.limit);
   }
   return limit;
@@ -1311,6 +1311,24 @@ export function canResolve(state: GameState, me: Side, source: CardInstance, abi
 }
 
 // ---------- game actions ----------
+
+/** Lote 15e: a volta do controle quando a janela do efeito expira — o mesmo
+    caminho de volta do releaseBound (ao dono, sem controlledBy). */
+function releaseControl(state: GameState, effect: PersistentEffect): void {
+  for (const id of effect.controlCards ?? []) {
+    for (const side of [0, 1] as const) {
+      const held = state.players[side].board.find((item) => item.instanceId === id);
+      if (!held) continue;
+      const owner = ownerOf(state, held);
+      held.boundTo = undefined;
+      held.controlledBy = undefined;
+      if (owner !== undefined && owner !== side) {
+        state.players[side].board = state.players[side].board.filter((item) => item !== held);
+        state.players[owner].board.push(held);
+      }
+    }
+  }
+}
 
 function releaseBound(state: GameState, source: CardInstance): void {
   for (const side of [0, 1] as const) {
@@ -2157,11 +2175,33 @@ function run(context: Context, act: Act): void {
         if (!type) break;
         stored.restrict = { ...stored.restrict, type };
       }
+      // Lote 15e:  é o takeControl do ato com o mesmo mecanismo de
+      // resolução (mudança física de board + boundTo) — a volta é no fim da
+      // janela (releaseControl) ou quando a fonte sai (releaseBound).
+      let controlCards: string[] | undefined;
+      if (stored.control) {
+        const to: Side = stored.control === "opponent" ? other(me) : me;
+        controlCards = [];
+        for (const card of everyMatch(state, me, source, stored.target, context)) {
+          const from = controllerOf(state, card);
+          if (from === undefined || from === to) continue;
+          const returning = ownerOf(state, card) === to;
+          state.players[from].board = state.players[from].board.filter((item) => item !== card);
+          state.players[to].board.unshift(card);
+          card.controlledBy = returning ? undefined : to;
+          if (source) card.boundTo = source.instanceId;
+          controlCards.push(card.instanceId);
+          record(state, "log.takeControl", { name: state.players[to].name, card: card.face.title });
+        }
+      }
+      // "while X is in play" (duration "source"): o boundTo do takeControl é o
+      // que devolve — não há entrada de lasting para expirar.
+      if (stored.control && stored.duration === "source") break;
       state.lasting = [
         ...(state.lasting ?? []),
-        // Lote 15d: `self` num efeito guardado é a FONTE do ato — guardado como
+        // Lote 15d:  num efeito guardado é a FONTE do ato — guardado como
         // id (o lasting é dado puro) e resolvido em activeEffects.
-        { ...stored, side: me, until, ...(stored.target?.self && context.source ? { sourceId: context.source.instanceId } : {}) },
+        { ...stored, side: me, until, ...(controlCards ? { controlCards } : {}), ...(stored.target?.self && context.source ? { sourceId: context.source.instanceId } : {}) },
       ];
       break;
     }
@@ -2367,6 +2407,23 @@ function resetAbilityBudgets(): void {
     targets of their own move, and a watcher is never a "You may" decision. */
 function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, deterministic: boolean, actor?: Side): void {
   if (observerDepth >= OBSERVER_DEPTH || observerBudget <= 0) return;
+  // Lote 15e: o observador TEMPORÁRIO de um lasting ("gain 1 each time a
+  // creature reaps" com duração) — caminho próprio, fora das cópias concedidas
+  // (Lote 3: uma cópia concedida nunca observa).
+  const nowStamp = turnStamp(state);
+  for (const effect of state.lasting ?? []) {
+    if ((effect.until ?? 0) <= nowStamp || !effect.abilities?.length) continue;
+    const source = effect.sourceId ? [...state.players[0].board, ...state.players[1].board].find((item) => item.instanceId === effect.sourceId) : undefined;
+    if (!source) continue;
+    for (const ability of effect.abilities) {
+      if (observerBudget <= 0 || observerDepth >= OBSERVER_DEPTH) return;
+      if (!ability.of || !ability.on.includes(trigger) || !matches(state, effect.side ?? 0, source, event, ability.of)) continue;
+      if (ability.if && !holds(ability.if, state, effect.side ?? 0, source, { actor })) continue;
+      observerBudget -= 1;
+      const context: Context = { state, me: effect.side ?? 0, source, event, deterministic, actor, mode: defaultMode(ability) };
+      for (const act of ability.acts) run(context, act);
+    }
+  }
   observerDepth += 1;
   // A watcher resolves with no house of its own choosing.
   const savedChoice = chosenHouse;
@@ -3122,6 +3179,10 @@ export function endTurn(current: GameState, playerIndex: Side): GameState {
   if (nextIndex === 0) state.turn += 1;
   // Lasting effects whose duration ran out with this turn stop applying.
   const stamp = turnStamp(state);
+  // Lote 15e: o controle tomado por um efeito volta ao dono com a janela.
+  for (const effect of state.lasting ?? []) {
+    if ((effect.until ?? 0) <= stamp && effect.controlCards?.length) releaseControl(state, effect);
+  }
   state.lasting = (state.lasting ?? []).filter((effect) => (effect.until ?? 0) > stamp);
 
   // "At the start of your turn:" (keyteki onTurnStart, before the forge step):

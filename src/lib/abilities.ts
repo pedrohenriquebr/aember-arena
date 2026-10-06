@@ -15,7 +15,7 @@ import type { CardFace } from "./game";
     or a new literal, never a rename — so a row is readable as long as its `v`
     is at most this. Bump with every batch that changes what a row means: rows
     above are discarded by the shape gate and stale failures earn a retry. */
-export const DSL_VERSION = 16; // 1 = implicit (rows without `v`)
+export const DSL_VERSION = 17; // 1 = implicit (rows without `v`)
 
 /** Event an ability is bound to. "after X" is the post-event window (keyteki
     reaction) and "each time X" fires again on every occurrence of X — the
@@ -269,7 +269,10 @@ export type Coverage = "full" | "partial" | "vanilla";
     player (keyteki effects.playerCannot). `who` is relative to the card's
     controller. */
 export interface Restrict {
-  who: "you" | "opponent";
+  /** Quem fica proibido, relativo ao controller do efeito. `"any"` (Lote 15e)
+      são os DOIS lados — "creatures cannot reap" sem dono (keyteki
+      `targetController: 'any'`). */
+  who: "you" | "opponent" | "any";
   /** `reap` (Lote 11 §C): the creatures the effect's `target` filter matches cannot be used to reap — the
       other actions ignore the filter. (A ban on using artifacts is `use` + `type`.) */
   action: "play" | "use" | "fight" | "reap";
@@ -371,11 +374,17 @@ export interface PersistentEffect {
       (stamp + 3) é a janela "during/until the end of your next turn"
       (keyteki untilPlayerNextTurnEnd), aplicada desde já e podada no fim do
       próximo turno do dono, como o LastingEffectAction do keyteki. */
-  duration?: "turn" | "next" | "nextTurn";
+  duration?: "turn" | "next" | "nextTurn" | "source";
   /** Lasting effects: the turn stamp (game.turnStamp) at which they expire. */
   until?: number;
   /** Lasting effects: the side that created them. */
   side?: 0 | 1;
+  /** Lote 15e: o efeito toma controle das cartas do `target` (keyteki
+      effects.takeControl) enquanto a janela durar — resolvido como o ato
+      takeControl e devolvido no fim dela. */
+  control?: "you" | "opponent";
+  /** Lasting effects: the cards the `control` effect took (runtime only). */
+  controlCards?: string[];
   /** Lasting effects: the instanceId of the source whose `self` the stored copy
       reads (Lote 15d — the stored effect is plain data). */
   sourceId?: string;
@@ -887,7 +896,7 @@ function validLote11(effect: Record<string, unknown>, lasting = false): boolean 
 }
 
 function validRestrict(value: unknown): boolean {
-  if (!isRecord(value) || (value.who !== "you" && value.who !== "opponent") || !["play", "use", "fight", "reap"].includes(value.action as string)) return false;
+  if (!isRecord(value) || (value.who !== "you" && value.who !== "opponent" && value.who !== "any") || !["play", "use", "fight", "reap"].includes(value.action as string)) return false;
   if (value.type !== undefined && typeof value.type !== "string") return false;
   if (value.limit !== undefined && !isFiniteNumber(value.limit)) return false;
   // A toll only exists for using: a play/fight toll has no engine path.
@@ -924,7 +933,11 @@ function validAct(value: unknown): boolean {
     if (!isRecord(value.e) || !isRecord(value.e.target) || houseEffectLoops(value.e) || traitEffectLoops(value.e)) return false;
     // Lote 15d: a duração é uma escolha fechada — um valor de outra gramática
     // mudaria a janela em que o efeito expira.
-    if (value.e.duration !== undefined && value.e.duration !== "turn" && value.e.duration !== "next" && value.e.duration !== "nextTurn") return false;
+    if (value.e.duration !== undefined && value.e.duration !== "turn" && value.e.duration !== "next" && value.e.duration !== "nextTurn" && value.e.duration !== "source") return false;
+    // Lote 15e: o controle tomado pelo efeito é uma escolha fechada.
+    if (value.e.control !== undefined && value.e.control !== "you" && value.e.control !== "opponent") return false;
+    // Lote 15e: o observador concedido pelo lasting passa pelo mesmo shape gate.
+    if (value.e.abilities !== undefined && (!Array.isArray(value.e.abilities) || !value.e.abilities.every(validAbility))) return false;
     if (value.e.until !== undefined && !isFiniteNumber(value.e.until)) return false;
     if (value.e.restrict !== undefined && !validRestrict(value.e.restrict)) return false;
     if (value.e.replace !== undefined && !validReplacement(value.e.replace, true)) return false;

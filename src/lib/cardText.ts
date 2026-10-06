@@ -29,7 +29,7 @@ const PREFIX_SRC =
     // become the ability's `if` (Lote 4 §4.2) instead of leaking the whole
     // sentence into the constant-text pass.
     "|\\b(at the (?:start|end) of your turn)(?=\\s*,)" +
-    "|\\b((?:after|each time) (?:(?:a|an) (?:friendly |enemy )?creatures? (?:reaps?|fights?|is destroyed)" +
+    "|\\b((?:after|each time|before) (?:(?:a|an) (?:friendly |enemy )?creatures? (?:reaps?|fights?|is destroyed)" +
     "|(?:you|your opponent) plays? a creature|you (?:use|uses) an artifact))(?=\\s*,)" +
     // Lote 5 §5.2: "After a player chooses an active house, …" (a comma, no colon).
     "|\\b(after (?:a player|you|your opponent) chooses? (?:an active house|[^,:.]{1,60}? as (?:your|their) active house))(?=\\s*,)" +
@@ -84,6 +84,14 @@ function observerFor(raw: string): { triggers: Trigger[]; of: Filter } | null {
     if (creature[1]) filter.side = creature[1].trim() as "friendly" | "enemy";
     const trigger: Trigger = creature[2].startsWith("reap") ? "reap" : creature[2].startsWith("fight") ? "fight" : "destroyed";
     return { triggers: [trigger], of: filter };
+  }
+  // Lote 15e (before-window): "Before a creature fights, X" — o observador da
+  // janela BEFORE (o motor já dispara beforeFight com o atacante como evento).
+  const before = part.match(/^before (?:a|an) (friendly |enemy )?creatures? fights?$/);
+  if (before) {
+    const filter: Filter = { type: "Creature" };
+    if (before[1]) filter.side = before[1].trim() as "friendly" | "enemy";
+    return { triggers: ["beforeFight"], of: filter };
   }
   const plays = part.match(/^(?:after|each time) (you|your opponent) plays? a creature$/);
   if (plays) return { triggers: ["play"], of: { type: "Creature", side: plays[1] === "you" ? "friendly" : "enemy" } };
@@ -174,7 +182,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 19;
+export const PARSER_VERSION = 21;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -1515,10 +1523,12 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
   // Lote 11 §C: "During your opponent's next turn, creatures … cannot reap" (either position) — the lasting duration of the
   // "on their next turn" tail. Only for this sentence: "Keys cost +N during your opponent's next turn" is the keyCost ACT
   // of SIMPLE (opp), and reading it here would charge both players.
+  let opponentWindow = false;
   const opponentsTurn = body.match(/^during your opponent's next turn, (.+ (?:cannot be used to reap|cannot reap))$/) ?? body.match(/^(.+ (?:cannot be used to reap|cannot reap)) during your opponent's next turn$/);
   if (opponentsTurn) {
     body = opponentsTurn[1];
     duration = "next";
+    opponentWindow = true;
   }
   // "While <condition>, X" / "For each <count>, X" gate or scale the effect.
   // A clause that is neither leaves the sentence to the branches below ("If
@@ -1642,11 +1652,16 @@ function parsePersistent(sentence: string, upgrade: boolean, creature: boolean, 
   // Lote 11 §C (Seismo-entangler): creatures that cannot be used to reap; the filter names which.
   const noReap = body.match(/^(.+?) (?:cannot be used to reap|cannot reap)$/);
   if (noReap) {
+    // Lote 15e: o prefixo de dono ("your creatures cannot reap") diz o lado —
+    // sem ele ("creatures cannot reap") os dois lados são proibidos.
+    const ownerPrefix = noReap[1].match(/^(your opponent's|their|your) /);
     const target = parseSubject(noReap[1], upgrade) ?? parseFilterWords(noReap[1]);
     if (!target) return null;
-    // Without a side both players are bound — except "during your opponent's next turn", where only the opponent acts.
-    const who: ("you" | "opponent")[] = target.side === "enemy" || (!target.side && duration === "next") ? ["opponent"] : target.side === "friendly" ? ["you"] : ["you", "opponent"];
-    return who.map((side) => ({ target: { ...target }, restrict: { who: side, action: "reap" }, duration, ...gate }));
+    if (ownerPrefix && target.side === undefined) target.side = ownerPrefix[1] === "your" ? "friendly" : "enemy";
+    // Lote 15e: sem dono no print ("creatures cannot reap") os DOIS lados são
+    // proibidos (`who: "any"` — keyteki targetController 'any'); com dono, só ele.
+    const who: "you" | "opponent" | "any" = target.side === "enemy" || (opponentWindow && !target.side) ? "opponent" : target.side === "friendly" ? "you" : "any";
+    return [{ target: { ...target }, restrict: { who, action: "reap" }, duration, ...gate }];
   }
   const restrict = parseRestriction(body);
   if (restrict) return [{ target: {}, restrict, duration, ...gate }];

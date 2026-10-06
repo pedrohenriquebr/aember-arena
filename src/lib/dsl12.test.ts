@@ -22,8 +22,8 @@ const play = (state: GameState, id: string, target?: string) => applyMove(state,
 
 describe("contract", () => {
   it("bumps both versions and the schema carries the new fields", () => {
-    expect(DSL_VERSION).toBe(16);
-    expect(PARSER_VERSION).toBe(19);
+    expect(DSL_VERSION).toBe(17);
+    expect(PARSER_VERSION).toBe(21);
     for (const needle of ['housesOf: "moved"', "whileSource?: true", 'k: "materialize"', 'hosts?: "Artifact"']) {
       expect(DSL_SCHEMA).toContain(needle);
     }

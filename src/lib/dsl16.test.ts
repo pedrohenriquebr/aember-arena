@@ -54,8 +54,8 @@ const overrideFor = (c: CardFace, dsl: AbilityOverride["dsl"]): AbilityOverride 
 
 describe("contract", () => {
   it("bumps both versions; the schema carries the target-select fields", () => {
-    expect(DSL_VERSION).toBe(16);
-    expect(PARSER_VERSION).toBe(19);
+    expect(DSL_VERSION).toBe(17);
+    expect(PARSER_VERSION).toBe(21);
     for (const needle of ["mostStat?:", "lowest?: boolean", '"moved"']) expect(DSL_SCHEMA).toContain(needle);
   });
 });
