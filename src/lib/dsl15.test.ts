@@ -39,7 +39,7 @@ const filler = (n: number) => Array.from({ length: n }, (_, i) => card(`Filler $
 describe("contract", () => {
   it("bumps both versions; the schema and the few-shots carry the then link and the moved selection", () => {
     expect(DSL_VERSION).toBe(15);
-    expect(PARSER_VERSION).toBe(17);
+    expect(PARSER_VERSION).toBe(18);
     for (const needle of ["then?: true", '"moved"']) expect(DSL_SCHEMA).toContain(needle);
     const shots = FEW_SHOTS.map((shot) => shot.text);
     expect(shots.some((text) => text.includes("then ready it"))).toBe(true);

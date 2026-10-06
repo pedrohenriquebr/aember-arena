@@ -140,7 +140,11 @@ function houseHeader(raw: string): { triggers: Trigger[]; cond?: Condition } | n
     const cond: Condition | undefined = plain[1] === "you" ? { k: "myTurn" } : plain[1] === "your opponent" ? { k: "not", c: { k: "myTurn" } } : undefined;
     return { triggers: ["house"], ...(cond ? { cond } : {}) };
   }
-  const named = part.match(/^after a player chooses? (.+?) as (?:your|their) active house$/);
+  // Lote 15c (triggers-novos): "After you choose Sanctum as your active house…"
+  // — o caso nomeado também vem com "you"/"your opponent". A casa nomeada só é
+  // legível como a casa da PRÓRIA carta; o estreitamento de quem escolheu se
+  // perde (a escolha acorda os dois lados), como no conversor.
+  const named = part.match(/^after (?:a player|you|your opponent) chooses? (.+?) as (?:your|their) active house$/);
   if (named && (named[1] === "this card's house" || named[1] === cardHouse)) {
     return { triggers: ["house"], cond: { k: "count", of: { c: { self: true, house: "active" } }, op: "gte", n: 1 } };
   }
@@ -170,7 +174,7 @@ const COUNTER_COUNT = "(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|
     own output frozen on disk, so it only counts while the parser that wrote it
     is the running one (abilities.storedAbility): bump this whenever the grammar
     changes what a text parses to. */
-export const PARSER_VERSION = 17;
+export const PARSER_VERSION = 18;
 
 /** First pass, on the RAW print: private-use glyphs (Master Vault prints Æmber
     and damage as U+F360/F361), the typographic punctuation of the export, the
@@ -365,6 +369,9 @@ function parseFilterWords(phrase: string): Filter | null {
     words = tail[1];
     flankClause = !tail[2];
   }
+  // Lote 15c (action-zones): "each friendly Knight creature in play" — a
+  // battleline é o default; o sufixo é decoração de texto.
+  words = words.replace(/ in play$/, "");
   // Lote 15b (target-select): "a creature with the highest power" / "each
   // creature with the lowest power" — o extremo do stat ENTRE OS MATCHES,
   // empates incluídos (`mostStat`); `lowest` espelha a direção.
@@ -869,6 +876,34 @@ function parseSentenceBody(sentence: string, upgrade: boolean, creature: boolean
   }
   // Lote 8 §8.1 (Gabos Longarms): the choice is the ability's target; the redirect is the fight's own.
   if (sentence === "choose a creature") return { acts: [], target: { type: "Creature" } };
+  // Lote 15c (action-zones): "Purge a creature from a discard pile." — ato de
+  // ZONA (fora da battleline): o `move` do estoque, sem `pick` = a escolha do
+  // controller ("from your opponent's …" usa o lado deles).
+  const fromZone = sentence.match(/^(purge|discard|return) (a|an|one|two|three|\d+|each|all) (.+?) from (your opponent's|their|your|a|an) (discard pile|discard|hand|archives|deck)$/);
+  if (fromZone) {
+    const to = fromZone[1] === "purge" ? "purged" : fromZone[1] === "discard" ? "discard" : "hand";
+    const from = fromZone[5] === "discard pile" ? "discard" : fromZone[5];
+    // "a card" é sem restrição de tipo ("Purge a card from your discard pile");
+    // frase com modificadores fora do padrão ("a random card") cai para os
+    // handlers seguintes em vez de matar a sentença.
+    const filter = /^(?:card|cards)$/.test(fromZone[3]) ? {} : parseFilterWords(fromZone[3]);
+    if (filter) {
+      const each = fromZone[2] === "each" || fromZone[2] === "all";
+      return {
+        acts: [
+          {
+            k: "move",
+            n: each ? 1 : fromZone[2] === "a" || fromZone[2] === "an" || fromZone[2] === "one" ? 1 : fromZone[2] === "two" ? 2 : fromZone[2] === "three" ? 3 : Number(fromZone[2]),
+            from: from as Zone,
+            to,
+            ...(each ? { pick: "all" as const } : {}),
+            ...(filter.type ? { type: filter.type } : {}),
+            ...(fromZone[4] === "your opponent's" || fromZone[4] === "their" ? { opp: true } : {}),
+          },
+        ],
+      };
+    }
+  }
   // Lote 15b (target-select): "Choose up to 2 creatures." — a escolha do
   // jogador (fila `targets` do movimento) vira o pick `upTo` que as frases
   // seguintes leem como "each chosen creature"; sozinha não resolve ato nenhum.

@@ -200,7 +200,7 @@ describe("Lote 1: glyphs, prefixes and the new wording (docs/DSL_EXPANSION_PLAN.
   });
 
   it("bumps PARSER_VERSION with the grammar", () => {
-    expect(PARSER_VERSION).toBe(17);
+    expect(PARSER_VERSION).toBe(18);
   });
 });
 
@@ -547,11 +547,13 @@ describe("starter decks", () => {
     // 46 -> 47 with "forged a key last turn" + "unforge it" (Key Hammer).
     // 47 -> 49 with Lote 8 (Tentacus' toll, Gabos Longarms' chosen redirect).
     // 49 -> 51 with Lote 10 (Psychic Bug: bare "Look at your opponent's hand"; Valdr: attackBonus).
+    // 52 -> 53 with Lote 15c (action-zones: "Purge a card from your discard pile."
+    // e o sufixo "in play" de "each friendly Knight creature in play").
     expect(counts).toMatchInlineSnapshot(`
       {
-        "full": 52,
+        "full": 53,
         "partial": 0,
-        "vanilla": 6,
+        "vanilla": 5,
       }
     `);
   });

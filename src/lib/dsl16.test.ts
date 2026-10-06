@@ -13,7 +13,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { DSL_VERSION, normaliseAbilityOverride, setAbilityOverrides, type AbilityOverride } from "./abilities";
 import { PARSER_VERSION, parseCardText, textHash } from "./cardText";
-import { applyMove, houseChoices, type CardFace, type GameState } from "./game";
+import { applyMove, chooseHouse, houseChoices, type CardFace, type GameState } from "./game";
 import { DSL_SCHEMA } from "./generated/dslSchema";
 import { byTitle, card, setupTest } from "./testkit";
 
@@ -55,7 +55,7 @@ const overrideFor = (c: CardFace, dsl: AbilityOverride["dsl"]): AbilityOverride 
 describe("contract", () => {
   it("bumps both versions; the schema carries the target-select fields", () => {
     expect(DSL_VERSION).toBe(15);
-    expect(PARSER_VERSION).toBe(17);
+    expect(PARSER_VERSION).toBe(18);
     for (const needle of ["mostStat?:", "lowest?: boolean", '"moved"']) expect(DSL_SCHEMA).toContain(needle);
   });
 });
@@ -347,5 +347,57 @@ describe("orçamento anti-laço", () => {
     // o movimento voltou (a cadeia não rodou para sempre) e o board não zerou
     expect(cast.players[1].board.length).toBeGreaterThan(0);
     expect(cast.players[1].board.length).toBeLessThan(100);
+  });
+});
+
+describe("Lote 15c (pacote de tabelas): grafias novas e linhas convertidas", () => {
+  it("'After you choose Sanctum as your active house' vira o gate self+active (regressão: era vanilla)", () => {
+    const parsed = parse("Jehu the Bureaucrat", "After you choose Sanctum as your active house, gain 2<A>.", "Creature", "Sanctum");
+    expect(parsed.coverage).toBe("full");
+    expect(parsed.abilities).toEqual([
+      { on: ["house"], if: { k: "count", of: { c: { self: true, house: "active" } }, op: "gte", n: 1 }, acts: [{ k: "gainAmber", n: 2 }] },
+    ]);
+  });
+
+  it("'Purge a creature from a discard pile' e '…creature in play' são ato de zona (regressão: eram vanilla)", () => {
+    const purge = parse("Purge Zone", "Play: Purge a creature from a discard pile.", "Action", "Dis");
+    expect(purge.coverage).toBe("full");
+    expect(purge.abilities).toEqual([{ on: ["play"], acts: [{ k: "move", n: 1, from: "discard", to: "purged", type: "Creature" }] }]);
+    const archive = parse("Epic Quest", "Play: Archive each friendly Knight creature in play.", "Action", "Sanctum");
+    expect(archive.coverage).toBe("full");
+    expect(archive.abilities).toEqual([{ on: ["play"], acts: [{ k: "archive", s: { each: { type: "Creature", side: "friendly", trait: "Knight" } } }] }]);
+  });
+
+  it("a linha convertida de amount dinâmico resolve no motor (Dr Escotera: n x per)", () => {
+    const spell = card("Dr Escotera", { type: "Creature", house: "Untamed", text: "Play: Gain 1<A> for each forged key your opponent has." });
+    setAbilityOverrides(new Map([
+      [spell.face.id, overrideFor(spell.face, [{ on: ["play"], acts: [{ k: "gainAmber", n: 1, per: { p: "keys", opp: true } }] }])],
+    ]));
+    const rich = play(setupTest({ hand: [spell] }, { keys: 3 }, "Untamed"), spell.instanceId);
+    expect(rich.players[0].amber).toBe(3);
+    // contra-caso: o oponente sem chaves forjadas não rende nada
+    const poor = play(setupTest({ hand: [spell] }, { keys: 0 }, "Untamed"), spell.instanceId);
+    expect(poor.players[0].amber).toBe(0);
+  });
+
+  it("a linha convertida do gatilho de casa dispara só na escolha da casa da carta (Jehu)", () => {
+    const state = setupTest({ inPlay: [card("Placeholder", { house: "Brobnar" })] }, {}, null);
+    const house = state.players[0].houses[0];
+    const jehu = card("Jehu the Bureaucrat", { type: "Creature", house, text: "After you choose Sanctum as your active house, gain 2<A>." });
+    setAbilityOverrides(new Map([
+      [jehu.face.id, overrideFor(jehu.face, [
+        { on: ["house"], if: { k: "count", of: { c: { self: true, house: "active" } }, op: "gte", n: 1 }, acts: [{ k: "gainAmber", n: 2 }] },
+      ])],
+    ]));
+    const setup = () => {
+      const s = setupTest({ inPlay: [jehu] }, {}, null);
+      return s;
+    };
+    const chosen = chooseHouse(setup(), 0, house);
+    expect(chosen.players[0].amber).toBe(2);
+    // contra-caso: outra casa escolhida não dispara
+    const other = state.players[0].houses.find((h) => h !== house) ?? "Dis";
+    const missed = chooseHouse(setup(), 0, other);
+    expect(missed.players[0].amber).toBe(0);
   });
 });
