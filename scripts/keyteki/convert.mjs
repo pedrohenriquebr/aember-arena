@@ -130,7 +130,8 @@ const equivalent = (list) => {
 const equivalentEffects = (list) => {
   const merged = [];
   for (const e of list ?? []) {
-    let entry = { ...e };
+    // o parse espalha duration/when mesmo quando indefinidos — undefined é ausente
+    let entry = Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined));
     if (entry.abilities?.length) {
       const byBody = new Map();
       for (const a of entry.abilities) {
