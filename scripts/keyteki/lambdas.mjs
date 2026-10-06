@@ -181,6 +181,9 @@ export function selectionOf(n, ctx = "context") {
   const p = path(n);
   if (p === `${ctx}.source`) return "self";
   if (p === `${ctx}.target`) return "target";
+  // Lote 15a: "…, then ready it" — `preThenEvent.card` é o resultado do ato
+  // anterior (o token que o makeToken criou): a Selection "moved" do DSL v14.
+  if (p === `${ctx}.preThenEvent.card`) return "moved";
   if (p === `${ctx}.source.neighbors`) return { each: { neighborsOfSource: true } };
   const base = (q) => {
     if (q === `${ctx}.game.creaturesInPlay`) return { type: "Creature" };

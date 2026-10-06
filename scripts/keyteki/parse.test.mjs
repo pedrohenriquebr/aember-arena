@@ -135,7 +135,10 @@ describe("keyteki lowering (lower.mjs)", () => {
     expect(code(card("A", "a", `        this.play({ gameAction: ability.actions.gainAmber({ bonus: true }) });`))).toBe("prop");
     expect(code(card("A", "a", `        this.play({ gameAction: ability.actions.search() });`))).toBe("action");
     expect(code(card("A", "a", `        this.play({ target: { cardCondition: (c) => c.name === 'X', gameAction: ability.actions.destroy() } });`))).toBe("lambda");
-    expect(code(card("A", "a", `        this.play({ gameAction: ability.actions.destroy(), then: { gameAction: ability.actions.draw() } });`))).toBe("then");
+    // Lote 15a (M2): o `then` baixa para as cadeias do DSL v14; o que o
+    // vocabulário não representa (um alvo dentro do bloco) continua fail-closed.
+    expect(code(card("A", "a", `        this.play({ gameAction: ability.actions.destroy(), then: { gameAction: ability.actions.draw() } });`))).toBe("ok");
+    expect(code(card("A", "a", `        this.play({ gameAction: ability.actions.destroy(), then: { target: { cardType: 'creature', gameAction: ability.actions.draw() } } });`))).toBe("prop");
     expect(code(HELPER)).toBe("custom");
   });
 });

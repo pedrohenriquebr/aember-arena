@@ -163,6 +163,7 @@ function lowerAbility(bag, base) {
   const { flags: _flags, ...plain } = base;
   const ability = { ...plain };
   let acts = null;
+  let thenNode = null;
   let hasTarget = false;
   for (const [key, v] of Object.entries(bag.props)) {
     if (COSMETIC.has(key) || key === "when") continue;
@@ -193,7 +194,7 @@ function lowerAbility(bag, base) {
         }
         break;
       case "then":
-        fail("then", "M2");
+        thenNode = v;
         break;
       default:
         fail("prop", key);
@@ -202,6 +203,8 @@ function lowerAbility(bag, base) {
   if (!acts || (bag.props.gameAction && hasTarget)) fail("empty", "gameAction/target missing or both");
   ability.acts = lowerAction(acts.node, acts.sel, acts);
   if (!ability.acts.length) fail("empty", "no acts");
+  // Lote 15a: o bloco `then` continua depois do gameAction principal.
+  if (thenNode) ability.acts.push(...lowerThen(thenNode, acts));
   // keyteki `optional: true` is the whole "You may" clause; the engine offers the decline move only when an act is optional.
   if (ability.optional) for (const a of ability.acts) a.optional = true;
   // "creaturesInPlay.length > 0" guarding a creature target says nothing the target itself does not (no creature = no target).
@@ -215,6 +218,61 @@ function lowerAbility(bag, base) {
   if (ability.target && first.k === "use" && first.s === "target" && ability.target.ready === undefined) ability.target.ready = true;
   const { on, of, if: cond, optional, target, acts: a, ...tail } = ability;
   return { on, ...(of ? { of } : {}), ...(cond ? { if: cond } : {}), ...(target ? { target } : {}), acts: a, ...(optional ? { optional } : {}), ...tail };
+}
+
+/** Lote 15a (M2): keyteki `then` — o bloco que resolve DEPOIS do gameAction
+    principal ("Then, X" / "If you do, X"). `alwaysTriggers`, um bloco com mais de
+    um ato ou a anáfora `preThenEvent` ("…, then ready it") abrem o link `then: true`
+    da cadeia do DSL v14; um then puro de um ato é o "If you do" de um ato só — o
+    `if: did` do Lote 2. `may` ("Then, you may …") marca SÓ os atos do bloco como
+    opcionais: o resto do texto é obrigatório (Legate Scipio foi o inverso — o
+    `optional` do registrar desce para todos os atos). */
+function lowerThen(node, env) {
+  const { props } = optionsOf(node);
+  let actsNode = null;
+  let next = null;
+  let may = false;
+  let cond = null;
+  let chain = false;
+  for (const [key, v] of Object.entries(props)) {
+    if (COSMETIC.has(key)) continue;
+    switch (key) {
+      case "gameAction":
+        actsNode = v;
+        break;
+      case "may":
+        if (typeof lit(v) !== "string") fail("dynamic", "then.may");
+        may = true;
+        break;
+      case "alwaysTriggers":
+        if (lit(v) !== true) fail("prop", "then.alwaysTriggers");
+        chain = true;
+        break;
+      case "condition":
+        {
+          const c = conditionOf(v);
+          if (c) cond = c;
+        }
+        break;
+      case "then":
+        next = v;
+        break;
+      default:
+        fail("prop", `then.${key}`);
+    }
+  }
+  if (!actsNode) fail("empty", "then without gameAction");
+  const acts = lowerAction(actsNode, env.sel, { inTarget: false });
+  if (!acts.length) fail("empty", "then with no acts");
+  const linked = chain || cond !== null || acts.length > 1 || acts.some((a) => a.s === "moved");
+  for (const a of acts) {
+    if (may) a.optional = true;
+    if (linked) {
+      a.then = true;
+      if (cond) a.if = cond;
+    } else a.if = { k: "count", of: "did", op: "gte", n: 1 };
+  }
+  return next ? [...acts, ...lowerThen(next, env)] : acts;
 }
 
 const sameFilter = (f, shape) => Object.keys(f).length === Object.keys(shape).length && Object.entries(shape).every(([k, v]) => f[k] === v);
