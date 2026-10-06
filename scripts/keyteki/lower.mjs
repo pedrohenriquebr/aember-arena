@@ -227,6 +227,9 @@ function effectFields(effects, out) {
       const who = path(e.args[0])?.endsWith('.player.opponent') ? 'opponent' : path(e.args[0])?.endsWith('.player') ? 'you' : null;
       if (!who || out.control !== undefined) fail('dynamic', 'effect takeControl');
       out.control = who;
+    } else if (spec.abilities) {
+      // gainAbility(type, properties) → a ability concedida ao host.
+      out.abilities = [...(out.abilities ?? []), grantedAbility(e.args[0], e.args[1])];
     } else if (spec.restrict) {
       // cardCannot('fight') → `restrict: {action}`; o `who` vem do
       // targetController da ação durável (lowerPersistent/lastingActOf).
@@ -259,6 +262,7 @@ function triggerAbility(when, gameAction) {
   if (!trig || trig.status !== "ok") fail("event", name);
   if (f.t !== "fn" || f.body.t === "block") fail("lambda", "when");
   const [ev, ctx] = [f.params[0] ?? "event", f.params[1] ?? "context"];
+  if (!gameAction) fail("empty", "trigger without gameAction");
   const ability = { on: [trig.on], acts: lowerAction(gameAction, "self", { inTarget: false }) };
   if (!ability.acts.length) fail("empty", "lasting trigger without acts");
   let body = f.body;
@@ -295,6 +299,44 @@ function triggerAbility(when, gameAction) {
   const subject = trig.subject.replace(/^event/, ev);
   const filter = filterOf({ ...f, body }, { subject, ctxName: ctx });
   if (!sameFilter(filter, { self: true })) ability.of = filter;
+  return ability;
+}
+
+
+/** Lote 15f (gain-ability): `gainAbility(type, properties)` → a ability
+    CONCEDIDA ao host (PersistentEffect.abilities). O type vira o `on`;
+    reaction/interrupt pedem o `when` do properties (o observador do 15e). */
+function grantedAbility(typeNode, propsNode) {
+  const type = lit(typeNode);
+  const { props, ctx } = optionsOf(propsNode);
+  const ability = {};
+  let on = null;
+  if (type === "reaction" || type === "interrupt") {
+    const granted = triggerAbility(props.when, props.gameAction);
+    if (type === "interrupt" && granted.on[0] !== "beforeFight") fail("effect", "interrupt grant");
+    return granted;
+  }
+  on = { reap: "reap", fight: "fight", play: "play", destroyed: "destroyed", action: "action", omni: "omni", beforeFight: "beforeFight" }[type ?? ""];
+  if (!on) fail("effect", "gainAbility " + String(type));
+  ability.on = [on];
+  if (props.condition) {
+    const c = conditionOf(props.condition);
+    if (c) ability.if = c;
+  }
+  if (props.target) {
+    const t = targetFilter(props.target);
+    if (t.house || t.pick) fail("effect", "gainAbility target");
+    ability.target = t.filter;
+    ability.acts = lowerAction(t.acts, "target", { inTarget: true });
+    if (!ability.acts.length) fail("empty", "gainAbility without acts");
+  } else if (props.gameAction) {
+    ability.acts = lowerAction(props.gameAction, "self", { inTarget: false });
+    if (!ability.acts.length) fail("empty", "gainAbility without acts");
+  } else fail("empty", "gainAbility without gameAction");
+  for (const key of Object.keys(props)) {
+    if (["gameAction", "target", "condition", "when", "effect", "effectArgs", "message", "messageArgs", "name", "effectAlert", "effectStyle", "activePromptTitle", "preferActionPromptMessage"].includes(key)) continue;
+    fail("prop", "gainAbility." + key);
+  }
   return ability;
 }
 
@@ -638,7 +680,7 @@ function lowerPersistent(reg, host) {
   else out.target = { self: true };
   effectFields(effects, out);
   // Keywords and power/armor only mean something on creatures: the text says "Mutant creature", keyteki's match just omits the type.
-  if ((out.keywords || out.power !== undefined || out.armor !== undefined) && out.target && !out.target.self && !out.target.host && !out.target.type) out.target = { type: "Creature", ...out.target };
+  if ((out.keywords || out.power !== undefined || out.armor !== undefined || out.abilities?.length) && out.target && !out.target.self && !out.target.host && !out.target.type) out.target = { type: "Creature", ...out.target };
   const { target, if: cond, ...tail } = out;
   return { target, ...tail, ...(cond ? { if: cond } : {}) };
 }

@@ -294,7 +294,10 @@
     "notas": "Lote 15c: ArchiveAction em carta em jogo -> archive do DSL."
   },
   "putIntoArchives": {
-    "pending": "zones (G)"
+    "k": "archive",
+    "kind": "card",
+    "props": {},
+    "notas": "Lote 15f: PutIntoArchivesAction = archive (o ato do DSL, play→archives)."
   },
   "discard": {
     "pending": "zones (G): move hand→discard"

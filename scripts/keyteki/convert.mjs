@@ -121,6 +121,36 @@ const equivalent = (list) => {
   }
   return [...merged.values()];
 };
+
+/** Lote 15f (triagem [c]): as mesmas fusões "mesmo efeito, escrita diferente"
+    no NÍVEL DO EFEITO — abilities com o mesmo corpo fundem o `on` ("Fight/Reap:"
+    vs dois grants separados) e efeitos com o MESMO target e campos disjuntos são
+    o mesmo efeito (uma frase "gets +2 power" e outra "gains …" vs o match único
+    do keyteki). */
+const equivalentEffects = (list) => {
+  const merged = [];
+  for (const e of list ?? []) {
+    let entry = { ...e };
+    if (entry.abilities?.length) {
+      const byBody = new Map();
+      for (const a of entry.abilities) {
+        const { on, ...rest } = a;
+        const key = JSON.stringify(sortKeys(rest));
+        const prev = byBody.get(key);
+        if (prev) prev.on = [...new Set([...prev.on, ...on])].sort();
+        else byBody.set(key, { on: [...on].sort(), ...rest });
+      }
+      entry = { ...entry, abilities: [...byBody.values()] };
+    }
+        const twin = merged.find(
+      (m) => JSON.stringify(sortKeys(m.target ?? {})) === JSON.stringify(sortKeys(entry.target ?? {})) && Object.keys(entry).every((k) => k === "target" || !(k in m)),
+    );
+    if (twin) Object.assign(twin, entry);
+    else merged.push(entry);
+  }
+  return merged;
+};
+
 /** `on` is a set ("Play/Fight/Reap"); `acts` order is kept unless `loose` (diff triage: same acts in another order). */
 const canon = (list, loose = false) =>
   (list ?? [])
@@ -257,7 +287,7 @@ function convertSet(set, src, packs, corpus, { quiet, write }) {
           report.golden.diff += 1;
           const sameEffects = JSON.stringify(canon(parsed.effects)) === JSON.stringify(canon(lowered.effects));
           const order = JSON.stringify(canon(parsed.abilities, true)) === JSON.stringify(canon(lowered.abilities, true)) && sameEffects;
-          const equiv = !order && JSON.stringify(canon(equivalent(parsed.abilities), true)) === JSON.stringify(canon(equivalent(lowered.abilities), true)) && sameEffects;
+          const equiv = !order && JSON.stringify(canon(equivalent(parsed.abilities), true)) === JSON.stringify(canon(equivalent(lowered.abilities), true)) && JSON.stringify(canon(equivalentEffects(parsed.effects))) === JSON.stringify(canon(equivalentEffects(lowered.effects)));
           if (order) report.golden.orderOnly += 1;
           if (equiv) report.golden.equivalent += 1;
           diffs.push({ kind: order ? "order-only" : equiv ? "equivalent" : "semantic", card: ir.id, title: face.title, text: face.text, parser: { abilities: parsed.abilities, effects: parsed.effects }, keyteki: lowered });

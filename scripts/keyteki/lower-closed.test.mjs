@@ -414,3 +414,27 @@ describe("lowering maps the 15e engine gaps", () => {
     expect(turn.on).toEqual(["endOfTurn"]);
   });
 });
+
+// Lote 15f (gain-ability): `effects.gainAbility(type, properties)` → a ability
+// concedida ao host (PersistentEffect.abilities) — o type vira o `on`.
+describe("lowering maps gainAbility (Lote 15f)", () => {
+  it("a simple granted ability rides the host effect (Duskrunner/Charge shapes)", () => {
+    const l = lower("        this.whileAttached({ effect: ability.effects.gainAbility('reap', { gameAction: ability.actions.steal() }) });").effects[0];
+    expect(l).toEqual({ target: { host: true }, abilities: [{ on: ["reap"], acts: [{ k: "steal", n: 1 }] }] });
+    const targeted = lower("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ match: (card) => card.type === 'creature', effect: ability.effects.gainAbility('play', { target: { cardType: 'creature', controller: 'opponent', gameAction: ability.actions.dealDamage({ amount: 2 }) } }) }) });").abilities[0];
+    expect(targeted.acts).toEqual([
+      { k: "lasting", e: { target: { type: "Creature", side: "friendly" }, abilities: [{ on: ["play"], target: { type: "Creature", side: "enemy" }, acts: [{ k: "damage", n: 2, s: "target" }] }], duration: "turn" } },
+    ]);
+  });
+
+  it("a granted reaction reads its `when` like the observer (Brain Stem shape)", () => {
+    const l = lower("        this.whileAttached({ effect: ability.effects.gainAbility('reaction', { when: { onReap: () => true }, gameAction: ability.actions.gainAmber() }) });").effects[0];
+    expect(l.abilities).toEqual([{ on: ["reap"], of: {}, acts: [{ k: "gainAmber", n: 1 }] }]);
+  });
+
+  it("rejects the grant shapes the mapping would guess about", () => {
+    expect(reject("        this.whileAttached({ effect: ability.effects.gainAbility('reap', { message: 'x' }) });")).toBe("empty:gainAbility without gameAction");
+    expect(reject("        this.whileAttached({ effect: ability.effects.gainAbility('weird', { gameAction: ability.actions.draw() }) });")).toBe("effect:gainAbility weird");
+    expect(reject("        this.whileAttached({ effect: ability.effects.gainAbility('reap', { gameAction: ability.actions.draw(), bogus: true }) });")).toBe("prop:gainAbility.bogus");
+  });
+});
