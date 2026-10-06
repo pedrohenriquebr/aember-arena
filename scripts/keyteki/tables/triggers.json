@@ -1,5 +1,5 @@
 {
-  "_doc": "keyteki `when: { onXxx: (event, context) => … }` keys → our Trigger. subject = the expression that names the card (or player) the event is about; the lambda is read against it with the filter library (lambdas.mjs). status: ok = lowered in M1; pending = recognised, lowered in M2 (patterns/events). Lote 15c: status ok = lowered (gatilhos que o MOTOR ja dispara: fire()/fireObservers()/wakePlayer em game.ts). turnBound = gatilho proprio do turno do controller (startOfTurn/endOfTurn); house = a escolha de casa (cond self+active). Os que ficam pending NAO tem evento no motor (engineGap do relatorio 15c): onUseCard, onDamageApplied, onDamageDealt, onStealAmber, onModifyAmber, onCardPlaced, onCardAttached, onCardLeavesPlay, onCardExalted, onCardStunned, onCardCaptured, onCardHealed, onCardReturnedToHand, onCardArchived, onAmberStolen, onPhaseEnded, onTurnEnd, onChooseHouse.",
+  "_doc": "keyteki `when: { onXxx: (event, context) => … }` keys → our Trigger. subject = the expression that names the card (or player) the event is about; the lambda is read against it with the filter library (lambdas.mjs). status: ok = lowered in M1; pending = recognised, lowered in M2 (patterns/events). Lote 15c: status ok = lowered (gatilhos que o MOTOR ja dispara: fire()/fireObservers()/wakePlayer em game.ts). turnBound = gatilho proprio do turno do controller (startOfTurn/endOfTurn); house = a escolha de casa (cond self+active). Os que ficam pending NAO tem evento no motor (engineGap do relatorio 15c): onUseCard, onDamageApplied, onDamageDealt, onStealAmber, onModifyAmber, onCardPlaced, onCardAttached, onCardLeavesPlay, onCardExalted, onCardStunned, onCardCaptured, onCardHealed, onCardReturnedToHand, onCardArchived, onAmberStolen, onPhaseEnded, onTurnEnd, onChooseHouse. Lote 15e: `before` = a forma do gatilho quando o registrador é o interrupt (janela BEFORE).",
   "onReap": {
     "on": "reap",
     "subject": "event.card",
@@ -8,12 +8,14 @@
   "onFight": {
     "on": "fight",
     "subject": "event.attacker",
-    "status": "ok"
+    "status": "ok",
+    "before": "beforeFight"
   },
   "onCardPlayed": {
     "on": "play",
     "subject": "event.card",
-    "status": "ok"
+    "status": "ok",
+    "before": "play"
   },
   "onCardDestroyed": {
     "on": "destroyed",
@@ -24,7 +26,8 @@
     "on": "forge",
     "subject": "event.player",
     "player": true,
-    "status": "ok"
+    "status": "ok",
+    "before": "forge"
   },
   "onBeginRound": {
     "on": "startOfTurn",
@@ -70,7 +73,11 @@
     "status": "ok"
   },
   "onTurnEnd": {
-    "status": "pending"
+    "on": "endOfTurn",
+    "turnBound": true,
+    "status": "ok",
+    "before": "endOfTurn",
+    "notas": "Lote 15e: o print é 'At the end of your turn' — o interrupt do keyteki resolve no fim do turno; o dispatch do motor é o mesmo do endOfTurn."
   },
   "onTurnStart": {
     "on": "startOfTurn",
@@ -112,6 +119,6 @@
     "on": "ready",
     "subject": "event.card",
     "status": "ok",
-    "notas": "grafias plural do keyteki"
+    "before": "ready"
   }
 }

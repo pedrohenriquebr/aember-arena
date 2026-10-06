@@ -222,6 +222,11 @@ function effectFields(effects, out) {
       const name = typeof h === "string" ? houseName(h) : null;
       if (!name || out.house !== undefined) fail("dynamic", `effect ${e.name}`);
       out.house = name;
+    } else if (spec.control) {
+      // takeControl(context.player[.opponent]) → control "you"/"opponent".
+      const who = path(e.args[0])?.endsWith('.player.opponent') ? 'opponent' : path(e.args[0])?.endsWith('.player') ? 'you' : null;
+      if (!who || out.control !== undefined) fail('dynamic', 'effect takeControl');
+      out.control = who;
     } else if (spec.restrict) {
       // cardCannot('fight') → `restrict: {action}`; o `who` vem do
       // targetController da ação durável (lowerPersistent/lastingActOf).
@@ -242,6 +247,57 @@ function effectFields(effects, out) {
   }
 }
 
+
+/** Lote 15e: o `when`+`gameAction` de um lasting (Crystal Hive "gain 1A each
+    time a creature reaps") → o observador CONCEDIDO à fonte do efeito
+    (`e.abilities`, target self): morre com a janela e roda sob os budgets de
+    observador como qualquer outro. */
+function triggerAbility(when, gameAction) {
+  if (!when || when.t !== "obj" || Object.keys(when.props).length !== 1) fail("event", "when shape");
+  const [name, f] = Object.entries(when.props)[0];
+  const trig = TRIGGERS[name];
+  if (!trig || trig.status !== "ok") fail("event", name);
+  if (f.t !== "fn" || f.body.t === "block") fail("lambda", "when");
+  const [ev, ctx] = [f.params[0] ?? "event", f.params[1] ?? "context"];
+  const ability = { on: [trig.on], acts: lowerAction(gameAction, "self", { inTarget: false }) };
+  if (!ability.acts.length) fail("empty", "lasting trigger without acts");
+  let body = f.body;
+  if (body.t === "logic" && body.op === "&&") {
+    const parts = [body.l, body.r];
+    const playerPart = parts.find((p2) => p2.t === "bin" && (p2.op === "===" || p2.op === "!==") && path(p2.l) === `${ev}.player`);
+    const r = playerPart ? path(playerPart.r) : null;
+    if (playerPart && (r === `${ctx}.player` || r === `${ctx}.player.opponent`)) {
+      ability.if = (r === `${ctx}.player.opponent`) === (playerPart.op === "===") ? { k: "actor", opp: true } : { k: "actor" };
+      body = parts.find((p2) => p2 !== playerPart);
+    }
+  }
+  if (body.t === "lit" && body.v === true) {
+    // `() => true` observa todos os eventos do tipo ("each time a creature reaps").
+    ability.of = {};
+    return ability;
+  }
+  // gatilhos de turno/jogador (sem subject): o mesmo tratamento do observer.
+  if (trig.turn || trig.turnBound || trig.player) {
+    const owner = (n) => path(n) === `${ctx}.game.activePlayer` || path(n) === "this.game.activePlayer";
+    if (trig.turn && body.t === "bin" && body.op === "===" && path(body.l) === `${ctx}.player` && owner(body.r)) return ability;
+    if ((trig.turnBound || trig.player) && body.t === "bin" && (body.op === "===" || body.op === "!==") && path(body.l) === `${ev}.player`) {
+      const r = path(body.r);
+      if (r === `${ctx}.player` || r === `${ctx}.player.opponent`) {
+        const opp = (r === `${ctx}.player.opponent`) === (body.op === "===");
+        if (trig.turnBound && opp) fail("event", "opponent turn");
+        if (!trig.turnBound) ability.if = opp ? { k: "actor", opp: true } : { k: "actor" };
+        return ability;
+      }
+    }
+    fail("lambda", "when");
+  }
+  if (!trig.subject) fail("event", name);
+  const subject = trig.subject.replace(/^event/, ev);
+  const filter = filterOf({ ...f, body }, { subject, ctxName: ctx });
+  if (!sameFilter(filter, { self: true })) ability.of = filter;
+  return ability;
+}
+
 /** keyteki's lasting durations → our `duration` (game.turnStamp windows). */
 const DURATIONS = {
   untilPlayerTurnEnd: "turn",
@@ -260,6 +316,8 @@ function lastingActOf(node, entry) {
   let effects = [];
   let match = null;
   let controller = null;
+  let triggerNode = null;
+  let triggerActs = null;
   for (const [key, v] of Object.entries(props)) {
     if (key === "message" || key === "messageArgs" || key === "effectArgs" || key === "preferActionPromptMessage" || key === "multipleTrigger" || key === "triggeredAbilityType") continue;
     switch (key) {
@@ -279,8 +337,26 @@ function lastingActOf(node, entry) {
           if (c) out.if = c;
         }
         break;
+      case "when":
+        triggerNode = v;
+        break;
+      case "gameAction":
+        triggerActs = v;
+        break;
+      case "multipleTrigger":
+        // "fires only once" não tem modelo — o padrão (true) é cosmético.
+        if (lit(v) !== true) fail("lasting", "multipleTrigger");
+        break;
+      case "triggeredAbilityType":
+        break;
       case "duration":
       case "until": {
+        // `until: {onCardLeavesPlay: …}` é o "while X is in play" do keyteki —
+        // o mecanismo é o boundTo do takeControl (a volta é quando a fonte sai).
+        if (v.t === "obj" && Object.keys(v.props).every((k) => k === "onCardLeavesPlay")) {
+          out.duration = "source";
+          break;
+        }
         const d = DURATIONS[lit(v)];
         if (!d) fail("lasting", `${key} ${lit(v)}`);
         out.duration = d;
@@ -290,7 +366,12 @@ function lastingActOf(node, entry) {
         fail("prop", `lasting.${key}`);
     }
   }
-  if (!effects.length) fail("empty", "lasting without effect");
+  if (!effects.length && !triggerNode) fail("empty", "lasting without effect");
+  if (triggerNode) {
+    if (!triggerActs) fail("lasting", "when without gameAction");
+    out.abilities = [triggerAbility(triggerNode, triggerActs)];
+    if (!match && controller === null) out.target = { self: true };
+  }
   effectFields(effects, out);
   if (match) {
     const f = filterOf(match);
@@ -299,9 +380,9 @@ function lastingActOf(node, entry) {
     if (f.side === undefined && controller !== "any") f.side = controller === "opponent" ? "enemy" : "friendly";
     out.target = f;
   } else if (controller && !out.restrict) fail("persistent", "player scope");
-  else out.target = {};
+  else out.target = out.abilities ? { self: true } : {};
   // O `who` do restrict vem do targetController (a restrição é de jogador).
-  if (out.restrict) out.restrict = { ...out.restrict, who: controller === "opponent" ? "opponent" : "you" };
+  if (out.restrict) out.restrict = { ...out.restrict, who: controller === "any" ? "any" : controller === "opponent" ? "opponent" : "you" };
   if ((out.keywords || out.power !== undefined || out.armor !== undefined) && out.target && !out.target.type) out.target = { type: "Creature", ...out.target };
   if (out.duration === undefined && entry.duration) out.duration = entry.duration;
   const { target, if: cond, ...tail } = out;
@@ -450,19 +531,21 @@ const sameFilter = (f, shape) => Object.keys(f).length === Object.keys(shape).le
 function lowerObserver(reg) {
   const bag = reg.args[0];
   if (!bag || bag.t !== "obj") return fail("registrar", "argument is not an object");
-  if (reg.registrar === "interrupt") return fail("interrupt", "before-window");
   const when = bag.props.when;
   if (!when || when.t !== "obj" || Object.keys(when.props).length !== 1) return fail("event", "when shape");
   const [name, f] = Object.entries(when.props)[0];
   const trig = TRIGGERS[name];
   if (!trig || trig.status !== "ok") return fail("event", name);
+  // Lote 15e: o interrupt é o observer da janela BEFORE — a forma do gatilho
+  // vem do campo `before` da tabela (onFight → beforeFight).
+  const on = reg.registrar === "interrupt" && trig.before ? trig.before : trig.on;
   if (f.t !== "fn" || f.body.t === "block") return fail("lambda", "when");
   const [ev, ctx] = [f.params[0] ?? "event", f.params[1] ?? "context"];
   if (trig.turn) {
     // "At the start/end of your turn": only the controller's own turn is a card-bound trigger. `this.game` (Liam Say) names the same game as `context.game`.
     const owner = (n) => path(n) === `${ctx}.game.activePlayer` || path(n) === "this.game.activePlayer";
     if (path(f.body.t === "bin" ? f.body.l : null) !== `${ctx}.player` || !owner(f.body.r) || f.body.op !== "===") return fail("lambda", "turn owner");
-    return lowerAbility(bag, { on: [trig.on] });
+    return lowerAbility(bag, { on: [on] });
   }
   // Lote 15c: turnBound (onTurnStart) aceita as DUAS grafias do keyteki — a
   // comparação com o activePlayer ("At the start of your turn", Liam Say) e a
@@ -472,16 +555,16 @@ function lowerObserver(reg) {
   if (trig.turnBound || trig.player) {
     const b = f.body;
     const owner = (n) => path(n) === `${ctx}.game.activePlayer` || path(n) === "this.game.activePlayer";
-    if (trig.turnBound && b.t === "bin" && b.op === "===" && path(b.l) === `${ctx}.player` && owner(b.r)) return lowerAbility(bag, { on: [trig.on] });
+    if (trig.turnBound && b.t === "bin" && b.op === "===" && path(b.l) === `${ctx}.player` && owner(b.r)) return lowerAbility(bag, { on: [on] });
     if (b.t !== "bin" || path(b.l) !== `${ev}.player` || (b.op !== "===" && b.op !== "!==")) return fail("lambda", "event.player");
     const r = path(b.r);
     if (r !== `${ctx}.player` && r !== `${ctx}.player.opponent`) return fail("lambda", "event.player");
     const opp = (r === `${ctx}.player.opponent`) === (b.op === "===");
     if (trig.turnBound) {
       if (opp) return fail("event", `${name} (opponent turn)`);
-      return lowerAbility(bag, { on: [trig.on] });
+      return lowerAbility(bag, { on: [on] });
     }
-    return lowerAbility(bag, { on: [trig.on], if: opp ? { k: "actor", opp: true } : { k: "actor" } });
+    return lowerAbility(bag, { on: [on], if: opp ? { k: "actor", opp: true } : { k: "actor" } });
   }
   // Lote 15c: onChooseActiveHouse — `event.house === '<casa>'` (com o par
   // `event.player === <ctx>.player` opcional) é "After you choose <casa> as your
@@ -502,11 +585,11 @@ function lowerObserver(reg) {
     if (typeof houseLit !== "string") return fail("lambda", "chooseHouse shape");
     return lowerAbility(bag, { on: ["house"], if: { k: "count", of: { c: { self: true, house: "active" } }, op: "gte", n: 1 } });
   }
-  if (f.body.t === "lit" && f.body.v === true) return lowerAbility(bag, { on: [trig.on] });
+  if (f.body.t === "lit" && f.body.v === true) return lowerAbility(bag, { on: [on] });
   const subject = trig.subject.replace(/^event/, ev);
   const filter = filterOf(f, { subject, ctxName: ctx });
-  if (sameFilter(filter, { self: true })) return lowerAbility(bag, { on: [trig.on] });
-  return lowerAbility(bag, { on: [trig.on], of: filter });
+  if (sameFilter(filter, { self: true })) return lowerAbility(bag, { on: [on] });
+  return lowerAbility(bag, { on: [on], of: filter });
 }
 
 function lowerPersistent(reg, host) {

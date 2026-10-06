@@ -1,19 +1,61 @@
 {
-  "_doc": "this.<registrar>(...) → what it becomes. kind: trigger = Ability.on [on]; observer = reaction/interrupt with `when` (tables/triggers.json); persistent = PersistentEffect (host: whileAttached). flags: the registrar's `play|reap|fight: true` props add triggers (keyteki Card.reaction). unsupported: the reason code.",
-  "play": { "kind": "trigger", "on": "play" },
-  "reap": { "kind": "trigger", "on": "reap" },
-  "fight": { "kind": "trigger", "on": "fight" },
-  "destroyed": { "kind": "trigger", "on": "destroyed" },
-  "beforeFight": { "kind": "trigger", "on": "beforeFight" },
-  "scrap": { "kind": "trigger", "on": "scrap" },
-  "action": { "kind": "trigger", "on": "action" },
-  "omni": { "kind": "trigger", "on": "omni" },
-  "reaction": { "kind": "observer" },
-  "interrupt": { "kind": "observer" },
-  "persistentEffect": { "kind": "persistent" },
-  "whileAttached": { "kind": "persistent", "host": true },
-  "fate": { "unsupported": "registrar:fate" },
-  "prophecyReaction": { "unsupported": "registrar:prophecy" },
-  "prophecyInterrupt": { "unsupported": "registrar:prophecy" },
-  "setupBlasterCardAbilities": { "unsupported": "registrar:custom" }
+  "_doc": "this.<registrar>(...) → what it becomes. kind: trigger = Ability.on [on]; observer = reaction/interrupt with `when` (tables/triggers.json); persistent = PersistentEffect (host: whileAttached). flags: the registrar's `play|reap|fight: true` props add triggers (keyteki Card.reaction). unsupported: the reason code. Lote 15e: interrupt = observer na janela BEFORE (o when passa por tables/triggers.json; o campo `before` da tabela escolhe a forma before do gatilho — onFight → beforeFight).",
+  "play": {
+    "kind": "trigger",
+    "on": "play"
+  },
+  "reap": {
+    "kind": "trigger",
+    "on": "reap"
+  },
+  "fight": {
+    "kind": "trigger",
+    "on": "fight"
+  },
+  "destroyed": {
+    "kind": "trigger",
+    "on": "destroyed"
+  },
+  "beforeFight": {
+    "kind": "trigger",
+    "on": "beforeFight"
+  },
+  "scrap": {
+    "kind": "trigger",
+    "on": "scrap"
+  },
+  "action": {
+    "kind": "trigger",
+    "on": "action"
+  },
+  "omni": {
+    "kind": "trigger",
+    "on": "omni"
+  },
+  "reaction": {
+    "kind": "observer"
+  },
+  "interrupt": {
+    "kind": "observer",
+    "before": true
+  },
+  "persistentEffect": {
+    "kind": "persistent"
+  },
+  "whileAttached": {
+    "kind": "persistent",
+    "host": true
+  },
+  "fate": {
+    "unsupported": "registrar:fate"
+  },
+  "prophecyReaction": {
+    "unsupported": "registrar:prophecy"
+  },
+  "prophecyInterrupt": {
+    "unsupported": "registrar:prophecy"
+  },
+  "setupBlasterCardAbilities": {
+    "unsupported": "registrar:custom"
+  }
 }

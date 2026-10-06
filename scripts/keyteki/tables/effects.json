@@ -1,5 +1,5 @@
 {
-  "_doc": "ability.effects.<name>(arg) → PersistentEffect fields (M1 core only; the other ~75 effects are G/M2). number = a literal number copied to `field`; keywords = an object literal {keyword: n|true} merged into `keywords`. Lote 15d: modifyKeyCost → keyCost; changeHouse → house (nome canônico via houseName). cardCannot/playerCannot → restrict {action} (o who vem do targetController da ação durável); o 2º arg (condição) fica de fora.",
+  "_doc": "ability.effects.<name>(arg) → PersistentEffect fields (M1 core only; the other ~75 effects are G/M2). number = a literal number copied to `field`; keywords = an object literal {keyword: n|true} merged into `keywords`. Lote 15d: modifyKeyCost → keyCost; changeHouse → house (nome canônico via houseName). cardCannot/playerCannot → restrict {action} (o who vem do targetController da ação durável); o 2º arg (condição) fica de fora. Lote 15e: takeControl(player) → control \"you\"|\"opponent\" (o arg é o caminho do player).",
   "modifyPower": {
     "number": "power"
   },
@@ -20,5 +20,8 @@
   },
   "playerCannot": {
     "restrict": "action"
+  },
+  "takeControl": {
+    "control": true
   }
 }

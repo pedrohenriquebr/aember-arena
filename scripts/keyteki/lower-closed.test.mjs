@@ -374,11 +374,43 @@ describe("lowering maps the lasting durations (Lote 15d)", () => {
   });
 
   it("rejects the lasting shapes the mapping would guess about", () => {
-    // lasting COM gatilho ("gain 1 each time a creature reaps") — fora
-    expect(reject("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd((context) => ({ when: { onReap: () => true }, gameAction: ability.actions.gainAmber() })) });")).toBe("prop:lasting.when");
     // duração fora do mapa (untilLeavesPlay) não vira achismo
     expect(reject("        this.play({ gameAction: ability.actions.cardLastingEffect({ match: (card) => card.type === 'creature', until: 'untilLeavesPlay', effect: ability.effects.modifyPower(1) }) });")).toBe("lasting:until untilLeavesPlay");
-    // efeito sem entrada na tabela
-    expect(reject("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ effect: ability.effects.takeControl() }) });")).toBe("effect:takeControl");
+    // takeControl sem o player explícito (a forma fn) não é mapeado
+    expect(reject("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ effect: ability.effects.takeControl() }) });")).toBe("dynamic:effect takeControl");
+    // o observador concedido precisa do gameAction
+    expect(reject("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ when: { onReap: () => true } }) });")).toBe("lasting:when without gameAction");
+  });
+});
+
+
+// Lote 15e (engineGaps fechados): who "any" no restrict, takeControl como
+// efeito durável e o lasting COM gatilho (observador concedido à fonte).
+describe("lowering maps the 15e engine gaps", () => {
+  it("takeControl(player) becomes the durable `control` effect (Harland Mindlock shape)", () => {
+    const mine = lower("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ match: (card) => card.type === 'creature', effect: ability.effects.takeControl(context.player) }) });").abilities[0];
+    expect(mine.acts).toEqual([{ k: "lasting", e: { target: { type: "Creature", side: "friendly" }, control: "you", duration: "turn" } }]);
+    const theirs = lower("        this.play({ gameAction: ability.actions.untilPlayerTurnEnd({ match: (card) => card.type === 'creature', effect: ability.effects.takeControl(context.player.opponent) }) });").abilities[0];
+    expect(theirs.acts).toEqual([{ k: "lasting", e: { target: { type: "Creature", side: "friendly" }, control: "opponent", duration: "turn" } }]);
+  });
+
+  it("a lasting with `when`+gameAction grants the observer to the source (Crystal Hive shape)", () => {
+    const l = lower("        this.action({ gameAction: ability.actions.untilPlayerTurnEnd((context) => ({ when: { onReap: () => true }, gameAction: ability.actions.gainAmber({ target: context.player }) })) });").abilities[0];
+    expect(l.acts).toEqual([{ k: "lasting", e: { target: { self: true }, abilities: [{ on: ["reap"], of: {}, acts: [{ k: "gainAmber", n: 1 }] }], duration: "turn" } }]);
+  });
+
+  it("targetController any + cardCannot is the who any restrict (Sow Salt shape)", () => {
+    const l = lower("        this.play({ gameAction: ability.actions.untilPlayerNextTurnStart({ targetController: 'any', effect: ability.effects.cardCannot('reap') }) });").abilities[0];
+    expect(l.acts).toEqual([{ k: "lasting", e: { target: {}, restrict: { action: "reap", who: "any" }, duration: "next" } }]);
+  });
+
+  it("the interrupt registrar resolves in the BEFORE window (Evasion Sigil shape)", () => {
+    const l = lower("        this.interrupt({ when: { onFight: (event) => event.attacker.type === 'creature' }, gameAction: ability.actions.draw() });").abilities[0];
+    expect(l.on).toEqual(["beforeFight"]);
+    expect(l.of).toEqual({ type: "Creature" });
+    expect(l.acts).toEqual([{ k: "draw", n: 1 }]);
+    // um interrupt de fim de turno continua no trigger do print ("At the end of…")
+    const turn = lower("        this.interrupt({ when: { onTurnEnd: (_, context) => context.player === this.game.activePlayer }, gameAction: ability.actions.draw() });").abilities[0];
+    expect(turn.on).toEqual(["endOfTurn"]);
   });
 });
