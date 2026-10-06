@@ -96,6 +96,10 @@ function conjunct(n, S, ctx, negated = false) {
     const arg = str(n.args[0]);
     switch (n.callee.prop) {
       case "hasHouse": {
+        // Lote 15b: `card.hasHouse(context.house)` é a casa que o
+        // `target: {mode: 'house'}` escolheu ("Stun each creature of that
+        // house") — a variável de casa do motor (`house: "chosen"`).
+        if (path(n.args[0]) === `${ctx}.house`) return { house: negated ? "!chosen" : "chosen" };
         const h = arg && houseName(arg);
         if (!h) throw new Unsupported("lambda", `house ${arg}`);
         return { house: negated ? `!${h}` : h };

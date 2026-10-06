@@ -116,13 +116,29 @@ describe("lowering maps keyteki then-chains (M2)", () => {
     expect(l.optional).toBeUndefined();
   });
 
-  it("alwaysTriggers + may opens the chain link (Key Abduction shape)", () => {
+  it("alwaysTriggers + may is an UNGATED follow-up (Key Abduction shape)", () => {
+    // Lote 15b (triagem M3): `alwaysTriggers` é o ANTI-gate do keyteki
+    // (ThenAbility.resolveThenIfNeeded: o bloco dispara mesmo com zero eventos —
+    // spec "should prompt to forge a key even if no mars creatures are returned").
+    // Virar `then: true` aqui matava o forge quando o return era vácuo.
     const l = lower(
       "        this.play({ gameAction: ability.actions.makeTokenCreature(), then: { may: 'forge a key', alwaysTriggers: true, gameAction: ability.actions.forgeKey() } });",
     ).abilities[0];
     expect(l.acts).toEqual([
       { k: "makeToken", n: 1 },
-      { k: "forgeKey", n: 1, optional: true, then: true },
+      { k: "forgeKey", n: 1, optional: true },
+    ]);
+  });
+
+  it("alwaysTriggers without may is an UNGATED follow-up (Edge of the World shape)", () => {
+    // "Move a creature to a flank of its battleline. Steal 1A." — o print não tem
+    // "Then,": o steal acontece mesmo quando o move é vácuo.
+    const l = lower(
+      "        this.play({ target: { cardType: 'creature', gameAction: ability.actions.moveToFlank() }, then: { alwaysTriggers: true, gameAction: ability.actions.steal() } });",
+    ).abilities[0];
+    expect(l.acts).toEqual([
+      { k: "toFlank", s: "target" },
+      { k: "steal", n: 1 },
     ]);
   });
 
@@ -147,24 +163,45 @@ describe("lowering maps keyteki then-chains (M2)", () => {
     ]);
   });
 
-  it("then.condition rides the chain act (Ragnarok Prep shape)", () => {
+  it("then.condition rides the act; alwaysTriggers drops the link (Ragnarok/Radix shapes)", () => {
+    // Lote 15b (triagem M3): com `alwaysTriggers` a condição é o ÚNICO gate
+    // (Radix of Suffering: "Your opponent loses 1A. If your opponent has no A,
+    // draw 1 card." — o draw acontece com o oponente já em 0 âmbar).
     const l = lower(
       "        this.play({ gameAction: ability.actions.makeTokenCreature(), then: { alwaysTriggers: true, condition: (context) => context.player.creaturesInPlay.length > context.player.opponent.creaturesInPlay.length, gameAction: ability.actions.loseAmber({ amount: 2 }) } });",
     ).abilities[0];
     expect(l.acts).toEqual([
       { k: "makeToken", n: 1 },
+      { k: "loseAmber", n: 2, opp: true, if: { k: "moreCreatures" } },
+    ]);
+    // sem alwaysTriggers o link continua ("Then, if <cond>, X" compartilha o gate)
+    const linked = lower(
+      "        this.play({ gameAction: ability.actions.makeTokenCreature(), then: { condition: (context) => context.player.creaturesInPlay.length > context.player.opponent.creaturesInPlay.length, gameAction: ability.actions.loseAmber({ amount: 2 }) } });",
+    ).abilities[0];
+    expect(linked.acts).toEqual([
+      { k: "makeToken", n: 1 },
       { k: "loseAmber", n: 2, opp: true, then: true, if: { k: "moreCreatures" } },
     ]);
   });
 
-  it("nested then-chains keep appending linked acts", () => {
+  it("nested then-chains keep appending acts", () => {
+    // alwaysTriggers em cascata = follow-ups em cascata, todos sem gate
     const l = lower(
       "        this.play({ gameAction: ability.actions.draw(), then: { alwaysTriggers: true, gameAction: ability.actions.draw(), then: { alwaysTriggers: true, gameAction: ability.actions.draw() } } });",
     ).abilities[0];
     expect(l.acts).toEqual([
       { k: "draw", n: 1 },
-      { k: "draw", n: 1, then: true },
-      { k: "draw", n: 1, then: true },
+      { k: "draw", n: 1 },
+      { k: "draw", n: 1 },
+    ]);
+    // then puro em cascata: cada link é o "If you do" do ato imediatamente antes
+    const bare = lower(
+      "        this.play({ gameAction: ability.actions.draw(), then: { gameAction: ability.actions.draw(), then: { gameAction: ability.actions.draw() } } });",
+    ).abilities[0];
+    expect(bare.acts).toEqual([
+      { k: "draw", n: 1 },
+      { k: "draw", n: 1, if: DID },
+      { k: "draw", n: 1, if: DID },
     ]);
   });
 
@@ -181,5 +218,40 @@ describe("lowering maps keyteki then-chains (M2)", () => {
     // `alwaysTriggers: 'true'` (string) existe no corpus — o map não adivinha
     expect(reject("        this.play({ gameAction: ability.actions.draw(), then: { alwaysTriggers: 'true', gameAction: ability.actions.draw() } });")).toBe("prop:then.alwaysTriggers");
     expect(reject("        this.play({ gameAction: ability.actions.draw(), then: { may: true, gameAction: ability.actions.draw() } });")).toBe("dynamic:then.may");
+  });
+});
+
+// Lote 15b (target-select): os targetingModes do keyteki viram as grafias do
+// parser — `mode: 'exactly'|'upTo'` + `numCards` = pick Selection; `mode:
+// 'house'` = a escolha de casa (os filtros dos gameAction leem
+// `house: "chosen"` via hasHouse(context.house)).
+describe("lowering maps keyteki target modes (Lote 15b)", () => {
+  it("target.mode 'exactly'/'upTo' + numCards become the pick selection", () => {
+    // Lights Out ("Return 2 enemy creatures to their owner's hand")
+    const exact = lower(
+      "        this.play({ target: { mode: 'exactly', numCards: 2, controller: 'opponent', cardType: 'creature', gameAction: ability.actions.returnToHand() } });",
+    ).abilities[0];
+    expect(exact.target).toBeUndefined();
+    expect(exact.acts).toEqual([{ k: "returnToHand", s: { pick: { type: "Creature", side: "enemy" }, n: 2 } }]);
+    // Nature's Call ("Return up to 3 creatures to their owners hands")
+    const upTo = lower(
+      "        this.play({ target: { mode: 'upTo', numCards: 3, cardType: 'creature', gameAction: ability.actions.returnToHand() } });",
+    ).abilities[0];
+    expect(upTo.acts).toEqual([{ k: "returnToHand", s: { pick: { type: "Creature" }, n: 3, upTo: true } }]);
+  });
+
+  it("target.mode 'house' is the house choice — the filters read `house: \"chosen\"`", () => {
+    // Blinding Light ("Choose a house. Stun each creature of that house.")
+    const l = lower(
+      "        this.play({ target: { mode: 'house' }, gameAction: ability.actions.stun((context) => ({ target: context.game.creaturesInPlay.filter((card) => card.hasHouse(context.house)) })) });",
+    ).abilities[0];
+    expect(l.target).toBeUndefined();
+    expect(l.acts).toEqual([{ k: "stun", s: { each: { type: "Creature", house: "chosen" } } }]);
+  });
+
+  it("rejects the target modes the mapping would guess about", () => {
+    expect(reject("        this.play({ target: { mode: 'random', numCards: 1, cardType: 'creature', gameAction: ability.actions.returnToHand() } });")).toBe("target:mode random");
+    expect(reject("        this.play({ target: { mode: 'exactly', cardType: 'creature', gameAction: ability.actions.returnToHand() } });")).toBe("target:exactly without numCards");
+    expect(reject("        this.play({ target: { mode: 'house', cardType: 'creature', gameAction: ability.actions.returnToHand() } });")).toBe("target:house mode with card target");
   });
 });

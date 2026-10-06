@@ -112,6 +112,8 @@ function targetFilter(node) {
   const filter = {};
   let acts = null;
   let cond = null;
+  let mode = null;
+  let numCards = null;
   for (const [key, v] of Object.entries(node.props)) {
     if (COSMETIC.has(key)) continue;
     switch (key) {
@@ -143,6 +145,17 @@ function targetFilter(node) {
       case "location":
         if (lit(v) !== "play area") fail("target", "location");
         break;
+      // Lote 15b (target-select): os targetingModes do keyteki.
+      case "mode": {
+        const m = lit(v);
+        if (m !== "house" && m !== "upTo" && m !== "exactly") fail("target", `mode ${m}`);
+        mode = m;
+        break;
+      }
+      case "numCards":
+        numCards = lit(v);
+        if (typeof numCards !== "number" || !(numCards > 0)) fail("target", "numCards");
+        break;
       default:
         fail("prop", `target.${key}`);
     }
@@ -153,7 +166,22 @@ function targetFilter(node) {
       filter[k] = val;
     }
   }
+  // Lote 15b: `mode: 'house'` ("Choose a house", Arise/BlindingLight) não é
+  // alvo de carta — a escolha vira `house: "chosen"` nos filtros dos
+  // gameAction (lambdas.mjs: hasHouse(context.house)) e o gameAction do nível
+  // superior é que traz os atos.
+  if (mode === "house") {
+    if (Object.keys(filter).length || cond || acts) fail("target", "house mode with card target");
+    return { house: true };
+  }
   if (!acts) fail("target", "no gameAction");
+  // 'exactly'/'upTo' + numCards: a escolha vira o pick do ato (a grafia do
+  // parser: "Return 2 enemy creatures" = `{pick, n}`, "Choose up to N" =
+  // `{pick, n, upTo: true}`).
+  if (mode) {
+    if (!numCards) fail("target", `${mode} without numCards`);
+    return { filter, acts, pick: { n: numCards, ...(mode === "upTo" ? { upTo: true } : {}) } };
+  }
   return { filter, acts };
 }
 
@@ -178,6 +206,14 @@ function lowerAbility(bag, base) {
         break;
       case "target": {
         const t = targetFilter(v);
+        // Lote 15b: "Choose a house" não traz alvo nem atos — os gameAction do
+        // nível superior resolvem com os filtros `house: "chosen"`.
+        if (t.house) break;
+        if (t.pick) {
+          // 'exactly'/'upTo': a escolha é o pick do ato, sem ability.target.
+          acts = { node: t.acts, sel: { pick: t.filter, ...t.pick }, inTarget: true };
+          break;
+        }
         ability.target = t.filter;
         acts = { node: t.acts, sel: "target", inTarget: true };
         hasTarget = true;
@@ -221,19 +257,26 @@ function lowerAbility(bag, base) {
 }
 
 /** Lote 15a (M2): keyteki `then` — o bloco que resolve DEPOIS do gameAction
-    principal ("Then, X" / "If you do, X"). `alwaysTriggers`, um bloco com mais de
-    um ato ou a anáfora `preThenEvent` ("…, then ready it") abrem o link `then: true`
-    da cadeia do DSL v14; um then puro de um ato é o "If you do" de um ato só — o
-    `if: did` do Lote 2. `may` ("Then, you may …") marca SÓ os atos do bloco como
-    opcionais: o resto do texto é obrigatório (Legate Scipio foi o inverso — o
-    `optional` do registrar desce para todos os atos). */
+    principal ("Then, X" / "If you do, X"). Um bloco com mais de um ato ou a
+    anáfora `preThenEvent` ("…, then ready it") abre o link `then: true` da cadeia
+    do DSL v14; um then puro de um ato é o "If you do" de um ato só — o `if: did`
+    do Lote 2. `may` ("Then, you may …") marca SÓ os atos do bloco como opcionais:
+    o resto do texto é obrigatório (Legate Scipio foi o inverso — o `optional` do
+    registrar desce para todos os atos).
+    Lote 15b (triagem M3): `alwaysTriggers` é o ANTI-gate do keyteki
+    (ThenAbility.resolveThenIfNeeded: o bloco dispara MESMO com zero eventos —
+    spec "should prompt to forge a key even if no mars creatures are returned") —
+    vira ato(s) SEM `then` e SEM `if: did`, como o print ("Move a creature to a
+    flank. Steal 1A." não tem "Then,"). O `then: true` do Lote 15a é o gate
+    (did ≥ 1); escrever gate onde o keyteki não tem um matava o follow-up quando o
+    ato anterior era vácuo (Radix of Suffering com o oponente em 0 âmbar). */
 function lowerThen(node, env) {
   const { props } = optionsOf(node);
   let actsNode = null;
   let next = null;
   let may = false;
   let cond = null;
-  let chain = false;
+  let ungated = false;
   for (const [key, v] of Object.entries(props)) {
     if (COSMETIC.has(key)) continue;
     switch (key) {
@@ -246,7 +289,7 @@ function lowerThen(node, env) {
         break;
       case "alwaysTriggers":
         if (lit(v) !== true) fail("prop", "then.alwaysTriggers");
-        chain = true;
+        ungated = true;
         break;
       case "condition":
         {
@@ -264,10 +307,13 @@ function lowerThen(node, env) {
   if (!actsNode) fail("empty", "then without gameAction");
   const acts = lowerAction(actsNode, env.sel, { inTarget: false });
   if (!acts.length) fail("empty", "then with no acts");
-  const linked = chain || cond !== null || acts.length > 1 || acts.some((a) => a.s === "moved");
+  const linked = !ungated && (cond !== null || acts.length > 1 || acts.some((a) => a.s === "moved"));
   for (const a of acts) {
     if (may) a.optional = true;
-    if (linked) {
+    if (ungated) {
+      // alwaysTriggers: sem gate de cadeia — só a condição impressa decide.
+      if (cond) a.if = cond;
+    } else if (linked) {
       a.then = true;
       if (cond) a.if = cond;
     } else a.if = { k: "count", of: "did", op: "gte", n: 1 };

@@ -27,7 +27,43 @@ const value = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : un
 
 /** Canonical form for the golden diff: sorted keys, abilities sorted by their JSON. */
 const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
-/** Same-effect rewrites the parser and keyteki spell differently: abilities with the same body merge their `on`; adjacent identical exalts sum. */
+/** Lote 15b — TRIAGEM DOS SEMANTIC DIFFS (método M3, parecer ao dono):
+    [a] bug do conversor/lower corrigido com spec | [b] parser/interpretador
+    certo, documentado | [c] equivalente, tratado na normalização abaixo |
+    [d] gap de DSL listado.
+    • [a] `alwaysTriggers: true` virava `then: true` (GATE) — mas é o ANTI-gate
+      do keyteki (ThenAbility.resolveThenIfNeeded: o bloco dispara mesmo com
+      zero eventos). lowerThen emite o follow-up SEM `then`/`if: did`. Fechou:
+      Edge of the World (6 faces), Nautilus, Massing at Midnight (2), Radix of
+      Suffering. Specs: lower-closed.test.mjs + dsl16.test.ts (motor).
+    • [a] "non-Star Alliance creature" parseava como traits ("non-star" → trait
+      "Star", "alliance" → trait "Alliance" sobrescrevendo): a negação agora
+      atravessa o par de palavras da casa → `house: "!Star Alliance"` (Séance
+      Scanner). Specs: dsl16.test.ts (parse + motor).
+    • [c] `then: true` num ato cuja seleção é a anáfora `moved` é redundante — o
+      `moved` já carrega a dependência (seleção vazia = no-op) e o keyteki só
+      escreve `then` porque `preThenEvent` vive num bloco then (Arm the
+      Plebeians ×2, Request Donations; o print não tem "Then,"). A normalização
+      vale para os dois lados, então Cover Operation (com `then` impresso)
+      continua AGREE.
+    • [b] Spike Trap: print "Destroy Spike Trap" × código `sacrifice()`. Nossa
+      regra exposta: sacrifice vai ao descarte do dono SEM a janela Destroyed:
+      (MECHANICS_REPORT §2.6) — o parser (`destroy`) é a fonte correta e o
+      código keyteki usa SacrificeAction como sinônimo de DestroyAction.
+      Divergência texto × código registrada; NÃO se normaliza destroy ≡
+      sacrifice (mascararia cartas com Destroyed:).
+    • [b] Ragnarok Prep: print "Then, if <cond>, X" (parser mantém o link
+      `then: true`, spelling do Lote 15a) × código `then: {alwaysTriggers,
+      condition}` (follow-up sem gate). Aqui o gate é imaterial (makeToken nunca
+      é vácuo), mas then+if ≠ if quando o ato anterior pode ser vácuo (Radix com
+      o oponente em 0 âmbar, onde o `if` sozinho é o comportamento do print) —
+      por isso a divergência fica documentada e NÃO normalizada.
+    • [d] gaps: nenhum campo novo necessário para os 15. Refinamento futuro
+      opcional: o print não denuncia o alwaysTriggers do código, então "Then,"
+      condicional e "Then," sequencial puro saem iguais no parser.
+    Fora do golden: Key Abduction (`modifier: 9 - hand` = `dynamic:
+    forgeKey.modifier`, unsupported). */
+/** Same-effect rewrites the parser and keyteki spell differently: abilities with the same body merge their `on`; adjacent identical exalts sum; the `then` link on a `moved`-anaphora act is redundant (Lote 15b, triagem [c]). */
 const equivalent = (list) => {
   const merged = new Map();
   for (const a of list ?? []) {
@@ -36,7 +72,11 @@ const equivalent = (list) => {
     for (const act of body.acts ?? []) {
       const last = acts[acts.length - 1];
       if (last && act.k === "exalt" && last.k === "exalt" && JSON.stringify({ ...last, n: 0 }) === JSON.stringify({ ...act, n: 0 })) last.n = (last.n ?? 1) + (act.n ?? 1);
-      else acts.push({ ...act });
+      else {
+        const copy = { ...act };
+        if (copy.then === true && copy.s === "moved") delete copy.then;
+        acts.push(copy);
+      }
     }
     const key = JSON.stringify(sortKeys({ ...body, acts }));
     merged.set(key, { ...JSON.parse(key), on: [...new Set([...(merged.get(key)?.on ?? []), ...on])] });
