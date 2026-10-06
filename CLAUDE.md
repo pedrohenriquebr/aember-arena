@@ -33,7 +33,7 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 + fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
 (CAT-3.5, `--export-queue`); ETL keyteki (`npm run keyteki:cards` + `merge:cards`
 → corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
-`npm run relay:go` (tier OpenCode Go). Specs: 819+ (Lote 15b).
+`npm run relay:go` (tier OpenCode Go). Specs: 847+ (Lote 15d).
 
 **Lotes 15a/15b FECHADOS (05/out noite, commits 74f8107/a541906/0a5da70/04a525e, mimo-v2.6-pro):**
   15a = then-chains (DSL v14 `Act.then`, Selection "moved", Ctx.chain; parser v16; canon do join +106 linhas
@@ -45,6 +45,14 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
   you may X" do parser segue com gate (case vácuo não oferece X) enquanto o keyteki nunca gateia — o
   comportamento de referência está specado no lado do conversor (Key Abduction). Pendente: noTextMatch 15
   (faces lowered sem face no corpus), Festering Touch (replacement por alvo fora do vocabulário).
+
+  **15c/15d também FECHADOS (06/out, commits 7982002/940ca55 + ae0b213/f38f1b6):** 15c = pacote de tabelas
+  (20 entradas no lambda-map de amounts dinâmicos, 5 gatilhos na triggers.json, archive/unstun/moveAmber,
+  exactly-1 → alvo singular; parser v18 zonas/gatilho de casa própria). 15d = durações (DSL v16
+  `duration:"nextTurn"`, **fix de motor: `self` em efeito lasting guardado era no-op — sourceId congelado**;
+  parser v19 "during your next turn"; 6 ações keyteki → lasting). converted 221→**383**, golden 371→**476**,
+  847 specs, 0 diff sem triagem. engineGaps p/ 15e: Restrict.who "any" (sow-salt), takeControl como efeito
+  (54 usos), lasting com gatilho (Crystal Hive), untilLeavesPlay, gain-ability (15f).
 
 ## Stack
 
@@ -146,7 +154,7 @@ ações, cobertura por set, pendências).
   faces (+73). Pendente: dono revisar as 73 na tela de revisão → leva T2 vendorizada
   (recomendação: chave `textHash|type`, 51 pares distintos); M4 = cauda (541 C-layer,
   1.745 unsupported). Testes do conversor rodam via **vitest**; CLI via **vite-node**.
-- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 15 — Lote 15b: `Filter.mostStat`/`lowest`, pick `upTo`/`exactly`/`house`, casa escolhida reusada do Lote 5; Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey; PARSER_VERSION 15) — linha com `v` maior é
+- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 16 — Lote 15d: `duration: "nextTurn"` no lasting, `sourceId` congelado em efeito guardado (self resolvia como no-op); Lote 15b: `Filter.mostStat`/`lowest`, pick `upTo`/`exactly`/`house`, casa escolhida reusada do Lote 5; Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey; PARSER_VERSION 15) — linha com `v` maior é
   descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
   `docs/DSL_EXPANSION_PLAN.md`); falhas `reply:` e transporte usam `tries` com tetos
   (3 e 5); `did`/`gone` são medidos pós-sweep (side capturado antes de sair de jogo);
