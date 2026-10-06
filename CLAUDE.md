@@ -33,7 +33,7 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 + fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
 (CAT-3.5, `--export-queue`); ETL keyteki (`npm run keyteki:cards` + `merge:cards`
 → corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
-`npm run relay:go` (tier OpenCode Go). Specs: 862+ (Lote 15e).
+`npm run relay:go` (tier OpenCode Go). Specs: 872+ (Lote 15f).
 
 **Lotes 15a/15b FECHADOS (05/out noite, commits 74f8107/a541906/0a5da70/04a525e, mimo-v2.6-pro):**
   15a = then-chains (DSL v14 `Act.then`, Selection "moved", Ctx.chain; parser v16; canon do join +106 linhas
@@ -53,8 +53,12 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
   parser v19 "during your next turn"; 6 ações keyteki → lasting). converted 221→**383**, golden 371→**476**,
   847 specs, 0 diff sem triagem. 15e TAMBÉM FECHADO (ba4b0ae/b2da28e): who "any" (sow-salt virou AGREE), takeControl efeito
   durável, lasting com gatilho (Crystal Hive), before-window. converted 221→**393**, golden 371→**480**,
-  862 specs. Próximo 15f = gain-ability (100 arq; motor já tem ability concedida). Fora de escopo com motivo:
-  beforeX genérico sem print no corpus, fires-once (Blypyp) sem modelo.
+  862 specs. 15f TAMBÉM FECHADO (4eba275/f452f2f/fa8aa6f, parser v22): gain-ability foi CONVERSOR/PARSER
+  como previsto — parseGrant combo keyword+ability, "another X", archives nos corpos concedidos;
+  equivalentEffects funde escritas e descarta undefined (fix killzord). converted 221→**432**, golden
+  371→**531**, 872 specs, rows 704, newlyCovered 148. Os 5 grandes clusters do M4 FECHADOS (15a-f).
+  Fora com motivo: beforeX genérico sem print, fires-once (Blypyp) sem modelo, gainAbility de
+  persistentEffect (efeito concedido = outro lote), "instead" dentro de grant (changeEvent).
 
 ## Stack
 
@@ -156,7 +160,7 @@ ações, cobertura por set, pendências).
   faces (+73). Pendente: dono revisar as 73 na tela de revisão → leva T2 vendorizada
   (recomendação: chave `textHash|type`, 51 pares distintos); M4 = cauda (541 C-layer,
   1.745 unsupported). Testes do conversor rodam via **vitest**; CLI via **vite-node**.
-- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 17 — Lote 15e: `Restrict.who "any"`, `control`/`controlCards` duráveis (takeControl como efeito, devolve na expiração), observador temporário de lasting com gatilho, janela beforeFight; Lote 15d: `duration: "nextTurn"` no lasting, `sourceId` congelado em efeito guardado (self resolvia como no-op); Lote 15b: `Filter.mostStat`/`lowest`, pick `upTo`/`exactly`/`house`, casa escolhida reusada do Lote 5; Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey; PARSER_VERSION 15) — linha com `v` maior é
+- **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 17 — Lote 15f não mudou motor (gainAbility → effect.abilities que já existia); Lote 15e: `Restrict.who "any"`, `control`/`controlCards` duráveis (takeControl como efeito, devolve na expiração), observador temporário de lasting com gatilho, janela beforeFight; Lote 15d: `duration: "nextTurn"` no lasting, `sourceId` congelado em efeito guardado (self resolvia como no-op); Lote 15b: `Filter.mostStat`/`lowest`, pick `upTo`/`exactly`/`house`, casa escolhida reusada do Lote 5; Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey; PARSER_VERSION 15) — linha com `v` maior é
   descartada, e falha com `v` menor é re-enfileirada (contrato de versionamento,
   `docs/DSL_EXPANSION_PLAN.md`); falhas `reply:` e transporte usam `tries` com tetos
   (3 e 5); `did`/`gone` são medidos pós-sweep (side capturado antes de sair de jogo);
