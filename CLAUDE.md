@@ -33,7 +33,7 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 + fila de tradução/revisão in-game (CAT-3) + importação da fila do harvest
 (CAT-3.5, `--export-queue`); ETL keyteki (`npm run keyteki:cards` + `merge:cards`
 → corpus 4.809 local); proxy local do dono via `scripts/llm-cors-relay.mjs` +
-`npm run relay:go` (tier OpenCode Go). Specs: 872+ (Lote 15f).
+`npm run relay:go` (tier OpenCode Go). Specs: 876+ (07/out).
 
 **Lotes 15a/15b FECHADOS (05/out noite, commits 74f8107/a541906/0a5da70/04a525e, mimo-v2.6-pro):**
   15a = then-chains (DSL v14 `Act.then`, Selection "moved", Ctx.chain; parser v16; canon do join +106 linhas
@@ -143,6 +143,21 @@ ações, cobertura por set, pendências).
   inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
   de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
   `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
+- **Estado 07/out (sessão dos 2 decks + UX + PWA)**: ① Lotes 15a-15f do conversor COMMITADOS
+  (then-chains DSL v14, target-select v15, pacote de tabelas, durações v16 + fix `self` no-op no lasting,
+  engineGaps v17, gain-ability — converted 221→432, golden 531; refs/audit em `docs/UX_ARENA_PLAN.md`).
+  ② SW CURADO: dev não registra SW (1ea1797), `sw.js` versionado por build + escape hatch `?swreset=1`
+  (975d982) — build novo = toast FEAT-09; harness `node e2e/sw-reset.mjs`. ③ 2 DECKS DO DONO 100%
+  (755bcdd): o faltante eram rascunhos nunca-revisados, não farm — checar drafts.json antes de farmar.
+  ④ **FALLBACK POR textHash no storedAbility (07/out)**: os ids de carta do MV DIVERGEM dos ids do
+  corpus ETL nos sets novos (Memette 07f5be7e… no MV vs 6e4e4627… no corpus) e o override nunca casava
+  por id — agora, se o id não acha, a linha cujo textHash é IGUAL ao texto da carta aplica (texto igual =
+  regra igual; cartas SEM texto nunca caem no fallback — teste dsl3 do laço de observers pega isso).
+  ⑤ UX ARENA (5e1db6e/2572fad): 15 referências MTG Arena em `docs/references/mtg-arena/`, backlog
+  UX-01..14, design system com tokens, home AAA (parallax/partículas/cascata) e mesa 3D estilo MTG
+  (atmosfera por profundidade; folga vertical ZERO na tela de jogo e `--row-z` travado — ver plano §6).
+  ⑥ MISSÃO DOS 2 DECKS NO NAVEGADOR: importação fresca do MV abre 19/36; com o fallback → 35/36
+  (Memette full). Crash do DeckTile com deck importado (`deck.houses[0]` sem houses) em correção.
 - **Keyteki como fonte de DSL (pesquisa 05/out)**: `docs/KEYTEKI_DSL_RESEARCH.md` (Opus low) e
   `_SONNET.md` (Sonnet medium, independente) mediram o sistema de habilidades do keyteki
   (2.606 arquivos JS, 101 classes de GameAction, 127 helpers usados). Veredito: conversor
