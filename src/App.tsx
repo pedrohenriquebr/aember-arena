@@ -2838,7 +2838,40 @@ function App() {
     void cacheDeck(DEMO_DECK);
     void cacheDeck(DEMO_DECK_2);
     let disposed = false;
-    if ("serviceWorker" in navigator) {
+    // ESCAPE HATCH (?swreset=1): cura manual de SW envenenado — produção E dev.
+    // O dono abre o app com ?swreset=1 na URL (ex.: localhost:4173/?swreset=1):
+    // desregistra TODOS os service workers, apaga TODOS os caches aember-arena-*,
+    // tira o parâmetro da URL (history.replaceState) e recarrega UMA vez. A flag
+    // "swreset-done" no sessionStorage evita loop caso o parâmetro persista; o
+    // passe seguinte (sem o parâmetro) zera a flag e registra o worker limpo do
+    // zero. Como usar: ver README ("PWA: atualização e recuperação").
+    const swreset = new URLSearchParams(window.location.search).get("swreset") === "1";
+    if (swreset) {
+      void (async () => {
+        try {
+          const registrations = (await navigator.serviceWorker?.getRegistrations()) ?? [];
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((key) => key.startsWith("aember-arena-")).map((key) => caches.delete(key)));
+        } catch {
+          // Sem SW/caches o reload abaixo já devolve o app à rede.
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete("swreset");
+        window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+        if (!sessionStorage.getItem("swreset-done")) {
+          sessionStorage.setItem("swreset-done", "1");
+          window.location.reload();
+        } else {
+          sessionStorage.removeItem("swreset-done");
+        }
+      })();
+    } else {
+      // Resíduo de um reset anterior: zera a flag para o PRÓXIMO ?swreset=1 recarregar.
+      sessionStorage.removeItem("swreset-done");
+    }
+    // No passe do reset nada é registrado: o reload acima re-entra sem o parâmetro.
+    if (!swreset && "serviceWorker" in navigator) {
       if (import.meta.env.DEV) {
         // Dev NÃO registra SW (e limpa o legado): módulos de dev não têm hash no
         // nome, então o stale-while-revalidate do worker serve módulo velho para

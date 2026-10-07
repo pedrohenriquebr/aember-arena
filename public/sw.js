@@ -1,4 +1,11 @@
-const SHELL_CACHE = "aember-arena-shell-v2";
+// BUILD_ID: trocado no build por scripts/inject-sw-version.mjs (git short hash +
+// timestamp curto). Com o placeholder injetado o sw.js muda de bytes A CADA
+// build → o navegador acha update → o toast FEAT-09 aparece → "Recarregar" faz
+// skipWaiting → o activate abaixo limpa as caches aember-arena-* antigas pelo
+// prefixo. Em dev o placeholder fica literal no lugar (dev não usa SW).
+self.BUILD_ID = "__BUILD_ID__";
+
+const SHELL_CACHE = "aember-arena-shell-" + self.BUILD_ID;
 const HOUSE_CACHE = "aember-arena-houses-v1";
 // Relative paths: resolved against the service worker script URL, so the shell
 // precache works at the deployment root, under a subpath, wherever the SW is.

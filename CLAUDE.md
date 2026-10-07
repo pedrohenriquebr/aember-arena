@@ -77,7 +77,7 @@ com validação tripla + harvest concorrente (`--concurrency`, saves serializado
 
 ```bash
 npm run dev            # vite dev server
-npm run build          # tsc --noEmit && vite build  (gate: tipos + bundle)
+npm run build          # tsc --noEmit && vite build + inject-sw-version (gate: tipos + bundle)
 npm run typecheck      # tsc --noEmit
 npm run preview        # serve o build
 npm run e2e:capture    # screenshots 4 viewports × 5 telas -> e2e/shots/current
@@ -95,6 +95,8 @@ npm run e2e:record:3d  # clipe + frames da mesa 3D (e2e/clips/frames-3d)
 npm run e2e:fit:3d     # o encaixe do palco (e2e:fit) com a mesa 3D; mão overlay >= 70%
 npm run e2e:arena      # layout Arena (H3D-13..15): palco, fileiras, notch, escala, a11y;
                        # `--break` (lane em flex) TEM de falhar; `--shots` salva PNGs
+node e2e/sw-reset.mjs  # PWA: BUILD_ID registrado, repro do SW envenenado, ?swreset=1,
+                       # update via toast FEAT-09 (requer `npm run build` antes)
 ```
 
 ## Layout
