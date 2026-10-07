@@ -157,7 +157,10 @@ ações, cobertura por set, pendências).
   keyteki válidos em `scripts/harvest/`). Correções de jogo no caminho: `optional` do
   keyteki propaga para os atos (Legate Scipio), conjunção "and enrage/stun it" herda o
   alvo da 1ª cláusula (Pestering Blow/Subdue). Full efetivo do corpus: 1.826 → **1.899**
-  faces (+73). T2 CONCLUÍDA: revisão delegada ao script review-auto (4 gates) e vendorizada — hoje são 148 linhas vivas em src/lib/generated/keyteki.json (50befa4), entram no boot sem clique
+  faces (+73). T2 CONCLUÍDA: revisão delegada ao script review-auto (4 gates) e vendorizada — hoje são 148 linhas vivas em src/lib/generated/keyteki.json (50befa4), entram no boot sem clique. Ruling do "Then" APLICADO (4f69697): "Then, you may X" impresso fica SEM
+  gate (sempre ofertado — Key Abduction no vácuo; keyteki alwaysTriggers); "If you do" e Then obrigatório
+  mantêm o gate de did (Art Project, Malison). Caso latente documentado: Key Drain ("You may discard…
+  Then, forge") morre com predecessor resolvido-vazio — decidir quando a gramática cobrir
   (recomendação: chave `textHash|type`, 51 pares distintos); M4 = cauda (541 C-layer,
   1.745 unsupported). Testes do conversor rodam via **vitest**; CLI via **vite-node**.
 - **Versão e orçamentos (ondas 2-3)**: `DSL_VERSION` (hoje 17 — Lote 15f não mudou motor (gainAbility → effect.abilities que já existia); Lote 15e: `Restrict.who "any"`, `control`/`controlCards` duráveis (takeControl como efeito, devolve na expiração), observador temporário de lasting com gatilho, janela beforeFight; Lote 15d: `duration: "nextTurn"` no lasting, `sourceId` congelado em efeito guardado (self resolvia como no-op); Lote 15b: `Filter.mostStat`/`lowest`, pick `upTo`/`exactly`/`house`, casa escolhida reusada do Lote 5; Lote 14: `skipForgeStep` one-shot no passo de chave/Miasma, `attackKeywords`+`whenAttacking` estado de luta/Spyyyder, arquivo de vizinhos + casas compartilhadas do conjunto movido/Code Monkey); `PARSER_VERSION` (hoje 22 — grafias Then/If-you-do/anáforas, mostStat/lowest, durações, who any, gain-ability combo/another/archives) — linha com `v` maior é
