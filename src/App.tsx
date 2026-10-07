@@ -2839,25 +2839,51 @@ function App() {
     void cacheDeck(DEMO_DECK_2);
     let disposed = false;
     if ("serviceWorker" in navigator) {
-      // T7c/T8: caminho relativo — coerente com SHELL_URLS/manifest; não quebra em subpath.
-      void navigator.serviceWorker.register("./sw.js").then((registration) => {
-        if (disposed) return;
-        swRegistrationRef.current = registration;
-        // FEAT-09: um worker já esperando (update achado numa sessão anterior)
-        // também avisa o jogador na próxima abertura.
-        if (registration.waiting && navigator.serviceWorker.controller) setUpdateReady(true);
-        registration.addEventListener("updatefound", () => {
-          const installing = registration.installing;
-          if (!installing) return;
-          installing.addEventListener("statechange", () => {
-            // Sem controller é o primeiro install: não há versão antiga a trocar.
-            if (installing.state === "installed" && navigator.serviceWorker.controller) {
-              setUpdateDismissed(false);
-              setUpdateReady(true);
+      if (import.meta.env.DEV) {
+        // Dev NÃO registra SW (e limpa o legado): módulos de dev não têm hash no
+        // nome, então o stale-while-revalidate do worker serve módulo velho para
+        // sempre — o jogo nunca "pega" a mudança de código (o index.html vem
+        // fresco da rede, mas o JS vem do cache). Um SW de sessão anterior é
+        // desregistrado, os caches aember-arena-* morrem e a página recarrega
+        // uma vez; o sessionStorage evita o loop. Produção segue com o FEAT-09.
+        void (async () => {
+          try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            if (!registrations.length) return;
+            await Promise.all(registrations.map((registration) => registration.unregister()));
+            const keys = await caches.keys();
+            await Promise.all(keys.filter((key) => key.startsWith("aember-arena-")).map((key) => caches.delete(key)));
+            if (!sessionStorage.getItem("sw-dev-cleanup")) {
+              sessionStorage.setItem("sw-dev-cleanup", "1");
+              window.location.reload();
+            } else {
+              sessionStorage.removeItem("sw-dev-cleanup");
             }
+          } catch {
+            // Dev segue sem SW; o app funciona direto da rede.
+          }
+        })();
+      } else {
+        // T7c/T8: caminho relativo — coerente com SHELL_URLS/manifest; não quebra em subpath.
+        void navigator.serviceWorker.register("./sw.js").then((registration) => {
+          if (disposed) return;
+          swRegistrationRef.current = registration;
+          // FEAT-09: um worker já esperando (update achado numa sessão anterior)
+          // também avisa o jogador na próxima abertura.
+          if (registration.waiting && navigator.serviceWorker.controller) setUpdateReady(true);
+          registration.addEventListener("updatefound", () => {
+            const installing = registration.installing;
+            if (!installing) return;
+            installing.addEventListener("statechange", () => {
+              // Sem controller é o primeiro install: não há versão antiga a trocar.
+              if (installing.state === "installed" && navigator.serviceWorker.controller) {
+                setUpdateDismissed(false);
+                setUpdateReady(true);
+              }
+            });
           });
-        });
-      }).catch(() => undefined);
+        }).catch(() => undefined);
+      }
     }
     const setNetwork = () => setOnline(navigator.onLine);
     window.addEventListener("online", setNetwork);
