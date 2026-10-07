@@ -146,6 +146,54 @@ button,
   /* Curva de saída única das entradas/microinterações. */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 
+  /* ---------- Design system (UX_ARENA_PLAN §4 Fase C · UX-06..UX-09) ----------
+     Espaçamento em escala 4/8: substitui os 11 valores de gap soltos (1, 5, 6,
+     7, 8, 9, 10, 14, 15, 16, 18px) e os marginTop inline. A faixa de partida
+     mantém os literais próprios — ali a folga vertical é ZERO (FIT mede soma ==
+     viewport) e mexer em altura quebra o `e2e/fit.mjs`. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Elevação (UX-07): graus estáveis de sombra no lugar dos 58 box-shadow
+     ad-hoc. 1 = superfície em repouso · 2 = superfície erguida (hover/painel) ·
+     3 = overlay/modal que flutua sobre a tela · focus = anel de foco dourado. */
+  --elev-0: none;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --elev-2: 0 12px 26px rgba(0, 0, 0, 0.28);
+  --elev-3: 0 25px 90px rgba(0, 0, 0, 0.55);
+  --elev-focus: 0 0 0 3px rgba(237, 200, 120, 0.32);
+
+  /* Motion (UX-08): quatro durações e quatro curvas. `--ease-out` continua o
+     default de saída; `--ease-spring` traz o overshoot das entradas em cascata,
+     `--ease-emph` a acentuação das revelações de carta, `--ease-in` a saída. */
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-action: 200ms; /* calibrado: a troca pronta→exausta da peça mede 200±20ms (H3D-18) */
+  --dur-slow: 340ms;
+  --dur-enter: 420ms;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.2, 1.6, 0.4, 1);
+  --ease-emph: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Tipografia (UX-09): entrelinha, tracking e peso — a escala de corpo segue
+     na `--fs-*` acima. */
+  --lh-tight: 1.15;
+  --lh-snug: 1.35;
+  --lh-normal: 1.5;
+  --ls-tight: -0.02em;
+  --ls-caps: 0.12em;
+  --ls-wide: 0.16em;
+  --ls-eyebrow: 0.18em;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 800;
+
   /* Onda 1 (plano §1): aura de seleção "Æmber-éter" — ciano-branca, cromaticamente
      oposta ao dourado da dica (FEAT-04), para os dois estados nunca se confundirem. */
   --sel-core: 160 232 255;
@@ -2699,8 +2747,8 @@ button:disabled {
 .section-label {
   color: #9d8c64;
   font-size: var(--fs-2xs);
-  font-weight: 800;
-  letter-spacing: 0.15em;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-wide);
 }
 
 .quiet-icon-button {
@@ -2813,11 +2861,11 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
-  margin: 8px 0 0;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0 0;
   color: var(--faint);
   font-size: var(--fs-2xs);
-  line-height: 1.45;
+  line-height: var(--lh-normal);
 }
 
 .coverage-badge {
@@ -2825,8 +2873,8 @@ button:disabled {
   border: 1px solid currentColor;
   border-radius: var(--radius-pill);
   font-size: var(--fs-3xs);
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-caps);
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -2846,8 +2894,8 @@ button:disabled {
 .inspector-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-top: 9px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 /* Ação única (Jogar/Usar) ocupa a linha: meia largura parecia secundária. */
@@ -3324,10 +3372,10 @@ button:disabled {
   align-items: end;
   justify-items: center;
   overflow-y: auto;
-  padding: 8px;
+  padding: var(--space-2);
   background: rgba(5, 7, 5, 0.76);
   backdrop-filter: blur(9px);
-  animation: backdrop-in 180ms ease both;
+  animation: backdrop-in var(--dur-fast) var(--ease-out) both;
 }
 
 @media (min-width: 701px) {
@@ -3344,8 +3392,8 @@ button:disabled {
   border: 1px solid rgba(225, 215, 191, 0.17);
   border-radius: 11px 11px 8px 8px;
   background: linear-gradient(145deg, #24261f, #191b17 74%);
-  box-shadow: 0 25px 90px rgba(0, 0, 0, 0.55), inset 0 1px rgba(255, 255, 255, 0.04);
-  animation: modal-in 260ms cubic-bezier(0.18, 0.8, 0.24, 1) both;
+  box-shadow: var(--elev-3), inset 0 1px rgba(255, 255, 255, 0.04);
+  animation: modal-in var(--dur-base) var(--ease-out) both;
 }
 
 @media (min-width: 701px) {
@@ -3367,7 +3415,7 @@ button:disabled {
 
 /* FEAT-07: shared confirmation dialog (remove deck). */
 .confirm-panel {
-  padding: 22px 20px 17px;
+  padding: var(--space-5) var(--space-5) var(--space-4);
 }
 
 .confirm-panel h2 {
@@ -3403,8 +3451,8 @@ button:disabled {
 .eyebrow {
   color: #b69c5f;
   font-size: var(--fs-3xs);
-  font-weight: 800;
-  letter-spacing: 0.18em;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-eyebrow);
 }
 
 .modal-heading h2 {
@@ -3951,12 +3999,12 @@ button:disabled {
 /* Primeiro acesso: reusa o diálogo de confirmação (.confirm-panel) e os chips do
    inspetor (.filter-chip); só a barra de progresso e o palco da miniatura são novos. */
 .tutorial-open {
-  margin-top: 14px;
+  margin-top: var(--space-4);
 }
 
 .tutorial-progress {
   height: 3px;
-  margin: 10px 0 16px;
+  margin: var(--space-3) 0 var(--space-4);
   background: rgba(255, 255, 255, 0.07);
 }
 
@@ -3964,25 +4012,25 @@ button:disabled {
   display: block;
   height: 100%;
   background: var(--gold-bright);
-  transition: width 240ms var(--ease-out);
+  transition: width var(--dur-base) var(--ease-out);
 }
 
 .tutorial-body {
-  animation: rise-in 220ms var(--ease-out) backwards;
+  animation: rise-in var(--dur-base) var(--ease-spring) backwards;
 }
 
 .tutorial-body p + p,
 .tutorial-body .exp-row {
-  margin-top: 9px;
+  margin-top: var(--space-2);
 }
 
 .tutorial-visual {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-  padding: 14px 10px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-3);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.025);
   pointer-events: none;
@@ -4325,6 +4373,154 @@ button:disabled {
   50% { opacity: 1; transform: scale(1.12); }
 }
 
+/* ==================== Home estilo AAA (Fase D · UX-02/03/04/05) ====================
+   Tudo neste bloco é movimento/ornamento: nenhuma regra altera layout nem
+   navegação. O parallax escreve `--px`/`--py` (números -1..1) via pointermove +
+   rAF no App (mesmo padrão da câmera 3D, H3D-12); aqui o CSS só os lê.
+   Profundidade por MULTIPLICADOR de camada — a camada mais funda se move mais
+   (referências: docs/references/mtg-arena/NOTES.md "Profundidade por escala e
+   sombra"). Tudo cai no `prefers-reduced-motion` e no toggle
+   `html.reduce-motion` (settings.animations), que a probe de screenshots força. */
+.home-hero {
+  /* Resposta do parallax: suave, sem travar no ponteiro. */
+  --parallax-ease: var(--dur-slow);
+}
+
+/* Camada de profundidade (fundo longe): a mais lenta. O `translate` é a
+   propriedade individual — compõe sem brigar com o `transform: scale()` do
+   `hero-pulse`. */
+.home-hero-glow {
+  translate: calc(var(--px, 0) * -14px) calc(var(--py, 0) * -9px);
+  transition: translate var(--parallax-ease) var(--ease-out);
+}
+
+/* Camada média: a "névoa" quente que atravessa o hero. */
+.home-hero-haze {
+  position: absolute;
+  inset: -22% -12%;
+  background:
+    radial-gradient(ellipse 42% 62% at 22% 78%, rgba(211, 173, 93, 0.1), transparent 70%),
+    radial-gradient(ellipse 38% 50% at 84% 22%, rgba(130, 170, 135, 0.09), transparent 72%);
+  pointer-events: none;
+  translate: calc(var(--px, 0) * 12px) calc(var(--py, 0) * 8px);
+  transition: translate var(--parallax-ease) var(--ease-out);
+}
+
+/* Camada perto: a poeira de Æmber flutuando (a que mais se move). */
+.home-amber-dust {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  translate: calc(var(--px, 0) * 26px) calc(var(--py, 0) * 15px);
+  transition: translate var(--parallax-ease) var(--ease-out);
+}
+
+.home-amber-dust i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 216, 150, 0.95), rgba(245, 216, 150, 0));
+  box-shadow: 0 0 7px rgba(237, 200, 120, 0.5);
+  opacity: 0;
+  animation: amber-drift 13s linear infinite;
+}
+
+/* Posição/ritmo por partícula: determinístico (nth-child), nunca aleatório. */
+.home-amber-dust i:nth-child(1)  { left: 7%;  animation-delay: -1.2s; animation-duration: 15s; }
+.home-amber-dust i:nth-child(2)  { left: 18%; animation-delay: -4.6s; animation-duration: 12s; }
+.home-amber-dust i:nth-child(3)  { left: 29%; animation-delay: -7.1s; animation-duration: 17s; }
+.home-amber-dust i:nth-child(4)  { left: 38%; animation-delay: -2.8s; animation-duration: 13s; }
+.home-amber-dust i:nth-child(5)  { left: 49%; animation-delay: -9.4s; animation-duration: 16s; }
+.home-amber-dust i:nth-child(6)  { left: 57%; animation-delay: -5.5s; animation-duration: 11s; }
+.home-amber-dust i:nth-child(7)  { left: 66%; animation-delay: -11.2s; animation-duration: 18s; }
+.home-amber-dust i:nth-child(8)  { left: 74%; animation-delay: -3.3s; animation-duration: 14s; }
+.home-amber-dust i:nth-child(9)  { left: 83%; animation-delay: -8.7s; animation-duration: 12s; }
+.home-amber-dust i:nth-child(10) { left: 91%; animation-delay: -6.1s; animation-duration: 16s; }
+
+@keyframes amber-drift {
+  0%   { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.6); }
+  18%  { opacity: 0.85; }
+  82%  { opacity: 0.55; }
+  100% { opacity: 0; transform: translate3d(-16px, -120px, 0) scale(1.15); }
+}
+
+/* ---- Entrada em cascata das seções (UX-02/03): hero → grade → atalhos → CTA.
+   A ordem segue a hierarquia visual; o degrau é o token de movimento, não um
+   valor solto. O `.deck-grid-item` continua com o próprio escalonamento. ---- */
+.home-hero,
+.home-section-head,
+.deck-list-head,
+.home-shortcuts,
+.home-cta-bar {
+  animation: home-rise var(--dur-enter) var(--ease-spring) backwards;
+}
+
+.home-hero        { animation-delay: 0ms; }
+.home-section-head { animation-delay: 70ms; }
+.deck-list-head   { animation-delay: 130ms; }
+.home-shortcuts   { animation-delay: 230ms; }
+.home-cta-bar     { animation-delay: 300ms; }
+
+@keyframes home-rise {
+  from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Transição de entrada da tela (UX-02): o home tem a própria, mais cinematográfica
+   que o `screen-in` genérico das outras telas. */
+.home-screen {
+  animation: home-enter var(--dur-enter) var(--ease-out) backwards;
+}
+
+@keyframes home-enter {
+  from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.995); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- Hover com elevação 3D nos baralhos (UX-04) ----
+   O item da grade é quem carrega a `perspective` (o `.deck-tile` é filho dele,
+   então o translateZ só projeta com a perspectiva no pai direto). O tile sobe
+   em Z de verdade — profundidade, não só translateY. Só com mouse e movimento
+   ligado; seleção/estado continuam valendo no reduce-motion (é informação). */
+.deck-grid-item {
+  perspective: 1200px;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .deck-grid-item:hover .deck-tile {
+    transform: translate3d(0, -8px, 28px) scale(1.012);
+    box-shadow: var(--elev-3);
+    transition:
+      border-color var(--dur-base) var(--ease-out),
+      transform var(--dur-base) var(--ease-spring),
+      box-shadow var(--dur-base) var(--ease-out);
+  }
+
+  /* Os vizinhos recuam de leve — o "push" das referências: dá escala à pilha em
+     vez de deixar os outros tiles parados. */
+  html:not(.reduce-motion) .deck-grid-item:hover ~ .deck-grid-item .deck-tile,
+  html:not(.reduce-motion) .deck-grid-item:has(~ .deck-grid-item:hover) .deck-tile {
+    transform: translate3d(0, 0, -10px) scale(0.995);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+}
+
+/* ---- Ornamento desligado no reduce-motion (a probe força isso nos shots) ---- */
+.reduce-motion .home-amber-dust,
+.reduce-motion .home-hero-haze {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-amber-dust,
+  .home-hero-haze {
+    display: none;
+  }
+}
+
 /* T6 — default = mobile; desktop ao lado. */
 .home-hero h1 {
   margin: 8px 0 5px;
@@ -4462,7 +4658,7 @@ button:disabled {
 
 .deck-grid-item {
   display: block;
-  animation: rise-in 340ms var(--ease-out) backwards;
+  animation: rise-in var(--dur-slow) var(--ease-spring) backwards;
 }
 
 .deck-list-head {
@@ -4508,36 +4704,36 @@ button:disabled {
 /* BYOK do catálogo dinâmico: campos empilhados; inputs/select a 16px (iOS). */
 .llm-form {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .llm-form label {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   color: #a58e5a;
   font-size: var(--fs-2xs);
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-caps);
 }
 
 .llm-form input,
 .llm-form select {
   min-width: 0;
   height: 44px;
-  padding: 0 11px;
+  padding: 0 var(--space-3);
   border: 1px solid rgba(224, 214, 191, 0.17);
   border-radius: var(--radius-sm);
   color: #eee9dc;
   background: rgba(5, 7, 5, 0.32);
   font-size: var(--fs-input);
   letter-spacing: normal;
-  font-weight: 500;
+  font-weight: var(--fw-medium);
 }
 
 .llm-link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   min-height: 32px;
   color: #edd28a;
   font-size: var(--fs-xs);
@@ -4547,7 +4743,7 @@ button:disabled {
   margin: 0;
   color: #92938a;
   font-size: var(--fs-xs);
-  line-height: 1.4;
+  line-height: var(--lh-snug);
 }
 
 .llm-status--paused {
@@ -4556,8 +4752,8 @@ button:disabled {
 
 /* Fila de revisão (onda 2, plano §5): rodada + rascunhos no card do LLM. */
 .llm-review {
-  margin-top: 14px;
-  padding-top: 12px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
   border-top: 1px solid rgba(225, 216, 194, 0.1);
 }
 
@@ -4615,23 +4811,27 @@ button:disabled {
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 11px;
+  gap: var(--space-3);
   overflow: hidden;
   height: 100%;
-  padding: 10px;
+  padding: var(--space-3);
   border: 1px solid rgba(224, 215, 192, 0.11);
   border-radius: var(--radius-lg);
   background:
     linear-gradient(150deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008)),
     #1b1d18;
+  box-shadow: var(--elev-1);
   text-align: left;
-  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
 @media (min-width: 701px) {
   .deck-tile {
     flex-wrap: nowrap;
-    padding: 11px 11px 41px;
+    padding: var(--space-3) var(--space-3) 41px;
   }
 }
 
@@ -4639,7 +4839,7 @@ button:disabled {
 .deck-tile:hover {
   border-color: rgba(220, 181, 103, 0.34);
   transform: translateY(-2px);
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--elev-2);
 }
 }
 
@@ -4648,6 +4848,7 @@ button:disabled {
   background:
     linear-gradient(140deg, rgba(201, 158, 70, 0.15), rgba(201, 158, 70, 0.03)),
     #1d1f19;
+  box-shadow: var(--elev-2);
 }
 
 .deck-tile-sheen {
@@ -4664,7 +4865,7 @@ button:disabled {
 
 .deck-tile-sheen.is-on {
   opacity: 1;
-  animation: sheen-sweep 900ms ease-out;
+  animation: sheen-sweep 900ms var(--ease-out);
 }
 
 @keyframes sheen-sweep {
@@ -4913,27 +5114,28 @@ button:disabled {
 .pager {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--space-1);
+  padding: var(--space-1);
   border: 1px solid rgba(226, 218, 196, 0.12);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
+  box-shadow: var(--elev-1);
 }
 
 .pager-pages {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .pager-slot {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .pager-gap {
-  padding: 0 2px;
+  padding: 0 var(--space-1);
   color: var(--faint);
   font-size: var(--fs-xs);
 }
@@ -4944,7 +5146,7 @@ button:disabled {
   min-width: 29px;
   height: 29px;
   place-items: center;
-  padding: 0 6px;
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
   color: #a3a49a;
@@ -4952,8 +5154,8 @@ button:disabled {
   cursor: pointer;
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
-  transition: color 150ms ease, background 150ms ease;
+  font-weight: var(--fw-semibold);
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 
 @media (hover: hover) {
@@ -4986,16 +5188,18 @@ button:disabled {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 13px;
-  margin-top: 14px;
-  padding: 15px;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
   border: 1px dashed rgba(224, 215, 192, 0.18);
   border-radius: var(--radius-lg);
   color: inherit;
   background: rgba(255, 255, 255, 0.012);
   cursor: pointer;
   text-align: left;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out);
 }
 
 @media (hover: hover) {
@@ -5014,6 +5218,7 @@ button:disabled {
   border-radius: var(--radius-md);
   color: #d9bd74;
   background: rgba(211, 173, 93, 0.12);
+  box-shadow: var(--elev-1);
 }
 
 .import-card div {
@@ -6484,15 +6689,15 @@ button:disabled {
 .meta-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid rgba(226, 218, 196, 0.13);
   border-radius: var(--radius-pill);
   color: #a8a99d;
   background: rgba(255, 255, 255, 0.02);
   font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
 }
 
@@ -6636,16 +6841,19 @@ button:disabled {
 
 .sort-chip {
   height: 30px;
-  padding: 0 11px;
+  padding: 0 var(--space-3);
   border: 1px solid rgba(226, 218, 196, 0.12);
   border-radius: var(--radius-pill);
   color: #9b9c91;
   background: transparent;
   cursor: pointer;
   font-size: var(--fs-xs);
-  font-weight: 650;
+  font-weight: var(--fw-semibold);
   white-space: nowrap;
-  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 @media (hover: hover) {
@@ -6994,23 +7202,42 @@ button:disabled {
 .filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
+}
+
+/* UX-06 (Fase C): o wizard de configuração espaçava os grupos de baralhos com
+   marginTop inline (12/14/8px), passando por cima do design system. Agora são
+   degraus da escala 4/8 — `--space-3` (12) e `--space-4` (16) mantêm a leitura
+   original de "grupo seguinte" e "rótulo + chips". */
+.chips-offset {
+  margin-top: var(--space-3);
+}
+
+.deck-pick {
+  margin-top: var(--space-4);
+}
+
+.deck-pick > .filter-chips {
+  margin-top: var(--space-2);
 }
 
 .filter-chip {
   display: inline-flex;
   height: 27px;
   align-items: center;
-  gap: 5px;
-  padding: 0 10px;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
   border: 1px solid rgba(226, 218, 196, 0.12);
   border-radius: var(--radius-pill);
   color: #9b9c91;
   background: transparent;
   cursor: pointer;
   font-size: var(--fs-2xs);
-  font-weight: 650;
-  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+  font-weight: var(--fw-semibold);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 @media (hover: hover) {
@@ -7654,6 +7881,15 @@ html .spin {
 
 .game-board--3d .board-content {
   perspective: var(--persp, 1100px);
+  /* Fase E (UX_ARENA_PLAN §4 · "plano inclinado na perspectiva do jogador"):
+     o horizonte da mesa fica nos 38% ALTOS do palco — nunca no meio —, que é o
+     "horizonte no topo" das referências (docs/references/mtg-arena/NOTES.md "O
+     trapézio do tapete"). MEDIDO, este é o teto: subir a origem (testado 32% e
+     34%) e/ou encurtar `--persp` derruba dois invariantes — "projecao: tilt 40
+     encurta a altura do plano" (cai de 20,5% para 18–19%, limiar >20%) e
+     "escala visual oponente/jogador 0,74–0,80" (o fundo encolhe demais) — do
+     e2e/probes/_3d-chain.mjs e e2e/probes/_3d-arena.mjs. Só filhos diretos do
+     palco com transform são projetados: os HUDs (faixas, mão) ficam de fora. */
   perspective-origin: 50% 38%;
 }
 
@@ -7856,13 +8092,22 @@ html .spin {
       background:
         radial-gradient(ellipse 58% 54% at 50% 47%, rgba(128, 176, 142, 0.34), transparent 72%),
         radial-gradient(ellipse 116% 94% at 50% 50%, transparent 48%, rgba(3, 6, 5, 0.7) 100%),
-        linear-gradient(180deg, rgba(4, 7, 6, 0.36), rgba(4, 7, 6, 0.02) 26%, rgba(4, 7, 6, 0.02) 74%, rgba(4, 7, 6, 0.38)),
-        /* H3D-21: terreno do turno (cor da casa a 10%) e gravura fina; troca seca, sem filter. */
+        linear-gradient(180deg, rgba(4, 7, 6, 0.52) 0%, rgba(4, 7, 6, 0.16) 24%, rgba(4, 7, 6, 0.02) 46%, rgba(4, 7, 6, 0.02) 74%, rgba(4, 7, 6, 0.4)),
+        /* Fase E (UX_ARENA_PLAN §4): a luz da casa ativa ganha DOIS degraus além
+           do terreno de 10% do H3D-21 — o halo largo de fundo (12%) e o miolo
+           quente (26%) que marca de que lado está a vez. Continua troca seca e
+           sem filter: só gradientes estáticos (§2.9). */
+        radial-gradient(ellipse 92% 68% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 12%, transparent), transparent 78%),
+        radial-gradient(ellipse 46% 32% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 26%, transparent), transparent 72%),
         radial-gradient(ellipse 60% 44% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 10%, transparent), transparent 72%),
         repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 38px);
       /* VA-05: borda do tapete iluminada (o trapézio da perspectiva precisa de um contorno
-         claro contra o fundo escuro, como no Arena) + brilho interno no aro. */
-      box-shadow: inset 0 0 0 2px rgba(214, 188, 128, 0.3), inset 0 0 28px rgba(150, 196, 160, 0.16);
+         claro contra o fundo escuro, como no Arena) + brilho interno no aro.
+         Fase E: o aro passa a respirar a cor da casa ativa. */
+      box-shadow:
+        inset 0 0 0 2px rgba(214, 188, 128, 0.3),
+        inset 0 0 28px rgba(150, 196, 160, 0.16),
+        inset 0 0 72px color-mix(in srgb, var(--turn-house, transparent) 15%, transparent);
       translate: calc(var(--cam-x, 0) * 12px);
       pointer-events: none;
     }
@@ -7949,7 +8194,7 @@ html .spin {
       transform-style: preserve-3d;
       /* H3D-16: --jy (cardJitter) soma ao recuo; na tile ele deixava a tile e a caixa
          da peca fora de fase no hit-test (o topo caia na peca). */
-      translate: 0 calc(var(--drop, 0px) + var(--jy, 0px)) var(--lift);
+      translate: 0 calc(var(--drop, 0px) + var(--jy, 0px)) calc(var(--lift) + var(--row-z, 0px));
       rotate: x calc(var(--lean) - var(--tilt));
       transform-origin: 50% 100%; /* os "pés" da carta ficam no tapete */
       transition: translate 150ms var(--ease-out), rotate 150ms var(--ease-out);
@@ -8564,6 +8809,121 @@ html .spin {
       translate: 0 calc(-30% - 12px);
       scale: 1.14;
       z-index: 5;
+    }
+  }
+
+  /* ==================== Mesa estilo MTG Arena — Fase E (UX-10..UX-14) ====================
+     Só profundidade/estado via `transform`, `opacity` e gradientes: nenhuma
+     regra deste bloco altera altura de layout, porque a folga vertical da
+     partida é ZERO (FIT mede soma == viewport em 1024x768 e 768x1024). */
+
+  /* --- UX-12: profundidade por fileira.
+     `--row-z` existe como gancho (soma à Z baseline do H3D-04) mas está em 0:
+     MEDIDO, qualquer deslocamento de Z por fileira — inclusive só no oponente,
+     e mesmo a ±2px — derruba o hit-test de `e2e/probes/_3d-arena.mjs`
+     ("centro visual acerta a propria peça") e o "6px abaixo do topo visual" na
+     peça `cr-ups-*`, porque as peças se sobrepõem na lane (`--overlap`) e a
+     perspectiva amplifica o trapézio da carta inclinada (lean − tilt) até o
+     centro visual sair dela. A profundidade por fileira entra, então, por
+     ESCALA DE LAYOUT (o `--card-w-2d5` 60/72px do H3D-15), pela sombra (abaixo)
+     e pela atmosfera (a fileira de fundo ganha névoa) — nenhuma mexe em Z nem
+     em ordem de pintura. --- */
+  @media (min-width: 701px) {
+    .game-board--3d .battle-zone--opponent .board-piece {
+      --row-z: 0px;
+    }
+
+    .game-board--3d .battle-zone--player .board-piece {
+      --row-z: 0px;
+    }
+
+    /* Atmosfera por profundidade: a atmosfera NÃO vai sobre as cartas (um véu
+       coplanar ficaria atrás do `--lift` delas em preserve-3d e não as tocaria,
+       e qualquer Z novo derruba o hit-test). Ela entra na superfície do tapete
+       — o fundo escurece mais que a frente, como nas referências. */
+    .game-board--3d .table-plane .battle-zone--opponent {
+      --row-haze: 1;
+    }
+
+    /* A sombra acompanha a distância: a do fundo é menor e mais colada, a da
+       frente se espalha (é ela que ancora a carta no tapete). */
+    .game-board--3d .battle-zone--opponent .table-plane .board-piece::before {
+      inset: auto 13% -3px;
+      height: 26%;
+      opacity: 0.82;
+    }
+
+    .game-board--3d .battle-zone--player .table-plane .board-piece::before {
+      inset: auto 3% -7px;
+      height: 36%;
+    }
+
+    /* --- UX-11: o pool (avatar + Æmber + chaves) lê como UM bloco iluminado
+       pela casa ativa. Antes só o avatar acendia e os contadores ficavam soltos,
+       disputando a faixa com nome/correntes. --- */
+    .game-board--3d .player-band--active .player-avatar {
+      box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--turn-house, transparent) 34%, rgba(211, 173, 93, 0.12)),
+        0 0 22px rgba(149, 205, 145, 0.28),
+        0 0 52px color-mix(in srgb, var(--turn-house, transparent) 24%, transparent);
+    }
+
+    .game-board--3d .player-band--active .amber-counter {
+      text-shadow: 0 0 20px color-mix(in srgb, var(--turn-house, transparent) 55%, transparent);
+    }
+
+    .game-board--3d .player-band--active .key-pip {
+      /* box-shadow, não filter: filter achataria a cadeia 3D (restrição do
+         bloco H3D-02) e o probe de estados exige 0 filter custoso. */
+      box-shadow: 0 0 9px color-mix(in srgb, var(--turn-house, transparent) 45%, transparent);
+    }
+
+    /* --- UX-10: o console de turno passa a usar o mesmo aro do playmat
+       (contorno quente + brilho interno da casa ativa), em vez de ler como uma
+       faixa colada na mesa. Altura intocada (o FIT mede a faixa). --- */
+    .game-board--3d .turn-console {
+      background:
+        linear-gradient(180deg, rgba(28, 33, 27, 0.92), rgba(17, 22, 18, 0.88)),
+        radial-gradient(ellipse 70% 170% at 50% 50%, color-mix(in srgb, var(--turn-house, transparent) 12%, transparent), transparent 72%);
+      box-shadow:
+        inset 0 0 0 1px rgba(214, 188, 128, 0.2),
+        inset 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 0 26px color-mix(in srgb, var(--turn-house, transparent) 9%, transparent);
+    }
+  }
+
+  /* --- UX-14: as transições de jogada passam a ler os tokens de motion da
+     Fase C (UX-08) em vez de durações soltas. Sob `animations: off` /
+     reduce-motion a regra global `*` já derruba tudo para 0,01ms — a probe de
+     screenshots continua determinística. --- */
+  @media (min-width: 701px) {
+    .game-board--3d .table-plane .board-piece {
+      transition:
+        translate var(--dur-fast) var(--ease-out),
+        rotate var(--dur-fast) var(--ease-out);
+    }
+
+    .game-board--3d .table-plane .board-piece > .card-tile {
+      transition:
+        translate var(--dur-fast) var(--ease-out),
+        rotate var(--dur-fast) var(--ease-out),
+        scale var(--dur-fast) var(--ease-out);
+    }
+
+    .game-board--3d .table-plane .board-piece .card-art {
+      transition: rotate var(--dur-action) var(--ease-out);
+    }
+
+    .game-board--3d .table-plane .board-piece--ready::after,
+    .game-board--3d .table-plane .board-piece--stunned::after {
+      transition: translate var(--dur-fast) var(--ease-out);
+    }
+
+    .game-board--3d .hand-track > .card-tile--hand {
+      transition:
+        rotate var(--dur-base) var(--ease-out),
+        translate var(--dur-base) var(--ease-out),
+        scale var(--dur-base) var(--ease-out);
     }
   }
 

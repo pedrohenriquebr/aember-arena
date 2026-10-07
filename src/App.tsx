@@ -539,7 +539,16 @@ function HomeScreen({
   return (
     <div className="screen home-screen">
       <div className="home-hero">
+        {/* Fase D: camadas de profundidade do hero (parallax leve + poeira de
+            Æmber). Decorativas e escondidas no reduce-motion — a informação da
+            tela não vive aqui. */}
         <div className="home-hero-glow" aria-hidden="true" />
+        <div className="home-hero-haze" aria-hidden="true" />
+        <div className="home-amber-dust" aria-hidden="true">
+          {Array.from({ length: 10 }, (_, index) => (
+            <i key={index} />
+          ))}
+        </div>
         <span className="eyebrow">{t("home.eyebrow")}</span>
         <h1>{t("home.title")}</h1>
         <p>{t("home.subtitle")}</p>
@@ -1044,7 +1053,7 @@ function ConfigScreen({
               ))}
             </div>
             {settings.opponentMode === "deck" && (
-              <div className="filter-chips" style={{ marginTop: 12 }} role="group" aria-label={t("config.opponent.pick")}>
+              <div className="filter-chips chips-offset" role="group" aria-label={t("config.opponent.pick")}>
                 {opponentChoices.map((item) => (
                   <button
                     key={item.id}
@@ -1068,9 +1077,9 @@ function ConfigScreen({
               <h2>{t("config.decks.title")}</h2>
               <p>{t("config.decks.sub")}</p>
             </div>
-            <div style={{ marginTop: 14 }}>
+            <div className="deck-pick">
               <span className="section-label">{t("config.decks.p1")}</span>
-              <div className="filter-chips" style={{ marginTop: 8 }} role="group" aria-label={t("config.decks.p1")}>
+              <div className="filter-chips" role="group" aria-label={t("config.decks.p1")}>
                 {savedDecks.map((item) => (
                   <button
                     key={item.id}
@@ -1084,9 +1093,9 @@ function ConfigScreen({
                 ))}
               </div>
             </div>
-            <div style={{ marginTop: 14 }}>
+            <div className="deck-pick">
               <span className="section-label">{t("config.decks.p2")}</span>
-              <div className="filter-chips" style={{ marginTop: 8 }} role="group" aria-label={t("config.decks.p2")}>
+              <div className="filter-chips" role="group" aria-label={t("config.decks.p2")}>
                 {p2Choices.map((item) => (
                   <button
                     key={item.id}
@@ -2630,6 +2639,60 @@ function App() {
       plane.style.removeProperty("--cam-y");
     };
   }, [screen, settings.tableView, settings.animations]);
+
+  // Fase D (UX_ARENA_PLAN §4 · UX-02/03): parallax leve do hero do home. Mesmo
+  // desenho da câmera 3D de cima (H3D-12): UM pointermove passivo + rAF com
+  // lerp, escrevendo só `--px`/`--py` no `.home-hero` — zero commit do React,
+  // nenhum tile re-renderiza. O CSS só lê as duas variáveis e move as camadas
+  // por multiplicador de profundidade. Só com mouse ("hover: hover" descarta
+  // toque) e movimento ligado; o ponteiro fora do hero volta ao neutro e o
+  // cleanup devolve o repouso (trocar de tela não deixa o fundo torto).
+  useEffect(() => {
+    if (screen !== "home") return;
+    if (!motionEnabled(settings.animations) || !prefersHover()) return;
+    const hero = document.querySelector<HTMLElement>(".home-hero");
+    if (!hero) return;
+    let targetX = 0;
+    let targetY = 0;
+    let x = 0;
+    let y = 0;
+    let frame = 0;
+    const step = () => {
+      x += (targetX - x) * 0.1;
+      y += (targetY - y) * 0.1;
+      const settled = Math.abs(targetX - x) < 0.002 && Math.abs(targetY - y) < 0.002;
+      if (settled) {
+        x = targetX;
+        y = targetY;
+      }
+      hero.style.setProperty("--px", x.toFixed(3));
+      hero.style.setProperty("--py", y.toFixed(3));
+      frame = settled ? 0 : window.requestAnimationFrame(step);
+    };
+    const wake = () => {
+      if (!frame) frame = window.requestAnimationFrame(step);
+    };
+    const onMove = (event: PointerEvent) => {
+      const rect = hero.getBoundingClientRect();
+      targetX = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1));
+      targetY = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1));
+      wake();
+    };
+    const onLeave = () => {
+      targetX = 0;
+      targetY = 0;
+      wake();
+    };
+    hero.addEventListener("pointermove", onMove, { passive: true });
+    hero.addEventListener("pointerleave", onLeave);
+    return () => {
+      hero.removeEventListener("pointermove", onMove);
+      hero.removeEventListener("pointerleave", onLeave);
+      if (frame) window.cancelAnimationFrame(frame);
+      hero.style.removeProperty("--px");
+      hero.style.removeProperty("--py");
+    };
+  }, [screen, settings.animations]);
 
   // FEAT-12a: the engine is pure and clones, so the state a transition leaves
   // behind stays a valid snapshot. Every commit records it together with
