@@ -1320,9 +1320,16 @@ function parseAbilityBody(triggers: Trigger[], body: string, upgrade: boolean, c
     // de um "If you do, X, and Y" (mais de um ato) compartilha o gate do ato
     // anterior, como o `then: {gameAction: […]}` do keyteki. "If you do" de um
     // ato só continua sendo `if: count did` (o did do ato imediatamente antes).
+    // Ruling do "Then" (Master Rulebook + Key Abduction: "prompt to forge a key
+    // even if no Mars creatures are returned"): "Then, you may X" é SEMPRE
+    // ofertado — predecessor obrigatório que resolveu com zero alvos abre o Then
+    // (keyteki: `alwaysTriggers`) — então a cláusula opcional do "Then" impresso
+    // fica SEM gate. "If you do" mantém o gate de did: ali o bloco exige que o
+    // predecessor tenha ACONTECIDO (Art Project sem chave = sem purge/draw).
     const linked = link || (ifYouDo && parsed.acts.length > 1);
     if (linked) {
-      for (const act of parsed.acts) act.then = true;
+      const ungated = link && parsed.acts.every((act) => act.optional);
+      if (!ungated) for (const act of parsed.acts) act.then = true;
       // "Then, if <cond>, X": o `then` é o gate; o `if` é a condição impressa.
       if (parsed.cond && !ifYouDo) for (const act of parsed.acts) act.if = parsed.cond;
     } else if (parsed.cond) {

@@ -135,7 +135,12 @@ describe("Key Abduction (Then, you may …, reduced by …)", () => {
         on: ["play"],
         acts: [
           { k: "returnToHand", s: { each: { type: "Creature", house: "Mars" } } },
-          { k: "forgeKey", n: 1, mod: 9, less: { p: "hand" }, optional: true, then: true },
+          // Ruling do "Then" (Master Rulebook + Key Abduction: "prompt to forge a
+          // key even if no Mars creatures are returned"): a cláusula opcional do
+          // "Then" impresso fica SEM gate — keyteki `then: {alwaysTriggers: true,
+          // may: 'forge a key'}`. O "If you do" (Art Project) é que mantém o gate
+          // de did — ali o bloco exige que o predecessor tenha ACONTECIDO.
+          { k: "forgeKey", n: 1, mod: 9, less: { p: "hand" }, optional: true },
         ],
       },
     ]);
@@ -169,6 +174,17 @@ describe("Key Abduction (Then, you may …, reduced by …)", () => {
     expect(returned.players[0].keys).toBe(0); // só o forge foi recusado
     expect(returned.players[0].board).toEqual([]);
     expect(returned.players[1].board).toEqual([]); // o return obrigatório aconteceu
+  });
+
+  it("vacuum: with no Mars creature at all the forge is STILL offered (ruling)", () => {
+    // keyteki spec: "should prompt to forge a key even if no Mars creatures are
+    // returned" — predecessor obrigatório que resolveu com zero alvos abre o
+    // Then (o ato opcional ficou SEM gate: sempre ofertado).
+    const spell = card("Key Abduction", { type: "Action", house: "Mars", text: KEY_ABDUCTION });
+    const state = setupTest({ hand: [spell], amber: 20 }, { inPlay: [card("Autocannon", { house: "Mars" })] }, "Mars");
+    // nenhuma criatura de Marte no nosso board; Autocannon (arte) não é criatura — nada a devolver
+    const cast = play(state, spell.instanceId);
+    expect(cast.players[0].keys).toBe(1); // o forge foi OFERECIDO e resolve com 20 âmber
   });
 });
 

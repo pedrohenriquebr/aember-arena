@@ -2214,7 +2214,11 @@ function run(context: Context, act: Act): void {
   if (explicitDid !== undefined) context.did = explicitDid;
   // Lote 15a: só um ato SEM `then` renova o gate do bloco — os atos de uma
   // cláusula encadeada ("If you do, X, and Y") compartilham o gate do ato antes
-  // do bloco, como o `then: {gameAction: […]}` do keyteki.
+  // do bloco, como o `then: {gameAction: […]}` do keyteki (default: dispara só
+  // se o predecessor ACONTECEU — did ≥ 1). O caso "Then, you may X" do ruling
+  // de Key Abduction (Master Rulebook: predecessor obrigatório resolvido com
+  // zero alvos abre o Then) é outro spelling: o parser emite o ato opcional
+  // SEM `then` (sempre ofertado = `alwaysTriggers` do keyteki).
   if (act.then === undefined) context.chain = (context.did ?? 0) > 0;
 }
 
