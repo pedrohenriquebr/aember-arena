@@ -8,3 +8,4 @@ docs/advisor/*.log
 e2e/probes/shots/
 .kfdata-tmp/
 scripts/harvest/
+opencode.json
