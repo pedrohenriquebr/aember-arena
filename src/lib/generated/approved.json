@@ -396,5 +396,1010 @@
   "model": "mimo-v2.6-flash-free",
   "effects": [],
   "keywords": {}
+ },
+ {
+  "cardId": "3870f42c-5b24-4833-b84f-688edec6b289",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "exhaust",
+      "s": "target"
+     },
+     {
+      "k": "destroy",
+      "s": "target",
+      "if": {
+       "k": "count",
+       "of": {
+        "c": {
+         "target": true,
+         "exhausted": true
+        }
+       },
+       "op": "gte",
+       "n": 1
+      }
+     },
+     {
+      "k": "loseAmber",
+      "n": 1,
+      "who": "controller",
+      "if": {
+       "k": "count",
+       "of": {
+        "c": {
+         "target": true,
+         "exhausted": true
+        }
+       },
+       "op": "gte",
+       "n": 1
+      }
+     }
+    ],
+    "target": {
+     "type": "Creature"
+    }
+   }
+  ],
+  "textHash": "53b2810a",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791149211677,
+  "v": 8,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "f2d8aadf-74c3-4f45-be79-7d517aa91f76",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "exhaust",
+      "s": {
+       "each": {
+        "type": "Creature",
+        "house": "chosen"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "on": [
+     "scrap"
+    ],
+    "acts": [
+     {
+      "k": "exhaust",
+      "s": "target"
+     }
+    ],
+    "target": {
+     "type": "!Upgrade"
+    }
+   }
+  ],
+  "textHash": "14cabf84",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791169429303,
+  "v": 10,
+  "model": "mimo-v2.6-pro",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "b6832a73-9223-41ae-8146-98e000a57f6d",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 5,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top"
+     },
+     {
+      "k": "capture",
+      "n": 1,
+      "s": "target",
+      "per": {
+       "gone": {
+        "house": "Geistoid"
+       }
+      }
+     }
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly"
+    }
+   }
+  ],
+  "textHash": "49fd8c63",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791169447975,
+  "v": 10,
+  "model": "mimo-v2.6-pro",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:700:149:geistoid",
+  "dsl": [
+   {
+    "on": [
+     "startOfTurn"
+    ],
+    "if": {
+     "k": "not",
+     "c": {
+      "k": "count",
+      "of": {
+       "p": "discard"
+      },
+      "op": "gte",
+      "n": 10
+     }
+    },
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top"
+     }
+    ]
+   },
+   {
+    "on": [
+     "omni"
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "p": "discard"
+     },
+     "op": "gte",
+     "n": 10
+    },
+    "acts": [
+     {
+      "k": "gainAmber",
+      "n": 1
+     }
+    ]
+   }
+  ],
+  "textHash": "0217b509",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170067622,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "5c522946-c5af-44ce-8153-4ab1d0011cb2",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 2,
+      "from": "discard",
+      "to": "archives"
+     }
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "p": "discard"
+     },
+     "op": "gte",
+     "n": 10
+    }
+   },
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 5,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top"
+     }
+    ],
+    "if": {
+     "k": "not",
+     "c": {
+      "k": "count",
+      "of": {
+       "p": "discard"
+      },
+      "op": "gte",
+      "n": 10
+     }
+    }
+   }
+  ],
+  "textHash": "86ef2983",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170072325,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "6e4e4627-a6a2-4482-9ae1-c9a91af8e8e4",
+  "dsl": [
+   {
+    "on": [
+     "play",
+     "destroyed"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "discard",
+      "to": "archives",
+      "pick": "top"
+     }
+    ]
+   }
+  ],
+  "textHash": "05dc72c9",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170077744,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "62e4a39a-3efc-4f9e-b32e-897f16d357b2",
+  "dsl": [
+   {
+    "on": [
+     "fight"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top",
+      "optional": true,
+      "per": {
+       "of": "damage",
+       "s": "self"
+      }
+     },
+     {
+      "k": "move",
+      "n": 1,
+      "from": "deck",
+      "to": "discard",
+      "opp": true,
+      "pick": "top",
+      "optional": true,
+      "per": {
+       "of": "damage",
+       "s": "self"
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "6c23a109",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170090874,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {
+   "taunt": 1
+  }
+ },
+ {
+  "cardId": "db02dbc6-216c-45a3-b66d-04cd9461475a",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "s": "target",
+      "own": true
+     },
+     {
+      "k": "damage",
+      "n": 1,
+      "s": {
+       "pick": {
+        "type": "Creature"
+       }
+      },
+      "per": {
+       "of": "amber",
+       "s": "target"
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "2faa6806",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170099667,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "8ad5b90b-5122-41e8-84ee-dc1d56845817",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "deck",
+      "to": "discard",
+      "pick": "top"
+     },
+     {
+      "k": "gainAmber",
+      "n": 1,
+      "if": {
+       "k": "count",
+       "of": {
+        "m": "cards",
+        "type": "Creature"
+       },
+       "op": "gte",
+       "n": 1
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "0323e3aa",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170136472,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:479:322:staralliance",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "gainAmber",
+      "n": 1,
+      "per": {
+       "c": {
+        "type": "Upgrade",
+        "host": true
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "b77513bc",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170150427,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "67ca7dfb-455a-4ba9-89a8-12c5e5be02d9",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "deck",
+      "to": "discard",
+      "opp": true,
+      "pick": "bottom"
+     },
+     {
+      "k": "exhaust",
+      "s": {
+       "each": {
+        "type": "Creature",
+        "house": "moved"
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "bbedf157",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170162539,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "17966775-224e-4db6-9f66-b1611f19ad0a",
+  "dsl": [
+   {
+    "on": [
+     "scrap"
+    ],
+    "acts": [
+     {
+      "k": "moveAmber",
+      "s": "target",
+      "to": "target2"
+     }
+    ],
+    "target": {
+     "type": "Creature",
+     "amber": true
+    },
+    "target2": {
+     "type": "Creature"
+    }
+   }
+  ],
+  "textHash": "53391b33",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170177260,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [
+   {
+    "target": {
+     "host": true
+    },
+    "power": -1,
+    "per": {
+     "of": "amber",
+     "s": "host"
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "982e8aed-879b-4e2b-a330-7e16ffbd5d83",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 3,
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "bc4b1a61",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170192834,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [
+   {
+    "target": {
+     "self": true
+    },
+    "keywords": {
+     "elusive": 1
+    },
+    "if": {
+     "k": "not",
+     "c": {
+      "k": "count",
+      "of": {
+       "c": {
+        "self": true,
+        "flank": true
+       }
+      },
+      "op": "gte",
+      "n": 1
+     }
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:700:323:unfathomable",
+  "dsl": [
+   {
+    "on": [
+     "fight",
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "hand",
+      "to": "discard",
+      "pick": "random"
+     },
+     {
+      "k": "move",
+      "n": 1,
+      "from": "hand",
+      "to": "discard",
+      "opp": true,
+      "pick": "random"
+     }
+    ]
+   },
+   {
+    "on": [
+     "scrap"
+    ],
+    "acts": [
+     {
+      "k": "exhaust",
+      "s": "target"
+     }
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "enemy"
+    }
+   }
+  ],
+  "textHash": "b6b30069",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170194544,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:700:290:unfathomable",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "acts": [
+     {
+      "k": "damage",
+      "n": 1,
+      "s": "targetNeighbors"
+     },
+     {
+      "k": "damage",
+      "n": 1,
+      "s": "target"
+     },
+     {
+      "k": "stun",
+      "s": "targetAndNeighbors",
+      "if": {
+       "k": "count",
+       "of": {
+        "p": "discard",
+        "opp": true
+       },
+       "op": "gte",
+       "n": 10
+      }
+     },
+     {
+      "k": "exhaust",
+      "s": "targetAndNeighbors",
+      "if": {
+       "k": "count",
+       "of": {
+        "p": "discard",
+        "opp": true
+       },
+       "op": "gte",
+       "n": 10
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "3c63dce5",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170213187,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:722:045:brobnar",
+  "dsl": [
+   {
+    "on": [
+     "play",
+     "fight",
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "returnToHand",
+      "s": "target"
+     }
+    ],
+    "target": {
+     "type": "Creature",
+     "side": "friendly",
+     "trait": "Giant",
+     "other": true
+    }
+   }
+  ],
+  "textHash": "dcf29872",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170227540,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "4e6ddfb1-80bb-408c-9470-9a17120b96dc",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "gainAmber",
+      "n": 1
+     }
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "gone": {
+       "type": "Creature",
+       "side": "enemy"
+      }
+     },
+     "op": "gte",
+     "n": 1
+    }
+   }
+  ],
+  "textHash": "a0b729cd",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170235322,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "a94f91e2-786d-4722-b0cc-d3cac14e5075",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "s": "self",
+      "per": {
+       "sub": [
+        {
+         "p": "amber",
+         "opp": true
+        },
+        0
+       ]
+      }
+     }
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "p": "discard"
+     },
+     "op": "gte",
+     "n": 10
+    }
+   }
+  ],
+  "textHash": "724798d1",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170245064,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "84178a80-c2a0-4e59-a493-c401728d1c17",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "c": {
+       "type": "Creature",
+       "side": "friendly"
+      }
+     },
+     "op": "eq",
+     "n": 0
+    },
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "hand",
+      "to": "archives",
+      "optional": true,
+      "per": {
+       "c": {
+        "type": "Creature",
+        "side": "enemy"
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "61cbbabb",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170284575,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "kt:722:309:logos",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "gainAmber",
+      "n": 1,
+      "per": {
+       "p": "amber"
+      }
+     },
+     {
+      "k": "gainAmber",
+      "n": 1,
+      "opp": true,
+      "per": {
+       "p": "amber",
+       "opp": true
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "f2e505aa",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170307598,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {
+   "alpha": 1
+  }
+ },
+ {
+  "cardId": "377549c9-9a9f-404a-b671-bb87620249cd",
+  "dsl": [
+   {
+    "on": [
+     "endOfTurn"
+    ],
+    "acts": [
+     {
+      "k": "move",
+      "n": 1,
+      "from": "hand",
+      "to": "archives"
+     }
+    ],
+    "if": {
+     "k": "not",
+     "c": {
+      "k": "count",
+      "of": {
+       "c": {
+        "self": true,
+        "flank": true
+       }
+      },
+      "op": "gte",
+      "n": 1
+     }
+    }
+   }
+  ],
+  "textHash": "9bb80d58",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170325361,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "5b3e69ea-11ec-4b48-bc1a-253713ef56dc",
+  "dsl": [
+   {
+    "on": [
+     "endOfTurn"
+    ],
+    "acts": [
+     {
+      "k": "counter",
+      "n": 1,
+      "s": {
+       "each": {
+        "neighborsOfSource": true
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "69c62c26",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170336761,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "d24adb16-e808-45b6-88a3-a355d253a65a",
+  "dsl": [],
+  "textHash": "2ee6e676",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791170337428,
+  "v": 10,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [
+   {
+    "target": {
+     "self": true
+    },
+    "power": 1,
+    "per": {
+     "p": "amber"
+    }
+   }
+  ],
+  "keywords": {}
+ },
+ {
+  "cardId": "58190de5-5df0-4806-8a84-97b0183cdca0",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "acts": [
+     {
+      "k": "fromDiscard",
+      "type": "Creature",
+      "optional": true
+     }
+    ]
+   }
+  ],
+  "textHash": "76cf2f38",
+  "source": "llm",
+  "reviewed": true,
+  "generatedAt": 1791173089709,
+  "v": 11,
+  "model": "mimo-v2.6-flash-free",
+  "effects": [
+   {
+    "target": {
+     "self": true
+    },
+    "entersPlayReady": true,
+    "if": {
+     "k": "count",
+     "of": {
+      "p": "discard"
+     },
+     "op": "gte",
+     "n": 10
+    }
+   }
+  ],
+  "keywords": {}
  }
 ]
