@@ -465,6 +465,15 @@ export interface AbilityOverride {
     rulesOf is synchronous — the store is read into memory, never per card. */
 let overrides = new Map<string, AbilityOverride>();
 
+/** Secondary index by textHash (first row wins): MV ids diverge from the corpus
+    ids on the newer sets, so storedAbility falls back to "whoever was written
+    for this exact text". Rebuilt wherever `overrides` is wholesale replaced. */
+let overridesByHash = new Map<string, AbilityOverride>();
+function reindexOverridesByHash(): void {
+  overridesByHash = new Map();
+  for (const row of overrides.values()) if (!overridesByHash.has(row.textHash)) overridesByHash.set(row.textHash, row);
+}
+
 /** Overrides apply only BETWEEN matches: swapping rules under a live match would
     change cards already in play (and reset the memo mid-turn). While a match is
     held, writes wait in `pending` and the App flushes them at launch, resume or
@@ -482,6 +491,7 @@ export function flushAbilityOverrides(): void {
   if (!pending.size) return;
   for (const [cardId, record] of pending) overrides.set(cardId, record);
   pending.clear();
+  reindexOverridesByHash();
   cache = new WeakMap();
 }
 
@@ -492,6 +502,7 @@ export function flushAbilityOverrides(): void {
 export function setAbilityOverrides(next: Map<string, AbilityOverride>): void {
   overrides = next;
   pending.clear();
+  reindexOverridesByHash();
   cache = new WeakMap();
 }
 
@@ -506,6 +517,7 @@ export function applyAbilityOverride(record: AbilityOverride): void {
   }
   pending.delete(record.cardId);
   overrides.set(record.cardId, record);
+  if (!overridesByHash.has(record.textHash)) overridesByHash.set(record.textHash, record);
   cache = new WeakMap();
 }
 
@@ -523,7 +535,10 @@ export function mergeAbilityOverrides(loaded: Map<string, AbilityOverride>): voi
       changed = true;
     }
   }
-  if (changed) cache = new WeakMap();
+  if (changed) {
+    reindexOverridesByHash();
+    cache = new WeakMap();
+  }
 }
 
 /** Rows currently known (live + staged), newest wins — the review queue's list. */
@@ -537,12 +552,16 @@ export function listAbilityOverrides(): AbilityOverride[] {
     and the between-matches rule above is not bypassed for real cards. */
 export function withTrialOverride<T>(record: AbilityOverride, run: () => T): T {
   const previous = overrides.get(record.cardId);
+  const previousHash = overridesByHash.get(record.textHash);
   overrides.set(record.cardId, record);
+  overridesByHash.set(record.textHash, record);
   try {
     return run();
   } finally {
     if (previous) overrides.set(record.cardId, previous);
     else overrides.delete(record.cardId);
+    if (previousHash) overridesByHash.set(record.textHash, previousHash);
+    else overridesByHash.delete(record.textHash);
   }
 }
 
@@ -560,10 +579,20 @@ let cache = new WeakMap<CardFace, CardRules>();
     same text) or an `llm` entry a human reviewed. An absent/unknown source
     (corrupted disk, schema from another version) and an unreviewed LLM draft
     never reach the table — plano §4: nunca meio-resolver. The text hash must
-    match, so a card whose text changed falls back to the live parser. */
+    match, so a card whose text changed falls back to the live parser.
+    Secondary index by textHash: pipeline rows are keyed by the CORPUS card id,
+    but decks imported from the Master Vault carry MV ids that DIVERGE on the
+    newer sets (07/out: Memette 07f5be7e… no MV vs 6e4e4627… no corpus) — when
+    the id misses, the row whose textHash equals this exact text applies. Same
+    text = same rules, so sharing a row across printings is correct by design. */
 function storedAbility(face: CardFace): AbilityOverride | null {
-  const entry = overrides.get(face.id);
-  if (!entry || entry.textHash !== textHash(face.text ?? "")) return null;
+  const hash = textHash(face.text ?? "");
+  // Textless cards never fall back by hash: every empty text hashes alike, and
+  // the first row with an empty textHash would leak onto every vanilla creature
+  // (the dsl3 observer-loop tests caught exactly that — Runner inherited the
+  // Loop ability and the recursion brake bit much later).
+  const entry = overrides.get(face.id) ?? (face.text?.trim() ? overridesByHash.get(hash) : undefined);
+  if (!entry || entry.textHash !== hash) return null;
   // A frozen parser output is only valid for the grammar that wrote it.
   if (entry.source === "parser" && entry.parserVersion !== PARSER_VERSION) return null;
   const trusted = entry.source === "manual" || entry.source === "parser" || ((entry.source === "llm" || entry.source === "keyteki") && entry.reviewed === true);

@@ -110,3 +110,30 @@ describe("overrides apply only between matches", () => {
     expect(rulesOf(card).abilities).toEqual([ability]);
   });
 });
+
+describe("fallback por textHash (ids do MV divergem dos ids do corpus)", () => {
+  const mvCard: CardFace = { ...card, id: "07f5be7e-ebb3-434b-b8aa-7c631686e704" };
+
+  afterEach(() => {
+    setAbilityOverrides(new Map());
+  });
+
+  it("a row keyed by the CORPUS id applies to the MV id when the text is identical", () => {
+    setAbilityOverrides(new Map([[card.id, row()]]));
+    expect(rulesOf(mvCard).abilities).toEqual([ability]);
+    expect(rulesOf(mvCard).coverage).toBe("full");
+  });
+
+  it("a different text never inherits the row (the hash is the contract)", () => {
+    const changed: CardFace = { ...mvCard, text: "Play: Look at the top card of your deck and name your rival." };
+    setAbilityOverrides(new Map([[card.id, row()]]));
+    expect(rulesOf(changed).abilities).toEqual([]);
+  });
+
+  it("the fallback respects the trust gates (unreviewed llm stays out)", () => {
+    setAbilityOverrides(new Map([[card.id, row({ source: "llm", reviewed: false })]]));
+    expect(rulesOf(mvCard).abilities).toEqual([]);
+    setAbilityOverrides(new Map([[card.id, row({ source: "keyteki", reviewed: true })]]));
+    expect(rulesOf(mvCard).abilities).toEqual([ability]);
+  });
+});

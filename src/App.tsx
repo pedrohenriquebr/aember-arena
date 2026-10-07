@@ -672,7 +672,7 @@ type ReviewSide =
 
 /** Deck order, one group per house. A house missing from `deck.houses` still shows. */
 function cardsByHouse(deck: DeckInfo): { house: string; cards: DeckInfo["cards"] }[] {
-  const order = deck.houses.length ? [...deck.houses] : [];
+  const order = deck.houses?.length ? [...deck.houses] : [];
   for (const card of deck.cards) {
     if (!order.includes(card.house)) order.push(card.house);
   }
@@ -741,7 +741,7 @@ function ReviewMatchDecks({ single, sides, t }: { single: boolean; sides: Review
                   <div>
                     <strong className="review-deck-name">{side.deck.name}</strong>
                     <div className="deck-card-houses">
-                      {side.deck.houses.map((house) => <HouseMark key={house} house={house} small />)}
+                      {(side.deck.houses ?? []).map((house) => <HouseMark key={house} house={house} small />)}
                     </div>
                     <small>{side.deck.cards.length} {t("common.cards")}</small>
                     <DeckCoverageChip deck={side.deck} t={t} />

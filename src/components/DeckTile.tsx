@@ -46,7 +46,8 @@ export function DeckTile({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div className="deck-tile-art" style={{ "--house-color": houseColor(deck.houses[0] ?? "Logos") } as CSSProperties}>
+      {/* Decks recém-importados do Master Vault podem chegar sem `houses` preenchido (o heal de dados do catálogo é whois posterior) — não crashar o tile inteiro por isso. */}
+      <div className="deck-tile-art" style={{ "--house-color": houseColor(deck.houses?.[0] ?? "Logos") } as CSSProperties}>
         <CardArt face={deck.cards[0]} size="preview" hoverZoom={false} />
         <span className="deck-tile-stack" aria-hidden="true" />
         {selected && <span className="deck-tile-check"><Check size={13} /></span>}
@@ -84,7 +85,7 @@ export function DeckTile({
             </span>
           )}
         </div>
-        <HouseRow houses={deck.houses} />
+        <HouseRow houses={deck.houses ?? []} />
         <dl className="deck-tile-stats">
           <div><dt>{t("common.cards")}</dt><dd>{summary.total}</dd></div>
           <div><dt>{t("deckStat.creatures")}</dt><dd>{summary.creatureCount}</dd></div>
