@@ -143,6 +143,9 @@ ações, cobertura por set, pendências).
   inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
   de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
   `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
+- **PAUSA 07/out noite (dono desligou): pill de casas NO STASH** — `git stash pop` retoma (seletor de
+  casas como pill flutuante sobre a mesa, parcial do mimo; depois: ícones maiores das pilhas e sessão
+  de QA jogando no navegador). Pilhas visíveis COMMITADAS (7cbb196). Estado do dia:
 - **Estado 07/out (sessão dos 2 decks + UX + PWA)**: ① Lotes 15a-15f do conversor COMMITADOS
   (then-chains DSL v14, target-select v15, pacote de tabelas, durações v16 + fix `self` no-op no lasting,
   engineGaps v17, gain-ability — converted 221→432, golden 531; refs/audit em `docs/UX_ARENA_PLAN.md`).
