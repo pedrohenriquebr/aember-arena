@@ -7710,6 +7710,136 @@ html .spin {
   color: var(--gold);
 }
 
+/* ---------- Zonas laterais: chips de pilha (chips do HUD nas bandas) ----------
+   FIT: os chips moram DENTRO da banda — nenhum pixel de altura nova (22px de
+   chip numa faixa de 57px). São `flex: 0 0 auto`: nunca encolhem; a folga
+   horizontal sai do nome/deck/hand-bar, todos com clip próprio — e o
+   player-resources também não encolhe para não derramar o placar.
+   <=700px o rótulo some (o texto inteiro vive em aria-label/title): sobram
+   ícone + contagem, que é a informação de decisão. */
+.pile-chips {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.player-band .player-resources {
+  flex: 0 0 auto;
+}
+
+.pile-chip {
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+  border: 1px solid rgba(226, 218, 196, 0.13);
+  border-radius: var(--radius-pill);
+  color: #a8a99d;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+button.pile-chip {
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.pile-chip svg {
+  flex: 0 0 auto;
+  color: #c2a05b;
+}
+
+.pile-chip b {
+  color: #d8d3c4;
+  font-weight: var(--fw-semibold);
+}
+
+@media (hover: hover) {
+  button.pile-chip:hover {
+    border-color: rgba(211, 173, 93, 0.5);
+    color: #e8e2d4;
+  }
+}
+
+button.pile-chip:focus-visible {
+  outline: 2px solid rgba(211, 173, 93, 0.6);
+  outline-offset: 1px;
+}
+
+/* Arquivo virado do oponente: mesma silhueta, sem ação — o ícone de face-down
+   e o tooltip dizem por quê (só a contagem é pública). */
+.pile-chip--hidden {
+  border-style: dashed;
+  cursor: help;
+  opacity: 0.85;
+}
+
+.pile-chip--hidden svg {
+  color: #7c8072;
+}
+
+@media (max-width: 1040px) {
+  .pile-chip-label {
+    display: none;
+  }
+
+  .pile-chip {
+    height: 20px;
+    gap: 2px;
+    padding: 0 5px;
+  }
+}
+
+/* 3D (>= 701px): a banda é um HUD cheio (âmbar absoluto colado ao avatar,
+   dorsos do Warden, placar à direita) — os chips saem do fluxo, empilham em
+   duas linhas (ícone + contagem; o texto está em aria-label/title) e ancoram na
+   direita da PRÓPRIA banda (position: relative do 3D). O bloco que encosta na
+   direita reserva o bolso com padding; a contagem da mão rende o espaço (a mão
+   está logo abaixo, mesmo racional do título já escondido no 3D). */
+@supports (transform-style: preserve-3d) {
+  @media (min-width: 701px) {
+    .game-board--3d .board-content > .player-band .pile-chips {
+      position: absolute;
+      z-index: 1;
+      top: 50%;
+      right: 8px;
+      translate: 0 -50%;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    .game-board--3d .board-content > .player-band .pile-chip-label {
+      display: none;
+    }
+
+    .game-board--3d .board-content > .player-band .pile-chip {
+      height: 20px;
+      gap: 2px;
+      padding: 0 5px;
+    }
+
+    /* A reserva é do ÚLTIMO bloco do fluxo (o que encosta na direita): a barra
+       da mão quando existe, senão o placar — nunca os dois (a banda do jogador
+       tem os dois e a reserva dupla empurraria as chaves para o âmbar). */
+    .game-board--3d .board-content > .player-band > .hand-bar-info,
+    .game-board--3d .board-content > .player-band > .player-resources:not(:has(~ .hand-bar-info)) {
+      padding-right: 52px;
+    }
+
+    .game-board--3d .board-content > .player-band .hand-count {
+      display: none;
+    }
+  }
+}
+
 /* BUG-18: artifacts/upgrades render in their own strip (visual neighbours =
    engine neighbours among creatures), upgrades naming their host. */
 .board-attachments {
@@ -9157,4 +9287,61 @@ html .spin {
   max-height: 60vh;
   overflow-y: auto;
   padding: 4px;
+}
+
+/* ---------- Overlay de pilha (zonas laterais) ----------
+   Modal de leitura das pilhas (descarte público / arquivo do dono): mesmo grid
+   de cartas do inspetor, ordenado; navegação é overlay puro — nada de layout
+   shift na mesa. O movimento segue o padrão modal/grid e morre no reduce-motion
+   global (rise-in/backdrop-in têm 1 quadro). */
+.pile-panel {
+  width: min(100%, 760px);
+  padding: 17px 15px 15px;
+}
+
+@media (min-width: 701px) {
+  .pile-panel {
+    padding: 21px 22px 19px;
+  }
+}
+
+.pile-count-row {
+  display: flex;
+  margin-top: 10px;
+}
+
+.pile-grid {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-top: 9px;
+  padding: 4px;
+}
+
+.pile-card {
+  cursor: default;
+}
+
+/* Mesmo racional do 3D (que já esconde o título): "YOUR HAND" é a própria mão
+   logo abaixo — as contagens ficam e o nome do dono volta a ter largura. Abaixo
+   de 1440 a banda não fecha com título + chips; a partir daí cabe tudo. */
+@media (max-width: 1439px) {
+  .game-board--stage .hand-title {
+    display: none;
+  }
+}
+
+/* Contagens da barra da mão: clip limpo (ellipsis) quando os chips apertam. */
+.hand-count,
+.deck-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* <=390px a contagem da mão rende o espaço aos chips de pilha: o tamanho da mão
+   se conta olhando a mão; as pilhas não aparecem em mais lugar nenhum. */
+@media (max-width: 390px) {
+  .game-board--stage .hand-count {
+    display: none;
+  }
 }

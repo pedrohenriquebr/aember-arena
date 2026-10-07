@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import {
   Activity,
   Anchor,
+  Archive,
   ArrowLeft,
   ArrowRight,
   BookOpen,
@@ -18,6 +19,7 @@ import {
   Crown,
   ExternalLink,
   Eye,
+  EyeOff,
   Gem,
   Home,
   KeyRound,
@@ -83,6 +85,7 @@ import {
 import { fetchKeyforgeDeck, loadDeckOrCache, syncCatalog, vaultErrorText, type CatalogProgress } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
+import { canOpenPile, sortPile, type PileKind } from "./lib/piles";
 import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, drawDeck, llmReady, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
@@ -1365,6 +1368,12 @@ type PlayerBandProps = {
   hint?: boolean;
   /** H3D-19: cartas na mão do oponente (pública no KeyForge) — dorsos no band do 3D. */
   backs?: number;
+  /** Zonas laterais: contagens vivas das pilhas (chips dentro da banda — FIT). */
+  discardCount: number;
+  archiveCount: number;
+  /** Lado do espectador (dono do device): decide quem abre o arquivo (virado). */
+  viewerSide: 0 | 1;
+  onOpenPile: (kind: PileKind, side: 0 | 1) => void;
   t: Translator;
 };
 
@@ -1383,6 +1392,10 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     a.backs === b.backs &&
     a.deckCount === b.deckCount &&
     (a.hint ?? false) === (b.hint ?? false) &&
+    a.discardCount === b.discardCount &&
+    a.archiveCount === b.archiveCount &&
+    a.viewerSide === b.viewerSide &&
+    a.onOpenPile === b.onOpenPile &&
     a.t === b.t &&
     a.player.name === b.player.name &&
     a.player.deckName === b.player.deckName &&
@@ -1409,8 +1422,16 @@ const PlayerBand = memo(function PlayerBand({
   deckCount,
   hint = false,
   backs,
+  discardCount,
+  archiveCount,
+  viewerSide,
+  onOpenPile,
   t,
 }: PlayerBandProps) {
+  const ownerName = localizeName(player.name, t);
+  // Regras oficiais: descarte é público (abre nos dois lados); arquivo é virado —
+  // só o dono abre o seu, o do oponente mostra só a contagem (sem ação).
+  const ownArchive = canOpenPile("archives", side, viewerSide);
   return (
     <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}${thinking ? " player-band--thinking" : ""}`} data-side={side}>
       <div className={`player-avatar${isAi ? " player-avatar--ai" : ""}`}>
@@ -1458,6 +1479,54 @@ const PlayerBand = memo(function PlayerBand({
           <span className="chain-counter" role="img" aria-label={t("game.chainsAria", { count: chains })}>
             <Link2 size={12} strokeWidth={2} />
             <b>{chains}</b>
+          </span>
+        )}
+      </div>
+      {/* Zonas laterais (FIT: os chips moram DENTRO da banda — nenhum pixel de
+          altura nova). Descarte é público e abre nos dois lados; arquivo é virado:
+          só o dono abre o seu, o do oponente mostra só a contagem (sem ação). */}
+      <div className="pile-chips" role="group" aria-label={t("game.piles")}>
+        <button
+          type="button"
+          className="pile-chip"
+          data-pile="discard"
+          data-side={side}
+          onClick={() => onOpenPile("discard", side)}
+          aria-haspopup="dialog"
+          aria-label={side === viewerSide ? t("game.pileDiscardAriaYou", { count: discardCount }) : t("game.pileDiscardAria", { name: ownerName, count: discardCount })}
+          title={side === viewerSide ? t("game.pileDiscardAriaYou", { count: discardCount }) : t("game.pileDiscardAria", { name: ownerName, count: discardCount })}
+        >
+          <Trash2 size={12} strokeWidth={2} />
+          <span className="pile-chip-label">{t("game.pileDiscard")}</span>
+          <b>{discardCount}</b>
+        </button>
+        {ownArchive ? (
+          <button
+            type="button"
+            className="pile-chip"
+            data-pile="archive"
+            data-side={side}
+            onClick={() => onOpenPile("archives", side)}
+            aria-haspopup="dialog"
+            aria-label={t("game.pileArchiveAria", { count: archiveCount })}
+            title={t("game.pileArchiveAria", { count: archiveCount })}
+          >
+            <Archive size={12} strokeWidth={2} />
+            <span className="pile-chip-label">{t("game.pileArchive")}</span>
+            <b>{archiveCount}</b>
+          </button>
+        ) : (
+          <span
+            className="pile-chip pile-chip--hidden"
+            data-pile="archive"
+            data-side={side}
+            role="img"
+            aria-label={t("game.pileArchiveHiddenAria", { name: ownerName, count: archiveCount })}
+            title={t("game.pileArchiveHidden")}
+          >
+            <EyeOff size={12} strokeWidth={2} />
+            <span className="pile-chip-label">{t("game.pileArchive")}</span>
+            <b>{archiveCount}</b>
           </span>
         )}
       </div>
@@ -1795,6 +1864,19 @@ function GameBoard({
     setOpenPeek(incoming);
   }, [game, readOnly, handHidden, passAndPlay, humanSide]);
   const peek = !readOnly && !handHidden ? openPeek ?? null : null;
+  // Zonas laterais: o overlay de pilha é navegação da UI (sem efeito de jogo) e
+  // lê o estado vivo — as cartas mudam junto com a partida enquanto ele está
+  // aberto. Descarte é público; o arquivo só abre para o dono (canOpenPile).
+  const [pile, setPile] = useState<{ kind: PileKind; side: 0 | 1 } | null>(null);
+  const openPile = useCallback((kind: PileKind, side: 0 | 1) => {
+    sound.play("click");
+    setPile({ kind, side });
+  }, []);
+  // A pilha não fica aberta por cima da pass screen (a mão do próximo lado some
+  // até ele confirmar) nem do vencedor.
+  useEffect(() => {
+    if (game.winner !== null || handHidden) setPile(null);
+  }, [game.winner, handHidden]);
   // FEAT-10/13: in pass-and-play both sides decide their own mulligan (the
   // solo board only prompts for side 0 and lets the AI decide side 1).
   const mulliganSide = inMulligan(game) ? (game.pendingMulligan as 0 | 1) : null;
@@ -1832,6 +1914,10 @@ function GameBoard({
           side={enemySide}
           avatarLabel={passAndPlay ? String(enemySide + 1) : undefined}
           backs={enemy.hand.length}
+          discardCount={enemy.discard.length}
+          archiveCount={enemy.archives.length}
+          viewerSide={humanSide}
+          onOpenPile={openPile}
           t={t}
         />
 
@@ -1959,6 +2045,10 @@ function GameBoard({
           handCount={player.hand.length}
           deckCount={player.deck.length}
           hint={game.activePlayer === humanSide && !game.activeHouse && game.winner === null && !inMulligan(game) && !handHidden}
+          discardCount={player.discard.length}
+          archiveCount={player.archives.length}
+          viewerSide={humanSide}
+          onOpenPile={openPile}
           t={t}
         />
 
@@ -1994,6 +2084,16 @@ function GameBoard({
       </div>
 
       {peek && <PeekDialog peek={peek} t={t} onClose={() => setOpenPeek(undefined)} />}
+
+      {pile && (
+        <PileDialog
+          kind={pile.kind}
+          owner={game.players[pile.side]}
+          cards={pile.kind === "discard" ? game.players[pile.side].discard : game.players[pile.side].archives}
+          t={t}
+          onClose={() => setPile(null)}
+        />
+      )}
 
       {mulliganSide !== null && !readOnly && !handHidden && (
         <div className="winner-shade mulligan-shade" role="dialog" aria-modal="true" aria-labelledby="mulligan-title">
@@ -2347,6 +2447,87 @@ function PeekDialog({ peek, t, onClose }: { peek: NonNullable<GameState["peek"]>
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------- Pile overlay (zonas laterais) ----------
+
+/** Leitura das pilhas da mesa: o descarte (público) e o arquivo do próprio lado
+    abrem face-up, ordenados por título no mesmo grid do inspetor. O arquivo
+    virado do oponente nunca chega aqui — o chip dele não abre (canOpenPile).
+    Fecha com X, Esc e clique no backdrop; o foco segue o contrato dos modais
+    (useDialogFocus) e o conteúdo segue o estado vivo da partida. */
+function PileDialog({
+  kind,
+  owner,
+  cards,
+  t,
+  onClose,
+}: {
+  kind: PileKind;
+  owner: GameState["players"][number];
+  cards: CardInstance[];
+  t: Translator;
+  onClose: () => void;
+}) {
+  const dialogRef = useDialogFocus<HTMLDivElement>();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+  const sorted = useMemo(() => sortPile(cards), [cards]);
+  // Portal no body como o CardLightbox: dentro do board o backdrop empilha dentro
+  // do stacking do palco e o rail (console) cobre o canto do painel no desktop.
+  return createPortal(
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="modal-panel pile-panel" data-pile={kind} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="pile-title">
+        <div className="modal-heading">
+          <div>
+            <span className="eyebrow">{localizeName(owner.name, t)}</span>
+            <h2 id="pile-title">{t(kind === "discard" ? "game.pileTitleDiscard" : "game.pileTitleArchive")}</h2>
+          </div>
+          <button className="modal-close" type="button" onClick={onClose} aria-label={t("common.close")}><X size={18} /></button>
+        </div>
+        <div className="pile-count-row">
+          <span className="meta-chip">
+            {kind === "discard" ? <Trash2 size={12} /> : <Archive size={12} />}
+            {cards.length} {t("common.cards")}
+          </span>
+        </div>
+        {sorted.length ? (
+          <div className="card-grid pile-grid">
+            {sorted.map((item, index) => (
+              <div
+                key={item.instanceId}
+                className="card-cell pile-card"
+                style={{ "--house-color": houseColor(item.face.house), animationDelay: `${Math.min(index, 11) * 26}ms` } as CSSProperties}
+              >
+                <CardArt face={item.face} size="hand" hoverZoom />
+                <span className="card-cell-caption">
+                  <strong>{item.face.title}</strong>
+                  <small>
+                    {cardTypeLabel(item.face.type, t)}
+                    {item.face.power > 0 ? ` · ${item.face.power}` : item.face.amber ? ` · ${item.face.amber}A` : ""}
+                  </small>
+                </span>
+                {item.face.isMaverick && <span className="maverick-flag">MV</span>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="card-grid-empty">
+            {kind === "discard" ? <Trash2 size={20} strokeWidth={1.5} /> : <Archive size={20} strokeWidth={1.5} />}
+            <p>{t(kind === "discard" ? "game.pileEmptyDiscard" : "game.pileEmptyArchive")}</p>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
