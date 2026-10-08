@@ -104,6 +104,7 @@ import { Pagination } from "./components/Pagination";
 import { useHandDrag } from "./components/useHandDrag";
 import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
+import { readUiFlag } from "./ui/flag";
 
 const RANDOM_RIVAL_KEY = "aember-arena-random-rival";
 
@@ -2697,6 +2698,9 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>(() => readSettings(readLanguage()));
   const [hasHover] = useState(prefersHover);
   const t = useMemo(() => createTranslator(language), [language]);
+  // H-01: a flag da v2 é lida uma vez; os lotes H-07+ passam a consumi-la.
+  const ui2 = useMemo(readUiFlag, []);
+  void ui2;
 
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
