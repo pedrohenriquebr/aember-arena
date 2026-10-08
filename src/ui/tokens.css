@@ -1,0 +1,16 @@
+/* Tokens da v2 "Forja Noturna" (UX_REWRITE_PLAN §1.1). Só :root — nenhum seletor
+   existente depende deste arquivo ainda. Onde o valor já existe em index.css o token
+   aponta para ele (alias), para que mudar a paleta antiga não deixe a v2 para trás. */
+:root {
+  --nf-void:#0d0f0c; --nf-s1:#151813; --nf-s2:var(--panel); --nf-s3:#232820; --nf-felt:#16241f;
+  --nf-line:rgba(230,221,198,.10); --nf-line-strong:rgba(230,221,198,.22);
+  --nf-text:var(--paper); --nf-text-2:#b9b8aa; --nf-text-3:var(--faint);
+  --nf-amber:var(--gold); --nf-amber-hi:var(--gold-bright); --nf-amber-deep:#a9822f; --nf-on-amber:#1b1405;
+  --nf-ether:#a0e8ff; --nf-ember:#ef6a5a; --nf-verdant:var(--green);
+  --nf-font-ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --nf-font-display:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --nf-lit-amber:0 0 0 1px rgb(211 173 93/.5),0 0 24px rgb(211 173 93/.25);
+  --nf-lit-ether:0 0 0 1px rgb(160 232 255/.5),0 0 24px rgb(160 232 255/.25);
+  --nf-lit-ember:0 0 0 1px rgb(239 106 90/.5),0 0 24px rgb(239 106 90/.25);
+  --nf-w-read:680px; --nf-w-content:1120px; --nf-w-wide:1280px;
+}
