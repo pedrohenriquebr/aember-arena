@@ -1,0 +1,12 @@
+/* Fixture de PROVA do lint:ui2 — tem de passar: só tokens, hairlines de 1px e var(--space-*). */
+.ok-card {
+  color: var(--nf-text);
+  background: color-mix(in srgb, var(--nf-s2) 90%, transparent);
+  box-shadow: 0 0 0 1px var(--nf-line), var(--nf-lit-amber);
+  gap: var(--space-2);
+  padding: 1px var(--space-3);
+  margin: 0 auto;
+}
+.ok-fallback {
+  color: var(--nf-text, rgba(0, 0, 0, 0.5));
+}

@@ -22,6 +22,8 @@
     "e2e:arena": "node e2e/probes/_3d-arena.mjs",
     "e2e:bundle": "node e2e/bundle-size.mjs",
     "e2e:acceptance": "node e2e/acceptance.mjs",
+    "e2e:ui2": "node e2e/ui2.mjs",
+    "lint:ui2": "node scripts/lint-ui2-css.mjs",
     "test": "vitest run",
     "gen:schema": "node scripts/gen-dsl-schema.mjs",
     "harvest": "vite-node scripts/ability-harvest.mjs --",

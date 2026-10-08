@@ -1,0 +1,11 @@
+/* Fixture de PROVA do lint:ui2 — tem de falhar. Cada linha abaixo é uma violação. */
+.bad-card {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  gap: 12px;
+  padding: 5px 9px;
+  margin: 0 0 6px;
+}
+.bad-shadow {
+  box-shadow: 0 0 0 1px var(--nf-line), 0 0 24px rgba(0, 0, 0, 0.5);
+}
