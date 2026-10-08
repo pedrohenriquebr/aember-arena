@@ -982,24 +982,25 @@ button:disabled {
   display: none;
 }
 
+/* Rail dockado (>= 1041px): o console vira UMA linha discreta
+   ("ROUND 01 · Your turn" + End turn) — o seletor de casas é o pill sobre a
+   mesa e as seções abaixo (notas, inspetor, undo, Warden, log) sobem. */
 .command-rail .turn-console {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex: 0 0 auto;
   min-height: 0;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 10px 14px;
   border-top: 0;
 }
 
 .command-rail .turn-console-copy {
-  flex: 1 0 100%;
-}
-
-.command-rail .turn-console > .house-picker {
-  flex: 1 1 100%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .command-rail .turn-console > .end-turn-button {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
 }
 
 .game-board--stage .player-band {
@@ -1972,7 +1973,8 @@ button:disabled {
 }
 
 /* VA-01 (celular): linha 1 = status + toggles (order 1), quebra forçada pelo ::after
-   (order 2), linha 2 = casas + End turn (order 3). Desktop volta à linha única. */
+   (order 2), linha 2 = End turn (order 3). Desktop volta à linha única. O seletor
+   de casas saiu do console (pill flutuante sobre a mesa). */
 .turn-console > .view-toggle {
   order: 1;
 }
@@ -1984,9 +1986,9 @@ button:disabled {
   height: 0;
 }
 
-.turn-console > .house-picker,
 .turn-console > .end-turn-button {
   order: 3;
+  flex: 1 1 auto;
 }
 
 @media (min-width: 701px) {
@@ -1997,9 +1999,9 @@ button:disabled {
     display: none;
   }
   .turn-console > .view-toggle,
-  .turn-console > .house-picker,
   .turn-console > .end-turn-button {
     order: 0;
+    flex: 0 0 auto;
   }
 }
 
@@ -2030,6 +2032,23 @@ button:disabled {
   gap: 1px;
 }
 
+/* A linha única do turno ("ROUND 01 · Your turn"): kicker, separador e status
+   na MESMA linha; o resumo do Warden (aiSummary) entra como sufixo com
+   reticências. O sr-only segue fora do fluxo visual. */
+.turn-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.turn-sep {
+  flex: 0 0 auto;
+  color: #6f7466;
+  font-size: var(--fs-2xs);
+  line-height: 1;
+}
+
 @media (min-width: 701px) {
   .turn-console-copy {
     min-width: 112px;
@@ -2046,12 +2065,14 @@ button:disabled {
 
 .round-kicker {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 5px;
   color: #b4a16d;
   font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.15em;
+  white-space: nowrap;
 }
 
 .round-dot {
@@ -2063,9 +2084,12 @@ button:disabled {
 }
 
 .turn-console-copy strong {
+  overflow: hidden;
   color: #ece6d7;
   font-size: var(--fs-2xs);
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (min-width: 701px) {
@@ -2074,20 +2098,13 @@ button:disabled {
   }
 }
 
-.turn-console-copy > span:last-child {
+/* Sufixo da linha (resumo do turno da IA): uma linha, com reticências. */
+.turn-line-summary {
   overflow: hidden;
   color: #888c81;
   font-size: var(--fs-2xs);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-@media (min-width: 701px) {
-  .turn-console-copy > span:last-child {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
 }
 
 /* FX-04: narração viva do turno da IA — invisível, mas anunciada; o resumo
@@ -2102,21 +2119,52 @@ button:disabled {
   white-space: nowrap;
 }
 
-.house-picker {
+/* ---------- Pill do seletor de casas (flutuante sobre a mesa) ----------
+   O bloco mora FORA do fluxo (absolute no .board-content, irmão das bandas e
+   do table-plane): nenhum pixel novo em viewport nenhuma (FIT). ≥1041 fica no
+   canto superior direito da mesa, logo abaixo do HUD do Warden (faixa do
+   oponente e chips de pilha); abaixo disso, ao alcance do polegar — sobre a
+   base da zona do jogador, acima da banda do jogador e da mão. Alvos de 44px
+   (regra 9); no touch o toque seleciona direto (hover só existe em
+   `@media (hover: hover)` e expande o nome). */
+.house-pill {
+  position: absolute;
+  z-index: 3;
   display: flex;
-  min-width: 0;
-  flex: 1 1 0;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(222, 214, 194, 0.14);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(23, 29, 25, 0.88), rgba(12, 17, 14, 0.92));
+  box-shadow: var(--elev-2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
 }
 
-@media (min-width: 701px) {
-  .house-picker {
-    justify-content: center;
-    flex: 1;
-    gap: 6px;
+@media (max-width: 1040px) {
+  .house-pill {
+    right: 10px;
+    bottom: calc(var(--hand-row, var(--hand-h)) + var(--hand-bar-h) + 10px);
   }
+}
+
+@media (min-width: 1041px) {
+  .house-pill {
+    top: calc(var(--band-h) + 26px);
+    right: 12px;
+  }
+
+  /* 3D: a zona é um plano inclinado e o heading é projetado para baixo (sobe o
+     viewport, mais abaixo ele fica) — o pill encosta no HUD do Warden, sempre
+     ACIMA do heading em qualquer altura (probe _houses-pill.mjs mede 668-1440).
+     Fica alinhado aos chips de pilha da banda (mesmo canto direito). */
+  .game-board--3d .house-pill {
+    top: calc(var(--band-h) + 2px);
+  }
+}
+
+.house-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .house-choice {
@@ -2124,66 +2172,62 @@ button:disabled {
   display: inline-flex;
   min-width: 44px;
   min-height: 44px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 4px;
-  border: 1px solid rgba(222, 214, 194, 0.1);
-  border-radius: var(--radius-sm);
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
   color: #a4a69a;
-  background: rgba(255, 255, 255, 0.025);
+  background: transparent;
   cursor: pointer;
   font-size: var(--fs-2xs);
   font-weight: 650;
-  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
 }
 
-/* Celular (§2.7): só o ícone; o nome vive no aria-label/title. */
-.house-choice > span:not(.house-icon),
-.house-choice .house-check {
-  display: none;
-}
-
-@media (min-width: 701px) {
-  .house-choice > span:not(.house-icon) {
-    display: inline;
-  }
-  .house-choice .house-check {
-    display: block;
-  }
-}
-
-@media (min-width: 701px) {
-  .house-choice {
-    min-width: 80px;
-    justify-content: flex-start;
-    gap: 5px;
-    padding: 10px 7px;
-  }
-}
-
-@media (min-width: 1221px) {
-  .house-choice {
-    min-width: 92px;
-    gap: 7px;
-    padding: 10px 9px;
-  }
+/* O nome vive no DOM (aria-label/title e textContent dos probes) e só expande
+   no hover — a largura anima via max-width (interpolável), nunca via `auto`. */
+.house-choice-name {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  transition:
+    max-width var(--dur-base) var(--ease-out),
+    margin var(--dur-base) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
 }
 
 @media (hover: hover) {
-.house-choice:not(:disabled):hover {
-  border-color: color-mix(in srgb, var(--house-color) 65%, transparent);
-  color: #f0eadc;
-  background: color-mix(in srgb, var(--house-color) 12%, transparent);
-  transform: translateY(-1px);
-}
+  .house-choice:not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--house-color) 65%, transparent);
+    color: #f0eadc;
+    background: color-mix(in srgb, var(--house-color) 14%, transparent);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--house-color) 32%, transparent);
+    transform: translateY(-1px);
+  }
+  .house-choice:not(:disabled):hover .house-choice-name {
+    max-width: 130px;
+    margin-left: 6px;
+    opacity: 1;
+  }
 }
 
+/* Casa ativa: anel/glow da casa (a mesma cor do tapete, --turn-house). */
 .house-choice.is-chosen {
-  border-color: color-mix(in srgb, var(--house-color) 70%, transparent);
   color: #f0eadc;
-  background: color-mix(in srgb, var(--house-color) 17%, rgba(18, 22, 18, 0.65));
-  box-shadow: inset 0 0 14px color-mix(in srgb, var(--house-color) 9%, transparent);
+  background: color-mix(in srgb, var(--house-color) 20%, rgba(18, 22, 18, 0.65));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--turn-house, var(--house-color)) 72%, transparent),
+    0 0 22px color-mix(in srgb, var(--turn-house, var(--house-color)) 38%, transparent);
 }
 
 .house-choice.is-locked {
@@ -2194,41 +2238,33 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* T6 — default = mobile (21px); desktop ao lado restaura o tamanho por
-   modificador (equivalentes a .house-icon--xs/sm/md/lg, ~15 linhas abaixo;
-   width/height do antigo 700px eram inertes: o HouseIcon usa style inline). */
-.house-choice .house-icon {
-  font-size: 21px;
+/* O emblema cabe inteiro no alvo de 44px (HouseIcon usa style inline; aqui só
+   o tamanho do glifo de fallback — iniciais). */
+.house-choice .house-icon.house-icon--xs {
+  font-size: 20px;
+}
+.house-choice .house-icon.house-icon--sm {
+  font-size: 23px;
+}
+.house-choice .house-icon.house-icon--md {
+  font-size: 27px;
+}
+.house-choice .house-icon.house-icon--lg {
+  font-size: 34px;
 }
 
-@media (min-width: 701px) {
-  .house-choice .house-icon.house-icon--xs {
-    font-size: 20px;
-  }
-  .house-choice .house-icon.house-icon--sm {
-    font-size: 23px;
-  }
-  .house-choice .house-icon.house-icon--md {
-    font-size: 27px;
-  }
-  .house-choice .house-icon.house-icon--lg {
-    font-size: 34px;
-  }
-}
-
+/* Selo de "casa escolhida": canto inferior direito do emblema. */
 .house-check {
-  width: 11px;
-}
-
-@media (min-width: 701px) {
-  .house-check {
-    width: auto;
-  }
-}
-
-.house-check {
-  margin-left: auto;
-  color: color-mix(in srgb, var(--house-color) 80%, white);
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 14px;
+  height: 14px;
+  padding: 2px;
+  border: 1px solid rgba(12, 17, 14, 0.8);
+  border-radius: 50%;
+  color: #10160f;
+  background: color-mix(in srgb, var(--turn-house, var(--house-color)) 80%, white);
 }
 
 /* T6 — default = mobile (célula do grid do console); desktop ao lado. */
@@ -7711,12 +7747,12 @@ html .spin {
 }
 
 /* ---------- Zonas laterais: chips de pilha (chips do HUD nas bandas) ----------
-   FIT: os chips moram DENTRO da banda — nenhum pixel de altura nova (22px de
-   chip numa faixa de 57px). São `flex: 0 0 auto`: nunca encolhem; a folga
+   FIT: os chips moram DENTRO da banda — nenhum pixel de altura nova (40px de
+   chip na faixa de 44-52px). São `flex: 0 0 auto`: nunca encolhem; a folga
    horizontal sai do nome/deck/hand-bar, todos com clip próprio — e o
    player-resources também não encolhe para não derramar o placar.
-   <=700px o rótulo some (o texto inteiro vive em aria-label/title): sobram
-   ícone + contagem, que é a informação de decisão. */
+   Glifo 20px + contagem SEMPRE ao lado do glifo; o rótulo textual volta em
+   >= 1041px (abaixo disso o texto inteiro vive em aria-label/title). */
 .pile-chips {
   display: flex;
   flex: 0 0 auto;
@@ -7730,10 +7766,10 @@ html .spin {
 
 .pile-chip {
   display: inline-flex;
-  height: 22px;
+  height: 40px;
   align-items: center;
-  gap: 3px;
-  padding: 0 7px;
+  gap: 5px;
+  padding: 0 10px;
   border: 1px solid rgba(226, 218, 196, 0.13);
   border-radius: var(--radius-pill);
   color: #a8a99d;
@@ -7748,7 +7784,10 @@ button.pile-chip {
   cursor: pointer;
   transition:
     border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    translate var(--dur-fast) var(--ease-out);
 }
 
 .pile-chip svg {
@@ -7756,16 +7795,32 @@ button.pile-chip {
   color: #c2a05b;
 }
 
+/* A contagem vive ao lado do glifo e nunca some. */
 .pile-chip b {
-  color: #d8d3c4;
+  color: #e7e1d0;
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
+}
+
+.pile-chip-label {
+  font-weight: 650;
+  letter-spacing: 0.04em;
 }
 
 @media (hover: hover) {
   button.pile-chip:hover {
-    border-color: rgba(211, 173, 93, 0.5);
+    border-color: rgba(211, 173, 93, 0.55);
     color: #e8e2d4;
+    background: rgba(211, 173, 93, 0.1);
+    box-shadow: var(--elev-1), 0 0 14px rgba(211, 173, 93, 0.18);
+    translate: 0 -1px;
   }
+}
+
+button.pile-chip:active {
+  background: rgba(211, 173, 93, 0.16);
+  box-shadow: var(--elev-0), inset 0 1px 4px rgba(0, 0, 0, 0.35);
+  translate: 0 0;
 }
 
 button.pile-chip:focus-visible {
@@ -7785,24 +7840,30 @@ button.pile-chip:focus-visible {
   color: #7c8072;
 }
 
+/* Celular: rótulo some (aria-label/title); o chip encolhe para 34px e o glifo
+   continua legível (20px) com a contagem colada nele. */
 @media (max-width: 1040px) {
   .pile-chip-label {
     display: none;
   }
+}
 
+@media (max-width: 700px) {
   .pile-chip {
-    height: 20px;
-    gap: 2px;
-    padding: 0 5px;
+    height: 34px;
+    gap: 3px;
+    padding: 0 7px;
   }
 }
 
 /* 3D (>= 701px): a banda é um HUD cheio (âmbar absoluto colado ao avatar,
-   dorsos do Warden, placar à direita) — os chips saem do fluxo, empilham em
-   duas linhas (ícone + contagem; o texto está em aria-label/title) e ancoram na
-   direita da PRÓPRIA banda (position: relative do 3D). O bloco que encosta na
-   direita reserva o bolso com padding; a contagem da mão rende o espaço (a mão
-   está logo abaixo, mesmo racional do título já escondido no 3D). */
+   dorsos do Warden, placar à direita) — os chips saem do fluxo, ancoram na
+   direita da PRÓPRIA banda (position: relative do 3D) lado a lado (o par de
+   chips de 40px não cabe empilhado na faixa). Glifo 20px + contagem colada
+   nele; o rótulo textual fica de fora do 3D (regra da 7cbb196 — o texto vive
+   em aria-label/title) para o par caber sem empurrar o placar para debaixo do
+   âmbar. O bloco que encosta na direita reserva o bolso com padding; a
+   contagem da mão rende o espaço (a mão está logo abaixo). */
 @supports (transform-style: preserve-3d) {
   @media (min-width: 701px) {
     .game-board--3d .board-content > .player-band .pile-chips {
@@ -7811,8 +7872,8 @@ button.pile-chip:focus-visible {
       top: 50%;
       right: 8px;
       translate: 0 -50%;
-      flex-direction: column;
-      align-items: flex-end;
+      flex-direction: row;
+      align-items: center;
       gap: 2px;
     }
 
@@ -7821,9 +7882,9 @@ button.pile-chip:focus-visible {
     }
 
     .game-board--3d .board-content > .player-band .pile-chip {
-      height: 20px;
-      gap: 2px;
-      padding: 0 5px;
+      height: 40px;
+      gap: 4px;
+      padding: 0 8px;
     }
 
     /* A reserva é do ÚLTIMO bloco do fluxo (o que encosta na direita): a barra
@@ -7831,7 +7892,13 @@ button.pile-chip:focus-visible {
        tem os dois e a reserva dupla empurraria as chaves para o âmbar). */
     .game-board--3d .board-content > .player-band > .hand-bar-info,
     .game-board--3d .board-content > .player-band > .player-resources:not(:has(~ .hand-bar-info)) {
-      padding-right: 52px;
+      padding-right: 124px;
+    }
+
+    /* A dica de casa some no 3D: o pill sobre a mesa é o CTA (o texto longo
+       empurrava o placar para debaixo do âmbar — probe _houses-pill.mjs). */
+    .game-board--3d .hand-prompt {
+      display: none;
     }
 
     .game-board--3d .board-content > .player-band .hand-count {

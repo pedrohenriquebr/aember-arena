@@ -24,6 +24,7 @@ import {
   Home,
   KeyRound,
   Languages,
+  Layers,
   Link2,
   LoaderCircle,
   Music,
@@ -1496,9 +1497,9 @@ const PlayerBand = memo(function PlayerBand({
           aria-label={side === viewerSide ? t("game.pileDiscardAriaYou", { count: discardCount }) : t("game.pileDiscardAria", { name: ownerName, count: discardCount })}
           title={side === viewerSide ? t("game.pileDiscardAriaYou", { count: discardCount }) : t("game.pileDiscardAria", { name: ownerName, count: discardCount })}
         >
-          <Trash2 size={12} strokeWidth={2} />
-          <span className="pile-chip-label">{t("game.pileDiscard")}</span>
+          <Layers size={20} strokeWidth={2} />
           <b>{discardCount}</b>
+          <span className="pile-chip-label">{t("game.pileDiscard")}</span>
         </button>
         {ownArchive ? (
           <button
@@ -1511,9 +1512,9 @@ const PlayerBand = memo(function PlayerBand({
             aria-label={t("game.pileArchiveAria", { count: archiveCount })}
             title={t("game.pileArchiveAria", { count: archiveCount })}
           >
-            <Archive size={12} strokeWidth={2} />
-            <span className="pile-chip-label">{t("game.pileArchive")}</span>
+            <Archive size={20} strokeWidth={2} />
             <b>{archiveCount}</b>
+            <span className="pile-chip-label">{t("game.pileArchive")}</span>
           </button>
         ) : (
           <span
@@ -1524,9 +1525,9 @@ const PlayerBand = memo(function PlayerBand({
             aria-label={t("game.pileArchiveHiddenAria", { name: ownerName, count: archiveCount })}
             title={t("game.pileArchiveHidden")}
           >
-            <EyeOff size={12} strokeWidth={2} />
-            <span className="pile-chip-label">{t("game.pileArchive")}</span>
+            <EyeOff size={20} strokeWidth={2} />
             <b>{archiveCount}</b>
+            <span className="pile-chip-label">{t("game.pileArchive")}</span>
           </span>
         )}
       </div>
@@ -1898,7 +1899,8 @@ function GameBoard({
       className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${consoleSlot ? " game-board--console-docked" : ""}${viewSwitching ? " game-board--switching" : ""}`}
       data-view={view3d ? "3d" : undefined}
       // H3D-21: a cor do tapete segue a casa do turno e a metade de quem joga.
-      style={view3d ? ({ "--turn-house": game.activeHouse ? houseColor(game.activeHouse) : "transparent", "--turn-y": game.activePlayer === humanSide ? "72%" : "28%" } as CSSProperties) : undefined}
+      // --turn-house também tinge o anel/glow da casa ativa no pill (2D e 3D).
+      style={{ "--turn-house": game.activeHouse ? houseColor(game.activeHouse) : "transparent", "--turn-y": game.activePlayer === humanSide ? "72%" : "28%" } as CSSProperties}
       aria-label={t("game.board")}
     >
       <div className="felt-etching" aria-hidden="true" />
@@ -1920,6 +1922,35 @@ function GameBoard({
           onOpenPile={openPile}
           t={t}
         />
+
+        {/* Seletor de casas como pill flutuante sobre a mesa (fora do table-plane:
+            no 3D o plano inclina e o pill é HUD, irmão das bandas). Só os 3
+            emblemas lado a lado (44px cada); hover expande com o nome; a casa
+            ativa ganha anel/glow. Clique = mesma ação dos botões antigos. */}
+        <div className="house-pill">
+          <div className="house-picker" role="group" aria-label={pick?.houses ? t("game.chooseMoveHouse") : t("game.chooseHouse")}>
+            {(pick?.houses ?? player.houses).map((house) => {
+              const chosen = !pick?.houses && game.activeHouse === house;
+              return (
+                <button
+                  key={house}
+                  type="button"
+                  className={`house-choice${chosen ? " is-chosen" : ""}${game.activeHouse && !chosen && !pick?.houses ? " is-locked" : ""}`}
+                  style={{ "--house-color": houseColor(house) } as CSSProperties}
+                  onClick={() => (pick?.houses ? onPickHouse(house) : onHouse(house))}
+                  disabled={pick?.houses ? !isHumanTurn : !isHumanTurn || Boolean(game.activeHouse) || !housesFor(game, humanSide).includes(house)}
+                  aria-pressed={chosen}
+                  aria-label={houseLabel(house, t)}
+                  title={houseLabel(house, t)}
+                >
+                  <HouseIcon house={house} size="lg" />
+                  <span className="house-choice-name">{houseLabel(house, t)}</span>
+                  {chosen && <Check size={13} className="house-check" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* H3D-02: no 2D o wrapper é `display: contents` — não existe para
             layout nem para a árvore de acessibilidade. No 3D ele é o plano da
@@ -1946,38 +1977,22 @@ function GameBoard({
           {(() => {
             const consoleNode = (
           <div className={`turn-console${isHumanTurn ? " turn-console--human" : ""}`}>
+            {/* UMA linha discreta: "ROUND 01 · Your turn" — o seletor de casas é
+                o pill flutuante sobre a mesa (house-pill, irmão do table-plane);
+                o resumo do Warden (aiSummary) continua vivo como sufixo da linha. */}
             <div className="turn-console-copy">
-              <div className="round-kicker"><span className="round-dot" /> {t("game.round")} {String(game.turn).padStart(2, "0")}</div>
-              <strong>
-                {passAndPlay
-                  ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
-                  : game.activePlayer === 0 ? t("game.yourTurn") : aiPhase === "thinking" ? t("game.thinking") : t("game.opponentTurn")}
-              </strong>
-              {/* FX-04: região viva antes do resumo — o :last-child do CSS continua no span visível. */}
+              <div className="turn-line">
+                <div className="round-kicker"><span className="round-dot" /> {t("game.round")} {String(game.turn).padStart(2, "0")}</div>
+                <span className="turn-sep" aria-hidden="true">·</span>
+                <strong>
+                  {passAndPlay
+                    ? t("game.turnOf", { name: localizeName(game.players[game.activePlayer].name, t) })
+                    : game.activePlayer === 0 ? t("game.yourTurn") : aiPhase === "thinking" ? t("game.thinking") : t("game.opponentTurn")}
+                </strong>
+                {aiSummary && <span className="turn-line-summary">{aiSummary}</span>}
+              </div>
+              {/* FX-04: região viva do turno — a linha visível é a narrativa curta. */}
               <span className="sr-only" aria-live="polite">{narration}</span>
-              <span>{aiSummary ?? (game.activeHouse ? `${houseLabel(game.activeHouse, t)} ${t("game.houseActive")}` : t("game.chooseHouse"))}</span>
-            </div>
-            <div className="house-picker" role="group" aria-label={pick?.houses ? t("game.chooseMoveHouse") : t("game.chooseHouse")}>
-              {(pick?.houses ?? player.houses).map((house) => {
-                const chosen = !pick?.houses && game.activeHouse === house;
-                return (
-                  <button
-                    key={house}
-                    type="button"
-                    className={`house-choice${chosen ? " is-chosen" : ""}${game.activeHouse && !chosen && !pick?.houses ? " is-locked" : ""}`}
-                    style={{ "--house-color": houseColor(house) } as CSSProperties}
-                    onClick={() => (pick?.houses ? onPickHouse(house) : onHouse(house))}
-                    disabled={pick?.houses ? !isHumanTurn : !isHumanTurn || Boolean(game.activeHouse) || !housesFor(game, humanSide).includes(house)}
-                    aria-pressed={chosen}
-                    aria-label={houseLabel(house, t)}
-                    title={houseLabel(house, t)}
-                  >
-                    <HouseMark house={house} small />
-                    <span>{houseLabel(house, t)}</span>
-                    {chosen && <Check size={13} className="house-check" />}
-                  </button>
-                );
-              })}
             </div>
             <button className="end-turn-button" type="button" onClick={onEndTurn} disabled={!isHumanTurn} aria-label={t("game.endTurn")} title={t("game.endTurn")}>
               <span>{t("game.endTurn")}</span>
@@ -2495,7 +2510,7 @@ function PileDialog({
         </div>
         <div className="pile-count-row">
           <span className="meta-chip">
-            {kind === "discard" ? <Trash2 size={12} /> : <Archive size={12} />}
+            {kind === "discard" ? <Layers size={12} /> : <Archive size={12} />}
             {cards.length} {t("common.cards")}
           </span>
         </div>
@@ -2521,7 +2536,7 @@ function PileDialog({
           </div>
         ) : (
           <div className="card-grid-empty">
-            {kind === "discard" ? <Trash2 size={20} strokeWidth={1.5} /> : <Archive size={20} strokeWidth={1.5} />}
+            {kind === "discard" ? <Layers size={20} strokeWidth={1.5} /> : <Archive size={20} strokeWidth={1.5} />}
             <p>{t(kind === "discard" ? "game.pileEmptyDiscard" : "game.pileEmptyArchive")}</p>
           </div>
         )}

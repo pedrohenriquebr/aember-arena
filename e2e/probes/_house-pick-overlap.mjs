@@ -1,5 +1,7 @@
 // GAP 1: com o inspetor ancorado aberto, o seletor de casa (house-picker) tem de
 // receber o clique quando o jogo espera move.house (classe --yield no inspetor).
+// Atualizado para o pill flutuante: o seletor mora sobre a mesa (.house-pill),
+// nunca no rail — o probe confirma o hit-test em qualquer viewport.
 import { spawn } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,10 +43,11 @@ try {
     const before = await probe();
     await page.evaluate(() => document.querySelector(".inspector-section")?.classList.add("inspector-section--yield"));
     const after = await probe();
-    // >= 1041px o console mora no topo da coluna direita (acima das notas); abaixo, no palco.
-    const inRail = await page.evaluate(() => Boolean(document.querySelector(".command-rail > .rail-console-slot > .turn-console .house-picker")));
-    const ok = after.every((v) => v === true) && inRail === (w >= 1041);
-    if (inRail !== (w >= 1041)) console.log(`  console na coluna: ${inRail} (esperado ${w >= 1041})`);
+    // O seletor virou pill flutuante sobre a mesa (.house-pill) — fora do rail,
+    // em cima do felt, em qualquer viewport.
+    const inPill = await page.evaluate(() => Boolean(document.querySelector(".game-board .house-pill .house-picker .house-choice")));
+    const ok = after.every((v) => v === true) && inPill;
+    if (!inPill) console.log(`  seletor fora do pill: ${inPill}`);
     if (!ok) bad += 1;
     console.log(`${w}x${h} sem yield: ${JSON.stringify(before)} | com yield: ${JSON.stringify(after)} ${ok ? "OK" : "FALHA"}`);
     await page.close();
