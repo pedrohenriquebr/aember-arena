@@ -1072,8 +1072,12 @@ function everyMatch(state: GameState, me: Side, source: CardInstance | undefined
   // máximo; `lowest` espelha). É uma decisão de CONJUNTO: `matches` (por carta)
   // não lê o campo — quem resolve o `mostStat` é sempre esta função.
   if (filter.mostStat) {
+    // Lote 15b: o stat lido é o do JOGO — power/armor efetivos e o amber SOBRE a
+    // criatura (capturado/exaltado), como o keyteki `cardStat: (card) =>
+    // card.amber` (Word of Returning: "for each Æmber on it"). O amber impresso
+    // (bonus icons) nunca é "amber on it".
     const stat = (card: CardInstance) =>
-      filter.mostStat === "power" ? effectivePower(state, card) : filter.mostStat === "armor" ? effectiveArmor(state, card) : (card.amber ?? 0) + (card.face.amber ?? 0);
+      filter.mostStat === "power" ? effectivePower(state, card) : filter.mostStat === "armor" ? effectiveArmor(state, card) : (card.amber ?? 0);
     const values = found.map(stat);
     if (!values.length) return found;
     const extreme = filter.lowest ? Math.min(...values) : Math.max(...values);
@@ -1335,14 +1339,20 @@ function releaseBound(state: GameState, source: CardInstance): void {
     for (const held of [...state.players[side].board]) {
       if (held.boundTo !== source.instanceId || held === source) continue;
       const owner = ownerOf(state, held);
+      // The artifact RETURNS as it was before the creature form (materialize):
+      // damage, stun and tokens were of the creature. A plain controlled
+      // creature (takeControl whileSource / lasting control) keeps its state —
+      // only the control ends.
+      const formed = held.asCreature !== undefined;
       held.asCreature = undefined;
       held.boundTo = undefined;
-      // The artifact returns as it was before the creature form: damage, stun and tokens were of the creature.
-      held.damage = 0;
-      held.stunned = false;
-      held.warded = undefined;
-      held.enraged = undefined;
-      held.ready = true;
+      if (formed) {
+        held.damage = 0;
+        held.stunned = false;
+        held.warded = undefined;
+        held.enraged = undefined;
+        held.ready = true;
+      }
       if (held.controlledBy === undefined || owner === undefined || owner === side) {
         held.controlledBy = undefined;
         continue;
@@ -1492,39 +1502,43 @@ function makeToken(state: GameState, side: Side, house: string): CardInstance {
 
 /** Armor absorbs damage once per turn (keyteki DealDamageAction/armorUsed).
     Ward prevents the whole instance and an active redirect takes it instead
-    (Onda 4); `allowRedirect` stops a redirected packet from bouncing again. */
-function dealDamage(state: GameState, card: CardInstance, amount: number, poison = false, allowRedirect = true): void {
-  if (!isCreature(card) || amount <= 0) return;
+    (Onda 4); `allowRedirect` stops a redirected packet from bouncing again.
+    Returns whether the damage EVENT happened (keyteki onDamageDealt): ward
+    CANCELS it (unwardAndCancel) and "cannot be dealt damage" raises none, but
+    damage fully absorbed by armor still counts — `checkEventCondition` keeps
+    the event alive whenever `amount > 0 || armorUsed > 0`. This boolean is what
+    the `damage` act's did (and its "If you do" gate) reads. */
+function dealDamage(state: GameState, card: CardInstance, amount: number, poison = false, allowRedirect = true): boolean {
+  if (!isCreature(card) || amount <= 0) return false;
   // Gabos Longarms (Lote 8 §8.1): during the fight the fought creature's damage goes to the chosen one.
   if (allowRedirect && fightRedirect?.from === card && fightRedirect.to !== card && controllerOf(state, fightRedirect.to) !== undefined) {
-    dealDamage(state, fightRedirect.to, amount, poison, false);
-    return;
+    return dealDamage(state, fightRedirect.to, amount, poison, false);
   }
   // "Cannot be dealt damage" (Lote 5 §5.6) is checked after the Gabos redirect, so the chosen creature (not the
   // fought one) is the one that may be immune; below it nothing is redirected, absorbed or warded.
-  if (damagePrevented(state, card)) return;
+  if (damagePrevented(state, card)) return false;
   // A redirect is an interrupt on the damage-applied event (keyteki Shadow
   // Self), so it runs before armor and before the target's own ward: a warded
   // neighbor still sends the damage to the redirecting creature.
   if (allowRedirect) {
     const redirected = redirectFor(state, card);
     if (redirected) {
-      dealDamage(state, redirected, amount, poison, false);
-      return;
+      return dealDamage(state, redirected, amount, poison, false);
     }
   }
   // Ward cancels the damage event (keyteki unwardAndCancel) before armor is
   // accounted: the token is discarded and nothing else happens.
   if (card.warded) {
     card.warded = 0;
-    return;
+    return false;
   }
   const absorbed = Math.min(Math.max(0, effectiveArmor(state, card) - (card.armorUsed ?? 0)), amount);
   card.armorUsed = (card.armorUsed ?? 0) + absorbed;
   const applied = amount - absorbed;
-  if (applied <= 0) return;
+  if (applied <= 0) return true;
   card.damage += applied;
   if (poison) card.poisoned = true;
+  return true;
 }
 
 /** Destroys every creature whose damage reached its power, whose effective power
@@ -1730,7 +1744,14 @@ function run(context: Context, act: Act): void {
       break;
     case "damage":
       if (act.divide) divideDamage(context, act, amount);
-      else for (const card of cards) dealDamage(state, card, amount);
+      else {
+        // Lote 15a/keyteki: o did do dano são os eventos de dano que
+        // ACONTECERAM — ward cancela o evento (unwardAndCancel) e não conta,
+        // armor não cancela (checkEventCondition: armorUsed>0 mantém vivo).
+        let events = 0;
+        for (const card of cards) if (dealDamage(state, card, amount)) events += 1;
+        explicitDid = events;
+      }
       break;
     case "heal":
       for (const card of cards) {
@@ -1742,7 +1763,13 @@ function run(context: Context, act: Act): void {
     case "destroy": {
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) destroy(state, card, deterministic, me);
-      remember(context, cards.filter((card) => controllerOf(state, card) === undefined), houses);
+      const away = cards.filter((card) => controllerOf(state, card) === undefined);
+      // keyteki: o ward CANCELA o evento de destroy (Card.js keywordReactions,
+      // changeEvent cancel:true) — um destroy interceptado não aconteceu e o
+      // "If you do" fica fechado. Só as cartas que REALMENTE saíram de jogo
+      // contam como did (a mesma régua do `{gone}`/"destroyed this way").
+      explicitDid = away.length;
+      remember(context, away, houses);
       break;
     }
     case "purge": {
@@ -1753,13 +1780,17 @@ function run(context: Context, act: Act): void {
       // "Purge ~" on an Action still being played: it is not in play yet, so
       // applyMove sends it to purged instead of the discard pile (Lote 5 §5.4).
       if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "purged");
-      remember(context, cards.filter((card) => controllerOf(state, card) === undefined), houses);
+      const away = cards.filter((card) => controllerOf(state, card) === undefined);
+      explicitDid = away.length;
+      remember(context, away, houses);
       break;
     }
     case "sacrifice": {
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) sacrifice(state, card, deterministic, me);
-      remember(context, cards.filter((card) => controllerOf(state, card) === undefined), houses);
+      const away = cards.filter((card) => controllerOf(state, card) === undefined);
+      explicitDid = away.length;
+      remember(context, away, houses);
       break;
     }
     case "exalt":
@@ -1960,6 +1991,9 @@ function run(context: Context, act: Act): void {
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) leaveByEffect(state, card, "hand");
       if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "hand");
+      // Ward intercepta o leave-play: o ato não aconteceu (did 0 — mesma régua
+      // do destroy acima, keyteki cancela o evento).
+      explicitDid = cards.filter((card) => controllerOf(state, card) === undefined).length;
       remember(context, cards.filter((card) => state.players.some((player) => player.hand.includes(card))), houses);
       break;
     }
@@ -1984,6 +2018,7 @@ function run(context: Context, act: Act): void {
         } else if (act.at === "shuffle") state.players[owner].deck = shuffle(deck, state);
       }
       if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "deck");
+      explicitDid = cards.filter((card) => controllerOf(state, card) === undefined).length;
       remember(context, landed, houses);
       break;
     }
@@ -2073,6 +2108,7 @@ function run(context: Context, act: Act): void {
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
       for (const card of cards) leaveByEffect(state, card, "archives");
       if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "archives");
+      explicitDid = cards.filter((card) => controllerOf(state, card) === undefined).length;
       remember(
         context,
         cards.filter((card) => state.players.some((player) => player.archives.includes(card))),
@@ -2421,10 +2457,25 @@ function fireObservers(state: GameState, event: CardInstance, trigger: Trigger, 
     if (!source) continue;
     for (const ability of effect.abilities) {
       if (observerBudget <= 0 || observerDepth >= OBSERVER_DEPTH) return;
-      if (!ability.of || !ability.on.includes(trigger) || !matches(state, effect.side ?? 0, source, event, ability.of)) continue;
-      if (ability.if && !holds(ability.if, state, effect.side ?? 0, source, { actor })) continue;
+      const side = effect.side ?? 0;
+      if (!ability.of || !ability.on.includes(trigger) || !matches(state, side, source, event, ability.of)) continue;
+      if (ability.if && !holds(ability.if, state, side, source, { actor })) continue;
+      const context: Context = { state, me: side, source, event, deterministic, actor, mode: defaultMode(ability) };
+      // Mesmo desdobramento do observer de board: o `target` do ability é
+      // auto-escolhido (um `s:"target"` sem alvo escolhido resolveria vazio) e
+      // a referência `who`/casa é capturada antes dos atos, como em fireOwn.
+      if (ability.target) {
+        context.target = autoPick(state, side, everyMatch(state, side, source, ability.target, context), isHarmful(ability), givesControl(ability));
+        if (!context.target) continue;
+      }
+      const reference = context.target ?? context.event;
+      if (reference) {
+        context.whoController = controllerOf(state, reference);
+        context.whoOwner = ownerOf(state, reference);
+      }
+      stamp(state, context);
+      if (observerBudget <= 0) return;
       observerBudget -= 1;
-      const context: Context = { state, me: effect.side ?? 0, source, event, deterministic, actor, mode: defaultMode(ability) };
       for (const act of ability.acts) run(context, act);
     }
   }

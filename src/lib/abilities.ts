@@ -587,11 +587,16 @@ let cache = new WeakMap<CardFace, CardRules>();
     text = same rules, so sharing a row across printings is correct by design. */
 function storedAbility(face: CardFace): AbilityOverride | null {
   const hash = textHash(face.text ?? "");
+  // A row keyed by this id only speaks for the exact text it was written for:
+  // a STALE one (the text changed since) falls through to the hash index
+  // below — "whoever was written for this exact text" wins over the parser —
+  // instead of silently blocking it.
+  const byId = overrides.get(face.id);
   // Textless cards never fall back by hash: every empty text hashes alike, and
   // the first row with an empty textHash would leak onto every vanilla creature
   // (the dsl3 observer-loop tests caught exactly that — Runner inherited the
   // Loop ability and the recursion brake bit much later).
-  const entry = overrides.get(face.id) ?? (face.text?.trim() ? overridesByHash.get(hash) : undefined);
+  const entry = (byId && byId.textHash === hash ? byId : undefined) ?? (face.text?.trim() ? overridesByHash.get(hash) : undefined);
   if (!entry || entry.textHash !== hash) return null;
   // A frozen parser output is only valid for the grammar that wrote it.
   if (entry.source === "parser" && entry.parserVersion !== PARSER_VERSION) return null;
