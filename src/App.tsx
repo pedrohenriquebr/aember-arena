@@ -43,11 +43,12 @@ import {
   WifiOff,
   X,
   Zap,
+  ZapOff,
   ZoomIn,
 } from "lucide-react";
 import { chooseAiHouse, chooseAiMove, describeAiThinking, holdEntrench, shouldMulligan, shouldTakeArchives, type Difficulty } from "./lib/ai";
 import { vendoredOverrides } from "./lib/vendored";
-import { flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides } from "./lib/abilities";
+import { flushAbilityOverrides, holdAbilityOverrides, mergeAbilityOverrides, rulesOf } from "./lib/abilities";
 import { cacheDeck, clearSavedMatch, countCatalogCards, deleteDeck, getCachedDeck, getDeckStats, listCatalogCards, listCachedDecks, loadAbilityOverrides, loadSavedMatch, putAbilityOverride, recordMatchResult, saveMatch, setDeckFavorite, type DeckStats, type LibraryDeck, type SavedMatch } from "./lib/cache";
 import { LLM_RUN_LIMIT, pendingTranslations, runTranslation, translationTries, type RunProgress } from "./lib/catalogLlm";
 import { DEMO_DECK, DEMO_DECK_ID } from "./lib/demoDeck";
@@ -306,6 +307,9 @@ type CardTileProps = {
   damageLabel?: string;
   /** FEAT-04: a carta tem ao menos um movimento legal agora. */
   hinted?: boolean;
+  /** QA 07/out: a carta é alvo legal da seleção em curso (anel + tooltip + clique
+      que escolhe o alvo, nunca o inspetor). */
+  targetable?: boolean;
   /** T5 — tradutor p/ o CardLightbox do long-press touch. */
   t: Translator;
   /** T7d — recebe a própria carta: o pai passa o handler estável direto
@@ -341,6 +345,7 @@ function areCardTilePropsEqual(a: CardTileProps, b: CardTileProps): boolean {
     a.stateLabel === b.stateLabel &&
     a.damageLabel === b.damageLabel &&
     a.hinted === b.hinted &&
+    a.targetable === b.targetable &&
     a.t === b.t &&
     a.onClick === b.onClick &&
     sameCardInstance(a.card, b.card)
@@ -358,6 +363,7 @@ const CardTile = memo(function CardTile({
   stateLabel,
   damageLabel,
   hinted = false,
+  targetable = false,
   t,
   onClick,
 }: CardTileProps) {
@@ -366,20 +372,24 @@ const CardTile = memo(function CardTile({
   const baseLabel = `${face.title}, ${houseLabel(face.house, t)} ${cardTypeLabel(face.type, t)}`;
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const longPressAt = useRef(0);
+  // QA 07/out: o alvo elegível se anuncia (tooltip + aria) — o clique nele escolhe
+  // o alvo, nunca abre o inspetor.
+  const targetNote = targetable ? `, ${t("game.chooseAsTarget")}` : "";
   return (
     <>
       <button
-        className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}${hinted ? " card-tile--hint" : ""}`}
+        className={`card-tile card-tile--${size}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}${playAnim ? " card-tile--enter" : ""}${hinted ? " card-tile--hint" : ""}${targetable ? " is-targetable" : ""}`}
         type="button"
         /* O diretor de FX acha a carta por aqui (destaque imperativo, sem prop). */
         data-iid={card.instanceId}
+        title={targetable ? t("game.chooseAsTarget") : undefined}
         onClick={() => {
           // T5: o long-press já abriu a inspeção — o click sintético do toque não seleciona.
           if (Date.now() - longPressAt.current < 700) return;
           onClick?.(card);
         }}
         disabled={disabled || !onClick}
-        aria-label={stateLabel ? `${baseLabel}, ${stateLabel}` : hinted ? `${baseLabel}, ${t("game.hintPlayable")}` : baseLabel}
+        aria-label={`${stateLabel ? `${baseLabel}, ${stateLabel}` : hinted ? `${baseLabel}, ${t("game.hintPlayable")}` : baseLabel}${targetNote}`}
       >
         <CardArt
           face={face}
@@ -1593,6 +1603,35 @@ function jitterVars(id: string) {
   return { "--jr": `${rot}deg`, "--jy": `${dy}px` };
 }
 
+// QA 07/out: a linha que diz o que a CASA ESCOLHIDA faz — vive ancorada aos
+// emblemas do pill. Só para os efeitos que agem sobre as criaturas dessa casa
+// ("Choose a house. Stun each creature of that house."); fora deles o prompt
+// genérico basta.
+const HOUSE_EFFECT_ACTS: Record<string, string> = {
+  stun: "game.houseChoiceEffect.stun",
+  exhaust: "game.houseChoiceEffect.exhaust",
+  destroy: "game.houseChoiceEffect.destroy",
+};
+
+function housePickEffect(move: GameMove, game: GameState, t: Translator): string | undefined {
+  const id = "instanceId" in move ? move.instanceId : move.type === "fight" ? move.attackerId : undefined;
+  if (!id) return undefined;
+  const source = game.players
+    .flatMap((player) => [...player.hand, ...player.board, ...player.archives, ...player.discard])
+    .find((card) => card.instanceId === id);
+  if (!source) return undefined;
+  for (const ability of rulesOf(source.face).abilities) {
+    for (const act of ability.acts) {
+      const selection = "s" in act ? act.s : undefined;
+      if (selection && typeof selection === "object" && "each" in selection && selection.each.house === "chosen") {
+        const key = HOUSE_EFFECT_ACTS[act.k];
+        if (key) return t(key);
+      }
+    }
+  }
+  return undefined;
+}
+
 const BoardLane = memo(function BoardLane({
   cards,
   owner,
@@ -1671,6 +1710,7 @@ const BoardLane = memo(function BoardLane({
               playAnim={settings.animations}
               stateLabel={stateLabel}
               hinted={hinted}
+              targetable={Boolean(targetIds?.includes(card.instanceId))}
               t={t}
               damageLabel={card.damage > 0 ? `${card.damage} ${t("game.dmg")}` : undefined}
               onClick={onSelect}
@@ -1679,6 +1719,13 @@ const BoardLane = memo(function BoardLane({
             {!card.ready && !card.stunned && (
               <span className="rest-badge" role="img" aria-label={t("game.resting")}>
                 <RotateCw size={12} strokeWidth={2.4} />
+              </span>
+            )}
+            {/* QA 07/out: badge de atordoada — sem ele o estado só aparecia na
+                borda dessaturada (o 3D/lite mantém a ficha do H3D-18 no ::after). */}
+            {card.stunned && (
+              <span className="stun-badge" role="img" aria-label={t("game.stunned")}>
+                <ZapOff size={13} strokeWidth={2.4} />
               </span>
             )}
             {/* Entrench: fica exausta no próximo ready step (escolha do dono). */}
@@ -1712,6 +1759,7 @@ const BoardLane = memo(function BoardLane({
                   dimmed={targetIds ? !targetIds.includes(card.instanceId) : false}
                   hoverZoom={settings.hoverZoom}
                   playAnim={settings.animations}
+                  targetable={Boolean(targetIds?.includes(card.instanceId))}
                   t={t}
                   onClick={onSelect}
                 />
@@ -1742,6 +1790,7 @@ function GameBoard({
   onConfirmPick = NOOP,
   onPickFlank = NOOP,
   onPickMode = NOOP,
+  onCancelPick = NOOP,
   onSelectHand,
   onPlayHand = NOOP,
   onSelectBoard,
@@ -1800,6 +1849,8 @@ function GameBoard({
   onPickFlank?: (flank: "left" | "right") => void;
   /** Lote 8: the answer to a "Choose one:" / "a player's deck" prompt. */
   onPickMode?: (mode: "a" | "b") => void;
+  /** QA 07/out: aborta a escolha pendente (banner/pill) sem jogar. */
+  onCancelPick?: () => void;
   onSelectHand: (card: CardInstance) => void;
   /** Drag-to-play: soltar sobre a battleline = o mesmo move do botão Play. */
   onPlayHand?: (card: CardInstance) => void;
@@ -1893,6 +1944,9 @@ function GameBoard({
   // o _table-plane_ do 3D real exige `--3d`, então um nunca vem com o outro.
   const view3d = settings.tableView === "3d";
   const tableClass = view3d ? (LITE_TABLE ? " game-board--lite" : " game-board--3d") : "";
+  // QA 07/out: o que a casa escolhida no pill vai fazer (a carta que pede a casa
+  // lê a escolha em "each creature of that house").
+  const houseEffect = pick?.houses ? housePickEffect(pick.move, game, t) : undefined;
 
   return (
     <section
@@ -1926,8 +1980,21 @@ function GameBoard({
         {/* Seletor de casas como pill flutuante sobre a mesa (fora do table-plane:
             no 3D o plano inclina e o pill é HUD, irmão das bandas). Só os 3
             emblemas lado a lado (44px cada); hover expande com o nome; a casa
-            ativa ganha anel/glow. Clique = mesma ação dos botões antigos. */}
-        <div className="house-pill">
+            ativa ganha anel/glow. Clique = mesma ação dos botões antigos.
+            QA 07/out: quando a carta pede casa, o PROMPT se integra ao pill (o
+            texto fica ancorado aos emblemas, que pulsam) em vez de flutuar no
+            meio da mesa sem apontar onde clicar. */}
+        <div className={`house-pill${pick?.houses ? " house-pill--asking" : ""}`}>
+          {pick?.houses && (
+            <div className="house-pill-prompt" role="status">
+              <Crosshair size={13} />
+              <span className="house-pill-ask">{t("game.chooseMoveHouse")}</span>
+              <button type="button" className="pick-cancel" onClick={onCancelPick} aria-label={t("game.cancelPick")} title={t("game.cancelPick")}>
+                <X size={12} />
+              </button>
+              {houseEffect && <span className="house-pill-effect">{houseEffect}</span>}
+            </div>
+          )}
           <div className="house-picker" role="group" aria-label={pick?.houses ? t("game.chooseMoveHouse") : t("game.chooseHouse")}>
             {(pick?.houses ?? player.houses).map((house) => {
               const chosen = !pick?.houses && game.activeHouse === house;
@@ -2010,8 +2077,11 @@ function GameBoard({
               <span>{t("game.yourLine")}</span>
               <span className="zone-card-count">{player.board.length} {t("game.onTable")}</span>
             </div>
-            {pick && (
-              <div className="fight-instruction" role="status">
+            {/* QA 07/out: a escolha de CASA mora no pill (prompt ancorado aos
+                emblemas); a de ALVO ganha o rótulo "Escolha um alvo" e um cancel —
+                enquanto a seleção vive, o clique fora dos elegíveis não faz nada. */}
+            {pick && !pick.houses && (
+              <div className={`fight-instruction${pick.ids.length ? " fight-instruction--target" : ""}`} role="status">
                 {pick.kind === "flank" ? (
                   <>
                     <Crosshair size={15} /> {t("game.chooseFlank")}
@@ -2026,10 +2096,21 @@ function GameBoard({
                   </>
                 ) : pick.kind === "targets" ? (
                   <>
-                    <Crosshair size={15} /> {t("game.chooseUpTo", { chosen: pick.chosen?.length ?? 0, max: pick.max ?? 0 })}
+                    <Crosshair size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span>
+                    <span className="pick-sep" aria-hidden="true">·</span>
+                    {t("game.chooseUpTo", { chosen: pick.chosen?.length ?? 0, max: pick.max ?? 0 })}
                     <button type="button" className="filter-chip" onClick={onConfirmPick}>{t("game.confirmPick")}</button>
                   </>
-                ) : pick.kind === "target2" ? <><Crosshair size={15} /> {t("game.chooseTarget2")}</> : pick.houses ? <><Crosshair size={15} /> {t("game.chooseMoveHouse")}</> : pick.move.type === "fight" ? <><Swords size={15} /> {t("game.chooseFight")}</> : <><Crosshair size={15} /> {t("game.chooseTarget")}</>}
+                ) : pick.kind === "target2" ? (
+                  <><Crosshair size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t("game.chooseTarget2")}</>
+                ) : pick.move.type === "fight" ? (
+                  <><Swords size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t("game.chooseFight")}</>
+                ) : (
+                  <><Crosshair size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t("game.chooseTarget")}</>
+                )}
+                <button type="button" className="pick-cancel" onClick={onCancelPick} aria-label={t("game.cancelPick")} title={t("game.cancelPick")}>
+                  <X size={12} />
+                </button>
               </div>
             )}
             <BoardLane
@@ -2237,7 +2318,7 @@ function SelectedCardPanel({
   const declineLabel = t("inspector.withoutEffect");
 
   return (
-    <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}${pick?.houses ? " inspector-section--yield" : ""}`} aria-live="polite">
+    <section className={`inspector-section${selection && card ? " inspector-section--docked" : ""}${pick ? " inspector-section--yield" : ""}`} aria-live="polite">
       <div className="section-label-row">
         <span className="section-label">{t("inspector.title")}</span>
         {selection && <button className="quiet-icon-button" type="button" onClick={onClear} aria-label={t("common.close")}><X size={14} /></button>}
@@ -3683,8 +3764,11 @@ function App() {
           performHumanMove(applied);
           return;
         }
-        if (!own) return;
-        setPick(null);
+        // QA 07/out: com a escolha pendente, o clique numa carta FORA dos
+        // elegíveis não abre o inspetor nem cancela a jogada (era o "o efeito não
+        // faz nada" do QA: o pick morria em silêncio). O cancelamento vive no
+        // banner/pill e no inspetor.
+        return;
       }
       sound.play("select");
       setSelected({ zone: own ? "board" : "enemy", playerIndex: owner, instanceId: card.instanceId });
@@ -4291,6 +4375,7 @@ function App() {
                   onConfirmPick={confirmPick}
                   onPickFlank={pickFlank}
                   onPickMode={pickMode}
+                  onCancelPick={() => setPick(null)}
                   onSelectHand={selectHandCard}
                   onPlayHand={(card) => performHumanMove({ type: "play", instanceId: card.instanceId })}
                   onSelectBoard={pickBoardCard}

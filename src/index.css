@@ -1886,6 +1886,29 @@ button:disabled {
   pointer-events: none;
 }
 
+/* QA 07/out: selo de ATORDOADA — no 2D o estado só aparecia na borda
+   dessaturada e passou batido no teste jogando. Selo no topo da carta (o canto
+   direito é do dano, o esquerdo do âmbar) com aria-label via t(); no 3D/lite a
+   ficha do H3D-18 no ::after da peça continua sendo o marcador (regra abaixo
+   esconde este selo lá). */
+.stun-badge {
+  position: absolute;
+  z-index: 2;
+  top: 3px;
+  left: 50%;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  translate: -50% 0;
+  place-items: center;
+  border: 1px solid rgba(255, 196, 146, 0.85);
+  border-radius: 50%;
+  color: #2c1507;
+  background: #e8853f;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), 0 0 10px rgba(232, 133, 63, 0.5);
+  pointer-events: none;
+}
+
 /* BUG-08: âmbar capturado no tile (antes só no inspetor). */
 .amber-label {
   position: absolute;
@@ -1920,6 +1943,30 @@ button:disabled {
 .board-lane--targeting .card-tile--board:not(.is-dimmed):not(:disabled) .card-art {
   border-color: rgba(224, 130, 100, 0.9);
   box-shadow: 0 0 0 1px rgba(224, 130, 100, 0.24), 0 0 13px rgba(224, 130, 100, 0.16);
+}
+
+/* QA 07/out: alvo elegível da seleção em curso — affordance CLARA (anel que
+   pulsa, cursor de clique e tooltip "Escolher como alvo"): o clique aqui sempre
+   escolhe o alvo, então a carta não pode parecer uma qualquer. */
+.card-tile.is-targetable {
+  cursor: pointer;
+}
+
+.card-tile.is-targetable .card-art {
+  border-color: rgba(224, 130, 100, 0.98);
+  box-shadow: 0 0 0 2px rgba(224, 130, 100, 0.45), 0 0 18px rgba(224, 130, 100, 0.3);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .card-art {
+  animation: target-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes target-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(224, 130, 100, 0.35), 0 0 12px rgba(224, 130, 100, 0.22); }
+  50% { box-shadow: 0 0 0 3px rgba(224, 130, 100, 0.55), 0 0 22px rgba(224, 130, 100, 0.42); }
 }
 
 .empty-battleline {
@@ -2131,12 +2178,64 @@ button:disabled {
   position: absolute;
   z-index: 3;
   display: flex;
+  flex-direction: column;
   padding: 4px;
   border: 1px solid rgba(222, 214, 194, 0.14);
   border-radius: var(--radius-pill);
   background: linear-gradient(180deg, rgba(23, 29, 25, 0.88), rgba(12, 17, 14, 0.92));
   box-shadow: var(--elev-2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(8px);
+}
+
+/* QA 07/out: o prompt de "Choose a house" INTEGRA o pill — o texto fica ancorado
+   aos emblemas (que pulsam) em vez de flutuar no meio da mesa sem apontar onde
+   clicar; a linha extra diz o que a casa escolhida vai fazer no efeito. */
+.house-pill-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 6px;
+  /* Largura contida: o prompt é HUD sobre a mesa e não pode cobrir as cartas. */
+  max-width: 244px;
+  color: #f0eadc;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+}
+
+.house-pill-ask {
+  letter-spacing: 0.03em;
+}
+
+/* O cancela fecha a linha do pedido; o efeito que a casa escolhida causa ocupa
+   a linha de baixo (a frase é longa demais para dividir a linha com os dois). */
+.house-pill-prompt .pick-cancel {
+  margin-left: auto;
+}
+
+.house-pill-effect {
+  flex: 1 0 100%;
+  color: var(--faint);
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.house-pill--asking {
+  border-color: rgba(224, 130, 100, 0.45);
+  box-shadow: var(--elev-2), 0 0 22px rgba(224, 130, 100, 0.22);
+}
+
+.house-pill--asking .house-picker {
+  justify-content: center;
+}
+
+html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-choice:not(:disabled) {
+  animation: house-ask 1.4s ease-in-out infinite;
+}
+
+@keyframes house-ask {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--house-color) 35%, transparent); }
+  50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--house-color) 75%, transparent), 0 0 16px color-mix(in srgb, var(--house-color) 45%, transparent); }
 }
 
 @media (max-width: 1040px) {
@@ -2319,9 +2418,11 @@ button:disabled {
 .fight-instruction {
   display: flex;
   min-height: 28px;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 7px;
+  row-gap: 2px;
   border-bottom: 1px solid rgba(210, 127, 95, 0.18);
   color: #e0aa8b;
   background: rgba(113, 55, 42, 0.12);
@@ -2329,6 +2430,48 @@ button:disabled {
   font-weight: 650;
   letter-spacing: 0.04em;
   animation: warm-pulse 1.8s ease-in-out infinite;
+}
+
+/* QA 07/out: banner da seleção de ALVO — mais contraste que o toast comum (o
+   jogador não via que a escolha estava ativa) e o rótulo curto "Escolha um alvo". */
+.fight-instruction--target {
+  border: 1px solid rgba(224, 130, 100, 0.5);
+  border-radius: var(--radius-pill);
+  color: #f3c6a6;
+  background: rgba(113, 55, 42, 0.34);
+  box-shadow: 0 0 18px rgba(224, 130, 100, 0.22);
+}
+
+.pick-tag {
+  color: #ffd9b8;
+  font-size: var(--fs-2xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pick-sep {
+  opacity: 0.55;
+}
+
+/* Cancel da escolha pendente (banner e pill) — o clique fora dos alvos não
+   cancela mais, então a saída tem de estar à vista. */
+.pick-cancel {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid rgba(224, 130, 100, 0.35);
+  border-radius: 50%;
+  color: #e0aa8b;
+  background: rgba(113, 55, 42, 0.25);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .pick-cancel:hover {
+    background: rgba(113, 55, 42, 0.5);
+  }
 }
 
 @media (min-width: 701px) {
@@ -2667,7 +2810,9 @@ button:disabled {
   }
 }
 
-/* Durante a escolha de casa (move.house) o sheet fixo cobriria o seletor do console. */
+/* Durante uma escolha pendente (casa — move.house — e, desde o QA 07/out, alvo/
+   flanco/modo) o sheet fixo cobriria o seletor do console, o banner e os alvos
+   no board: quem conduz é o prompt do pick (banner ou pill). */
 .inspector-section--docked.inspector-section--yield {
   display: none;
 }
@@ -8238,10 +8383,18 @@ button.pile-chip:focus-visible {
   :is(.game-board--3d, .game-board--lite) .board-piece--stunned::after {
     top: 2px;
     left: 2px;
-    width: 19px;
-    height: 19px;
-    background: #d9743a;
+    /* QA 07/out: ficha maior e mais clara — no tamanho antigo o atordoamento
+       passava batido junto da exaustão. */
+    width: 22px;
+    height: 22px;
+    background: #ef8b46;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 0a12 12 0 1 0 0 24A12 12 0 0 0 12 0Zm1.5 5L7 13h4l-1 6 6.5-8h-4z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  }
+
+  /* O selo de atordoada do 2D (.stun-badge) some no 3D/lite: a ficha de cima é
+     o marcador daqui (H3D-18) e os dois juntos seriam ruído. */
+  :is(.game-board--3d, .game-board--lite) .stun-badge {
+    display: none;
   }
 
   /* Exausta: a arte gira em 200ms (reduce-motion/animacoes off: a regra global
@@ -8775,6 +8928,13 @@ button.pile-chip:focus-visible {
       animation: none;
     }
 
+    /* QA 07/out: o anel pulsante do alvo é box-shadow animado — no 3D real ele
+       re-rasteriza a camada (§2.9), então o anel fica estático (a borda acesa
+       segue) e o alvo já sobe pelo --lift do H3D-07. */
+    html:not(.reduce-motion) .game-board--3d:not(.no-anim) .card-tile.is-targetable .card-art {
+      animation: none;
+    }
+
     /* H3D-18: o ready-glow do tile saiu — o arco "pronta" (::after da peca) o
        substitui, com uma animacao a menos por carta. */
     .game-board--3d .board-piece--ready::after {
@@ -8787,8 +8947,9 @@ button.pile-chip:focus-visible {
       top: auto;
       left: -6px;
       bottom: calc(100% + 8px);
-      width: 24px;
-      height: 24px;
+      /* QA 07/out: ficha maior (24 -> 28) para o atordoamento ler de longe. */
+      width: 28px;
+      height: 28px;
     }
 
     /* A peca erguida (selecao/hover) leva o indicador junto. */

@@ -200,9 +200,21 @@ const DICT: Record<string, [string, string]> = {
   "game.takeArchives": ["Take the {count} archived card(s)", "Pegar as {count} carta(s) arquivada(s)"],
   "game.undo": ["Undo", "Desfazer"],
   "game.undoBlocked": ["Undo unavailable: this turn already drew or shuffled cards.", "Desfazer indisponível: este turno já comprou ou embaralhou cartas."],
-  "game.chooseFight": ["Choose an enemy creature to fight", "Escolha uma criatura inimiga para lutar"],
-  "game.chooseTarget": ["Choose a highlighted card as the target", "Escolha uma das cartas destacadas como alvo"],
+  // Detalhes do banner de alvo (QA 07/out): frases curtas depois do rótulo
+  // "Escolha um alvo" — o toast não pode virar duas linhas por cima das cartas.
+  "game.chooseFight": ["an enemy creature", "uma criatura inimiga"],
+  "game.chooseTarget": ["a highlighted card", "uma carta destacada"],
   "game.chooseMoveHouse": ["Choose a house for this card", "Escolha uma casa para esta carta"],
+  // QA 07/out: seleção de alvo — rótulo do banner enquanto ela vive + tooltip do
+  // alvo elegível no board (o clique ali SEMPRE escolhe o alvo).
+  "game.chooseTargetBanner": ["Choose a target", "Escolha um alvo"],
+  "game.chooseAsTarget": ["Choose as target", "Escolher como alvo"],
+  "game.cancelPick": ["Cancel this choice", "Cancelar esta escolha"],
+  // QA 07/out: o que a casa escolhida no pill faz, quando o efeito da carta age
+  // sobre as criaturas dela ("Stun each creature of that house").
+  "game.houseChoiceEffect.stun": ["The chosen house stuns each creature of that house.", "A casa escolhida atordoa as criaturas dessa casa."],
+  "game.houseChoiceEffect.exhaust": ["The chosen house exhausts each creature of that house.", "A casa escolhida exaure as criaturas dessa casa."],
+  "game.houseChoiceEffect.destroy": ["The chosen house destroys each creature of that house.", "A casa escolhida destrói as criaturas dessa casa."],
   "game.opponentLine": ["OPPONENT BATTLELINE", "LINHA DO OPONENTE"],
   "game.yourLine": ["YOUR BATTLELINE", "SUA LINHA DE BATALHA"],
   "game.onTable": ["ON TABLE", "NA MESA"],
@@ -289,8 +301,8 @@ const DICT: Record<string, [string, string]> = {
   // Onda 2 ("You may"): resolve a jogada sem a cláusula opcional da carta.
   "inspector.withoutEffect": ["Without effect", "Sem efeito"],
   "inspector.cannotPlay": ["Cannot be played now", "Não pode ser jogada agora"],
-  "game.chooseTarget2": ["Choose a second card (highlighted)", "Escolha uma segunda carta (destacada)"],
-  "game.chooseUpTo": ["Choose up to {max} cards ({chosen} picked)", "Escolha até {max} cartas ({chosen} escolhidas)"],
+  "game.chooseTarget2": ["a second card", "uma segunda carta"],
+  "game.chooseUpTo": ["up to {max} ({chosen} picked)", "até {max} ({chosen} escolhidas)"],
   "game.confirmPick": ["Confirm", "Confirmar"],
   "game.chooseFlank": ["Choose the flank", "Escolha o flanco"],
   "game.flankLeft": ["Left flank", "Flanco esquerdo"],
