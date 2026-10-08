@@ -7,7 +7,9 @@ export const LANGUAGES: { id: Language; label: string; flag: string; short: stri
 
 // Uma linha por chave: [en, pt-BR]. As chaves aparecem UMA vez no bundle
 // (os dois dicionarios separados repetiam as ~290 chaves, ~5 kB de orcamento).
-const DICT: Record<string, [string, string]> = {
+// Exportado só para o teste de paridade (i18nUsage.test.ts): createTranslator cai no
+// inglês quando o pt-BR falta, então sem o par não dá para provar que ele existe.
+export const DICT: Record<string, [string, string]> = {
   "nav.home": ["Home", "Início"],
   "nav.play": ["Play", "Jogar"],
   "nav.config": ["Settings", "Ajustes"],
