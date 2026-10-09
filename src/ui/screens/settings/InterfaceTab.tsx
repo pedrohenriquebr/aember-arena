@@ -28,7 +28,6 @@ export function InterfaceTab({ t, settings, onChange, hasHover, theme, onTheme, 
           <span className="nf-setting-desc">{t("ui.settings.themeDesc")}</span>
         </div>
         <ThemePicker t={t} value={theme} onChange={onTheme} />
-        <p className="u-theme-note">{t("ui.theme.boardPending")}</p>
       </div>
 
       <SettingRow

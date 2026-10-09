@@ -583,7 +583,6 @@ export const DICT: Record<string, [string, string]> = {
   "ui.theme.claro.desc": ["Paper and daylight, AAA contrast.", "Papel e luz do dia, contraste AAA."],
   "ui.theme.arcano.name": ["Arcane", "Arcano"],
   "ui.theme.arcano.desc": ["Saturated violet with a magical glow.", "Violeta saturado com brilho mágico."],
-  "ui.theme.boardPending": ["The table keeps its fixed colours for now; it follows the theme in a later update.", "Por enquanto a mesa mantém as cores fixas; ela acompanha o tema em uma atualização futura."],
   "ui.settings.tab.data": ["Data & offline", "Dados e offline"],
   "ui.settings.tab.lab": ["Lab", "Laboratório"],
   "ui.settings.tab.about": ["About", "Sobre"],

@@ -6,7 +6,7 @@ import { ThemePicker } from "./ThemePicker";
 
 // Contrato do ThemePicker (UX_REWRITE_PLAN §5 H-18, §1.6.2): radiogroup de 4 cartões
 // role=radio com data-theme do próprio tema e a miniatura dentro; o anel fica no slot
-// externo (fora do data-theme do cartão). As 10 chaves novas têm as duas línguas.
+// externo (fora do data-theme do cartão). As 9 chaves novas têm as duas línguas.
 const t = createTranslator("ptBR");
 const html = renderToStaticMarkup(<ThemePicker t={t} value="aco" onChange={() => {}} />);
 
@@ -34,14 +34,13 @@ describe("H-18 ThemePicker (UX_REWRITE_PLAN §5 H-18)", () => {
     expect(html.indexOf("u-theme-preview")).toBeLessThan(html.indexOf("</button>"));
   });
 
-  it("as 10 chaves novas de tema existem nas duas línguas", () => {
+  it("as 9 chaves novas de tema existem nas duas línguas", () => {
     const en = createTranslator("en");
     const keys = [
       "ui.theme.title",
-      "ui.theme.boardPending",
       ...THEMES.flatMap((id) => [`ui.theme.${id}.name`, `ui.theme.${id}.desc`]),
     ];
-    expect(keys).toHaveLength(10);
+    expect(keys).toHaveLength(9);
     for (const key of keys) {
       expect(DICT[key], `chave ausente: ${key}`).toBeDefined();
       expect(t(key), `sem pt-BR: ${key}`).not.toBe(key);

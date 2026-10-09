@@ -108,7 +108,11 @@ const AUDIT = (scope) => {
     const timing = anim.effect?.getComputedTiming();
     const decor = anim.effect?.target?.closest?.("[data-decor]");
     if (timing?.iterations === Infinity && decor) continue;
-    out.motion.push(`${anim.animationName || anim.constructor.name} em ${anim.effect?.target?.className || "?"}`);
+    // Diagnóstico: propriedade em transição + marcação do alvo (o className de <img> e de quem
+    // não tem classe volta vazio e antes saía "?", sem dizer qual elemento era).
+    const target = anim.effect?.target;
+    const prop = anim.transitionProperty || anim.animationName || anim.constructor.name;
+    out.motion.push(`${prop} em ${target?.className || "?"} <${target?.outerHTML?.slice(0, 100) ?? "sem alvo"}>`);
   }
 
   return out;
@@ -566,6 +570,89 @@ const RAIL_MEASURE = () => {
   return out;
 };
 
+// H-25: os textos que o tema precisa deixar legíveis sobre o tapete e o HUD da mesa.
+const CONTRAST_SELECTORS = [".zone-heading", ".player-band", ".turn-console"];
+
+// H-25 (§5 H-25): contraste dos textos da mesa. Para cada elemento mede `color` contra o primeiro
+// background-color OPACO na cadeia (ele mesmo e os ancestrais), com o alfa do texto misturado.
+// Se alguma camada até esse fundo é gradiente ou translúcida, o item é "nao-medido" com o motivo:
+// um gradiente não é aprovado nem reprovado em silêncio. Sem fundo sólido na cadeia, idem.
+// Também devolve o Æmber: o contador tem de sair em --nf-aember e a distância ΔE76 para o acento.
+const CONTRAST_MEASURE = (selectors) => {
+  const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  // O canvas normaliza qualquer cor CSS (color-mix, var(), rgb/rgba) para RGBA de 8 bits.
+  const rgba = (css) => {
+    ctx.fillStyle = "#000000";
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = css;
+    ctx.fillRect(0, 0, 1, 1);
+    return [...ctx.getImageData(0, 0, 1, 1).data];
+  };
+  const lum = ([r, g, b]) => {
+    const f = (c) => (c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  const lab = ([r, g, b]) => {
+    const lin = (c) => (c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    const R = lin(r);
+    const G = lin(g);
+    const B = lin(b);
+    const X = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047;
+    const Y = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+    const Z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883;
+    const f = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  const dE = (a, b) => {
+    const la = lab(a);
+    const lb = lab(b);
+    return Math.hypot(la[0] - lb[0], la[1] - lb[1], la[2] - lb[2]);
+  };
+  const label = (el) => {
+    const cls = typeof el.className === "string" ? el.className.trim().split(/\s+/)[0] : "";
+    return el.tagName.toLowerCase() + (cls ? `.${cls}` : "");
+  };
+  const rows = [];
+  for (const sel of selectors) {
+    const els = [...document.querySelectorAll(sel)];
+    if (!els.length) rows.push({ sel, status: "ausente" });
+    els.forEach((el, i) => {
+      const name = `${sel}[${i}]`;
+      const fgRaw = rgba(getComputedStyle(el).color);
+      let blocker = null;
+      let bg = null;
+      for (let node = el; node && !bg; node = node.parentElement) {
+        const cs = getComputedStyle(node);
+        const c = rgba(cs.backgroundColor);
+        if (cs.backgroundImage !== "none" && !blocker) blocker = `gradiente em ${label(node)}`;
+        else if (c[3] > 0 && c[3] < 255 && !blocker) blocker = `fundo translúcido em ${label(node)}`;
+        if (c[3] === 255) bg = c;
+      }
+      if (!bg) rows.push({ sel: name, status: "nao-medido", motivo: "sem fundo sólido na cadeia" });
+      else if (blocker) rows.push({ sel: name, status: "nao-medido", motivo: blocker });
+      else {
+        const a = fgRaw[3] / 255;
+        const fg = [0, 1, 2].map((i) => Math.round(a * fgRaw[i] + (1 - a) * bg[i]));
+        const r = ratio(fg, bg);
+        rows.push({ sel: name, status: r >= 4.5 ? "ok" : "fail", ratio: r });
+      }
+    });
+  }
+  const root = getComputedStyle(document.documentElement);
+  const aember = rgba(root.getPropertyValue("--nf-aember"));
+  const accent = rgba(root.getPropertyValue("--nf-accent"));
+  const counter = document.querySelector(".amber-counter");
+  const counterRgba = counter ? rgba(getComputedStyle(counter).color) : null;
+  const amber = counter
+    ? { counterIsAember: counterRgba.every((v, i) => v === aember[i]), deltaE: Math.round(dE(aember, accent) * 10) / 10 }
+    : null;
+  return { rows, amber };
+};
+
 // Casca -> Jogar (lobby) -> partida demo (mulligan mantido) -> turno do jogador pronto.
 // H-18: Ajustes deixou de levar ao wizard v1; a partida começa pelo Jogar do lobby (H-11).
 async function openTable(page, url) {
@@ -618,6 +705,22 @@ async function tableFlow(browser, vp, url, view) {
     check(await page.evaluate(TABLE_MEASURE), "8x8+artefato");
   } else {
     failures.push(`mesa cheia não preparada: ${patched}`);
+  }
+
+  // H-25: contraste na mesa cheia (mais conteúdo sobre os textos). "nao-medido" é listado, não
+  // reprovado: o tema não pode aprovar um gradiente em silêncio, mas também não o condena sem medida.
+  const contrast = await page.evaluate(CONTRAST_MEASURE, CONTRAST_SELECTORS);
+  for (const row of contrast.rows) {
+    if (row.status === "ok" || row.status === "fail") reports.push(`contraste ${row.sel}: ${row.ratio.toFixed(2)}:1`);
+    else if (row.status === "nao-medido") reports.push(`contraste ${row.sel}: NÃO MEDIDO (${row.motivo})`);
+    else reports.push(`contraste ${row.sel}: ausente`);
+    if (row.status === "fail") failures.push(`contraste ${row.sel}: ${row.ratio.toFixed(2)}:1 < 4,5:1`);
+    if (row.status === "ausente") failures.push(`contraste ${row.sel}: elemento da mesa não encontrado`);
+  }
+  if (!contrast.amber) failures.push("contraste: .amber-counter ausente (Æmber não medido)");
+  else {
+    reports.push(`Æmber: ${contrast.amber.counterIsAember ? "contador = --nf-aember" : "contador FORA de --nf-aember"}; ΔE76 para o acento = ${contrast.amber.deltaE}`);
+    if (!contrast.amber.counterIsAember) failures.push("Æmber: o contador não sai em --nf-aember");
   }
 
   await context.close();

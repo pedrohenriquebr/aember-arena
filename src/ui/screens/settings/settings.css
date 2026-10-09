@@ -286,9 +286,3 @@ html.reduce-motion .u-progress-fill { transition: none; }
   border-radius: var(--radius-sm);
   background: var(--nf-felt);
 }
-
-.u-theme-note {
-  margin: 0;
-  color: var(--nf-text-2);
-  font-size: var(--fs-xs);
-}

@@ -194,10 +194,6 @@ button,
   --fw-semibold: 600;
   --fw-bold: 800;
 
-  /* Onda 1 (plano §1): aura de seleção "Æmber-éter" — ciano-branca, cromaticamente
-     oposta ao dourado da dica (FEAT-04), para os dois estados nunca se confundirem. */
-  --sel-core: 160 232 255;
-
   /* Altura da tab bar mobile (44px de alvo + 2×5px + 1px de borda ≈ 54px) mais a
      safe-area: âncora dos docks fixos/sticky que ficam logo acima dela. */
   --tabbar-h: calc(54px + env(safe-area-inset-bottom, 0px));
@@ -823,20 +819,20 @@ button:disabled {
 .archives-count {
   font-size: var(--fs-2xs);
   line-height: 1;
-  color: var(--faint);
+  color: var(--nf-text-3);
 }
 
 .game-board {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(218, 207, 179, 0.19);
+  border: 1px solid var(--nf-line-strong);
   border-radius: var(--radius-md);
-  background:
-    radial-gradient(ellipse at 47% 48%, rgba(50, 77, 67, 0.62), transparent 58%),
-    linear-gradient(135deg, #202e28 0%, #1a2521 45%, #18211e 100%);
-  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.23), inset 0 0 0 5px rgba(9, 12, 10, 0.16);
+  background: radial-gradient(ellipse at 47% 48%, color-mix(in srgb, var(--nf-felt) 80%, var(--nf-felt-text)), transparent 58%),
+    linear-gradient(135deg, color-mix(in srgb, var(--nf-felt) 88%, var(--nf-felt-text)) 0%, var(--nf-felt) 45%, color-mix(in srgb, var(--nf-felt) 92%, var(--nf-void)) 100%);
+  box-shadow: 0 18px 55px rgb(var(--nf-shadow) / 0.23), inset 0 0 0 5px color-mix(in srgb, var(--nf-void) 16%, transparent);
   animation: rise-in 620ms 60ms var(--ease-out) backwards;
+  background-color: var(--nf-felt);
 }
 
 @media (min-width: 701px) {
@@ -849,12 +845,11 @@ button:disabled {
   position: absolute;
   z-index: -1;
   inset: 4px;
-  border: 1px solid rgba(209, 182, 122, 0.075);
+  border: 1px solid color-mix(in srgb, var(--nf-accent) 7.5%, transparent);
   border-radius: var(--radius-sm);
-  background:
-    radial-gradient(ellipse at 50% 51%, transparent 0 29%, rgba(183, 156, 98, 0.06) 29.2% 29.35%, transparent 29.6%),
-    radial-gradient(ellipse at 50% 51%, transparent 0 39%, rgba(183, 156, 98, 0.04) 39.2% 39.35%, transparent 39.6%),
-    repeating-linear-gradient(0deg, transparent 0 37px, rgba(255, 255, 255, 0.012) 38px, transparent 39px);
+  background: radial-gradient(ellipse at 50% 51%, transparent 0 29%, color-mix(in srgb, var(--nf-accent) 6%, transparent) 29.2% 29.35%, transparent 29.6%),
+    radial-gradient(ellipse at 50% 51%, transparent 0 39%, color-mix(in srgb, var(--nf-accent) 4%, transparent) 39.2% 39.35%, transparent 39.6%),
+    repeating-linear-gradient(0deg, transparent 0 37px, color-mix(in srgb, var(--nf-felt-text) 1.2%, transparent) 38px, transparent 39px);
   pointer-events: none;
 }
 
@@ -956,7 +951,7 @@ button:disabled {
   flex-wrap: nowrap;
   margin: 0 0 0 12px;
   padding-left: 12px;
-  border-left: 1px solid rgba(218, 205, 171, 0.14);
+  border-left: 1px solid var(--nf-line-strong);
 }
 
 .game-board--stage .empty-battleline {
@@ -1031,7 +1026,7 @@ button:disabled {
   left: 50%;
   min-height: 0;
   padding: 4px 12px;
-  border: 1px solid rgba(210, 127, 95, 0.3);
+  border: 1px solid color-mix(in srgb, var(--nf-ember) 30%, transparent);
   border-radius: var(--radius-pill);
   transform: translateX(-50%);
   white-space: nowrap;
@@ -1082,14 +1077,17 @@ button:disabled {
 }
 
 /* T6 — default = mobile; desktop invertido ao lado do seletor. */
+/* H-25: cada superfície migrada declara o próprio texto. O `color` do :root é o legado
+   claro (#eee9dc) e, sobre o --nf-s2 branco do Claro, daria 1.21:1. */
 .player-band {
   display: flex;
   min-height: 57px;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(225, 215, 190, 0.11);
-  background: rgba(10, 14, 12, 0.2);
+  border-bottom: 1px solid var(--nf-line);
+  color: var(--nf-text);
+  background: var(--nf-s2);
 }
 
 @media (min-width: 701px) {
@@ -1101,12 +1099,13 @@ button:disabled {
 }
 
 .player-band--active {
-  background: linear-gradient(90deg, rgba(197, 158, 75, 0.08), rgba(9, 13, 11, 0.1) 55%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--nf-accent) 8%, var(--nf-s2)), var(--nf-s2) 55%);
+  background-color: var(--nf-s2);
 }
 
 .player-band--active .player-avatar {
-  border-color: rgba(211, 173, 93, 0.56);
-  box-shadow: 0 0 0 3px rgba(211, 173, 93, 0.08), 0 0 20px rgba(211, 173, 93, 0.12);
+  border-color: color-mix(in srgb, var(--nf-accent) 56%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nf-accent) 8%, transparent), 0 0 20px color-mix(in srgb, var(--nf-accent) 12%, transparent);
 }
 
 .player-avatar {
@@ -1116,10 +1115,10 @@ button:disabled {
   height: 29px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(216, 209, 190, 0.2);
+  border: 1px solid var(--nf-line-strong);
   border-radius: 50%;
-  color: #d6bd7a;
-  background: rgba(222, 213, 188, 0.055);
+  color: var(--nf-accent-hi);
+  background: var(--nf-s3);
   font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -1140,8 +1139,8 @@ button:disabled {
 }
 
 .player-avatar--ai {
-  color: #c1a770;
-  background: rgba(180, 141, 67, 0.1);
+  color: var(--nf-accent);
+  background: color-mix(in srgb, var(--nf-accent) 10%, var(--nf-s3));
 }
 
 .avatar-live-dot {
@@ -1150,10 +1149,10 @@ button:disabled {
   bottom: 1px;
   width: 8px;
   height: 8px;
-  border: 1px solid #1d2a24;
+  border: 1px solid var(--nf-s2);
   border-radius: 50%;
-  background: #a1c098;
-  box-shadow: 0 0 7px rgba(149, 205, 145, 0.6);
+  background: var(--nf-verdant);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--nf-verdant) 60%, transparent);
 }
 
 .player-copy {
@@ -1170,7 +1169,7 @@ button:disabled {
 
 .player-name-row strong {
   overflow: hidden;
-  color: #eee9dc;
+  color: var(--nf-text);
   font-size: var(--fs-2xs);
   font-weight: 700;
   text-overflow: ellipsis;
@@ -1194,10 +1193,10 @@ button:disabled {
   flex: 0 0 auto;
   align-items: center;
   padding: 2px 4px;
-  border: 1px solid rgba(211, 173, 93, 0.22);
+  border: 1px solid color-mix(in srgb, var(--nf-accent) 22%, transparent);
   border-radius: 3px;
-  color: #d6bd7a;
-  background: rgba(211, 173, 93, 0.08);
+  color: var(--nf-accent-hi);
+  background: color-mix(in srgb, var(--nf-accent) 8%, transparent);
 }
 
 @media (min-width: 701px) {
@@ -1213,7 +1212,7 @@ button:disabled {
   overflow: hidden;
   max-width: 170px;
   margin-top: 3px;
-  color: #999b8e;
+  color: var(--nf-text-3);
   font-size: var(--fs-2xs);
 }
 
@@ -1267,7 +1266,7 @@ button:disabled {
 .resource-divider {
   width: 1px;
   height: 20px;
-  background: rgba(231, 221, 198, 0.15);
+  background: var(--nf-line-strong);
 }
 
 @media (min-width: 701px) {
@@ -1280,7 +1279,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 3px;
-  color: #dbd4c4;
+  color: var(--nf-text);
   font-size: var(--fs-2xs);
   font-weight: 700;
   white-space: nowrap;
@@ -1295,7 +1294,7 @@ button:disabled {
 .key-pip {
   width: 13px;
   height: 13px;
-  color: #65685f;
+  color: var(--nf-text-3);
   transform: rotate(-42deg);
 }
 
@@ -1314,13 +1313,13 @@ button:disabled {
 }
 
 .key-pip.is-forged {
-  color: #e3bd67;
-  fill: rgba(211, 173, 93, 0.18);
-  filter: drop-shadow(0 0 5px rgba(221, 175, 79, 0.4));
+  color: var(--nf-accent-hi);
+  fill: color-mix(in srgb, var(--nf-accent) 18%, transparent);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--nf-accent) 40%, transparent));
 }
 
 .key-counter > span {
-  color: #eee3c9;
+  color: var(--nf-text);
   font-size: var(--fs-2xs);
 }
 
@@ -1342,23 +1341,24 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 3px;
-  color: #f1d58a;
+  color: var(--nf-aember);
   font-size: var(--fs-base);
   font-weight: 700;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .amber-counter svg {
   width: 15px;
   height: 15px;
-  color: #d7af5b;
-  fill: rgba(215, 175, 91, 0.18);
+  color: var(--nf-aember);
+  fill: color-mix(in srgb, var(--nf-aember) 18%, transparent);
 }
 
 .amber-counter small {
   display: none;
   margin-left: 2px;
-  color: #929286;
+  color: var(--nf-text-3);
   font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.11em;
@@ -1374,23 +1374,23 @@ button:disabled {
   height: 2px;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: rgba(215, 175, 91, 0.16);
+  background: color-mix(in srgb, var(--nf-aember) 16%, transparent);
 }
 
 .amber-meter i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #b8913f, #f1d58a);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--nf-aember) 70%, var(--nf-void)), var(--nf-aember));
   transition: width 320ms var(--ease-out);
 }
 
 .amber-counter--ready .amber-meter i {
-  box-shadow: 0 0 8px rgba(241, 213, 138, 0.8);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--nf-aember) 80%, transparent);
 }
 
 .amber-counter--ready svg {
-  filter: drop-shadow(0 0 6px rgba(241, 213, 138, 0.6));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--nf-aember) 60%, transparent));
 }
 
 .amber-value {
@@ -1423,13 +1423,13 @@ button:disabled {
 
 .battle-zone--opponent {
   min-height: 129px;
-  border-bottom: 1px solid rgba(218, 205, 171, 0.11);
-  background: linear-gradient(180deg, rgba(11, 14, 12, 0.12), rgba(11, 14, 12, 0));
+  border-bottom: 1px solid var(--nf-line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--nf-void) 12%, transparent), transparent);
 }
 
 .battle-zone--player {
   min-height: 129px;
-  background: linear-gradient(180deg, rgba(247, 239, 215, 0.013), rgba(11, 14, 12, 0.12));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--nf-felt-text) 1.3%, transparent), color-mix(in srgb, var(--nf-void) 12%, transparent));
 }
 
 @media (min-width: 701px) {
@@ -1449,7 +1449,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
-  color: rgba(218, 206, 178, 0.64);
+  color: var(--nf-felt-text);
   font-size: var(--fs-2xs);
   font-weight: 750;
   letter-spacing: 0.16em;
@@ -1462,7 +1462,7 @@ button:disabled {
 }
 
 .zone-card-count {
-  color: var(--faint);
+  color: var(--nf-text-3);
   font-size: var(--fs-2xs);
   letter-spacing: 0.12em;
 }
@@ -1477,7 +1477,7 @@ button:disabled {
   overflow-x: auto;
   padding: 1px 2px 4px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(211, 173, 93, 0.26) transparent;
+  scrollbar-color: color-mix(in srgb, var(--nf-accent) 26%, transparent) transparent;
 }
 
 @media (min-width: 701px) {
@@ -1643,10 +1643,9 @@ button:disabled {
   aspect-ratio: 0.714;
   border-radius: var(--radius-sm);
   pointer-events: none;
-  box-shadow:
-    0 0 0 2px rgb(var(--sel-core) / 0.95),
-    0 0 10px 3px rgb(var(--sel-core) / 0.5),
-    0 0 26px 8px rgb(var(--sel-core) / 0.16);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nf-ether) 95%, transparent),
+    0 0 10px 3px color-mix(in srgb, var(--nf-ether) 50%, transparent),
+    0 0 26px 8px color-mix(in srgb, var(--nf-ether) 16%, transparent);
   /* respira em 1,8s (fora de fase do ready-breathe de 2,6s, então a
      selecionada se destaca mesmo numa peça pronta). */
   animation: sel-breathe 1.8s ease-in-out infinite;
@@ -1658,7 +1657,7 @@ button:disabled {
 }
 
 .card-tile.is-selected .card-art {
-  border-color: rgb(var(--sel-core) / 0.9);
+  border-color: color-mix(in srgb, var(--nf-ether) 90%, transparent);
 }
 
 /* O leve brilho fica no TILE: no .card-art ele brigaria com o filtro de
@@ -1700,7 +1699,7 @@ button:disabled {
   width: 100%;
   overflow: hidden;
   margin-top: 4px;
-  color: #dbd8cb;
+  color: var(--nf-text);
   /* Piso informacional (§2 invariante): texto não-caps nunca abaixo de 11px —
      --fs-card-floor (10px) vale só p/ caps in-card. O cqi deixa o título crescer
      em cartas grandes; em tiles pequenos vence o piso (estado T3). */
@@ -1720,7 +1719,7 @@ button:disabled {
 .card-tile--board .card-caption {
   max-width: 68px;
   margin-top: 3px;
-  color: #c9c6b8;
+  color: var(--nf-felt-text);
 }
 
 @media (min-width: 701px) {
@@ -1808,7 +1807,7 @@ button:disabled {
 }
 
 .board-piece--ready .card-tile:not(:disabled) .card-art {
-  border-color: rgba(190, 202, 155, 0.49);
+  border-color: color-mix(in srgb, var(--nf-ether) 49%, transparent);
 }
 
 /* Estados da peça no board (T4): o texto READY/STUNNED/RESTING saiu do DOM e
@@ -1816,12 +1815,12 @@ button:disabled {
    visual — borda verde p/ pronta (.board-piece--ready, acima), laranja com
    dessaturação p/ atordoada, opacidade p/ descansando. */
 .board-piece--stunned .card-tile:not(:disabled) .card-art {
-  border-color: rgba(209, 155, 114, 0.62);
+  border-color: color-mix(in srgb, var(--nf-ember) 62%, transparent);
   filter: saturate(0.45) brightness(0.9);
 }
 
 .board-piece--resting .card-tile:not(:disabled) .card-art {
-  border-color: rgba(150, 154, 146, 0.55);
+  border-color: color-mix(in srgb, var(--nf-text-3) 55%, transparent);
   opacity: 0.62;
   filter: grayscale(0.55);
 }
@@ -1829,7 +1828,7 @@ button:disabled {
 /* Entrench (Lote 4 §4.2): a carta segurada fica com a borda âncora e o selo; a
    escolha em si vive no inspetor (toggle). */
 .board-piece--hold .card-tile:not(:disabled) .card-art {
-  border-color: rgba(120, 165, 191, 0.62);
+  border-color: color-mix(in srgb, var(--nf-text-2) 62%, transparent);
 }
 
 .mark-badge {
@@ -1918,10 +1917,10 @@ button:disabled {
   align-items: center;
   gap: 2px;
   padding: 3px 5px;
-  border: 1px solid rgba(211, 173, 93, 0.55);
+  border: 1px solid color-mix(in srgb, var(--nf-accent) 55%, transparent);
   border-radius: 3px;
-  color: #f4dfae;
-  background: #6f5420;
+  color: var(--nf-aember);
+  background: var(--nf-s2);
   font-size: max(var(--fs-2xs), 7cqi);
   line-height: 1;
 }
@@ -1941,8 +1940,8 @@ button:disabled {
 }
 
 .board-lane--targeting .card-tile--board:not(.is-dimmed):not(:disabled) .card-art {
-  border-color: rgba(224, 130, 100, 0.9);
-  box-shadow: 0 0 0 1px rgba(224, 130, 100, 0.24), 0 0 13px rgba(224, 130, 100, 0.16);
+  border-color: color-mix(in srgb, var(--nf-ether) 90%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nf-ether) 24%, transparent), 0 0 13px color-mix(in srgb, var(--nf-ether) 16%, transparent);
 }
 
 /* QA 07/out: alvo elegível da seleção em curso — affordance CLARA (anel que
@@ -1953,8 +1952,8 @@ button:disabled {
 }
 
 .card-tile.is-targetable .card-art {
-  border-color: rgba(224, 130, 100, 0.98);
-  box-shadow: 0 0 0 2px rgba(224, 130, 100, 0.45), 0 0 18px rgba(224, 130, 100, 0.3);
+  border-color: color-mix(in srgb, var(--nf-ether) 98%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--nf-ether) 45%, transparent), 0 0 18px color-mix(in srgb, var(--nf-ether) 30%, transparent);
   transition:
     border-color var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
@@ -1975,7 +1974,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
   align-items: center;
   justify-content: center;
   gap: 9px;
-  color: var(--faint);
+  color: var(--nf-text-3);
   font-size: var(--fs-2xs);
   letter-spacing: 0.035em;
 }
@@ -2014,9 +2013,10 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
   align-items: center;
   gap: 4px 6px;
   padding: 3px 8px;
-  border-top: 1px solid rgba(216, 204, 175, 0.15);
-  border-bottom: 1px solid rgba(216, 204, 175, 0.15);
-  background: linear-gradient(90deg, rgba(17, 22, 18, 0.78), rgba(26, 31, 25, 0.7), rgba(17, 22, 18, 0.74));
+  border-top: 1px solid var(--nf-line);
+  border-bottom: 1px solid var(--nf-line);
+  color: var(--nf-text);
+  background: var(--nf-s2);
 }
 
 /* VA-01 (celular): linha 1 = status + toggles (order 1), quebra forçada pelo ::after
@@ -2068,7 +2068,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
 }
 
 .turn-console--human {
-  box-shadow: inset 3px 0 rgba(207, 168, 85, 0.55);
+  box-shadow: inset 3px 0 color-mix(in srgb, var(--nf-accent) 55%, transparent);
 }
 
 .turn-console-copy {
@@ -2091,7 +2091,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
 
 .turn-sep {
   flex: 0 0 auto;
-  color: #6f7466;
+  color: var(--nf-text-3);
   font-size: var(--fs-2xs);
   line-height: 1;
 }
@@ -2115,7 +2115,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
   flex: 0 0 auto;
   align-items: center;
   gap: 5px;
-  color: #b4a16d;
+  color: var(--nf-accent);
   font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.15em;
@@ -2126,13 +2126,13 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #dab761;
-  box-shadow: 0 0 6px rgba(218, 183, 97, 0.65);
+  background: var(--nf-accent-hi);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--nf-accent-hi) 65%, transparent);
 }
 
 .turn-console-copy strong {
   overflow: hidden;
-  color: #ece6d7;
+  color: var(--nf-text);
   font-size: var(--fs-2xs);
   font-weight: 700;
   text-overflow: ellipsis;
@@ -2148,7 +2148,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
 /* Sufixo da linha (resumo do turno da IA): uma linha, com reticências. */
 .turn-line-summary {
   overflow: hidden;
-  color: #888c81;
+  color: var(--nf-text-3);
   font-size: var(--fs-2xs);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2180,10 +2180,11 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
   display: flex;
   flex-direction: column;
   padding: 4px;
-  border: 1px solid rgba(222, 214, 194, 0.14);
+  border: 1px solid var(--nf-line);
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(23, 29, 25, 0.88), rgba(12, 17, 14, 0.92));
-  box-shadow: var(--elev-2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: var(--nf-text);
+  background: var(--nf-s2);
+  box-shadow: var(--nf-elev-2), inset 0 1px 0 color-mix(in srgb, var(--nf-text) 5%, transparent);
   backdrop-filter: blur(8px);
 }
 
@@ -2198,7 +2199,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
   padding: 2px 6px 6px;
   /* Largura contida: o prompt é HUD sobre a mesa e não pode cobrir as cartas. */
   max-width: 244px;
-  color: #f0eadc;
+  color: var(--nf-text);
   font-size: var(--fs-2xs);
   font-weight: 650;
 }
@@ -2215,14 +2216,14 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .card-tile.is-targetable .car
 
 .house-pill-effect {
   flex: 1 0 100%;
-  color: var(--faint);
+  color: var(--nf-text-3);
   font-weight: 550;
   line-height: 1.35;
 }
 
 .house-pill--asking {
-  border-color: rgba(224, 130, 100, 0.45);
-  box-shadow: var(--elev-2), 0 0 22px rgba(224, 130, 100, 0.22);
+  border-color: color-mix(in srgb, var(--nf-ether) 45%, transparent);
+  box-shadow: var(--nf-elev-2), 0 0 22px color-mix(in srgb, var(--nf-ether) 22%, transparent);
 }
 
 .house-pill--asking .house-picker {
@@ -2277,7 +2278,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   padding: 0 5px;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  color: #a4a69a;
+  color: var(--nf-text-2);
   background: transparent;
   cursor: pointer;
   font-size: var(--fs-2xs);
@@ -2308,7 +2309,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 @media (hover: hover) {
   .house-choice:not(:disabled):hover {
     border-color: color-mix(in srgb, var(--house-color) 65%, transparent);
-    color: #f0eadc;
+    color: var(--nf-text);
     background: color-mix(in srgb, var(--house-color) 14%, transparent);
     box-shadow: 0 0 18px color-mix(in srgb, var(--house-color) 32%, transparent);
     transform: translateY(-1px);
@@ -2322,8 +2323,8 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 
 /* Casa ativa: anel/glow da casa (a mesma cor do tapete, --turn-house). */
 .house-choice.is-chosen {
-  color: #f0eadc;
-  background: color-mix(in srgb, var(--house-color) 20%, rgba(18, 22, 18, 0.65));
+  color: var(--nf-text);
+  background: color-mix(in srgb, var(--house-color) 20%, var(--nf-s2));
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--turn-house, var(--house-color)) 72%, transparent),
     0 0 22px color-mix(in srgb, var(--turn-house, var(--house-color)) 38%, transparent);
@@ -2360,7 +2361,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   width: 14px;
   height: 14px;
   padding: 2px;
-  border: 1px solid rgba(12, 17, 14, 0.8);
+  border: 1px solid color-mix(in srgb, var(--nf-void) 80%, transparent);
   border-radius: 50%;
   color: #10160f;
   background: color-mix(in srgb, var(--turn-house, var(--house-color)) 80%, white);
@@ -2376,10 +2377,10 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   justify-content: center;
   gap: 5px;
   padding: 8px 12px;
-  border: 1px solid rgba(211, 173, 93, 0.47);
+  border: 1px solid var(--nf-accent-hi);
   border-radius: var(--radius-sm);
-  color: #f0d38b;
-  background: linear-gradient(140deg, rgba(162, 123, 51, 0.25), rgba(131, 97, 42, 0.15));
+  color: var(--nf-on-accent);
+  background: linear-gradient(180deg, var(--nf-accent-hi), var(--nf-accent));
   cursor: pointer;
   font-size: var(--fs-2xs);
   font-weight: 750;
@@ -2406,13 +2407,19 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 
 @media (hover: hover) {
 .end-turn-button:hover:not(:disabled) {
-  background: rgba(196, 151, 65, 0.27);
+  background: var(--nf-accent-hi);
   transform: translateY(-1px);
 }
 }
 
 .end-turn-button:disabled {
   opacity: 0.34;
+}
+
+/* O lit do primário só aparece com o botão ativo (vez do jogador): sem jogada, o
+   botão fica chapado e não compete com o aro da mesa. */
+.end-turn-button:not(:disabled) {
+  box-shadow: var(--nf-lit-accent);
 }
 
 .fight-instruction {
@@ -2423,9 +2430,9 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   justify-content: center;
   gap: 7px;
   row-gap: 2px;
-  border-bottom: 1px solid rgba(210, 127, 95, 0.18);
-  color: #e0aa8b;
-  background: rgba(113, 55, 42, 0.12);
+  border-bottom: 1px solid color-mix(in srgb, var(--nf-ember) 18%, transparent);
+  color: var(--nf-ember);
+  background: color-mix(in srgb, var(--nf-ember) 12%, transparent);
   font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.04em;
@@ -2435,11 +2442,11 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 /* QA 07/out: banner da seleção de ALVO — mais contraste que o toast comum (o
    jogador não via que a escolha estava ativa) e o rótulo curto "Escolha um alvo". */
 .fight-instruction--target {
-  border: 1px solid rgba(224, 130, 100, 0.5);
+  border: 1px solid color-mix(in srgb, var(--nf-ether) 50%, transparent);
   border-radius: var(--radius-pill);
-  color: #f3c6a6;
-  background: rgba(113, 55, 42, 0.34);
-  box-shadow: 0 0 18px rgba(224, 130, 100, 0.22);
+  color: var(--nf-ether);
+  background: color-mix(in srgb, var(--nf-ether) 14%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--nf-ether) 22%, transparent);
 }
 
 .pick-tag {
@@ -2482,8 +2489,9 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 
 .hand-zone {
   padding: 10px 9px 11px;
-  border-top: 1px solid rgba(218, 205, 171, 0.11);
-  background: linear-gradient(180deg, rgba(11, 14, 12, 0.27), rgba(10, 13, 11, 0.51));
+  border-top: 1px solid var(--nf-line);
+  color: var(--nf-text);
+  background: var(--nf-s1);
 }
 
 @media (min-width: 701px) {
@@ -2499,7 +2507,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   align-items: center;
   gap: 8px;
   padding-left: 12px;
-  border-left: 1px solid rgba(231, 221, 198, 0.15);
+  border-left: 1px solid var(--nf-line);
   white-space: nowrap;
 }
 
@@ -2510,7 +2518,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 }
 
 .hand-title {
-  color: rgba(224, 216, 194, 0.84);
+  color: var(--nf-text-2);
   font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -2540,7 +2548,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   align-items: center;
   gap: 6px;
   padding: 3px 0 0;
-  color: #c4ad70;
+  color: var(--nf-accent-hi);
   font-size: var(--fs-2xs);
   animation: rise-in 320ms ease backwards;
 }
@@ -2578,7 +2586,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   padding: 7px 2px 3px;
   scroll-snap-type: x proximity;
   scrollbar-width: thin;
-  scrollbar-color: rgba(211, 173, 93, 0.27) transparent;
+  scrollbar-color: color-mix(in srgb, var(--nf-accent) 27%, transparent) transparent;
 }
 
 @media (min-width: 701px) {
@@ -2596,7 +2604,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   min-height: 112px;
   width: 100%;
   place-items: center;
-  color: #939489;
+  color: var(--nf-text-3);
   font-size: var(--fs-2xs);
 }
 
@@ -2709,7 +2717,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 }
 
 .table-number {
-  color: var(--faint);
+  color: var(--nf-text-3);
 }
 
 /* FEAT-12a: undo lives in the rail, above the Warden brief. */
@@ -6332,7 +6340,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   position: absolute;
   z-index: 15;
   inset: 0;
-  background: radial-gradient(ellipse at 50% var(--forge-y, 45%), rgba(240, 205, 130, 0.4), transparent 58%);
+  background: radial-gradient(ellipse at 50% var(--forge-y, 45%), color-mix(in srgb, var(--nf-accent) 40%, transparent), transparent 58%);
   content: "";
   pointer-events: none;
   animation: forge-glow 900ms ease-out both;
@@ -6616,7 +6624,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   left: 50%;
   margin-bottom: 0;
   padding: 10px 26px;
-  border: 1px solid rgb(var(--sel-core) / 0.45);
+  border: 1px solid color-mix(in srgb, var(--nf-ether) 45%, transparent);
   background: rgba(10, 14, 18, 0.9);
   font-size: var(--fs-xl);
   font-weight: 800;
@@ -7915,10 +7923,10 @@ html .spin {
   align-items: center;
   gap: 5px;
   padding: 0 10px;
-  border: 1px solid rgba(226, 218, 196, 0.13);
+  border: 1px solid var(--nf-line);
   border-radius: var(--radius-pill);
-  color: #a8a99d;
-  background: rgba(255, 255, 255, 0.02);
+  color: var(--nf-text-2);
+  background: var(--nf-s3);
   font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
   font-weight: var(--fw-semibold);
@@ -7937,12 +7945,12 @@ button.pile-chip {
 
 .pile-chip svg {
   flex: 0 0 auto;
-  color: #c2a05b;
+  color: var(--nf-accent);
 }
 
 /* A contagem vive ao lado do glifo e nunca some. */
 .pile-chip b {
-  color: #e7e1d0;
+  color: var(--nf-text);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
 }
@@ -7954,22 +7962,22 @@ button.pile-chip {
 
 @media (hover: hover) {
   button.pile-chip:hover {
-    border-color: rgba(211, 173, 93, 0.55);
-    color: #e8e2d4;
-    background: rgba(211, 173, 93, 0.1);
-    box-shadow: var(--elev-1), 0 0 14px rgba(211, 173, 93, 0.18);
+    border-color: color-mix(in srgb, var(--nf-accent) 55%, transparent);
+    color: var(--nf-text);
+    background: color-mix(in srgb, var(--nf-accent) 10%, var(--nf-s3));
+    box-shadow: var(--nf-elev-1), 0 0 14px color-mix(in srgb, var(--nf-accent) 18%, transparent);
     translate: 0 -1px;
   }
 }
 
 button.pile-chip:active {
-  background: rgba(211, 173, 93, 0.16);
-  box-shadow: var(--elev-0), inset 0 1px 4px rgba(0, 0, 0, 0.35);
+  background: color-mix(in srgb, var(--nf-accent) 16%, var(--nf-s3));
+  box-shadow: var(--elev-0), inset 0 1px 4px rgb(var(--nf-shadow) / 0.35);
   translate: 0 0;
 }
 
 button.pile-chip:focus-visible {
-  outline: 2px solid rgba(211, 173, 93, 0.6);
+  outline: 2px solid var(--nf-ether);
   outline-offset: 1px;
 }
 
@@ -7982,7 +7990,7 @@ button.pile-chip:focus-visible {
 }
 
 .pile-chip--hidden svg {
-  color: #7c8072;
+  color: var(--nf-text-3);
 }
 
 /* Celular: rótulo some (aria-label/title); o chip encolhe para 34px e o glifo
@@ -8141,7 +8149,7 @@ button.pile-chip:focus-visible {
   color: var(--gold-bright);
   font-size: 10px;
   line-height: 1;
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  text-shadow: 0 0 4px rgb(var(--nf-shadow) / 0.8);
   pointer-events: none;
 }
 
@@ -8308,9 +8316,9 @@ button.pile-chip:focus-visible {
     inset: -41% 0 -4%;
     border-radius: var(--radius-md);
     background:
-      radial-gradient(ellipse 58% 46% at 50% 58%, rgba(110, 152, 124, 0.2), transparent 68%),
-      radial-gradient(ellipse 116% 86% at 50% 72%, transparent 48%, rgba(4, 7, 6, 0.5) 100%);
-    box-shadow: inset 0 0 0 1px rgba(209, 182, 122, 0.1);
+      radial-gradient(ellipse 58% 46% at 50% 58%, color-mix(in srgb, var(--nf-verdant) 20%, transparent), transparent 68%),
+      radial-gradient(ellipse 116% 86% at 50% 72%, transparent 48%, color-mix(in srgb, var(--nf-void) 50%, transparent) 100%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nf-accent) 10%, transparent);
     transform: perspective(1400px) rotateX(30deg);
     transform-origin: 50% 100%;
     pointer-events: none;
@@ -8375,7 +8383,7 @@ button.pile-chip:focus-visible {
     width: 60%;
     height: 11px;
     translate: -50% 0 0;
-    background: radial-gradient(ellipse 60% 130% at 50% 100%, rgb(255 176 70), rgb(255 176 70 / 0));
+    background: radial-gradient(ellipse 60% 130% at 50% 100%, var(--nf-ether), transparent);
     clip-path: polygon(0 100%, 50% 0, 100% 100%, 84% 100%, 50% 34%, 16% 100%);
     opacity: 0.85;
   }
@@ -8387,7 +8395,7 @@ button.pile-chip:focus-visible {
        passava batido junto da exaustão. */
     width: 22px;
     height: 22px;
-    background: #ef8b46;
+    background: var(--nf-ember);
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 0a12 12 0 1 0 0 24A12 12 0 0 0 12 0Zm1.5 5L7 13h4l-1 6 6.5-8h-4z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   }
 
@@ -8409,7 +8417,7 @@ button.pile-chip:focus-visible {
     position: absolute;
     inset: auto 8% -5px;
     height: 30%;
-    background: radial-gradient(closest-side, rgb(0 0 0 / 0.46), transparent);
+    background: radial-gradient(closest-side, rgb(var(--nf-shadow) / 0.46), transparent);
     pointer-events: none;
   }
 
@@ -8440,9 +8448,9 @@ button.pile-chip:focus-visible {
       inset: 0;
       border-radius: var(--radius-md);
       background:
-        radial-gradient(ellipse 58% 54% at 50% 47%, rgba(128, 176, 142, 0.34), transparent 72%),
-        radial-gradient(ellipse 116% 94% at 50% 50%, transparent 48%, rgba(3, 6, 5, 0.7) 100%),
-        linear-gradient(180deg, rgba(4, 7, 6, 0.52) 0%, rgba(4, 7, 6, 0.16) 24%, rgba(4, 7, 6, 0.02) 46%, rgba(4, 7, 6, 0.02) 74%, rgba(4, 7, 6, 0.4)),
+        radial-gradient(ellipse 58% 54% at 50% 47%, color-mix(in srgb, var(--nf-verdant) 34%, transparent), transparent 72%),
+        radial-gradient(ellipse 116% 94% at 50% 50%, transparent 48%, color-mix(in srgb, var(--nf-void) 70%, transparent) 100%),
+        linear-gradient(180deg, color-mix(in srgb, var(--nf-void) 52%, transparent) 0%, color-mix(in srgb, var(--nf-void) 16%, transparent) 24%, color-mix(in srgb, var(--nf-void) 2%, transparent) 46%, color-mix(in srgb, var(--nf-void) 2%, transparent) 74%, color-mix(in srgb, var(--nf-void) 40%, transparent)),
         /* Fase E (UX_ARENA_PLAN §4): a luz da casa ativa ganha DOIS degraus além
            do terreno de 10% do H3D-21 — o halo largo de fundo (12%) e o miolo
            quente (26%) que marca de que lado está a vez. Continua troca seca e
@@ -8450,13 +8458,13 @@ button.pile-chip:focus-visible {
         radial-gradient(ellipse 92% 68% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 12%, transparent), transparent 78%),
         radial-gradient(ellipse 46% 32% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 26%, transparent), transparent 72%),
         radial-gradient(ellipse 60% 44% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 10%, transparent), transparent 72%),
-        repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 38px);
+        repeating-radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--nf-felt-text) 4%, transparent) 0 1px, transparent 1px 38px);
       /* VA-05: borda do tapete iluminada (o trapézio da perspectiva precisa de um contorno
          claro contra o fundo escuro, como no Arena) + brilho interno no aro.
          Fase E: o aro passa a respirar a cor da casa ativa. */
       box-shadow:
-        inset 0 0 0 2px rgba(214, 188, 128, 0.3),
-        inset 0 0 28px rgba(150, 196, 160, 0.16),
+        inset 0 0 0 2px color-mix(in srgb, var(--nf-accent) 30%, transparent),
+        inset 0 0 28px color-mix(in srgb, var(--nf-verdant) 16%, transparent),
         inset 0 0 72px color-mix(in srgb, var(--turn-house, transparent) 15%, transparent);
       translate: calc(var(--cam-x, 0) * 12px);
       pointer-events: none;
@@ -8888,7 +8896,7 @@ button.pile-chip:focus-visible {
       height: 34%;
       transform-origin: 50% 100%;
       transform: rotateX(calc(var(--tilt) - var(--lean))) translateZ(calc(1px - var(--lift)));
-      background: radial-gradient(closest-side, rgb(0 0 0 / 0.5), transparent);
+      background: radial-gradient(closest-side, rgb(var(--nf-shadow) / 0.5), transparent);
       opacity: calc(0.62 - var(--lift-n, 0) * 0.3);
       scale: calc(1 + var(--lift-n, 0) * 0.18);
       transition: opacity 150ms var(--ease-out), scale 150ms var(--ease-out);
@@ -8997,7 +9005,7 @@ button.pile-chip:focus-visible {
       translate: -50% 0;
       padding: 3px 7px;
       border-radius: 999px;
-      box-shadow: 0 0 10px rgb(255 190 80 / 0.45);
+      box-shadow: 0 1px 4px rgb(var(--nf-shadow) / 0.45);
     }
 
     .game-board--3d .board-piece--ready .amber-label {
@@ -9039,7 +9047,7 @@ button.pile-chip:focus-visible {
     }
 
     .game-board--3d .turn-console--human .round-dot {
-      box-shadow: 0 0 0 4px rgba(136, 177, 138, 0.08), 0 0 10px rgba(136, 177, 138, 0.24);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--nf-accent-hi) 8%, transparent), 0 0 10px color-mix(in srgb, var(--nf-accent-hi) 24%, transparent);
       animation: dot-glow 2.2s ease-in-out infinite;
     }
 
@@ -9108,7 +9116,10 @@ button.pile-chip:focus-visible {
       margin: 0;
       padding: 2px 4px;
       border-radius: var(--radius-sm);
-      background: rgba(10, 12, 10, 0.82);
+      /* A tarja é sempre escura (--nf-shadow é escuro em todo tema), então o texto fica
+         claro mesmo no Claro: --nf-text ali seria escuro sobre escuro. */
+      color: #dbd8cb;
+      background: rgb(var(--nf-shadow) / 0.82);
       text-align: center;
     }
 
@@ -9221,8 +9232,8 @@ button.pile-chip:focus-visible {
        disputando a faixa com nome/correntes. --- */
     .game-board--3d .player-band--active .player-avatar {
       box-shadow:
-        0 0 0 3px color-mix(in srgb, var(--turn-house, transparent) 34%, rgba(211, 173, 93, 0.12)),
-        0 0 22px rgba(149, 205, 145, 0.28),
+        0 0 0 3px color-mix(in srgb, var(--turn-house, transparent) 34%, color-mix(in srgb, var(--nf-accent) 12%, transparent)),
+        0 0 22px color-mix(in srgb, var(--nf-accent) 28%, transparent),
         0 0 52px color-mix(in srgb, var(--turn-house, transparent) 24%, transparent);
     }
 
@@ -9240,13 +9251,12 @@ button.pile-chip:focus-visible {
        (contorno quente + brilho interno da casa ativa), em vez de ler como uma
        faixa colada na mesa. Altura intocada (o FIT mede a faixa). --- */
     .game-board--3d .turn-console {
-      background:
-        linear-gradient(180deg, rgba(28, 33, 27, 0.92), rgba(17, 22, 18, 0.88)),
-        radial-gradient(ellipse 70% 170% at 50% 50%, color-mix(in srgb, var(--turn-house, transparent) 12%, transparent), transparent 72%);
+      background: radial-gradient(ellipse 70% 170% at 50% 50%, color-mix(in srgb, var(--turn-house, transparent) 12%, transparent), transparent 72%);
       box-shadow:
-        inset 0 0 0 1px rgba(214, 188, 128, 0.2),
-        inset 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 0 0 1px color-mix(in srgb, var(--nf-accent) 20%, transparent),
+        inset 0 1px color-mix(in srgb, var(--nf-felt-text) 5%, transparent),
         inset 0 0 26px color-mix(in srgb, var(--turn-house, transparent) 9%, transparent);
+      background-color: var(--nf-s2);
     }
   }
 
@@ -9328,8 +9338,8 @@ button.pile-chip:focus-visible {
     }
 
     .game-board--3d .player-band--active .player-avatar {
-      background: radial-gradient(circle, rgba(161, 192, 152, 0.24), rgba(222, 213, 188, 0.06) 72%);
-      box-shadow: 0 0 0 3px rgba(211, 173, 93, 0.12), 0 0 22px rgba(149, 205, 145, 0.28);
+      background: radial-gradient(circle, color-mix(in srgb, var(--nf-accent) 24%, transparent), color-mix(in srgb, var(--nf-felt-text) 6%, transparent) 72%);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--nf-accent) 12%, transparent), 0 0 22px color-mix(in srgb, var(--nf-accent) 28%, transparent);
     }
 
     .game-board--3d .player-band--thinking .avatar-live-dot {
@@ -9385,12 +9395,12 @@ button.pile-chip:focus-visible {
       width: 22px;
       height: 31px;
       margin-left: -10px;
-      border: 1px solid rgba(214, 188, 128, 0.5);
+      border: 1px solid color-mix(in srgb, var(--nf-accent) 50%, transparent);
       border-radius: 3px;
       background:
-        radial-gradient(circle at 50% 50%, rgba(214, 188, 128, 0.35) 0 22%, transparent 24%),
-        linear-gradient(135deg, #3a4a3f, #1b2620);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--nf-accent) 35%, transparent) 0 22%, transparent 24%),
+        linear-gradient(135deg, var(--nf-s3), var(--nf-s1));
+      box-shadow: 0 1px 3px rgb(var(--nf-shadow) / 0.5);
     }
 
     .game-board--3d .hand-backs i:first-child {
@@ -9402,7 +9412,7 @@ button.pile-chip:focus-visible {
 
     .game-board--3d .hand-backs b {
       margin-left: 8px;
-      color: #d6bd7a;
+      color: var(--nf-accent-hi);
       font-size: var(--fs-2xs);
       font-weight: 800;
     }
@@ -9491,15 +9501,15 @@ button.pile-chip:focus-visible {
 
 /* Zona válida: realce só com outline/box-shadow (nada de filter/opacity — o 3D achataria). */
 .battle-zone--player[data-drop] {
-  outline: 2px dashed rgba(211, 173, 93, 0.55);
+  outline: 2px dashed color-mix(in srgb, var(--nf-ether) 55%, transparent);
   outline-offset: -4px;
-  box-shadow: inset 0 0 0 1000px rgba(211, 173, 93, 0.06);
+  box-shadow: inset 0 0 0 1000px color-mix(in srgb, var(--nf-ether) 6%, transparent);
   transition: outline-color 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
 }
 
 .battle-zone--player[data-drop="over"] {
-  outline: 2px solid rgba(240, 205, 125, 0.95);
-  box-shadow: inset 0 0 0 1000px rgba(211, 173, 93, 0.16);
+  outline: 2px solid color-mix(in srgb, var(--nf-ether) 95%, transparent);
+  box-shadow: inset 0 0 0 1000px color-mix(in srgb, var(--nf-ether) 16%, transparent);
 }
 
 /* Lote 10: modal privado do "Look at …" - tiras de cartas que quebram linha. */

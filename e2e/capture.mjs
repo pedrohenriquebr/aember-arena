@@ -56,6 +56,9 @@ const INPUT_FLOOR_PX = 16;
 
 /** H3D-11: "2d" (default) ou "3d" — vira `tableView` no seed de cada contexto. */
 let VIEW = "2d";
+// H-25: --theme <id> semeia o tema salvo (forja | aco | claro | arcano); sem a flag nada é
+// semeado e o baseline continua o da Forja (o padrão do motor de temas).
+let THEME = null;
 
 // Ordem fixa dos controles de navegacao no DOM:
 //   .header-nav .nav-link  = home, browse, config, [game]  (src/App.tsx:1341-1354)
@@ -63,13 +66,14 @@ let VIEW = "2d";
 const NAV_INDEX = { home: 0, browse: 1, config: 2, game: 3 };
 
 function parseArgs(argv) {
-  const args = { port: DEFAULT_PORT, out: null, floorOnly: false, matchSmoke: false, baseUrl: null, view: VIEW };
+  const args = { port: DEFAULT_PORT, out: null, floorOnly: false, matchSmoke: false, baseUrl: null, view: VIEW, theme: null };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--out") args.out = argv[(i += 1)];
     else if (a === "--port") args.port = Number(argv[(i += 1)]);
     else if (a === "--base-url") args.baseUrl = argv[(i += 1)];
     else if (a === "--view") args.view = argv[(i += 1)];
+    else if (a === "--theme") args.theme = argv[(i += 1)];
     else if (a === "--floor-only") args.floorOnly = true;
     else if (a === "--match-smoke") args.matchSmoke = true;
     else {
@@ -79,6 +83,10 @@ function parseArgs(argv) {
   }
   if (args.view !== "2d" && args.view !== "3d") {
     console.error(`capture: --view aceita "2d" ou "3d" (recebi "${args.view}")`);
+    process.exit(2);
+  }
+  if (args.theme !== null && !["forja", "aco", "claro", "arcano"].includes(args.theme)) {
+    console.error(`capture: --theme aceita forja | aco | claro | arcano (recebi "${args.theme}")`);
     process.exit(2);
   }
   if (args.floorOnly && args.matchSmoke) {
@@ -203,6 +211,7 @@ const seedBody = () => `(() => {
     hoverZoom: true, language: "en", tableView: "${VIEW}", aiSpeed: "fast",
   }));
   localStorage.setItem("aember-arena-language", "en");
+  ${THEME ? `localStorage.setItem("aember-arena-theme", "${THEME}");` : ""}
 })()`;
 
 async function newPage(browser, { w, h }) {
@@ -367,7 +376,7 @@ async function runCapture(browser, base, outDir) {
     generatedAt: new Date().toISOString(),
     viewports: VIEWPORTS.map(({ w, h }) => `${w}x${h}`),
     screens: ["home", "config", "game", "browse", "inspect"],
-    determinism: `localStorage seedado (animations/sfx/music off, lang en, tableView ${VIEW}) + reducedMotion:reduce`,
+    determinism: `localStorage seedado (animations/sfx/music off, lang en, tableView ${VIEW}${THEME ? `, tema ${THEME}` : ""}) + reducedMotion:reduce`,
     note: "browse depende da API do Master Vault ao vivo; os demais funcionam offline",
     files: [],
     errors: [],
@@ -695,6 +704,7 @@ async function runMatchSmoke(browser, base, outDir) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   VIEW = args.view;
+  THEME = args.theme;
   const server = args.baseUrl ? null : startDevServer(args.port);
   const base = args.baseUrl ?? server.url;
   let browser;
