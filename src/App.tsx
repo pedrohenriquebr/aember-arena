@@ -27,6 +27,7 @@ import {
   Layers,
   Link2,
   LoaderCircle,
+  Menu,
   Music,
   RefreshCw,
   RotateCcw,
@@ -107,6 +108,7 @@ import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/Tut
 import { readUiFlag } from "./ui/flag";
 import { KitScreen } from "./ui/screens/KitScreen";
 import { LobbyShell } from "./ui/shell/LobbyShell";
+import { TableMenu } from "./ui/shell/TableMenu";
 import { destinationOf } from "./ui/shell/shellNav";
 
 const RANDOM_RIVAL_KEY = "aember-arena-random-rival";
@@ -4144,10 +4146,19 @@ function App() {
   }, [drawerOpen]);
   // No 2P o drawer nunca fica aberto por cima da mão do outro lado.
   useEffect(() => setRailOpen(false), [humanSide]);
-  // H-08: saída provisória da mesa sem header (o H-09 assume com o ☰ do TableMenu).
-  const lobbyExit = (
-    <button type="button" className="view-toggle" aria-label={t("ui.shell.lobby")} title={t("ui.shell.lobby")} onClick={goHome}>
-      <Home size={16} />
+  // H-09: o ☰ da casca de mesa abre o TableMenu (que agora leva a saída para o lobby e a visão 3D).
+  const [tableMenuOpen, setTableMenuOpen] = useState(false);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const tableMenuTrigger = (
+    <button
+      type="button"
+      className="view-toggle table-menu-trigger"
+      aria-label={t("ui.table.menu")}
+      aria-haspopup="dialog"
+      aria-expanded={tableMenuOpen}
+      onClick={() => { sound.play("click"); setTableMenuOpen(true); }}
+    >
+      <Menu size={16} />
     </button>
   );
   // H3D-01: atalho da visão da mesa — alterna sem sair da partida. 44px (regra 9),
@@ -4168,6 +4179,16 @@ function App() {
   const lobbyShell = ui2 === "2" && screen !== "game";
   // H-08: na partida a casca some (header e tab bar) e o palco recebe os pixels (tableShell.css).
   const tableShell = ui2 === "2" && screen === "game";
+  // H-09: no desktop, Esc abre o ☰ quando nada mais pede a tecla. Com o menu aberto, a Sheet fecha.
+  useEffect(() => {
+    if (!tableShell || drawerMode || tableMenuOpen || exitConfirmOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || selected || pick || replay || document.querySelector('[aria-modal="true"]')) return;
+      setTableMenuOpen(true);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [tableShell, drawerMode, tableMenuOpen, exitConfirmOpen, selected, pick, replay]);
 
   // H-05: a galeria de primitivas só existe com ?ui=2&screen=_kit; sem a flag o App é o de hoje.
   if (ui2 === "2" && new URLSearchParams(window.location.search).get("screen") === "_kit") {
@@ -4447,10 +4468,19 @@ function App() {
                     </button>
                   ) : undefined}
                   consoleSlot={drawerMode ? null : railConsoleSlot}
-                  consoleExtra={compactStage || drawerMode ? (
+                  consoleExtra={tableShell ? (
+                    <>
+                      {/* H-09: no celular o console tem Undo + ☰ (as notas e a visão 3D estão no menu). */}
+                      {drawerMode && !passAndPlay && (
+                        <button type="button" className="view-toggle" aria-label={t("game.undo")} title={undo?.blocked ? t("game.undoBlocked") : t("game.undo")} onClick={undoLastMove} disabled={!undoable}>
+                          <RotateCcw size={16} />
+                        </button>
+                      )}
+                      {tableMenuTrigger}
+                    </>
+                  ) : compactStage || drawerMode ? (
                     <>
                       {compactStage && viewToggle}
-                      {tableShell && lobbyExit}
                       {drawerMode && !passAndPlay && (
                         <button type="button" className="view-toggle" aria-label={t("game.undo")} title={undo?.blocked ? t("game.undoBlocked") : t("game.undo")} onClick={undoLastMove} disabled={!undoable}>
                           <RotateCcw size={16} />
@@ -4481,10 +4511,7 @@ function App() {
                   {drawerOpen ? (
                     <button type="button" className="quiet-icon-button rail-close" onClick={() => setRailOpen(false)} aria-label={t("rail.close")}><X size={14} /></button>
                   ) : (
-                    <>
-                      {tableShell && !compactStage && !drawerMode && <>{viewToggle}{lobbyExit}</>}
-                      <span className="table-number">01</span>
-                    </>
+                    <span className="table-number">01</span>
                   )}
                 </div>
                 <SelectedCardPanel
@@ -4588,7 +4615,8 @@ function App() {
                     </>
                   ) : (
                     <div className="match-log">
-                      {game.log.slice(-5).reverse().map((entry, index) => (
+                      {/* H-10: na casca de mesa do desktop o log inteiro cabe no espaço que sobra e rola por dentro. */}
+                      {(tableShell && !drawerMode ? game.log : game.log.slice(-5)).slice().reverse().map((entry, index) => (
                         <div className={`log-entry${index === 0 ? " log-entry--latest" : ""}`} key={`${entry.key}-${index}-${game.log.length}`}>
                           <span className="log-marker" />
                           <p>{renderLog(entry, t)}</p>
@@ -4683,6 +4711,45 @@ function App() {
             <Swords size={17} /><span>{t("nav.play")}</span>
           </button>
         </nav>
+      )}
+
+      {tableShell && game && (
+        <TableMenu
+          t={t}
+          open={tableMenuOpen}
+          onClose={() => setTableMenuOpen(false)}
+          view3d={settings.tableView === "3d"}
+          onToggleView={toggleTableView}
+          sfx={settings.sfx}
+          onToggleSfx={() => { sound.play("click"); setSettings((prev) => ({ ...prev, sfx: !prev.sfx })); }}
+          music={settings.music}
+          onToggleMusic={() => setSettings((prev) => ({ ...prev, music: !prev.music }))}
+          aiDelayMs={passAndPlay ? undefined : settings.aiDelayMs}
+          onAiDelay={(ms) => setSettings((prev) => ({ ...prev, aiDelayMs: ms }))}
+          // Sem o rail-drawer (desktop) as notas já estão ao lado da mesa: a ação some.
+          onOpenNotes={drawerMode ? () => setRailOpen(true) : undefined}
+          onOpenLog={() => { setSelected(null); setPick(null); setLogOpen(true); if (drawerMode) setRailOpen(true); }}
+          rules={(
+            <>
+              <p>{t("rail.rule1")}</p>
+              <p>{t("rail.rule2")}</p>
+              <p>{t("rail.rule3", { cost: keyCost(game, humanSide) })}</p>
+            </>
+          )}
+          onTutorial={() => setTutorialOpen(true)}
+          onExit={() => setExitConfirmOpen(true)}
+        />
+      )}
+
+      {exitConfirmOpen && (
+        <ConfirmDialog
+          title={t("ui.table.exitTitle")}
+          body={t("ui.table.exitBody")}
+          confirmLabel={t("ui.table.exitConfirm")}
+          cancelLabel={t("common.cancel")}
+          onConfirm={() => { setExitConfirmOpen(false); goHome(); }}
+          onCancel={() => setExitConfirmOpen(false)}
+        />
       )}
 
       {deckToRemove && (
