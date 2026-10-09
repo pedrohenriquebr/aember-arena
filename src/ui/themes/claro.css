@@ -1,0 +1,18 @@
+/* Tema "Claro Alto-Contraste" (UX_REWRITE_PLAN §1.6.4): papel/dia, AAA, impressão. Único tema claro.
+   O lit do Claro é SEM blur (anel duplo sólido): override próprio, depois dos tokens, mesma
+   especificidade — vence por ordem. */
+[data-theme="claro"] {
+  --nf-void:#f1ede4; --nf-s1:#f8f5ee; --nf-s2:#ffffff; --nf-s3:#ebe6da;
+  --nf-felt:#cfd9c8; --nf-felt-text:#1d2a1f;
+  --nf-line:rgba(21,18,11,.14); --nf-line-strong:rgba(21,18,11,.30); --nf-edge:rgba(21,18,11,.50);
+  --nf-text:#15120b; --nf-text-2:#3b372c; --nf-text-3:#575246;
+  --nf-accent:#8a4a00; --nf-accent-hi:#a65d06; --nf-accent-deep:#6b3800; --nf-on-accent:#ffffff;
+  --nf-aember:#7a5200; --nf-ether:#0a54a8; --nf-ember:#b3231b; --nf-verdant:#17663a;
+  --nf-shadow:60 40 10; --nf-scrim:rgba(21,18,11,.55);
+  color-scheme: light;
+}
+[data-theme="claro"] {
+  --nf-lit-accent: 0 0 0 2px var(--nf-s2), 0 0 0 4px var(--nf-accent);   /* anel duplo, sem blur */
+  --nf-lit-ether:  0 0 0 2px var(--nf-s2), 0 0 0 4px var(--nf-ether);
+  --nf-lit-ember:  0 0 0 2px var(--nf-s2), 0 0 0 4px var(--nf-ember);
+}

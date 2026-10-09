@@ -11,6 +11,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 5209;
 // H3D-13: `--view 3d` roda o mesmo encaixe com a mesa inclinada (mao em overlay).
 const VIEW3D = process.argv.includes("--view") && process.argv[process.argv.indexOf("--view") + 1] === "3d";
+// H-02c: --theme <id> semeia o tema; o encaixe tem de ser idêntico em qualquer tema (§1.6.3.5).
+const THEME = process.argv.includes("--theme") ? process.argv[process.argv.indexOf("--theme") + 1] : null;
 const VIEWPORTS = [
   { name: "1280x800", width: 1280, height: 800 },
   { name: "1296x668", width: 1296, height: 668 },
@@ -26,7 +28,7 @@ const SEED = () => `(() => {
     hoverZoom: false, hints: false, language: "en", opponentMode: "mirror", gameMode: "solo",${VIEW3D ? ' tableView: "3d",' : ""}
   }));
   localStorage.setItem("aember-arena-language", "en");
-  localStorage.setItem("aember-arena-tutorial-seen", "1");
+  localStorage.setItem("aember-arena-tutorial-seen", "1");${THEME ? ` localStorage.setItem("aember-arena-theme", "${THEME}");` : ""}
 })()`;
 
 function startServer() {

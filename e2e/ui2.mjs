@@ -34,6 +34,12 @@ const SCREENS = [
   { name: "lobby", label: "lobby-empty", query: "state=empty", scope: '[data-screen="lobby"]' },
 ];
 
+// H-02c: --theme <id> semeia o tema salvo e roda os checks naquele tema (forja é o padrão).
+const THEME = process.argv.includes("--theme") ? process.argv[process.argv.indexOf("--theme") + 1] : null;
+if (THEME !== null && !["forja", "aco", "claro", "arcano"].includes(THEME)) {
+  console.error(`ui2: tema desconhecido "${THEME}" (forja | aco | claro | arcano)`);
+  process.exit(2);
+}
 const SEED = `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
     difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: false,
@@ -41,6 +47,7 @@ const SEED = `(() => {
   }));
   localStorage.setItem("aember-arena-language", "en");
   localStorage.setItem("aember-arena-tutorial-seen", "1");
+  ${THEME ? `localStorage.setItem("aember-arena-theme", "${THEME}");` : ""}
 })()`;
 
 // Roda no browser. Devolve só o que falhou (lista vazia = passou).
@@ -209,6 +216,29 @@ async function interactionFlow(browser, vp, url, shotDir) {
   const after = await toggle.getAttribute("aria-checked");
   if (before === after) failures.push(`switch não alternou (${before})`);
 
+  await context.close();
+  return failures;
+}
+
+// H-02b: um tema gravado inválido ("lixo") não quebra o boot: o motor cai no padrão, tira o
+// data-theme da raiz e a Forja (--nf-void) vale. Sem erro de página. Devolve as falhas.
+async function themeFlow(browser, vp, url) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  await context.addInitScript(`localStorage.setItem("aember-arena-theme", "lixo")`);
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="shell"]', { timeout: 30000 });
+  const state = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme ?? null,
+    void: getComputedStyle(document.documentElement).getPropertyValue("--nf-void").trim(),
+  }));
+  if (state.theme !== null) failures.push(`data-theme ficou "${state.theme}" após boot com valor inválido`);
+  if (state.void !== "#0d0f0c") failures.push(`--nf-void é "${state.void}", esperado o da Forja`);
+  if (errors.length) failures.push(`erro de página: ${errors.join("; ")}`);
   await context.close();
   return failures;
 }
@@ -725,6 +755,17 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[shell-flow ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const failures = await themeFlow(browser, vp, server.url);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[theme-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[theme-flow ${vp.name}] OK`);
       }
     }
   }

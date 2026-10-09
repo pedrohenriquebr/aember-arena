@@ -1,0 +1,11 @@
+/* Tema "Arcano" (UX_REWRITE_PLAN §1.6.4): violeta saturado, acento magenta, halo mais forte. */
+[data-theme="arcano"] {
+  --nf-void:#0e0718; --nf-s1:#160c26; --nf-s2:#1e1233; --nf-s3:#2a1a46;
+  --nf-felt:#1b1040; --nf-felt-text:#cdbff0;
+  --nf-line:rgba(200,170,255,.14); --nf-line-strong:rgba(200,170,255,.30); --nf-edge:rgba(200,170,255,.50);
+  --nf-text:#f3ecff; --nf-text-2:#c6b8e2; --nf-text-3:#a395c4;
+  --nf-accent:#ff5fd2; --nf-accent-hi:#ff8fe0; --nf-accent-deep:#e048bb; --nf-on-accent:#1c0618;
+  --nf-aember:#ffd35e; --nf-ether:#5ef2ff; --nf-ember:#ff8a4c; --nf-verdant:#62f0b0;
+  --nf-shadow:12 0 32; --nf-scrim:rgba(10,4,24,.80);
+  color-scheme: dark;
+}

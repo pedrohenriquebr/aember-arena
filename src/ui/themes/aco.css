@@ -1,0 +1,12 @@
+/* Tema "Aço Frio" (UX_REWRITE_PLAN §1.6.4): tech azul-aço, "painel de comando". Os mesmos 22
+   tokens do contrato, com valores literais (nenhum var()); a geometria não muda (§1.6.3.5). */
+[data-theme="aco"] {
+  --nf-void:#080b10; --nf-s1:#0f141b; --nf-s2:#151c26; --nf-s3:#1d2733;
+  --nf-felt:#0f1d2b; --nf-felt-text:#a9bfd3;
+  --nf-line:rgba(170,200,235,.12); --nf-line-strong:rgba(170,200,235,.30); --nf-edge:rgba(170,200,235,.48);
+  --nf-text:#e6edf5; --nf-text-2:#aebccd; --nf-text-3:#8696aa;
+  --nf-accent:#5aa9ff; --nf-accent-hi:#8cc4ff; --nf-accent-deep:#3a88e0; --nf-on-accent:#04101f;
+  --nf-aember:#f2c85f; --nf-ether:#9dfcd2; --nf-ember:#ff7b72; --nf-verdant:#5fd0a0;
+  --nf-shadow:2 8 20; --nf-scrim:rgba(4,8,14,.78);
+  color-scheme: dark;
+}
