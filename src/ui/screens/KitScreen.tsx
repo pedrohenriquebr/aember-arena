@@ -1,5 +1,7 @@
 import { Inbox, Plus } from "lucide-react";
 import { useState } from "react";
+import { DEMO_DECK } from "../../lib/demoDeck";
+import { DEMO_DECK_2 } from "../../lib/demoDeck2";
 import type { Translator } from "../../lib/i18n";
 import { Button } from "../primitives/Button";
 import { Chip } from "../primitives/Chip";
@@ -10,6 +12,8 @@ import { SettingRow, Switch } from "../primitives/SettingRow";
 import { Sheet } from "../primitives/Sheet";
 import { Skeleton } from "../primitives/Skeleton";
 import { StatBlock } from "../primitives/StatBlock";
+import { DeckTileV2 } from "./DeckTileV2";
+import { DeckHero } from "./lobby/DeckHero";
 
 type View = "today" | "week" | "all";
 
@@ -21,6 +25,8 @@ export function KitScreen({ t }: { t: Translator }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [view, setView] = useState<View>("today");
   const [turnAlerts, setTurnAlerts] = useState(true);
+  const [tileSelected, setTileSelected] = useState(false);
+  const [tileFavorite, setTileFavorite] = useState(false);
   const closeSheet = () => setSheetOpen(false);
 
   return (
@@ -141,6 +147,39 @@ export function KitScreen({ t }: { t: Translator }) {
         <div className="nf-kit-row">
           <Skeleton width="2.5em" height="2.5em" shape="circle" />
           <Skeleton width="60%" height="1em" />
+        </div>
+      </section>
+
+      <section className="nf-kit-section" aria-labelledby="nf-kit-hero">
+        <h2 id="nf-kit-hero">{t("ui.kit.hero")}</h2>
+        <DeckHero deck={DEMO_DECK} t={t} heading="h2" />
+      </section>
+
+      <section className="nf-kit-section" aria-labelledby="nf-kit-tiles">
+        <h2 id="nf-kit-tiles">{t("ui.kit.tiles")}</h2>
+        <div className="nf-kit-grid">
+          <DeckTileV2
+            deck={DEMO_DECK}
+            t={t}
+            variant="mine"
+            selected={tileSelected}
+            tag={t("deck.savedOffline")}
+            favorite={tileFavorite}
+            onSelect={() => setTileSelected((value) => !value)}
+            onPlay={() => undefined}
+            onInspect={() => undefined}
+            onToggleFavorite={() => setTileFavorite((value) => !value)}
+            onRemove={() => undefined}
+          />
+          <DeckTileV2
+            deck={DEMO_DECK_2}
+            t={t}
+            variant="vault"
+            tag={t("ui.kit.tile.vaultTag")}
+            onSelect={() => undefined}
+            onPlay={() => undefined}
+            onInspect={() => undefined}
+          />
         </div>
       </section>
     </main>

@@ -28,6 +28,10 @@ const SCREENS = [
   { name: "_kit", query: "screen=_kit" },
   // scope: a casca do lobby é a tela; o conteúdo v1 sob ela (deck tiles com 27px) entra em H-11/H-12.
   { name: "shell", query: "", scope: '[data-screen="shell"]' },
+  // H-12: o Lobby (S2) e os estados C (loading) e V (empty) por query; o rótulo separa os três no log.
+  { name: "lobby", query: "", scope: '[data-screen="lobby"]' },
+  { name: "lobby", label: "lobby-loading", query: "state=loading", scope: '[data-screen="lobby"]' },
+  { name: "lobby", label: "lobby-empty", query: "state=empty", scope: '[data-screen="lobby"]' },
 ];
 
 const SEED = `(() => {
@@ -407,7 +411,7 @@ async function tableFlow(browser, vp, url, view) {
   if (patched === "ok") {
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.waitForSelector('[data-screen="shell"]', { timeout: 20000 });
-    await page.locator(".resume-bar").first().click();
+    await page.locator('[data-action="continue"]').click();
     await page.waitForSelector(".game-screen", { timeout: 20000 });
     await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 60000 });
     await page.waitForTimeout(700);
@@ -499,6 +503,112 @@ async function menuFlow(browser, vp, url) {
   return failures;
 }
 
+// H-12: o Lobby na dobra. A 1280×800 o botão Jogar e o topo da prateleira cabem sem rolar
+// (bottom <= innerHeight); a cascata anima no máximo 5 itens (UX_REWRITE_PLAN §1.5); os estados
+// C (?state=loading: aria-busy + esqueletos) e V (?state=empty: só os iniciais, com a nota) existem.
+// Devolve { failures, reports } (vazio = passou).
+async function lobbyFlow(browser, vp, url) {
+  const failures = [];
+  const reports = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  const page = await context.newPage();
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.waitForTimeout(600);
+  const m = await page.evaluate(() => {
+    const box = (sel) => document.querySelector(sel)?.getBoundingClientRect() ?? null;
+    const play = box('[data-screen="lobby"] [data-action="play"]');
+    const shelf = box('[data-screen="lobby"] .nf-shelf');
+    return {
+      vp: window.innerHeight,
+      playBottom: play ? Math.round(play.bottom) : null,
+      shelfTop: shelf ? Math.round(shelf.top) : null,
+      animated: document.querySelectorAll('[data-screen="lobby"] [data-enter]').length,
+    };
+  });
+  reports.push(`lobby ${vp.name}: Jogar bottom=${m.playBottom} topo da prateleira=${m.shelfTop} (vp ${m.vp}) itens animados=${m.animated}`);
+  if (m.animated > 5) failures.push(`cascata com ${m.animated} itens (máximo 5)`);
+  if (vp.name === "1280x800") {
+    if (m.playBottom === null) failures.push("Jogar ausente no lobby (sem partida salva)");
+    else if (m.playBottom > m.vp) failures.push(`Jogar abaixo da dobra (bottom ${m.playBottom} > ${m.vp})`);
+    if (m.shelfTop === null) failures.push("prateleira ausente no lobby");
+    else if (m.shelfTop > m.vp) failures.push(`topo da prateleira abaixo da dobra (${m.shelfTop} > ${m.vp})`);
+  }
+  await context.close();
+
+  // C: esqueletos e aria-busy; sem a prateleira real.
+  const loading = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await loading.addInitScript(SEED);
+  const lp = await loading.newPage();
+  await lp.goto(`${url}?ui=2&state=loading`, { waitUntil: "domcontentloaded" });
+  await lp.waitForSelector('[data-screen="lobby"][aria-busy="true"]', { timeout: 30000 }).catch(() => failures.push("estado C: lobby sem aria-busy"));
+  const skeletons = await lp.evaluate(() => document.querySelectorAll('[data-screen="lobby"] [class*="skeleton"]').length);
+  if (skeletons < 2) failures.push(`estado C: ${skeletons} esqueleto(s), esperado >= 2`);
+  if (await lp.locator('[data-screen="lobby"] .nf-shelf').count()) failures.push("estado C: prateleira real aparece durante o carregamento");
+  await loading.close();
+
+  // V: só os iniciais na prateleira e a nota que ensina a importar.
+  const empty = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await empty.addInitScript(SEED);
+  const ep = await empty.newPage();
+  await ep.goto(`${url}?ui=2&state=empty`, { waitUntil: "domcontentloaded" });
+  await ep.waitForSelector('[data-screen="lobby"] .nf-shelf-grid', { timeout: 30000 });
+  const tiles = await ep.locator('[data-screen="lobby"] .nf-shelf-grid .nf-tile').count();
+  if (tiles !== 2) failures.push(`estado V: ${tiles} tile(s), esperado 2 (só os iniciais)`);
+  if (!(await ep.locator('[data-screen="lobby"] .nf-shelf .nf-card-note').count())) failures.push("estado V: falta a nota de importar");
+  await empty.close();
+
+  return { failures, reports };
+}
+
+// H-13: a MatchSheet (S3) a partir do Lobby. Abre pela linha "contra …"; a folha passa na mesma
+// auditoria do ☰ (alvos 44px, rótulos, piso tipográfico, sem animação com reduced-motion); a força
+// escrita pela folha aparece em settings; o modo 2 jogadores mostra os dois decks sem repetir; Esc
+// fecha e devolve o foco à linha do oponente. Devolve a lista de falhas (vazia = passou).
+async function sheetFlow(browser, vp, url) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  const page = await context.newPage();
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  const trigger = page.locator(".nf-opponent");
+  const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+
+  await trigger.click();
+  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => failures.push("a linha do oponente não abriu a folha"));
+  await page.waitForTimeout(600);
+  if (await dialog.count()) {
+    const audit = await page.evaluate(AUDIT, '[role="dialog"][aria-modal="true"]');
+    for (const [key, items] of Object.entries(audit)) {
+      if (Array.isArray(items) ? items.length : items !== null) failures.push(`folha ${key}: ${Array.isArray(items) ? items.slice(0, 4).join("; ") : items}`);
+    }
+  }
+
+  // Força pela folha: Duro = Hard · 4 nas settings gravadas.
+  await dialog.getByRole("radio", { name: /Hard|Duro/ }).click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("aember-arena-settings") ?? "{}"));
+  if (saved.difficulty !== "Hard" || saved.thinkingDepth !== 4) failures.push(`força Duro não gravou (difficulty=${saved.difficulty}, depth=${saved.thinkingDepth})`);
+
+  // Modo 2 jogadores: dois seletores de deck, nunca o mesmo nos dois.
+  await dialog.getByRole("radio", { name: /pass-and-play|2 players|2 jogadores/ }).click();
+  await page.waitForTimeout(150);
+  const decks = await page.evaluate(() => [...document.querySelectorAll('[role="dialog"] .nf-match-field select')].map((s) => s.value));
+  if (decks.length !== 2) failures.push(`2 jogadores: ${decks.length} seletor(es) de deck, esperado 2`);
+  else if (decks[0] === decks[1]) failures.push("2 jogadores: os dois lados com o mesmo deck");
+  if (await dialog.getByRole("button", { name: /Play|Jogar/ }).isDisabled()) failures.push("2 jogadores: Jogar travado com decks distintos");
+
+  // Esc fecha e devolve o foco à linha do oponente.
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "detached", timeout: 5000 }).catch(() => failures.push("Esc não fechou a folha"));
+  const back = await page.evaluate(() => document.activeElement?.classList.contains("nf-opponent") ?? false);
+  if (!back) failures.push("folha fechada: foco não voltou à linha do oponente");
+
+  await context.close();
+  return failures;
+}
+
 const server = startServer();
 let browser;
 let problems = 0;
@@ -534,18 +644,19 @@ try {
       await p.waitForSelector(`[data-screen="${screen.name}"]`, { timeout: 30000 });
       await p.waitForTimeout(600);
       const audit = await p.evaluate(AUDIT, screen.scope ?? null);
+      const label = screen.label ?? screen.name;
       if (failed(audit)) {
         problems += 1;
-        console.log(`[${screen.name} ${vp.name}] FALHA`);
+        console.log(`[${label} ${vp.name}] FALHA`);
         for (const [key, items] of Object.entries(audit)) {
           if (Array.isArray(items) ? items.length : items !== null) {
             console.log(`    ${key}: ${Array.isArray(items) ? items.slice(0, 8).join("; ") : items}`);
           }
         }
       } else {
-        console.log(`[${screen.name} ${vp.name}] OK`);
+        console.log(`[${label} ${vp.name}] OK`);
       }
-      if (shotDir) await p.screenshot({ path: join(shotDir, `${screen.name}-${vp.name}.png`), fullPage: true });
+      if (shotDir) await p.screenshot({ path: join(shotDir, `${label}-${vp.name}.png`), fullPage: true });
       await ctx.close();
     }
 
@@ -580,6 +691,29 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[menu ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const { failures, reports } = await lobbyFlow(browser, vp, server.url);
+      for (const line of reports) console.log(`[lobby-flow] ${line}`);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[lobby-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[lobby-flow ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const failures = await sheetFlow(browser, vp, server.url);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[sheet ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[sheet ${vp.name}] OK`);
       }
     }
 

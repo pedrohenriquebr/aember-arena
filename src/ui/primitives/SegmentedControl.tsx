@@ -9,7 +9,8 @@ export type SegmentOption<T extends string> = { value: T; label: ReactNode; disa
  */
 export function SegmentedControl<T extends string>({ label, value, options, onChange, className }: {
   label: string;
-  value: T;
+  /** null = nenhuma opção marcada (ex.: força personalizada); a primeira fica como parada do Tab. */
+  value: T | null;
   options: SegmentOption<T>[];
   onChange: (value: T) => void;
   className?: string;
@@ -53,7 +54,7 @@ export function SegmentedControl<T extends string>({ label, value, options, onCh
             type="button"
             role="radio"
             aria-checked={selected}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={(value === null ? index === 0 : selected) ? 0 : -1}
             disabled={option.disabled}
             className={cx("nf-seg-option", selected && "is-selected")}
             onClick={() => onChange(option.value)}

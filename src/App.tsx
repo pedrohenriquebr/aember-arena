@@ -106,6 +106,11 @@ import { useHandDrag } from "./components/useHandDrag";
 import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 import { readUiFlag } from "./ui/flag";
+import { LobbyScreen } from "./ui/screens/lobby/LobbyScreen";
+import { resumeInfoOf } from "./ui/lib/resume";
+import { resolvePassDecks } from "./ui/lib/passDecks";
+import { presetOf, applyPreset } from "./ui/lib/presets";
+import { MatchSheet } from "./ui/screens/MatchSheet";
 import { KitScreen } from "./ui/screens/KitScreen";
 import { LobbyShell } from "./ui/shell/LobbyShell";
 import { TableMenu } from "./ui/shell/TableMenu";
@@ -194,6 +199,8 @@ const NOOP = () => undefined;
 
 const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "Very hard", "Impossible"];
 const STARTER_DECKS: DeckInfo[] = [DEMO_DECK, DEMO_DECK_2];
+// UX_REWRITE_PLAN §5 H-12: os iniciais não ganham etiqueta de "salvo" nem remover (mesmo critério da Home v1).
+const STARTER_IDS: ReadonlySet<string> = new Set(STARTER_DECKS.map((deck) => deck.id));
 /** FEAT-12a: how many past states the undo history keeps (memory cap). */
 const UNDO_LIMIT = 40;
 
@@ -271,18 +278,6 @@ const inMulligan = (game: GameState) => game.pendingMulligan === 0 || game.pendi
 function humanSideOf(state: GameState, mode: GameMode): 0 | 1 {
   if (mode !== "passAndPlay") return 0;
   return inMulligan(state) ? (state.pendingMulligan as 0 | 1) : state.activePlayer;
-}
-
-/** FEAT-13: the two pass-and-play decks — the persisted ids, the Home selection
-    as the P1 fallback and a different library deck as the P2 fallback, so the
-    two sides never share a deck. */
-function resolvePassDecks(savedDecks: LibraryDeck[], fallback: DeckInfo, settings: AppSettings): [DeckInfo, DeckInfo] {
-  const p1 = savedDecks.find((item) => item.id === settings.deckP1Id) ?? fallback;
-  const p2 =
-    savedDecks.find((item) => item.id === settings.deckP2Id && item.id !== p1.id) ??
-    savedDecks.find((item) => item.id !== p1.id) ??
-    fallback;
-  return [p1, p2];
 }
 
 /** FEAT-05: log keys the type filter knows about (the rest pass every filter). */
@@ -2706,6 +2701,10 @@ function App() {
   const t = useMemo(() => createTranslator(language), [language]);
   // H-01: a flag da v2 é lida uma vez; os lotes H-07+ passam a consumi-la.
   const ui2 = useMemo(readUiFlag, []);
+  // UX_REWRITE_PLAN §2 S2: ?state=loading|empty força os estados C/V do Lobby (gate e2e:ui2). Só com a v2.
+  const uiState = ui2 === "2" ? new URLSearchParams(window.location.search).get("state") : null;
+  // H-13: a MatchSheet (S3) aberta pela linha "contra …" do Lobby.
+  const [matchSheetOpen, setMatchSheetOpen] = useState(false);
 
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
@@ -2831,6 +2830,16 @@ function App() {
 
   useEffect(() => { gameRef.current = game; }, [game]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  // UX_REWRITE_PLAN §5 H-12: recorde V/D do deck do hero (só a v2 lê; a v1 segue sem essa leitura).
+  const [deckRecord, setDeckRecord] = useState<DeckStats | null>(null);
+  const winnerOfLive = game?.winner ?? null;
+  useEffect(() => {
+    if (ui2 !== "2") return;
+    let disposed = false;
+    setDeckRecord(null);
+    void getDeckStats(selectedDeck.id).then((stats) => { if (!disposed) setDeckRecord(stats); });
+    return () => { disposed = true; };
+  }, [ui2, selectedDeck.id, winnerOfLive]);
   useEffect(() => { currentDeckRef.current = currentDeck; }, [currentDeck]);
   useEffect(() => { matchModeRef.current = matchMode; }, [matchMode]);
 
@@ -3650,6 +3659,69 @@ function App() {
     launchMatch(deck1, deck2, "passAndPlay");
   }
 
+  // UX_REWRITE_PLAN §5 H-14: retoma a partida salva (a mesma ação do resume-bar da v1).
+  function resumeSavedMatch() {
+    if (!resumeMatch) return;
+    sound.play("forge");
+    const saved = resumeMatch.game as GameState;
+    // BUG2-11: a partida retomada não guardou o setup; o estado ainda
+    // prova o espelho pelo deck renomeado do Warden, o resto vem das
+    // settings no momento da retomada.
+    matchSetupRef.current = {
+      difficulty: settingsRef.current.difficulty,
+      opponentMode: saved.players[1].deckName === "Warden's mirror deck" ? "mirror" : settingsRef.current.opponentMode === "mirror" ? "deck" : settingsRef.current.opponentMode,
+    };
+    // FEAT-12a: a resumed match has no in-memory history to undo; its
+    // step list stays null so replay stays off (BUG2-03).
+    flushAbilityOverrides();
+    historyRef.current = [];
+    stepsRef.current = null;
+    gameRef.current = saved;
+    prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
+    setGame(saved);
+    // BUG2-04: a deck removed from the library (or not loaded yet) is
+    // rebuilt from the state instead of falling into the demo deck;
+    // the rival comes back too, so the rematch keeps its deck.
+    setCurrentDeck(deckFromState(saved.players[0], resumeMatch.deckId));
+    opponentRef.current = deckFromState(saved.players[1], "rival");
+    setMatchMode("solo");
+    setPassPending(null);
+    setAiPhase("idle");
+    setAiSummary(null);
+    setMatchVersion((version) => version + 1);
+    setScreen("game");
+    setResumeMatch(null);
+  }
+
+  // UX_REWRITE_PLAN §5 H-14: "Jogar" (aba e Continuar). Com partida viva ou salva, continua;
+  // sem ela, a aba só leva ao Lobby (o Jogar do Lobby é playDeck).
+  function continueMatch() {
+    if (resumeMatch) resumeSavedMatch();
+    else if (game && game.winner === null) setScreen("game");
+    else setScreen("home");
+  }
+
+  // UX_REWRITE_PLAN §5 H-14: Jogar com um deck, com as settings atuais. Usa só os caminhos
+  // que o v1 já tem (startMatch / startPassAndPlay), e pede o abandono quando há save.
+  // Em pass-and-play o deck escolhido é o Jogador 1 e o outro lado sai de resolvePassDecks.
+  function playDeck(deck: DeckInfo) {
+    setSelectedDeck(deck);
+    if (settings.gameMode === "passAndPlay") {
+      const [deck1, deck2] = resolvePassDecks(savedDecks, deck, { ...settings, deckP1Id: deck.id });
+      setSettings((prev) => ({ ...prev, deckP1Id: deck1.id, deckP2Id: deck2.id }));
+      if (resumeMatch) setPendingDeck({ mode: "passAndPlay", deck: deck1, opponent: deck2 });
+      else startPassAndPlay(deck1, deck2);
+      return;
+    }
+    // Um save que ainda não foi retomado é partida viva: trocá-lo pede confirmação.
+    if (resumeMatch) {
+      sound.play("click");
+      setPendingDeck({ mode: "solo", deck });
+      return;
+    }
+    startMatch(deck);
+  }
+
   // FEAT-11: "deck" usa o baralho escolhido nas configurações e "random" sorteia
   // um diferente da biblioteca a cada partida; qualquer escolha inválida (deck
   // removido da biblioteca) cai no espelho.
@@ -4175,6 +4247,15 @@ function App() {
     </button>
   );
 
+  // UX_REWRITE_PLAN §5 H-12/H-14: a partida viva (em memória ou salva) é o estado do botão Jogar.
+  const resumeGame = resumeMatch ? (resumeMatch.game as GameState) : game && game.winner === null ? game : null;
+  const resumeInfo = resumeGame ? resumeInfoOf(resumeGame, !resumeMatch && matchMode === "passAndPlay") : null;
+  const pickedOpponent = settings.opponentDeckId ? savedDecks.find((item) => item.id === settings.opponentDeckId && item.id !== selectedDeck.id) : undefined;
+  // No 2P a linha mostra o Jogador 2 (o solo não tem oponente de deck nesse modo).
+  const passPair = settings.gameMode === "passAndPlay" ? resolvePassDecks(savedDecks, selectedDeck, settings) : null;
+  const opponentLabel = passPair ? passPair[1].name : settings.opponentMode === "deck" && pickedOpponent
+    ? pickedOpponent.name
+    : settings.opponentMode === "random" ? (randomRival?.name ?? t("ui.match.random")) : t("ui.match.mirror");
   // H-07: com a v2, as telas que não são a partida trocam header/tab bar pela casca do lobby.
   const lobbyShell = ui2 === "2" && screen !== "game";
   // H-08: na partida a casca some (header e tab bar) e o palco recebe os pixels (tableShell.css).
@@ -4201,13 +4282,13 @@ function App() {
         <LobbyShell
           t={t}
           active={destinationOf(screen)}
-          hasGame={Boolean(game)}
+          hasGame={resumeGame !== null}
           online={online}
           sfx={settings.sfx}
           brandMark={<ForgeMark />}
           languageMenu={<LanguageMenu language={language} onChange={(next) => { setLanguage(next); showToast(t("toast.langChanged")); }} label={t("nav.language")} compact />}
           onBrand={goHome}
-          onPlay={() => { sound.play("click"); setScreen(game ? "game" : "home"); }}
+          onPlay={() => { sound.play("click"); continueMatch(); }}
           onDecks={() => { sound.play("click"); setScreen("browse"); }}
           onSettings={() => { sound.play("click"); setScreen("settings"); }}
           onToggleSfx={() => { sound.play("click"); setSettings((prev) => ({ ...prev, sfx: !prev.sfx })); }}
@@ -4291,52 +4372,49 @@ function App() {
           body={t("error.body")}
           action={t("error.back")}
         >
-        {screen === "home" && resumeMatch && (
+        {screen === "home" && ui2 !== "2" && resumeMatch && (
           <button
             type="button"
             className="resume-bar"
             onClick={() => {
-              sound.play("forge");
-              const saved = resumeMatch.game as GameState;
-              // BUG2-11: a partida retomada não guardou o setup; o estado ainda
-              // prova o espelho pelo deck renomeado do Warden, o resto vem das
-              // settings no momento da retomada.
-              matchSetupRef.current = {
-                difficulty: settingsRef.current.difficulty,
-                opponentMode: saved.players[1].deckName === "Warden's mirror deck" ? "mirror" : settingsRef.current.opponentMode === "mirror" ? "deck" : settingsRef.current.opponentMode,
-              };
-              // FEAT-12a: a resumed match has no in-memory history to undo; its
-              // step list stays null so replay stays off (BUG2-03).
-              flushAbilityOverrides();
-              historyRef.current = [];
-              stepsRef.current = null;
-              gameRef.current = saved;
-              prevKeysRef.current = { player: saved.players[0].keys, ai: saved.players[1].keys };
-              setGame(saved);
-              // BUG2-04: a deck removed from the library (or not loaded yet) is
-              // rebuilt from the state instead of falling into the demo deck;
-              // the rival comes back too, so the rematch keeps its deck.
-              setCurrentDeck(deckFromState(saved.players[0], resumeMatch.deckId));
-              opponentRef.current = deckFromState(saved.players[1], "rival");
-              setMatchMode("solo");
-              setPassPending(null);
-              setAiPhase("idle");
-              setAiSummary(null);
-              setMatchVersion((version) => version + 1);
-              setScreen("game");
-              setResumeMatch(null);
+              resumeSavedMatch();
             }}
           >
             <KeyRound size={15} />
             {t("home.resumeMatch", { round: (resumeMatch.game as GameState).turn })}
           </button>
         )}
-        {screen === "home" && canReplay && (
+        {screen === "home" && ui2 !== "2" && canReplay && (
           <button type="button" className="resume-bar" onClick={openReplay}>
             <Eye size={15} /> {t("game.replayLast")}
           </button>
         )}
-        {screen === "home" && (
+        {screen === "home" && ui2 === "2" && (
+          <LobbyScreen
+            t={t}
+            selectedDeck={selectedDeck}
+            savedDecks={uiState === "empty" ? STARTER_DECKS : savedDecks}
+            starterIds={STARTER_IDS}
+            resume={resumeInfo}
+            lastRecord={deckRecord}
+            opponentLabel={opponentLabel}
+            canReplay={canReplay}
+            loading={uiState === "loading"}
+            onPlay={playDeck}
+            onContinue={continueMatch}
+            strength={presetOf(settings)}
+            onStrength={(preset) => { sound.play("click"); setSettings((prev) => applyPreset(prev, preset)); }}
+            onOpenMatchSheet={() => { sound.play("click"); setMatchSheetOpen(true); }}
+            onSelectDeck={(deck) => { sound.play("select"); setSelectedDeck(deck); }}
+            onInspect={openInspector}
+            onImport={() => { sound.play("click"); openDeckModal(); }}
+            onExplore={() => { sound.play("click"); setScreen("browse"); }}
+            onToggleFavorite={toggleFavorite}
+            onRemoveDeck={setDeckToRemove}
+            onReplay={openReplay}
+          />
+        )}
+        {screen === "home" && ui2 !== "2" && (
           <HomeScreen
             t={t}
             language={language}
@@ -4775,6 +4853,21 @@ function App() {
             launchMatch(pending.deck, pending.opponent, pending.mode);
           }}
           onCancel={() => setPendingDeck(null)}
+        />
+      )}
+
+      {ui2 === "2" && (
+        <MatchSheet
+          open={matchSheetOpen}
+          t={t}
+          onClose={() => setMatchSheetOpen(false)}
+          deck={selectedDeck}
+          savedDecks={savedDecks}
+          settings={settings}
+          randomRival={randomRival}
+          opponentLabel={opponentLabel}
+          onChange={setSettings}
+          onPlay={(deck) => { setMatchSheetOpen(false); playDeck(deck); }}
         />
       )}
 

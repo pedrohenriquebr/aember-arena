@@ -4,6 +4,7 @@ import type { DeckInfo } from "../lib/game";
 import { summarizeDeck } from "../lib/game";
 import type { Translator } from "../lib/i18n";
 import { houseColor } from "../lib/houses";
+import { DeckTileV2, type DeckTileVariant } from "../ui/screens/DeckTileV2";
 import { CardArt } from "./CardArt";
 import { HouseIcon, HouseRow } from "./HouseIcon";
 
@@ -14,17 +15,7 @@ export function HouseMark({ house, small = false }: { house: string; small?: boo
   return <HouseIcon house={house} size={small ? "sm" : "md"} />;
 }
 
-export function DeckTile({
-  deck,
-  t,
-  selected = false,
-  tag,
-  favorite = false,
-  onSelect,
-  onInspect,
-  onToggleFavorite,
-  onRemove,
-}: {
+type DeckTileProps = {
   deck: DeckInfo;
   t: Translator;
   selected?: boolean;
@@ -35,7 +26,28 @@ export function DeckTile({
   onInspect?: () => void;
   onToggleFavorite?: () => void;
   onRemove?: () => void;
-}) {
+  /** UX_REWRITE_PLAN §5 H-11: com `variant` o tile é o da v2; sem ele, o da v1 (inalterado). */
+  variant?: DeckTileVariant;
+  /** v2: botão Jogar do tile (tile → Jogar → Manter, plano §3.2). */
+  onPlay?: () => void;
+};
+
+export function DeckTile(props: DeckTileProps) {
+  if (props.variant) return <DeckTileV2 {...props} variant={props.variant} />;
+  return <DeckTileClassic {...props} />;
+}
+
+function DeckTileClassic({
+  deck,
+  t,
+  selected = false,
+  tag,
+  favorite = false,
+  onSelect,
+  onInspect,
+  onToggleFavorite,
+  onRemove,
+}: DeckTileProps) {
   const [hovered, setHovered] = useState(false);
   const summary = summarizeDeck(deck);
   const hasTools = Boolean(onToggleFavorite || onRemove);

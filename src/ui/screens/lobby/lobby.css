@@ -1,0 +1,266 @@
+/* Hero do deck, casas e (H-12) o layout do Lobby da v2 (UX_REWRITE_PLAN §5 H-11/H-12).
+   Só tokens --nf-* / --space-* / --fs-* / --dur-* (lint:ui2). Mobile primeiro: o padrão
+   empilha; o desktop entra em @media (min-width) junto de cada seletor. */
+
+/* ---- Hero: leque de cartas + copy ---- */
+.nf-hero {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.nf-hero-fan {
+  position: relative;
+  height: 180px;
+}
+.nf-fan-card {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 112px;
+  /* Pivô embaixo do centro: o leque abre a partir da mão, não do meio da carta. */
+  transform: translateX(-50%) rotate(var(--fan, 0deg));
+  transform-origin: 50% 100%;
+  border-radius: var(--radius-md);
+  box-shadow: var(--elev-2);
+}
+.nf-fan-card .card-art {
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+.nf-fan-card .card-art img {
+  transition: none;
+}
+.nf-fan-card:nth-child(2) { z-index: 1; }
+
+.nf-hero-copy {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  justify-items: start;
+}
+.nf-hero-name {
+  margin: 0;
+  font-family: var(--nf-font-display);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  color: var(--nf-text);
+  overflow-wrap: anywhere;
+}
+.nf-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--nf-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Casas com nome ---- */
+.nf-trio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nf-trio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--nf-text-2);
+}
+
+@media (min-width: 701px) {
+  .nf-hero {
+    grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+    align-items: center;
+  }
+  .nf-hero-fan { height: 220px; }
+  .nf-fan-card { width: 136px; }
+}
+
+@media (min-width: 1041px) {
+  .nf-hero-name { font-size: var(--fs-display); }
+}
+
+/* ---- Lobby: página, topo (hero + lateral) e prateleira ---- */
+.nf-lobby {
+  position: relative;
+  display: grid;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: var(--nf-w-content);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-3) var(--space-7);
+  min-width: 0;
+}
+.nf-lobby > :not(.nf-lobby-dust) { position: relative; z-index: 1; }
+
+.nf-lobby-top {
+  display: grid;
+  gap: var(--space-5);
+  align-items: start;
+  min-width: 0;
+}
+.nf-lobby-side {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  min-width: 0;
+}
+.nf-lobby-actions {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+/* Linha "contra …": abre a MatchSheet; é um alvo de 44px com o texto do oponente. */
+.nf-opponent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--radius-md);
+  background: var(--nf-s1);
+  color: var(--nf-text-2);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.nf-opponent:focus-visible {
+  outline: 2px solid var(--nf-ether);
+  outline-offset: 2px;
+}
+
+/* ---- Cards do lobby (continuar, recorde) ---- */
+.nf-card {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s2);
+  box-shadow: var(--elev-1);
+}
+.nf-card-title {
+  margin: 0;
+  font-family: var(--nf-font-display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--nf-text);
+}
+.nf-card-note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--nf-text-3);
+}
+/* Partida em andamento é âmbar: a energia do jogador (UX_REWRITE_PLAN §1.1). */
+.nf-continue { border-color: color-mix(in srgb, var(--nf-amber) 45%, transparent); }
+.nf-continue-stats,
+.nf-record-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.nf-record-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ---- Prateleira "Seus decks" ---- */
+.nf-shelf {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.nf-shelf-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+.nf-shelf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.nf-shelf-grid {
+  display: grid;
+  grid-template-columns: minmax(min(260px, 100%), 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 701px) {
+  .nf-shelf-grid { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
+}
+
+/* ---- Cascata de entrada (UX_REWRITE_PLAN §1.5): ≤5 itens, fill-mode backwards ---- */
+@keyframes nf-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes nf-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.nf-lobby [data-enter] {
+  animation: nf-rise var(--dur-enter) var(--ease-emph) backwards;
+  animation-delay: calc(var(--i, 0) * var(--nf-stagger));
+}
+@media (prefers-reduced-motion: reduce) {
+  .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) linear backwards; }
+}
+html.reduce-motion .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) linear backwards; }
+
+/* ---- Partículas de Æmber (data-decor): só enfeite, somem no reduced-motion ---- */
+@keyframes nf-dust {
+  from { transform: translateY(0); opacity: 0; }
+  20% { opacity: 0.6; }
+  to { transform: translateY(-420px); opacity: 0; }
+}
+.nf-lobby-dust {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.nf-lobby-dust i {
+  position: absolute;
+  bottom: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--nf-amber-hi);
+  animation: nf-dust 14s linear infinite;
+}
+.nf-lobby-dust i:nth-child(odd) { animation-duration: 18s; }
+.nf-lobby-dust i:nth-child(1) { left: 8%; animation-delay: -2s; }
+.nf-lobby-dust i:nth-child(2) { left: 22%; animation-delay: -7s; }
+.nf-lobby-dust i:nth-child(3) { left: 37%; animation-delay: -11s; }
+.nf-lobby-dust i:nth-child(4) { left: 51%; animation-delay: -4s; }
+.nf-lobby-dust i:nth-child(5) { left: 64%; animation-delay: -9s; }
+.nf-lobby-dust i:nth-child(6) { left: 77%; animation-delay: -13s; }
+.nf-lobby-dust i:nth-child(7) { left: 88%; animation-delay: -6s; }
+.nf-lobby-dust i:nth-child(8) { left: 95%; animation-delay: -15s; }
+@media (prefers-reduced-motion: reduce) {
+  .nf-lobby-dust { display: none; }
+}
+html.reduce-motion .nf-lobby-dust { display: none; }
+
+/* ---- Desktop: hero à esquerda, lateral à direita; a prateleira abaixo ---- */
+@media (min-width: 1041px) {
+  .nf-lobby-top { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+}

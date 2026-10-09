@@ -1,0 +1,157 @@
+/* Tile da v2 (UX_REWRITE_PLAN §5 H-11): variantes mine/vault de DeckTileV2. Só .nf-tile*.
+   O hover levanta o tile por transform (nunca muda o layout) e só existe com ponteiro
+   fino (@media hover) e sem reduced-motion; o toque tem o mesmo caminho pelos botões. */
+
+.nf-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s2);
+  box-shadow: var(--elev-1);
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+/* Seleção é éter (UX_REWRITE_PLAN §1.1); âmbar fica para a ação do jogador. */
+.nf-tile.is-selected {
+  border-color: var(--nf-ether);
+  box-shadow: var(--nf-lit-ether);
+}
+
+.nf-tile-select {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: transparent;
+  color: var(--nf-text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.nf-tile-select:focus-visible {
+  outline: 2px solid var(--nf-ether);
+  outline-offset: 2px;
+}
+
+.nf-tile-art {
+  position: relative;
+  flex: none;
+  width: 64px;
+  border-radius: var(--radius-md);
+  /* A cor da casa só acende a borda: identidade, não estado (UX_REWRITE_PLAN §1.1). */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--house-color) 55%, transparent);
+}
+.nf-tile-art .card-art {
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+/* A arte aparece de uma vez: o fade do <img> da v1 deixava transições "rodando" sob reduced-motion. */
+.nf-tile-art .card-art img,
+.nf-fan-card .card-art img {
+  transition: none;
+}
+.nf-tile-check {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--nf-ether);
+  color: var(--nf-void);
+}
+
+.nf-tile-copy {
+  display: grid;
+  align-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.nf-tile-tag {
+  font-size: var(--fs-3xs);
+  font-weight: 700;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--nf-text-3);
+}
+.nf-tile-name {
+  display: block;
+  overflow: hidden;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nf-tile-meta {
+  font-size: var(--fs-2xs);
+  color: var(--nf-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.nf-tile-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+.nf-tile-actions > .nf-btn--secondary {
+  flex: 1 1 auto;
+}
+
+.nf-tile-more {
+  position: relative;
+  flex: none;
+}
+.nf-tile-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-1));
+  z-index: 40;
+  display: grid;
+  min-width: 13rem;
+  padding: var(--space-1);
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--nf-s3);
+  box-shadow: var(--elev-3);
+}
+.nf-tile-menuitem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--nf-text);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.nf-tile-menuitem:focus-visible {
+  outline: 2px solid var(--nf-ether);
+  outline-offset: -2px;
+}
+.nf-tile-menuitem--danger { color: var(--nf-ember); }
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .nf-tile:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--elev-2);
+  }
+  html:not(.reduce-motion) .nf-tile-menuitem:hover { background: var(--nf-s2); }
+}
+
+@media (min-width: 701px) {
+  .nf-tile-art { width: 72px; }
+}

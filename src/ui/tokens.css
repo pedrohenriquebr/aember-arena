@@ -13,4 +13,6 @@
   --nf-lit-ether:0 0 0 1px rgb(160 232 255/.5),0 0 24px rgb(160 232 255/.25);
   --nf-lit-ember:0 0 0 1px rgb(239 106 90/.5),0 0 24px rgb(239 106 90/.25);
   --nf-w-read:680px; --nf-w-content:1120px; --nf-w-wide:1280px;
+  /* Passo da cascata de entrada (UX_REWRITE_PLAN §1.5: 60ms, até 5 itens). */
+  --nf-stagger:60ms;
 }
