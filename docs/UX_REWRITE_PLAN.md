@@ -11,6 +11,9 @@ execução de `node e2e/fit.mjs` (FIT OK nos 7 viewports) e de `node e2e/capture
 5 telas × 4 viewports) com inspeção visual dos PNGs. Toda proposta abaixo cita o problema
 real que a originou (`arquivo:linha`, medida ou screenshot).
 
+**Revisão 08/out/2026 — sistema de temas**: a paleta Forja Noturna é o tema *padrão* de um sistema de
+4 temas selecionáveis em Ajustes (§1.6; lotes H-02b/H-02c; linha Tema em H-18; tapete em H-25).
+
 **Como ler**: §0 diagnóstico → §1 identidade → §2 telas → §3 jornada → §4 arquitetura →
 §5 lotes para o Haiku (o que será executado) → §6 riscos → §7 decisões do dono.
 
@@ -56,33 +59,44 @@ escuro com acentos dourados" e passa a ter **regra**: *âmbar = ação e energia
 éter (ciano) = seleção/alvo; brasa (vermelho) = perigo/inimigo; tudo o mais é matéria fosca.*
 
 Toda a v2 é escrita **somente com tokens** (gate de lint em H-03). Prefixo `--nf-` para não
-colidir com os tokens atuais; `--nf-*` aponta para os existentes quando o valor é o mesmo.
+colidir com os tokens atuais. **Os tokens `--nf-*` são tematizáveis** (§1.6): "Forja Noturna" é o
+tema **padrão**, não "a" paleta; o jogador troca em Ajustes › Interface. Por isso os valores dos
+tokens são **literais** (nunca `var(--panel)`/`var(--gold)` legados — um alias aponta para o
+valor do tema padrão e furaria a troca). Os *papéis* (§1.1) são o contrato; os hex da tabela
+abaixo são os valores do tema Forja Noturna.
 
 ### 1.1 Paleta com papéis semânticos
 
-| Papel | Token | Valor | Uso (e só isso) |
+| Papel | Token | Valor (Forja Noturna) | Uso (e só isso) |
 | --- | --- | --- | --- |
 | Vazio (fundo do app) | `--nf-void` | `#0d0f0c` | fundo da página; vinheta nas bordas |
 | Superfície 1 | `--nf-s1` | `#151813` | seções, trilhos, barras |
-| Superfície 2 | `--nf-s2` | `#1b1f18` | painéis/cards (= `--panel` atual) |
+| Superfície 2 | `--nf-s2` | `#1b1f18` | painéis/cards |
 | Superfície 3 | `--nf-s3` | `#232820` | itens erguidos, hover de linha, input |
 | Feltro | `--nf-felt` | `#16241f` | **só** o tapete da mesa e miniaturas dele |
-| Linha | `--nf-line` / `--nf-line-strong` | `rgba(230,221,198,.10)` / `.22` | bordas 1px |
-| Texto principal | `--nf-text` | `#eee9dc` (=`--paper`) | títulos, valores |
+| Texto sobre feltro | `--nf-felt-text` | `#b9c9bd` | rótulos de zona e contagens no tapete |
+| Linha | `--nf-line` / `--nf-line-strong` | `rgba(230,221,198,.10)` / `.22` | bordas decorativas de 1px |
+| **Borda de controle** | `--nf-edge` | `rgba(230,221,198,.42)` | contorno de input/segmento/switch (**≥3:1**, WCAG 1.4.11) |
+| Texto principal | `--nf-text` | `#eee9dc` | títulos, valores |
 | Texto secundário | `--nf-text-2` | `#b9b8aa` | corpo auxiliar |
-| Texto terciário | `--nf-text-3` | `#8e8f83` (=`--faint`) | rótulos, contagens (mín. no piso 11px) |
-| **Âmbar** | `--nf-amber` / `-hi` / `-deep` | `#d3ad5d` / `#edc878` / `#a9822f` | **CTA primário**, Æmber, chaves, item ativo da nav |
-| Sobre âmbar | `--nf-on-amber` | `#1b1405` | texto/ícone sobre fundo âmbar |
-| **Éter** | `--nf-ether` | `#a0e8ff` (=`--sel-core`) | seleção, alvo elegível, foco de teclado, "informação" |
+| Texto terciário | `--nf-text-3` | `#8e8f83` | rótulos, contagens (mín. no piso 11px) |
+| **Acento primário** | `--nf-accent` / `-hi` / `-deep` | `#d3ad5d` / `#edc878` / `#a9822f` | **CTA primário**, item ativo da nav, ação (o nome histórico "âmbar" vale só no tema padrão) |
+| Sobre acento | `--nf-on-accent` | `#1b1405` | texto/ícone sobre fundo de acento |
+| **Æmber (recurso)** | `--nf-aember` | `#edc878` | **só** o contador/ícone do Æmber do jogo — *não* acompanha o acento (§1.6.3) |
+| **Éter** | `--nf-ether` | `#a0e8ff` | seleção, alvo elegível, foco de teclado, "informação" |
 | **Brasa** | `--nf-ember` | `#ef6a5a` | dano, perigo, derrota, ação destrutiva (sempre com ícone+texto) |
-| Verdejante | `--nf-verdant` | `#82aa87` (=`--green`) | sucesso, vitória, online |
-| Casas | `houseColor()` | `houses.ts` | **só identidade de casa**; nunca para estado semântico |
+| Verdejante | `--nf-verdant` | `#82aa87` | sucesso, vitória, online |
+| Sombra (canal rgb) | `--nf-shadow` | `0 0 0` | sombras `--nf-elev-*` da v2: `rgb(var(--nf-shadow) / .4)` |
+| Véu | `--nf-scrim` | `rgba(9,12,10,.76)` | backdrop de Sheet/diálogo |
+| Esquema nativo | `color-scheme` | `dark` | inputs, scrollbars e `<select>` nativos |
+| Casas | `houseColor()` | `houses.ts` | **só** identidade de casa; nunca para estado semântico |
 
-Contrastes calculados (WCAG): texto/void 15,9:1 · texto/s2 13,8:1 · text-2/s2 8,4:1 ·
-text-3/s2 5,1:1 (text-3/s3 4,6:1 — **proibido text-3 sobre s3 em corpo <12px**) · âmbar/s2 7,9:1 ·
-on-amber/âmbar 8,6:1 · éter/feltro 11,9:1 · brasa/s2 5,5:1 · verdejante/s2 6,4:1. Brobnar
-(`#c65e4a`) é visualmente próximo da brasa: regra — **estado nunca é só cor** (ícone + texto +
-`aria-label`), então a ambiguidade não vira informação perdida.
+Contrastes calculados (WCAG, Forja Noturna): texto/void 15,9:1 · texto/s2 13,8:1 · text-2/s2 8,4:1 ·
+text-3/s2 5,1:1 (text-3/s3 4,6:1 — **proibido text-3 sobre s3 em corpo <12px**) · acento/s2 7,9:1 ·
+on-accent/accent 8,6:1 · éter/feltro 11,9:1 · brasa/s2 5,5:1 · verdejante/s2 6,4:1 · edge/s2 ≥3:1.
+Brobnar (`#c65e4a`) é visualmente próximo da brasa: regra — **estado nunca é só cor** (ícone +
+texto + `aria-label`), então a ambiguidade não vira informação perdida. Os contrastes dos outros
+três temas estão na §1.6.4.
 
 ### 1.2 Tipografia (sistema, sem web fonts — regra 1 do CLAUDE.md)
 
@@ -128,13 +142,13 @@ Três **shells** (conceito novo — hoje há um só, e a partida é "uma tela co
 | Camada | Token | Receita |
 | --- | --- | --- |
 | e0 chão | `--elev-0` | sem sombra |
-| e1 painel | `--elev-1` + borda | `1px var(--nf-line)` + `inset 0 1px 0 rgba(255,255,255,.04)` (vidro fumê) |
-| e2 erguido | `--elev-2` | hover de tile, popover |
-| e3 flutuante | `--elev-3` | sheet, diálogo, toast |
-| **lit** (novo) | `--nf-lit-amber/ether/ember` | `0 0 0 1px <cor>/.5, 0 0 24px <cor>/.25` — **só estado ativo** (selecionado, alvo, turno) |
+| e1 painel | `--nf-elev-1` + borda | `1px var(--nf-line)` + realce superior `inset 0 1px 0 color-mix(in srgb, var(--nf-text) 5%, transparent)` (vidro fumê; no Claro, papel) |
+| e2 erguido | `--nf-elev-2` | hover de tile, popover |
+| e3 flutuante | `--nf-elev-3` | sheet, diálogo, toast |
+| **lit** (novo) | `--nf-lit-accent/ether/ember` | `0 0 0 1px color-mix(in srgb, var(--nf-<cor>) 50%, transparent), 0 0 24px color-mix(in srgb, var(--nf-<cor>) 25%, transparent)` — derivado do token de cor (**muda com o tema**, §1.6); **só estado ativo** (selecionado, alvo, turno) |
 
 Materiais: **Obsidiana** (`--nf-s1..3` + vinheta radial `radial-gradient(120% 90% at 50% 0%, ...)`),
-**Latão** (CTA: `linear-gradient(180deg, var(--nf-amber-hi), var(--nf-amber))` + sombra interna
+**Latão** (CTA: `linear-gradient(180deg, var(--nf-accent-hi), var(--nf-accent))` + sombra interna
 inferior), **Feltro** (já existe no playmat), **Poeira de âmbar** (partículas do Lobby —
 `home-amber-dust` existente, mantida), **Granulado** (SVG `feTurbulence` em data-URI ≤1 kB a 3–4%
 de opacidade, **só** em Lobby/Result; nunca dentro de `.table-plane` — cadeia 3D, regra 10).
@@ -154,6 +168,168 @@ Regras: cascata ≤5 itens com 60ms de passo; entradas com `fill-mode: backwards
 CLAUDE.md); nada anima `height/margin/padding` na partida (FIT); reduced-motion = só
 `opacity` em 1 quadro (a classe `reduce-motion` no `<html>` e `@media (prefers-reduced-motion)`
 já neutralizam via `*`; todo CSS novo usa os tokens `--dur-*` para herdar isso de graça).
+
+### 1.6 Sistema de temas — a paleta é um *valor*, os papéis são o *contrato*
+
+**Pedido do dono**: temas de cor selecionáveis em Ajustes. **Forja Noturna é o tema padrão**; a
+camada `--nf-*` é tematizável sem tocar em nenhum seletor.
+
+#### 1.6.1 Mecanismo
+
+- **Raiz**: atributo `data-theme` em `<html>` (`document.documentElement`, não no `.app-root`, para
+  que Sheets em portal no `body` herdem). Valores: `forja` (padrão — atributo ausente = `forja`),
+  `aco`, `claro`, `arcano`.
+- **Um arquivo por tema** (temas são arquivos de tokens — o lint de H-03 segue valendo para todo
+  o resto de `src/ui/**`):
+  `src/ui/tokens.css` (tema `forja` + tokens não cromáticos) · `src/ui/themes/aco.css` ·
+  `themes/claro.css` · `themes/arcano.css`. Importados em `main.tsx` nessa ordem, **depois** de
+  `index.css`.
+- **Seletor sem `:root`** — o ponto que viabiliza a pré-visualização sem JS:
+```css
+/* tokens.css */
+:root, [data-theme="forja"] { --nf-void:#0d0f0c; /* … os 22 tokens do contrato … */ color-scheme: dark; }
+/* themes/aco.css */
+[data-theme="aco"] { --nf-void:#080b10; /* … os mesmos 22 … */ color-scheme: dark; }
+```
+  `:root` e `[data-theme]` têm a mesma especificidade (0,1,0); o tema importado depois vence. Como o
+  seletor casa **qualquer elemento**, um `<button data-theme="claro">` re-tematiza a própria
+  subárvore (é assim que os cartões de Ajustes se pré-visualizam com as cores *do tema que
+  representam*, sem aplicar nada).
+- **Contrato fechado** — todo tema define **exatamente** estes 22 tokens (e nada mais; nenhum
+  `var()` — valores literais, senão um alias aponta para o tema padrão):
+  `void s1 s2 s3 felt felt-text line line-strong edge text text-2 text-3 accent accent-hi
+  accent-deep on-accent aember ether ember verdant shadow scrim` + `color-scheme`.
+- **Tokens derivados** (realce `lit`, elevações `--nf-elev-1..3`) são declarados **uma vez**, num
+  bloco `:root, [data-theme] { … }` em `tokens.css`, com `color-mix()` e `rgb(var(--nf-shadow) / .x)`.
+  Armadilha a evitar: uma propriedade custom com `var()` declarada **só** em `:root` é calculada
+  na raiz e os descendentes `data-theme` herdam o valor *já calculado* — o preview mostraria o
+  glow da Forja num cartão Aço Frio. Declarar o derivado em `[data-theme]` o recalcula por elemento.
+- **Motor** `src/ui/theme.ts` (puro, testável):
+```ts
+export const THEMES = ["forja", "aco", "claro", "arcano"] as const;
+export type ThemeId = (typeof THEMES)[number];
+export const DEFAULT_THEME: ThemeId = "forja";
+const KEY = "aember-arena-theme";
+/** Cor da barra do navegador/PWA por tema (espelho de --nf-void; o teste compara com o CSS). */
+export const THEME_COLOR: Record<ThemeId, string> = { forja: "#0d0f0c", aco: "#080b10", claro: "#f1ede4", arcano: "#0e0718" };
+export function readTheme(store: Pick<Storage, "getItem"> | null = safeStore()): ThemeId { /* valor fora de THEMES → DEFAULT_THEME */ }
+export function applyTheme(id: ThemeId, root = document.documentElement, store = safeStore()): void {
+  if (id === DEFAULT_THEME) delete root.dataset.theme; else root.dataset.theme = id;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[id]);
+  try { store?.setItem(KEY, id); } catch { /* storage opcional (regra 6) */ }
+}
+```
+- **Sem flash (FOUC)**: um `<script>` inline mínimo no `<head>` do `index.html` (antes do CSS
+  pintar) lê `aember-arena-theme` e seta `data-theme`; valor desconhecido simplesmente não casa
+  nenhum seletor e cai no padrão. `main.tsx` chama `applyTheme(readTheme())` antes de `createRoot`.
+- **Persistência**: chave própria `aember-arena-theme` no `localStorage` (não entra em
+  `AppSettings`/`readSettings`: o contrato e os specs de `settings.ts` ficam intactos).
+- **Escopo do tema**: tudo que lê `--nf-*` — telas v2 e, a partir de H-25, o HUD e o tapete da mesa.
+  **Não muda**: arte das cartas, emblemas oficiais das casas, a v1 (que só existe até o cutover).
+  A tematização do tapete exige migrar os gradientes literais do board para `--nf-felt`/
+  `--nf-felt-text` em H-25 (risco R12).
+- **Fora de escopo (decisão de produto, não técnica)**: "Automático" por `prefers-color-scheme`
+  (mapearia escuro→Forja, claro→Claro). É trivial depois que o motor existe; não foi pedido.
+
+#### 1.6.2 Seletor com pré-visualização ao vivo (Ajustes › Interface)
+
+`ThemePicker` = `radiogroup` de 4 cartões. Cada cartão é um `<button role="radio"
+data-theme="<id>" aria-checked>` contendo uma **miniatura do Lobby** feita só de tokens
+(painel `--nf-s2`, botão `--nf-accent`, duas linhas de texto, um chip de seleção `--nf-ether`, faixa
+de feltro) — como o atributo está no próprio cartão, a miniatura já aparece nas cores do tema.
+**Clicar aplica na hora** (`applyTheme`), persiste e toca o som `select`; setas navegam; o cartão
+ativo recebe `--nf-lit-accent` (do tema *vigente*, para o jogador ver onde está). A tela inteira
+repinta em ≤`--dur-base` (transição de `background-color/color` na raiz; reduced-motion = instantâneo).
+Nome e linha de descrição via i18n (`ui.theme.<id>.name/.desc`).
+
+#### 1.6.3 Regras semânticas — o que **nunca** muda entre temas
+
+1. **Papéis imutáveis**: `accent` = ação/CTA; `ether` = seleção/alvo/foco; `ember` = perigo/dano;
+   `verdant` = sucesso. Mudam só os valores. Por isso, num tema em que o acento é azul (Aço Frio),
+   o `ether` deixa de ser ciano e vira **menta** — senão seleção e CTA se confundiriam.
+2. **Æmber é recurso de jogo, não acento**: `--nf-aember` existe separado para o contador de Æmber
+   continuar *dourado* em qualquer tema (um Æmber azul no Aço Frio seria um bug de leitura do jogo).
+3. **Casas = identidade**: `houseColor()` não é tematizado. Em fundos claros a cor de casa usada
+   como **texto/glifo** passa por `color-mix(in srgb, var(--hc) 55%, var(--nf-text))` (pior caso das
+   19 cores sobre `#ffffff`: **5,45:1**; sem a mistura: 2,14:1). Preenchimentos/tints seguem diretos.
+4. **Estado nunca só por cor** (ícone + texto + `aria-label`) — vale para os quatro temas.
+5. **Tema não muda geometria**: nenhum tema altera `--space-*`, `--fs-*`, alturas de faixa — o FIT
+   e o piso tipográfico são **independentes de tema** (gate roda em todos, §5 H-02c).
+
+#### 1.6.4 Os quatro temas
+
+| Papel / token | **Forja Noturna** *(padrão)* | **Aço Frio** | **Claro Alto-Contraste** | **Arcano** |
+| --- | --- | --- | --- | --- |
+| Direção | obsidiana + âmbar fundido | tech azul-aço, "cockpit" | papel/dia, AAA, impressão | violeta saturado, mágico |
+| `color-scheme` | dark | dark | **light** | dark |
+| `--nf-void` | `#0d0f0c` | `#080b10` | `#f1ede4` | `#0e0718` |
+| `--nf-s1` | `#151813` | `#0f141b` | `#f8f5ee` | `#160c26` |
+| `--nf-s2` | `#1b1f18` | `#151c26` | `#ffffff` | `#1e1233` |
+| `--nf-s3` | `#232820` | `#1d2733` | `#ebe6da` | `#2a1a46` |
+| `--nf-felt` | `#16241f` | `#0f1d2b` | `#cfd9c8` | `#1b1040` |
+| `--nf-felt-text` | `#b9c9bd` | `#a9bfd3` | `#1d2a1f` | `#cdbff0` |
+| `--nf-line` / `-strong` | `rgba(230,221,198,.10)` / `.22` | `rgba(170,200,235,.12)` / `.30` | `rgba(21,18,11,.14)` / `.30` | `rgba(200,170,255,.14)` / `.30` |
+| `--nf-edge` (controles) | `rgba(230,221,198,.42)` | `rgba(170,200,235,.48)` | `rgba(21,18,11,.50)` | `rgba(200,170,255,.50)` |
+| `--nf-text` | `#eee9dc` | `#e6edf5` | `#15120b` | `#f3ecff` |
+| `--nf-text-2` | `#b9b8aa` | `#aebccd` | `#3b372c` | `#c6b8e2` |
+| `--nf-text-3` | `#8e8f83` | `#8696aa` | `#575246` | `#a395c4` |
+| `--nf-accent` | `#d3ad5d` | `#5aa9ff` | `#8a4a00` | `#ff5fd2` |
+| `--nf-accent-hi` | `#edc878` | `#8cc4ff` | `#a65d06` | `#ff8fe0` |
+| `--nf-accent-deep` | `#a9822f` | `#3a88e0` | `#6b3800` | `#e048bb` |
+| `--nf-on-accent` | `#1b1405` | `#04101f` | `#ffffff` | `#1c0618` |
+| `--nf-aember` | `#edc878` | `#f2c85f` | `#7a5200` | `#ffd35e` |
+| `--nf-ether` (seleção) | `#a0e8ff` | `#9dfcd2` | `#0a54a8` | `#5ef2ff` |
+| `--nf-ember` (perigo) | `#ef6a5a` | `#ff7b72` | `#b3231b` | `#ff8a4c` |
+| `--nf-verdant` | `#82aa87` | `#5fd0a0` | `#17663a` | `#62f0b0` |
+| `--nf-shadow` (rgb) | `0 0 0` | `2 8 20` | `60 40 10` | `12 0 32` |
+| `--nf-scrim` | `rgba(9,12,10,.76)` | `rgba(4,8,14,.78)` | `rgba(21,18,11,.55)` | `rgba(10,4,24,.80)` |
+| `lit` (estado ativo) | halo 1px + 24px | halo 1px + 24px, frio | **anel duplo sólido** 2px+4px (sem blur) | halo 1px + 32px, mais intenso |
+| Granulado do Lobby | 3% | 0% (limpo, "tech") | 0% (papel liso) | 4% + poeira violeta |
+| Vinheta | pesada (referência Arena) | média | **nenhuma** (fundo plano) | pesada, centrada |
+
+**Intenção de cada direção** (por que são distintas, não variações de matiz):
+- **Aço Frio** — troca a *temperatura* e o *acento*: sai o quente (âmbar), entra o azul-aço
+  com ciano-menta de seleção; sombras azuladas; zero granulado. É o "painel de comando".
+- **Claro Alto-Contraste** — troca a *luminância*: único tema claro (`color-scheme: light`),
+  texto ≥7:1 em corpo, controles com borda ≥3:1, **sem glow** (anel sólido) e sem vinheta;
+  o tapete vira sálvia-clara com rótulos escuros. Serve a luz do dia, baixa visão e impressão
+  de screenshots.
+- **Arcano** — troca a *saturação*: violeta profundo, acento magenta, éter ciano elétrico,
+  halo mais forte; o tema "show", o mais afastado da Forja.
+
+**Contrastes calculados (WCAG 2.x)** — mínimo exigido em negrito; o teste de H-02c reproduz esta
+tabela, não confia nela:
+
+| Par (fg / bg) | mín. | Forja | Aço Frio | Claro | Arcano |
+| --- | --- | --- | --- | --- | --- |
+| `text` / `s2` | **7** | 13,80 | 14,52 | 18,70 | 15,34 |
+| `text-2` / `s2` | **4,5** | 8,36 | 8,87 | 11,87 | 9,55 |
+| `text-3` / `s2` | **4,5** | 5,10 | 5,67 | 7,78 | 6,43 |
+| `text-3` / `s3` *(só ≥12px)* | 4,5 | 4,59 | 5,00 | 6,24 | 5,73 |
+| `accent` / `s2` (texto de acento) | **4,5** | 7,89 | 6,98 | 6,86 | 6,57 |
+| `on-accent` / `accent` (CTA) | **4,5** | 8,62 | 7,78 | 6,86 | 7,18 |
+| `on-accent` / `accent-hi` (hover) | **4,5** | 11,43 | 10,42 | 5,01 | 9,42 |
+| `on-accent` / `accent-deep` (pressed) | **4,5** | 5,15 | 5,26 | 9,59 | 5,34 |
+| `ether` / `s2` | **4,5** | 12,33 | 14,10 | 7,38 | 13,13 |
+| `ether` / `felt` | **4,5** | 11,85 | 14,04 | 5,06 | 13,07 |
+| `ember` / `s2` | **4,5** | 5,48 | 6,79 | 6,62 | 7,56 |
+| `verdant` / `s2` | **4,5** | 6,41 | 8,99 | 7,00 | 12,28 |
+| `aember` / `s2` | **4,5** | 10,46 | 10,77 | 6,92 | 12,38 |
+| `felt-text` / `felt` | **4,5** | 9,30 | 9,00 | 10,27 | 10,30 |
+| `edge` composto / `s2` e `s3` *(controle)* | **3,0** | ≥3,05 | ≥3,05 | ≥3,05 | ≥3,05 |
+| casas (pior das 19) / `s2` *(glifo)* | **3,0** | 3,80 | 3,89 | 5,45 *(com mistura §1.6.3)* | 4,01 |
+
+Notas: (a) os alfas de `--nf-edge` foram obtidos por busca (menor alfa que dá ≥3,05 sobre `s2`
+**e** `s3`) e arredondados para cima; (b) `text-3` em `s3` é o par mais fraco — herdou a regra "só
+≥12px" da Forja; (c) o Claro é o único cujo `on-accent` é claro sobre acento escuro (CTA invertido).
+
+#### 1.6.5 Como um quinto tema entra (checklist de autoria)
+
+1. Copiar `themes/aco.css`, trocar o seletor e os valores; **não** adicionar nem remover token.
+2. Registrar o id em `THEMES` + `THEME_COLOR` (`theme.ts`) e as 2 chaves i18n `ui.theme.<id>.*`.
+3. `npx vitest run src/ui/themes` — o teste exige os 22 tokens, valores literais e **todos** os
+   pares da tabela de contraste acima do mínimo; só então o tema aparece no `ThemePicker`.
+4. `node e2e/ui2.mjs --theme <id>` (screenshots de cada tela) e o FIT no tema novo.
 
 ---
 
@@ -248,7 +424,8 @@ Legenda de estados: **V** vazio · **C** carregando · **E** erro · **S** suces
 ### S7 — Ajustes *(central nova — resolve D-01)*
 Abas (lista no desktop, acordeão de largura total no celular):
 1. **Jogo**: força padrão do Warden, ritmo da IA (`aiDelayMs`), dicas (`hints`).
-2. **Interface**: som, música, animações, mesa 2D/3D, hover zoom, idioma.
+2. **Interface**: **Tema** (primeira linha: 4 cartões com pré-visualização ao vivo — troca aplica na
+   hora e persiste, §1.6.2), som, música, animações, mesa 2D/3D, hover zoom, idioma.
 3. **Dados e offline**: catálogo (N cartas, sincronizar, progresso/cancelar), status do app
    (versão/BUILD_ID, "atualização pronta", offline-ready, `?swreset=1` documentado), ação
    "Sincronizar deck atual" (sai do header).
@@ -387,7 +564,9 @@ persistem (`saveSettings`); idioma muda sem reload (`createTranslator`).
 ```
 src/ui/                       # tudo da v2 — presentacional, SEM estado de jogo
   flag.ts                     # ui2 on/off (H-01)
-  tokens.css                  # --nf-* (H-02)
+  tokens.css                  # tema Forja (padrão) + derivados + não cromáticos (H-02)
+  theme.ts                    # THEMES, readTheme, applyTheme (H-02b)
+  themes/                     # aco.css, claro.css, arcano.css + themes.test.ts (H-02c)
   primitives/                 # Button, Chip, Panel, StatBlock, Sheet, SegmentedControl,
                               #   SettingRow/Switch, EmptyState, Skeleton  (+ primitives.css)
   shell/                      # LobbyShell (TopBar/TabBar), TableShell, TableMenu
@@ -412,6 +591,7 @@ O `App.tsx` continua dono do estado e dos handlers; as telas v2 recebem **props*
 | `DeckDetail`, `CardPane`, `StatStrip` | **refactor** | de `DeckInspector` (302 l) |
 | `ImportSheet` | **refactor** | de `DeckModal` (`App.tsx:2443`) |
 | `SettingsScreen` + 5 abas | **novo** (reusa `Toggle`, `LanguageMenu`, `LlmSettings`) | |
+| `theme.ts` (motor), `ThemePicker` + `ThemePreview` | **novo** | tokens tematizáveis §1.6; o picker vive em Ajustes › Interface (H-18) |
 | `ResultScreen`, `matchSummary()` | **novo** | |
 | `OnboardingFlow`, `Coachmark`, `coach.ts` | **novo** | reusa `TutorialWizard` como passo/ajuda |
 | `ZonesSheet` | **refactor** | de `PileDialog` (`App.tsx:2556`) |
@@ -421,12 +601,13 @@ O `App.tsx` continua dono do estado e dos handlers; as telas v2 recebem **props*
 ### 4.3 Dependências e ordem de construção
 
 ```
-tokens(H-02) ─▶ primitives(H-05,06) ─▶ ┬▶ Shells(H-07) ─▶ Table shell(H-08) ─▶ TableMenu(H-09) ─▶ Rail(H-10)
+tokens(H-02) ─▶ motor de temas(H-02b) ─▶ temas+contraste(H-02c) ─┐
+            └──────────▶ primitives(H-05,06) ─────────────────────┴▶ ┬▶ Shells(H-07) ─▶ Table shell(H-08) ─▶ TableMenu(H-09) ─▶ Rail(H-10)
                                         ├▶ Lobby(H-11,12) ─▶ MatchSheet(H-13) ─▶ Play wiring(H-14)
                                         ├▶ Decks(H-15,16,17)
-                                        ├▶ Settings(H-18..20)
+                                        ├▶ Settings(H-18..20)  ← H-18 traz o ThemePicker (exige H-02c)
                                         └▶ Result(H-21,22) ─▶ Onboarding(H-23,24)
-flag(H-01) e harness(H-03,04) precedem tudo. Cutover(H-29) só depois de todas as telas.
+flag(H-01) e harness(H-03,04) precedem tudo; o tema vale para toda tela nova desde H-05 (tudo lê `--nf-*`). Cutover(H-29) só depois de todas as telas.
 ```
 A ordem prioriza **valor cedo e risco isolado**: shell imersivo (maior ganho de pixels, maior
 risco no FIT) logo após as primitivas; Lobby+Play (maior ganho de jornada) em seguida; as telas
@@ -436,13 +617,20 @@ de gestão por último.
 
 ## 5. Roadmap de implementação — lotes para o Haiku 5.5
 
+> **Estado de execução (revisão do sistema de temas, 08/out/2026)**: H-01..H-10 estão commitados
+> (`git log`: `525b15d` … `493bb93`); H-11..H-14 existem no working tree (Lobby/MatchSheet). Como
+> H-05..H-14 já consomem `--nf-amber*`, **H-02b e H-02c entram na fila AGORA** (antes de H-15):
+> cada tela nova escrita antes deles é mais uma a migrar. H-18 (linha Tema) exige H-02c; H-25
+> (tapete) exige H-02c. Nenhum lote já entregue é refeito — H-02b é uma migração mecânica
+> verificável por `grep` (ver o lote).
+
 ### 5.0 Protocolo comum (vale para TODO lote)
 
 1. **Antes**: `git status` limpo; `npx vitest run` e anotar o total (baseline ≥ **922** segundo o
    commit `ccfd53d`; nunca regredir). `node e2e/fit.mjs` deve estar `FIT OK`.
 2. **Proibido**: editar `src/lib/game.ts`, `ai.ts`, `abilities.ts`, `dsl*`, `fx.ts`,
    `FxLayer.tsx`, `useHandDrag.tsx`, `public/sw.js`; adicionar dependência npm; usar web fonts/CDN;
-   introduzir `hex`/`rgba(`/`gap: Npx` literais em `src/ui/**` (gate H-03); escrever texto de UI
+   introduzir `hex`/`rgba(`/`gap: Npx` literais em `src/ui/**` fora dos arquivos de tokens `tokens.css` e `themes/*.css` (gate H-03; cor só via `var(--nf-*)`); escrever texto de UI
    sem `t("…")`; chave de i18n sem **as duas** línguas (`[en, pt-BR]` em `i18n.ts`).
 3. **Estilo**: comentários só explicam *por quê*; `fill-mode: backwards` em entradas; alvo de
    toque ≥44px; estados nunca só por cor.
@@ -482,29 +670,13 @@ function safeStore() { try { return localStorage; } catch { return null; } }
 - **Aceite**: vitest cobre `?ui=2` persiste · `?ui=1` reverte · sem storage retorna `"1"` ·
   valor inválido ignora. `npm run build` ok; `e2e:capture` visualmente idêntico.
 
-#### H-02 · Tokens `--nf-*` · **M** · dep.: H-01
-- **Escopo**: arquivo de tokens da §1; **nenhum seletor existente muda**.
-- **Arquivos**: `src/ui/tokens.css` (novo, só `:root{…}`), `src/main.tsx` (`import "./ui/tokens.css"`
-  **depois** de `./index.css`).
-- **Conteúdo mínimo** (valores da §1.1; aliases quando o valor já existe):
-```css
-:root {
-  --nf-void:#0d0f0c; --nf-s1:#151813; --nf-s2:var(--panel); --nf-s3:#232820; --nf-felt:#16241f;
-  --nf-line:rgba(230,221,198,.10); --nf-line-strong:rgba(230,221,198,.22);
-  --nf-text:var(--paper); --nf-text-2:#b9b8aa; --nf-text-3:var(--faint);
-  --nf-amber:var(--gold); --nf-amber-hi:var(--gold-bright); --nf-amber-deep:#a9822f; --nf-on-amber:#1b1405;
-  --nf-ether:#a0e8ff; --nf-ember:#ef6a5a; --nf-verdant:var(--green);
-  --nf-font-ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --nf-font-display:"Iowan Old Style","Palatino Linotype",Georgia,serif;
-  --nf-lit-amber:0 0 0 1px rgb(211 173 93/.5),0 0 24px rgb(211 173 93/.25);
-  --nf-lit-ether:0 0 0 1px rgb(160 232 255/.5),0 0 24px rgb(160 232 255/.25);
-  --nf-lit-ember:0 0 0 1px rgb(239 106 90/.5),0 0 24px rgb(239 106 90/.25);
-  --nf-w-read:680px; --nf-w-content:1120px; --nf-w-wide:1280px;
-}
-```
-- **Aceite**: `npm run build` ok; `node e2e/shots/_2d-freeze.mjs` + `_png-diff.mjs` = **0 pixels de
-  diferença** no board 2D; `e2e:floor` ok. Tabela de contraste da §1.1 reproduzível (script
-  curto no PR descreve o cálculo).
+#### H-02 · Tokens `--nf-*` · **M** · dep.: H-01 · ✅ **entregue** (`4377de2`)
+- Entregou `src/ui/tokens.css` com um único `:root{…}`, nomes `--nf-amber*`/`--nf-on-amber`/
+  `--nf-lit-amber` e **aliases** para tokens legados (`--nf-s2: var(--panel)`, `--nf-text:
+  var(--paper)`, `--nf-text-3: var(--faint)`, `--nf-accent…: var(--gold…)`, `--nf-verdant:
+  var(--green)`) mais `--nf-stagger: 60ms`. Era o desenho certo *antes* dos temas; **o sistema de
+  temas (§1.6) o supera** — o contrato final (22 tokens literais, `data-theme`, derivados) é
+  entregue por **H-02b**, que também migra o que já foi construído sobre estes nomes.
 
 #### H-03 · Harness `e2e/ui2.mjs` + lint de tokens · **M** · dep.: H-01
 - **Escopo**: o gate de todas as telas novas. Sobe o vite (como `fit.mjs`, porta própria **5211**),
@@ -517,8 +689,8 @@ function safeStore() { try { return localStorage; } catch { return null; } }
   5. com `reducedMotion:"reduce"` nenhuma animação em curso (`document.getAnimations()` vazio após
      600ms, exceto `infinite` de partículas marcadas `data-decor`).
   Cada tela expõe `data-screen="<nome>"` no elemento raiz.
-- **Lint** `scripts/lint-ui2-css.mjs` (novo, `node`): falha se algum `src/ui/**/*.css` (exceto
-  `tokens.css`) contiver `#[0-9a-f]{3,8}\b`, `rgba?\(` fora de `var()`/`color-mix`, ou
+- **Lint** `scripts/lint-ui2-css.mjs` (novo, `node`): falha se algum `src/ui/**/*.css` (exceto os
+  **arquivos de tokens**: `tokens.css` e `themes/*.css`) contiver `#[0-9a-f]{3,8}\b`, `rgba?\(` fora de `var()`/`color-mix`, ou
   `(gap|margin|padding)[^;]*\b\d+px` que não seja 0/1/2 (hairline) — instruindo a usar
   `var(--space-*)`. Adicionar `"lint:ui2": "node scripts/lint-ui2-css.mjs"` e `"e2e:ui2": "node e2e/ui2.mjs"` ao `package.json`.
 - **Aceite**: `npm run e2e:ui2` sai 0 com `SCREENS` vazio; um CSS de teste com `#fff` faz o lint
@@ -530,6 +702,112 @@ function safeStore() { try { return localStorage; } catch { return null; } }
   `createTranslator("en")(chave) !== chave`; e que nenhum par `[en, pt]` tem string vazia.
 - **Aceite**: passa com `src/ui` vazio; falha se um `t("ui.inexistente")` for adicionado (provar
   localmente e desfazer). **Convenção de chaves novas**: prefixo `ui.<tela>.<elemento>`.
+
+#### H-02b · Motor de temas + migração de tokens para o contrato tematizável · **M** · dep.: H-02, H-03 *(prioridade: **antes de H-15**; hoje H-05..H-14 já consomem os nomes antigos)*
+- **Escopo**: (A) reestruturar `tokens.css` para o contrato da §1.6.1 e renomear o que já existe;
+  (B) o motor `data-theme`; ainda com **um** tema (`forja`) — prova a infraestrutura antes de
+  existirem os outros.
+- **(A) Migração mecânica** (nenhuma tela muda de aparência além da nota de `--nf-s2` abaixo):
+  1. Renomear em **todo** `src/ui/**`, `e2e/`, `scripts/` (incl. `scripts/__fixtures__/ui2-ok/ok.css`):
+     `--nf-lit-amber→--nf-lit-accent`, `--nf-on-amber→--nf-on-accent`,
+     `--nf-amber-hi→--nf-accent-hi`, `--nf-amber-deep→--nf-accent-deep`, `--nf-amber→--nf-accent`
+     (nessa ordem, mais longos primeiro). Hoje são **19** ocorrências em `tokens.css`,
+     `primitives/primitives.css`, `screens/lobby/lobby.css`, `screens/match.css`, `shell/shell.css`.
+     Aceite da etapa: `grep -rnE "nf-(amber|on-amber|lit-amber)" src e2e scripts` = **0**.
+  2. Reescrever `tokens.css` em três blocos (código abaixo): tema `forja` com **22 valores
+     literais** (sem `var(--panel/--paper/--faint/--gold/--green)`), derivados em `:root,
+     [data-theme]`, não cromáticos em `:root` (**preservar** `--nf-font-*`, `--nf-w-*`,
+     `--nf-stagger`).
+  3. Onde o código já usava `var(--elev-N)` legados dentro de `src/ui`, trocar por `--nf-elev-N`.
+  4. **Nota de valor**: `--nf-s2` passa de `var(--panel)` (= `#191b17`) para `#1b1f18` (o valor da
+     §1.1/§1.6.4, sobre o qual todos os contrastes foram calculados) — mudança de 1 degrau, só nas
+     telas v2; a v1 não é afetada. Registrar no commit.
+- **Código-alvo de `tokens.css`**:
+```css
+/* 1) TEMA PADRÃO — contrato fechado de 22 tokens + color-scheme (valores = tabela §1.6.4) */
+:root, [data-theme="forja"] {
+  --nf-void:#0d0f0c; --nf-s1:#151813; --nf-s2:#1b1f18; --nf-s3:#232820;
+  --nf-felt:#16241f; --nf-felt-text:#b9c9bd;
+  --nf-line:rgba(230,221,198,.10); --nf-line-strong:rgba(230,221,198,.22); --nf-edge:rgba(230,221,198,.42);
+  --nf-text:#eee9dc; --nf-text-2:#b9b8aa; --nf-text-3:#8e8f83;
+  --nf-accent:#d3ad5d; --nf-accent-hi:#edc878; --nf-accent-deep:#a9822f; --nf-on-accent:#1b1405;
+  --nf-aember:#edc878; --nf-ether:#a0e8ff; --nf-ember:#ef6a5a; --nf-verdant:#82aa87;
+  --nf-shadow:0 0 0; --nf-scrim:rgba(9,12,10,.76);
+  color-scheme: dark;
+}
+/* 2) DERIVADOS — mesmo bloco para a raiz e para qualquer [data-theme] (previews, §1.6.1) */
+:root, [data-theme] {
+  --nf-lit-accent: 0 0 0 1px color-mix(in srgb, var(--nf-accent) 50%, transparent), 0 0 24px color-mix(in srgb, var(--nf-accent) 25%, transparent);
+  --nf-lit-ether:  0 0 0 1px color-mix(in srgb, var(--nf-ether) 50%, transparent),  0 0 24px color-mix(in srgb, var(--nf-ether) 25%, transparent);
+  --nf-lit-ember:  0 0 0 1px color-mix(in srgb, var(--nf-ember) 50%, transparent),  0 0 24px color-mix(in srgb, var(--nf-ember) 25%, transparent);
+  --nf-elev-1: 0 1px 2px rgb(var(--nf-shadow) / .28);
+  --nf-elev-2: 0 12px 26px rgb(var(--nf-shadow) / .28);
+  --nf-elev-3: 0 25px 90px rgb(var(--nf-shadow) / .55);
+}
+/* 3) NÃO CROMÁTICOS (iguais em todos os temas) */
+:root {
+  --nf-font-ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --nf-font-display:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --nf-w-read:680px; --nf-w-content:1120px; --nf-w-wide:1280px; --nf-stagger:60ms;
+}
+```
+- **(B) Motor**: `src/ui/theme.ts` (código da §1.6.1), `src/ui/theme.test.ts`, `src/main.tsx`
+  (`applyTheme(readTheme())` **antes** de `createRoot`), `index.html` (o `<meta name="theme-color">`
+  **já existe** com `#111310` — trocar para `#0d0f0c`; adicionar o script inline abaixo no `<head>`,
+  **antes** de qualquer `<style>`/CSS).
+```html
+<script>try{var t=localStorage.getItem("aember-arena-theme");if(t&&t!=="forja")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+```
+- **(C) Lint**: `scripts/lint-ui2-css.mjs` hoje isenta só o arquivo `tokens.css` (`EXEMPT` é um
+  `Set` de nomes, linha ~10). Passar a comparar o caminho relativo a `src/ui`: isentos =
+  `tokens.css` **e** `themes/*.css`. Adicionar fixture `scripts/__fixtures__/ui2-theme-exempt/`
+  (um `themes/x.css` com `#fff` **passa**; o mesmo arquivo fora de `themes/` **falha**).
+- **Regras do motor**: `THEMES`/`THEME_COLOR`/`DEFAULT_THEME` exportados; `readTheme` com valor
+  inválido, storage ausente ou lançando → `"forja"`; `applyTheme("forja")` **remove** o atributo;
+  tudo em `try/catch` silencioso (regra 6). **Não** tocar em `settings.ts`/`AppSettings`.
+- **Aceite**: vitest (injetar `root` e `store` falsos, como `flag.test.ts`): ler/aplicar/persistir;
+  inválido → padrão; `applyTheme` atualiza o `content` do meta `theme-color`; `THEME_COLOR[id]` é
+  hex de 7 chars. `npm run build`, `npm run lint:ui2` (com a fixture nova) e `npx vitest run` verdes;
+  `e2e/ui2.mjs` e `e2e/ui2-journey.mjs` seguem verdes **sem alteração de comportamento**;
+  `_2d-freeze` = 0 diff (v1 intacta); recarregar com `localStorage["aember-arena-theme"]="lixo"` não
+  quebra nada (probe de 1 linha em `ui2.mjs`).
+
+#### H-02c · Temas Aço Frio, Claro Alto-Contraste e Arcano + teste de contraste · **M** · dep.: H-02b, H-03
+- **Escopo**: os três arquivos da §1.6.4 e o gate que impede um tema ruim de entrar.
+- **Arquivos**: `src/ui/themes/{aco,claro,arcano}.css` (novos, cada um **um** bloco
+  `[data-theme="<id>"] { … 22 tokens … color-scheme: … }`), override do `lit` do Claro **no próprio
+  `claro.css`** (depois do bloco de tokens, mesma especificidade, vence por ordem):
+```css
+[data-theme="claro"] {
+  --nf-lit-accent: 0 0 0 2px var(--nf-s2), 0 0 0 4px var(--nf-accent);   /* anel duplo, sem blur */
+  --nf-lit-ether:  0 0 0 2px var(--nf-s2), 0 0 0 4px var(--nf-ether);
+  --nf-lit-ember:  0 0 0 2px var(--nf-s2), 0 0 0 4px var(--nf-ember);
+}
+```
+  `src/ui/theme.ts` (acrescentar `aco`, `claro`, `arcano` a `THEMES` e `THEME_COLOR`),
+  `src/main.tsx` (importar os 3 CSS **depois** de `tokens.css`), `src/ui/themes/themes.test.ts` (novo),
+  `e2e/ui2.mjs` (flag `--theme <id>`: semeia `aember-arena-theme` antes de abrir e roda **todos** os
+  checks do H-03 naquele tema).
+- **Teste** (`themes.test.ts`, vitest; lê os CSS com `import css from "./aco.css?raw"`):
+```ts
+export const REQUIRED = ["void","s1","s2","s3","felt","felt-text","line","line-strong","edge","text","text-2",
+  "text-3","accent","accent-hi","accent-deep","on-accent","aember","ether","ember","verdant","shadow","scrim"] as const;
+// [fg, bg, mínimo] — a tabela da §1.6.4; "edge" e "line*" são compostos sobre o bg antes de medir.
+export const PAIRS = [["text","s2",7],["text-2","s2",4.5],["text-3","s2",4.5],["accent","s2",4.5],
+  ["on-accent","accent",4.5],["on-accent","accent-hi",4.5],["on-accent","accent-deep",4.5],
+  ["ether","s2",4.5],["ether","felt",4.5],["ember","s2",4.5],["verdant","s2",4.5],["aember","s2",4.5],
+  ["felt-text","felt",4.5],["edge","s2",3],["edge","s3",3]] as const;
+```
+  Afirmações: (1) cada tema declara **exatamente** `REQUIRED` + `color-scheme`; (2) nenhum valor
+  contém `var(`; (3) todos os `PAIRS` ≥ mínimo (luminância WCAG implementada no próprio teste, ~15
+  linhas, sem dependência); (4) `THEME_COLOR[id] === --nf-void` do CSS; (5) `claro` tem
+  `color-scheme: light` e os demais `dark`; (6) o tema `forja` em `tokens.css` passa os mesmos pares.
+- **Aceite**: vitest verde (inclusive o *teste do teste*: trocar localmente um valor por um cinza
+  que viola 4,5:1 faz o teste falhar — provar e desfazer); `npm run lint:ui2` verde (os 4 arquivos
+  de tokens são **isentos**, o resto de `src/ui/**` não); com `?ui=2` e `localStorage` semeado,
+  `node e2e/ui2.mjs --theme claro|aco|arcano` verde na `_kit` nos 5 viewports; `node e2e/fit.mjs`
+  e `--view 3d` idênticos em qualquer tema (o tema não pode mexer em geometria — §1.6.3.5; semear o
+  tema no `SEED()` do fit via param `--theme`).
 
 ### FASE 1 — Primitivas
 
@@ -543,7 +821,7 @@ type WithText = Common & { children: ReactNode; icon?: ReactNode; "aria-label"?:
 type IconOnly  = Common & { icon: ReactNode; children?: never; "aria-label": string }; // obrigatório
 export function Button(p: (WithText | IconOnly) & ButtonHTMLAttributes<HTMLButtonElement>) { … }
 ```
-  `primary` = latão (âmbar) com `--nf-on-amber`; só **um** primário por tela (documentado no kit).
+  `primary` = latão (cor de acento do tema) com `--nf-on-accent`; só **um** primário por tela (documentado no kit).
   `size="md"` = 44px de altura; `sm` marca `data-dense` (36px).
 - **Aceite**: KitScreen registrada em `SCREENS`; `npm run e2e:ui2` e `npm run lint:ui2` verdes nos
   5 viewports; foco visível com `--elev-focus`; `Button` iconOnly sem `aria-label` **não compila**
@@ -708,12 +986,45 @@ export function applyPreset<T extends { difficulty: Difficulty; thinkingDepth: n
 
 ### FASE 5 — Ajustes
 
-#### H-18 · `SettingsScreen` + abas Jogo/Interface · **M** · dep.: H-06, H-07
+#### H-18 · `SettingsScreen` + abas Jogo/Interface (+ linha **Tema**) · **M** · dep.: H-02c, H-06, H-07
 - **Escopo**: S7 abas 1 e 2 com `SettingRow`; **as mesmas** chaves de `AppSettings`
   (`sfx/music/animations/tableView/aiDelayMs/hints/hoverZoom`, idioma). `hasHover` esconde
-  hoverZoom como hoje (`ConfigScreen`).
+  hoverZoom como hoje (`ConfigScreen`). **Nova primeira linha da aba Interface: Tema**
+  (`ThemePicker`, §1.6.2) — não passa por `AppSettings`; usa `readTheme`/`applyTheme` de H-02b.
+- **Arquivos**: `src/ui/screens/settings/{SettingsScreen,InterfaceTab,GameTab}.tsx`,
+  `src/ui/screens/settings/ThemePicker.tsx` + `ThemePreview.tsx`, CSS, chaves i18n
+  `ui.theme.title`, `ui.theme.<id>.name`, `ui.theme.<id>.desc` (4 temas) e `ui.theme.boardPending` (aviso transitório, removido em H-25) — todas en + pt-BR.
+- **Contrato do `ThemePicker`** (para não haver ambiguidade):
+```tsx
+export function ThemePicker({ t, value, onChange }: { t: Translator; value: ThemeId; onChange: (id: ThemeId) => void }) {
+  return (
+    <div role="radiogroup" aria-label={t("ui.theme.title")} className="u-theme-grid">
+      {THEMES.map((id) => (
+        <div key={id} className="u-theme-slot" data-lit={value === id}>{/* FORA do escopo: o anel usa o tema VIGENTE */}
+          <button type="button" role="radio" aria-checked={value === id} data-theme={id}
+            className="u-theme-card" onClick={() => onChange(id)}>
+            <ThemePreview />{/* miniatura só de tokens; herda as cores do data-theme do botão */}
+            <strong>{t(`ui.theme.${id}.name`)}</strong><small>{t(`ui.theme.${id}.desc`)}</small>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+// no SettingsScreen: onChange = (id) => { sound.play("select"); applyTheme(id); setTheme(id); }
+```
+  Grade `repeat(auto-fill, minmax(min(160px,100%), 1fr))`; cartão ≥44px de alvo (na prática ~120px);
+  setas navegam (roving `tabindex`). O `.u-theme-slot[data-lit=true]` desenha o anel
+  `--nf-lit-accent` com os tokens do tema **vigente** (por isso fica *fora* do `data-theme` do botão;
+  dentro dele o anel sairia na cor do tema que o cartão representa). Testar visualmente nos 4.
 - **Aceite**: alternar cada opção persiste (`readSettings` após reload) e aplica ao vivo; vitest
-  de `settings.test.ts` inalterado; `data-screen="settings"` verde.
+  de `settings.test.ts` inalterado; `data-screen="settings"` verde. **Tema**: clicar um cartão muda
+  `document.documentElement.dataset.theme` **no mesmo frame** e `localStorage["aember-arena-theme"]`;
+  recarregar mantém o tema **sem flash** (Playwright: `page.addInitScript` captura o primeiro
+  `getComputedStyle(body).backgroundColor` e compara com o `--nf-void` do tema salvo); `forja`
+  remove o atributo; os 4 cartões mostram cores distintas (assert: `--nf-accent` computado difere
+  entre cartões); `e2e:ui2` verde **nos 4 temas × 5 viewports** na tela Ajustes; teclado: setas
+  movem a seleção e `Enter/Espaço` aplicam; paridade i18n (H-04) verde para as 10 chaves novas (`ui.theme.title`, 4×`name`, 4×`desc`, `boardPending`).
 
 #### H-19 · Aba Dados e offline · **M** · dep.: H-18
 - **Escopo**: card de catálogo (contagem, sincronizar, progresso `CatalogProgress`, cancelar) —
@@ -771,13 +1082,26 @@ export function summarizeMatch(game: GameState): MatchSummary | null  // null se
 
 ### FASE 7 — Mesa: acabamento
 
-#### H-25 · Tokens no HUD da mesa · **M** · dep.: H-10
-- **Escopo**: bandas, console, chips de pilha, pill de casas, selos de chave/Æmber passam a ler
-  `--nf-*`/`--elev-*`/`--dur-*` **sem mudar dimensões** (altura/padding intactos). Numerais
-  `tabular-nums`. Glow só em estado ativo (turno, alvo, seleção) — auditar e remover glows
-  estáticos.
-- **Aceite**: `fit.mjs` **idêntico** ao baseline pós-H-08 (mesmos `rows`); `e2e:floor`, `floor:3d`,
-  `e2e:arena`, 3 probes 3D e capture 2D/3D sem regressão; revisão visual lado a lado.
+#### H-25 · Tokens no HUD e no tapete da mesa (tematização do board) · **L** · dep.: H-10, H-02c
+- **Escopo**: bandas, console, chips de pilha, pill de casas, selos de chave/Æmber **e o tapete**
+  passam a ler `--nf-*`/`--nf-elev-*`/`--dur-*` **sem mudar dimensões** (altura/padding intactos).
+  Numerais `tabular-nums`. Glow só em estado ativo (turno, alvo, seleção) — auditar e remover glows
+  estáticos; remover `ui.theme.boardPending` do ThemePicker. **É aqui que os temas chegam à mesa** (§1.6.1 "Escopo do tema"; risco R12): mapa de
+  migração — fundo/gradientes do playmat e `.felt-etching` → `--nf-felt` (variações por
+  `color-mix(in srgb, var(--nf-felt) N%, var(--nf-void))`); `.zone-heading`, contagens "N on table"
+  → `--nf-felt-text`; `.player-band`/`.turn-console`/chips → `--nf-s2`/`--nf-s3`/`--nf-line`;
+  contador de Æmber → `--nf-aember` (**não** o acento); aro "pronta"/alvo/seleção → `--nf-ether`
+  (substitui `--sel-core` no board); botão End turn → `Button primary`. Método: `grep -nE
+  "#[0-9a-fA-F]{3,8}|rgba?\(" src/index.css` restrito aos seletores do board, convertendo um
+  seletor por vez. **Sombras/halos dentro de `.table-plane` continuam sem `filter`** (regra 10).
+- **Aceite**: `fit.mjs` **idêntico** ao baseline pós-H-08 (mesmos `rows`) **em cada um dos 4
+  temas** (seed `--theme`); `e2e:floor`, `floor:3d`, `e2e:arena`, 3 probes 3D e capture 2D/3D sem
+  regressão no tema padrão; **capture 2D+3D da mesa nos 4 temas** (`node e2e/capture.mjs --theme
+  <id> --out …`) com revisão lado a lado: nenhum texto "escuro sobre escuro"/"claro sobre claro";
+  novo check no `ui2.mjs` (modo mesa): para `.zone-heading`, `.player-band` e `.turn-console`,
+  contraste `color` × primeiro `background-color` opaco ancestral ≥4,5:1 (elementos com gradiente
+  são listados como "não medido", não aprovados em silêncio); com o tema **Claro** o contador de
+  Æmber continua dourado-escuro (`--nf-aember`) e distinto do botão de acento.
 
 #### H-26 · `ZonesSheet` (pilhas por abas) · **M** · dep.: H-06
 - **Escopo**: substitui `PileDialog` (`App.tsx:2556`) com abas Descarte (você) · Descarte (Warden)
@@ -807,9 +1131,11 @@ export function summarizeMatch(game: GameState): MatchSummary | null  // null se
 - **Escopo**: `readUiFlag` devolve `"2"` por padrão; `?ui=1` continua como escape por **uma**
   versão; atualizar `e2e/capture.mjs`, `fit.mjs`, `acceptance.mjs`, `e2e/sw-reset.mjs` (seeds e
   telas: `home→lobby`, `browse→library`, `config→settings`) e regerar `e2e/shots/baseline`.
-- **Aceite**: **`npm run e2e:acceptance`** + `e2e:fit` (2D/3D) + `e2e:arena` + 3 probes 3D +
-  `e2e:smoke`(2D/3D) + `e2e:ui2` + `e2e/sw-reset.mjs` + `npx vitest run` (≥ baseline + novos) +
-  `npm run build` — todos verdes.
+  `capture.mjs`/`fit.mjs`/`ui2.mjs` aceitam `--theme <id>` (semeiam `aember-arena-theme`);
+  `acceptance.mjs` roda `fit` e `ui2` **nos 4 temas** e o capture no padrão + 1 tema escuro e o Claro.
+- **Aceite**: **`npm run e2e:acceptance`** + `e2e:fit` (2D/3D, 4 temas) + `e2e:arena` + 3 probes 3D +
+  `e2e:smoke`(2D/3D) + `e2e:ui2` (4 temas) + `e2e/sw-reset.mjs` + `npx vitest run` (≥ baseline +
+  novos, inclusive `themes.test.ts`) + `npm run build` — todos verdes.
 
 #### H-30 · Remover a v1 · **L** · dep.: H-29 + 1 ciclo de uso do dono
 - **Escopo**: apagar `HomeScreen`, `ConfigScreen`/`MODE_CONFIG_STEPS`, `DeckModal`, `PileDialog`,
@@ -850,12 +1176,24 @@ lotes integram em `main` sem expor nada. Custo: dois caminhos por ~8 lotes (acei
 | R9 | Haiku deriva do plano (inventa API, CSS literal) | lotes pequenos, código-âncora, lint H-03/H-04, regra "parar e reportar" (§5.0 item 7) |
 | R10 | `hover` sem equivalente touch no novo Detalhe | gate `e2e:ui2` roda com `hasTouch` além do mouse; hover só em `@media (hover:hover)` |
 | R11 | Pass-and-play esquecido na nova folha/resultado | H-13/H-22 têm assert explícito de 2P (decks distintos, sem recorde) |
+| R12 | **Tema não alcança o que ainda é literal**: o board tem centenas de `hex`/`rgba` em `index.css` (D-10); trocar para Claro deixaria tapete/bandas escuros com texto claro (ou o inverso) | H-25 migra o board seletor a seletor para `--nf-*` e o gate `--theme` mede contraste computado; até H-25 vale a nota abaixo |
+| R13 | **Flash do tema errado** (FOUC) ao abrir o PWA com tema salvo | script inline no `<head>` antes do CSS (H-02b) + teste do primeiro `backgroundColor` pintado |
+| R14 | **Tema novo quebra contraste** (hex "quase certo") | `themes.test.ts` (H-02c) calcula WCAG de 15 pares por tema e falha o build; o lint H-03 proíbe literal fora dos arquivos de tokens |
+| R15 | **Derivado calculado na raiz** (`lit`/`elev` com `var()` só em `:root`) faz o preview mostrar o glow do tema errado | derivados declarados em `:root, [data-theme]` (H-02); `ui2.mjs` compara o `--nf-lit-accent` computado de cada cartão de tema |
+| R16 | Tema muda geometria por acidente (fonte/borda/padding) | temas só definem os 22 tokens cromáticos; FIT e floor rodam nos 4 temas (H-02c, H-25, H-29) |
+| R17 | Æmber azul/rosa no Aço Frio/Arcano lido como outro recurso | token `--nf-aember` dourado nos 4 temas (§1.6.3.2) |
+
+> **Nota R12 (transição)**: entre H-02c e H-25 o `GameBoard` ainda lê tokens legados. Para o jogador
+> nunca ver uma mesa meio-tematizada, o ThemePicker mostra o aviso i18n `ui.theme.boardPending`
+> ("a mesa adota o tema em uma atualização futura"), removido em H-25. O cutover (H-29) é posterior
+> a H-25, então nenhum usuário final vê o estado intermediário.
 
 ### 6.3 O que testar (pirâmide)
-1. **vitest** (puro): `flag`, `presets`, `matchSummary`, `coach`, paridade i18n, parser de import.
+1. **vitest** (puro): `flag`, `theme` (motor), `themes` (22 tokens + contraste WCAG × 4 temas), `presets`,
+   `matchSummary`, `coach`, paridade i18n, parser de import.
    Meta: baseline 922 + os novos, **zero removidos**.
-2. **Harness `e2e/ui2.mjs`** (por tela, 5 viewports, 2D): overflow, alvo de toque, `aria-label`, piso
-   tipográfico, reduced-motion.
+2. **Harness `e2e/ui2.mjs`** (por tela, 5 viewports, 2D, **`--theme` em cada um dos 4 temas**):
+   overflow, alvo de toque, `aria-label`, piso tipográfico, reduced-motion e contraste computado do HUD.
 3. **Jornada `e2e/ui2-journey.mjs`**: contagem de toques (≤3), F1–F6.
 4. **Gates existentes** (CLAUDE.md "Verification gates"): FIT 2D/3D, floor 2D/3D, capture, smoke
    2D/3D, arena, 3 probes 3D, `sw-reset`, acceptance.
@@ -912,4 +1250,5 @@ decisão §7-C seja "sim"), a DOM/classe de `GameBoard` usada pelos probes, `.ta
 
 *Notas finais*: bundle não é critério de corte (regra 7); nenhuma dependência npm nova é
 proposta; as primitivas custam ~3–5 kB gz estimados. A estimativa de esforço total dos 31 lotes:
-**S×8 · M×22 · L×1** (H-08 e H-30 concentram o risco; reservar revisão humana extra neles).
+**S×8 · M×24 · L×2** em **33 lotes** (H-01..H-31 + H-02b/H-02c; H-25 virou L ao absorver a
+tematização do tapete). H-08, H-25 e H-30 concentram o risco; reservar revisão humana extra neles.
