@@ -1,0 +1,4 @@
+/* Fixture de PROVA do lint:ui2 — tem de PASSAR: arquivo de tema (themes/*.css) é isento. */
+[data-theme="x"] {
+  --nf-void: #fff;
+}

@@ -2,6 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "./ui/tokens.css";
+import "./ui/themes/aco.css";
+import "./ui/themes/claro.css";
+import "./ui/themes/arcano.css";
 import "./ui/primitives/primitives.css";
 import "./ui/shell/shell.css";
 import "./ui/shell/tableShell.css";
@@ -11,6 +14,10 @@ import "./ui/screens/deckTile.css";
 import "./ui/screens/lobby/lobby.css";
 import "./ui/screens/match.css";
 import App from "./App";
+import { applyTheme, readTheme } from "./ui/theme";
+
+// Antes do createRoot: o tema salvo já está no <html> quando a primeira tela pinta.
+applyTheme(readTheme());
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -97,7 +97,7 @@
 .nf-range {
   width: 100%;
   min-height: 44px;
-  accent-color: var(--nf-amber);
+  accent-color: var(--nf-accent);
 }
 .nf-range:focus-visible {
   outline: 2px solid var(--nf-ether);

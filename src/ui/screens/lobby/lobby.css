@@ -21,7 +21,7 @@
   transform: translateX(-50%) rotate(var(--fan, 0deg));
   transform-origin: 50% 100%;
   border-radius: var(--radius-md);
-  box-shadow: var(--elev-2);
+  box-shadow: var(--nf-elev-2);
 }
 .nf-fan-card .card-art {
   width: 100%;
@@ -152,7 +152,7 @@
   border: 1px solid var(--nf-line);
   border-radius: var(--radius-lg);
   background: var(--nf-s2);
-  box-shadow: var(--elev-1);
+  box-shadow: var(--nf-elev-1);
 }
 .nf-card-title {
   margin: 0;
@@ -167,7 +167,7 @@
   color: var(--nf-text-3);
 }
 /* Partida em andamento é âmbar: a energia do jogador (UX_REWRITE_PLAN §1.1). */
-.nf-continue { border-color: color-mix(in srgb, var(--nf-amber) 45%, transparent); }
+.nf-continue { border-color: color-mix(in srgb, var(--nf-accent) 45%, transparent); }
 .nf-continue-stats,
 .nf-record-stats {
   display: grid;
@@ -243,7 +243,7 @@ html.reduce-motion .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) l
   width: 4px;
   height: 4px;
   border-radius: var(--radius-pill);
-  background: var(--nf-amber-hi);
+  background: var(--nf-accent-hi);
   animation: nf-dust 14s linear infinite;
 }
 .nf-lobby-dust i:nth-child(odd) { animation-duration: 18s; }

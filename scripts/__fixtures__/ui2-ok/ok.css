@@ -2,7 +2,7 @@
 .ok-card {
   color: var(--nf-text);
   background: color-mix(in srgb, var(--nf-s2) 90%, transparent);
-  box-shadow: 0 0 0 1px var(--nf-line), var(--nf-lit-amber);
+  box-shadow: 0 0 0 1px var(--nf-line), var(--nf-lit-accent);
   gap: var(--space-2);
   padding: 1px var(--space-3);
   margin: 0 auto;

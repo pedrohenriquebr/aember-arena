@@ -71,9 +71,9 @@
 }
 
 .nf-shell-tab:focus-visible {
-  outline: 2px solid var(--nf-amber-hi);
+  outline: 2px solid var(--nf-accent-hi);
   outline-offset: 2px;
-  box-shadow: var(--elev-focus);
+  box-shadow: var(--nf-elev-focus);
 }
 
 /* Destino atual: fundo + filete na base. A forma (não só a cor) marca o estado. */
@@ -81,7 +81,7 @@
   border-color: var(--nf-line-strong);
   background: var(--nf-s3);
   color: var(--nf-text);
-  box-shadow: inset 0 -2px 0 var(--nf-amber);
+  box-shadow: inset 0 -2px 0 var(--nf-accent);
 }
 
 .nf-shell-actions {

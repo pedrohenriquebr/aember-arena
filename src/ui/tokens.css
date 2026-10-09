@@ -1,18 +1,35 @@
-/* Tokens da v2 "Forja Noturna" (UX_REWRITE_PLAN §1.1). Só :root — nenhum seletor
-   existente depende deste arquivo ainda. Onde o valor já existe em index.css o token
-   aponta para ele (alias), para que mudar a paleta antiga não deixe a v2 para trás. */
+/* Tokens da v2 (UX_REWRITE_PLAN §1.6). O tema padrão "forja" é o contrato: 22 tokens
+   cromáticos LITERAIS (nenhum var() — um alias apontaria para o tema padrão, não para o
+   tema vigente). Os outros temas vivem em themes/*.css com o mesmo conjunto de nomes. */
+
+/* 1) TEMA PADRÃO — contrato fechado de 22 tokens + color-scheme (valores = tabela §1.6.4) */
+:root, [data-theme="forja"] {
+  --nf-void:#0d0f0c; --nf-s1:#151813; --nf-s2:#1b1f18; --nf-s3:#232820;
+  --nf-felt:#16241f; --nf-felt-text:#b9c9bd;
+  --nf-line:rgba(230,221,198,.10); --nf-line-strong:rgba(230,221,198,.22); --nf-edge:rgba(230,221,198,.42);
+  --nf-text:#eee9dc; --nf-text-2:#b9b8aa; --nf-text-3:#8e8f83;
+  --nf-accent:#d3ad5d; --nf-accent-hi:#edc878; --nf-accent-deep:#a9822f; --nf-on-accent:#1b1405;
+  --nf-aember:#edc878; --nf-ether:#a0e8ff; --nf-ember:#ef6a5a; --nf-verdant:#82aa87;
+  --nf-shadow:0 0 0; --nf-scrim:rgba(9,12,10,.76);
+  color-scheme: dark;
+}
+
+/* 2) DERIVADOS — mesmo bloco para a raiz e para qualquer [data-theme] (previews, §1.6.1).
+   Declarados aqui e não só em :root: um var() calculado na raiz seria herdado já resolvido. */
+:root, [data-theme] {
+  --nf-lit-accent: 0 0 0 1px color-mix(in srgb, var(--nf-accent) 50%, transparent), 0 0 24px color-mix(in srgb, var(--nf-accent) 25%, transparent);
+  --nf-lit-ether:  0 0 0 1px color-mix(in srgb, var(--nf-ether) 50%, transparent),  0 0 24px color-mix(in srgb, var(--nf-ether) 25%, transparent);
+  --nf-lit-ember:  0 0 0 1px color-mix(in srgb, var(--nf-ember) 50%, transparent),  0 0 24px color-mix(in srgb, var(--nf-ember) 25%, transparent);
+  --nf-elev-1: 0 1px 2px rgb(var(--nf-shadow) / .28);
+  --nf-elev-2: 0 12px 26px rgb(var(--nf-shadow) / .28);
+  --nf-elev-3: 0 25px 90px rgb(var(--nf-shadow) / .55);
+  /* Anel de foco = o acento-hi a 32% (o mesmo do v1 --elev-focus); tematizado como os demais. */
+  --nf-elev-focus: 0 0 0 3px color-mix(in srgb, var(--nf-accent-hi) 32%, transparent);
+}
+
+/* 3) NÃO CROMÁTICOS (iguais em todos os temas — §1.6.3.5: tema não muda geometria) */
 :root {
-  --nf-void:#0d0f0c; --nf-s1:#151813; --nf-s2:var(--panel); --nf-s3:#232820; --nf-felt:#16241f;
-  --nf-line:rgba(230,221,198,.10); --nf-line-strong:rgba(230,221,198,.22);
-  --nf-text:var(--paper); --nf-text-2:#b9b8aa; --nf-text-3:var(--faint);
-  --nf-amber:var(--gold); --nf-amber-hi:var(--gold-bright); --nf-amber-deep:#a9822f; --nf-on-amber:#1b1405;
-  --nf-ether:#a0e8ff; --nf-ember:#ef6a5a; --nf-verdant:var(--green);
   --nf-font-ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --nf-font-display:"Iowan Old Style","Palatino Linotype",Georgia,serif;
-  --nf-lit-amber:0 0 0 1px rgb(211 173 93/.5),0 0 24px rgb(211 173 93/.25);
-  --nf-lit-ether:0 0 0 1px rgb(160 232 255/.5),0 0 24px rgb(160 232 255/.25);
-  --nf-lit-ember:0 0 0 1px rgb(239 106 90/.5),0 0 24px rgb(239 106 90/.25);
-  --nf-w-read:680px; --nf-w-content:1120px; --nf-w-wide:1280px;
-  /* Passo da cascata de entrada (UX_REWRITE_PLAN §1.5: 60ms, até 5 itens). */
-  --nf-stagger:60ms;
+  --nf-w-read:680px; --nf-w-content:1120px; --nf-w-wide:1280px; --nf-stagger:60ms;
 }

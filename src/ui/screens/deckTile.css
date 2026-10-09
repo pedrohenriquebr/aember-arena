@@ -10,7 +10,7 @@
   border: 1px solid var(--nf-line);
   border-radius: var(--radius-lg);
   background: var(--nf-s2);
-  box-shadow: var(--elev-1);
+  box-shadow: var(--nf-elev-1);
   transition:
     transform var(--dur-base) var(--ease-out),
     box-shadow var(--dur-base) var(--ease-out),
@@ -123,7 +123,7 @@
   border: 1px solid var(--nf-line-strong);
   border-radius: var(--radius-md);
   background: var(--nf-s3);
-  box-shadow: var(--elev-3);
+  box-shadow: var(--nf-elev-3);
 }
 .nf-tile-menuitem {
   display: flex;
@@ -147,7 +147,7 @@
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   html:not(.reduce-motion) .nf-tile:hover {
     transform: translateY(-4px);
-    box-shadow: var(--elev-2);
+    box-shadow: var(--nf-elev-2);
   }
   html:not(.reduce-motion) .nf-tile-menuitem:hover { background: var(--nf-s2); }
 }

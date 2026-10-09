@@ -1,0 +1,4 @@
+/* Fixture de PROVA do lint:ui2 — tem de FALHAR: o mesmo #fff fora de themes/ não é isento. */
+[data-theme="x"] {
+  --nf-void: #fff;
+}

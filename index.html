@@ -2,8 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Sem flash (§1.6.1): o data-theme salvo entra ANTES de qualquer CSS pintar. Valor
+         desconhecido não casa seletor nenhum e cai no padrão forja. -->
+    <script>try{var t=localStorage.getItem("aember-arena-theme");if(t&&t!=="forja")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#111310" />
+    <meta name="theme-color" content="#0d0f0c" />
     <meta name="description" content="Play a KeyForge-inspired solo match, import Master Vault decks, and practice against a configurable AI." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

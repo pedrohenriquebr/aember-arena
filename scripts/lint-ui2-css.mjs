@@ -7,7 +7,10 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const target = resolve(ROOT, process.argv[2] ?? "src/ui");
-const EXEMPT = new Set(["tokens.css"]);
+// Isentos por caminho relativo ao diretório lido: tokens.css (o padrão), themes/*.css (os temas,
+// §1.6.1) e theme.ts (o registro: THEME_COLOR é o espelho hex do --nf-void para a meta theme-color,
+// que não aceita var()).
+const EXEMPT = /^(tokens\.css|theme\.ts|themes\/[^/]+\.css)$/;
 const EXTENSIONS = /\.(css|ts|tsx)$/;
 
 if (!existsSync(target)) {
@@ -60,7 +63,7 @@ const RGBA = /\brgba?\(/g;
 const SPACING = /\b(gap|margin|padding)[^;{}]*?\b(\d+(?:\.\d+)?)px\b/g;
 
 const violations = [];
-const files = walk(target).filter((f) => EXTENSIONS.test(f) && !EXEMPT.has(f.split(/[\\/]/).pop()));
+const files = walk(target).filter((f) => EXTENSIONS.test(f) && !EXEMPT.test(relative(target, f).replace(/\\/g, "/")));
 
 for (const file of files) {
   const src = stripComments(readFileSync(file, "utf8"));
