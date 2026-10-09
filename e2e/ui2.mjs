@@ -339,12 +339,29 @@ const FILL_BOARDS_TABLE = () => {
   return "ok";
 };
 
-async function tableFlow(browser, vp, url, view) {
-  const failures = [];
-  const reports = [];
-  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
-  await context.addInitScript(seedFor(view));
-  const page = await context.newPage();
+// H-10: o rail do desktop (>=1041) na casca. Sem carta selecionada: sem inspetor, sem topline e
+// sem rodapé; o turno cabe sem reticências; o log rola por dentro e o rail não rola.
+const RAIL_MEASURE = () => {
+  const out = [];
+  const rail = document.querySelector(".command-rail");
+  if (!rail) return ["rail ausente"];
+  const shown = (sel) => [...rail.querySelectorAll(`:scope > ${sel}`)].filter((el) => getComputedStyle(el).display !== "none");
+  if (shown(".rail-topline").length) out.push("topline ainda visível");
+  if (shown(".rail-footer").length) out.push("rodapé ainda visível");
+  if (shown(".inspector-section").length) out.push("inspetor visível sem seleção");
+  const line = rail.querySelector(".turn-line");
+  if (line && line.scrollWidth > line.clientWidth + 1) out.push(`turno corta: ${line.scrollWidth} > ${line.clientWidth}`);
+  const log = rail.querySelector(":scope > .log-section > .match-log");
+  if (!log) out.push("log ausente");
+  else if (getComputedStyle(log).overflowY !== "auto") out.push(`log sem rolagem própria (${getComputedStyle(log).overflowY})`);
+  if (rail.scrollHeight > rail.clientHeight + 1) out.push(`rail rola (${rail.scrollHeight} > ${rail.clientHeight}); deveria rolar só o log`);
+  const h = rail.getBoundingClientRect().height;
+  if (h > Math.max(520, window.innerHeight - 92) + 1) out.push(`rail mais alto que a mesa (${Math.round(h)} > ${window.innerHeight - 92})`);
+  return out;
+};
+
+// Casca -> Ajustes -> partida demo (mulligan mantido) -> turno do jogador pronto.
+async function openTable(page, url) {
   await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-screen="shell"]', { timeout: 30000 });
   await page.locator(".nf-shell-tab").nth(2).click();
@@ -358,6 +375,15 @@ async function tableFlow(browser, vp, url, view) {
   await page.waitForSelector(".mulligan-shade", { state: "detached", timeout: 20000 }).catch(() => {});
   await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 90000 });
   await page.waitForTimeout(700);
+}
+
+async function tableFlow(browser, vp, url, view) {
+  const failures = [];
+  const reports = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(seedFor(view));
+  const page = await context.newPage();
+  await openTable(page, url);
 
   const check = (m, label) => {
     reports.push(`${label}: soma=${m.sum} respiro=${m.respiro} vp=${m.vp} docH=${m.docH} zonaOp=${m.rows.zoneOpponent} carta=${m.cardMin}-${m.cardMax} maoBottom=${m.handBottom}`);
@@ -370,6 +396,11 @@ async function tableFlow(browser, vp, url, view) {
     if (m.handBottom !== null && m.handBottom > m.vp + 0.5 && !m.is3d) failures.push(`${label}: mão cortada (bottom ${m.handBottom} > ${m.vp})`);
   };
   check(await page.evaluate(TABLE_MEASURE), "mesa vazia");
+  if (vp.width >= 1041) {
+    const railIssues = await page.evaluate(RAIL_MEASURE);
+    reports.push(`trilho: ${railIssues.length ? railIssues.join("; ") : "ok"}`);
+    for (const issue of railIssues) failures.push(`trilho: ${issue}`);
+  }
 
   // Mesa cheia: patch do save e retomada pela home da casca (resume-bar).
   const patched = await page.evaluate(FILL_BOARDS_TABLE);
@@ -387,6 +418,85 @@ async function tableFlow(browser, vp, url, view) {
 
   await context.close();
   return { failures, reports };
+}
+
+// H-09: o ☰ da mesa. Abre pelo gatilho (Enter) com o foco na folha; a folha passa no AUDIT (alvos
+// 44px, rótulos, piso tipográfico); Esc fecha e devolve o foco ao ☰. O interruptor 3D troca a mesa
+// sem fechar a folha. Esc abre o ☰ só no desktop (>=1041), sem nada selecionado. "Sair para o
+// lobby" pede confirmação; confirmado, o lobby abre com "Continuar" (a partida fica salva).
+// Devolve a lista de falhas (vazia = passou).
+async function menuFlow(browser, vp, url) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(seedFor("2d"));
+  const page = await context.newPage();
+  await openTable(page, url);
+  const desktop = vp.width >= 1041;
+  const trigger = page.locator(".table-menu-trigger");
+  const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+  const focusOnTrigger = () => page.evaluate(() => document.activeElement?.classList.contains("table-menu-trigger") ?? false);
+
+  if ((await trigger.count()) !== 1) failures.push(`☰ da mesa: ${await trigger.count()} gatilhos, esperado 1`);
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => failures.push("Enter no ☰ não abriu a folha"));
+  await page.waitForTimeout(600);
+
+  const focusInside = await page.evaluate(() => Boolean(document.querySelector('[role="dialog"][aria-modal="true"]')?.contains(document.activeElement)));
+  if (!focusInside) failures.push("☰: foco não entrou na folha");
+  const audit = await page.evaluate(AUDIT, '[role="dialog"][aria-modal="true"]');
+  for (const [key, items] of Object.entries(audit)) {
+    if (Array.isArray(items) ? items.length : items !== null) failures.push(`☰ ${key}: ${Array.isArray(items) ? items.slice(0, 4).join("; ") : items}`);
+  }
+
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "detached", timeout: 5000 }).catch(() => failures.push("Esc não fechou o ☰"));
+  if (!(await focusOnTrigger())) failures.push("☰ fechado: foco não voltou ao gatilho");
+
+  // Esc abre só no desktop; no celular a tecla não faz nada na mesa.
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(400);
+  const openedByKey = (await dialog.count()) > 0;
+  if (desktop && !openedByKey) failures.push("Esc no desktop não abriu o ☰");
+  if (!desktop && openedByKey) failures.push("Esc abriu o ☰ no celular (só vale no desktop)");
+
+  if (desktop) {
+    // Interruptor 3D: troca a mesa e a folha segue aberta.
+    const sw = dialog.locator('[role="switch"]').first();
+    const before = await sw.getAttribute("aria-checked");
+    await sw.click();
+    await page.waitForTimeout(300);
+    const after = await sw.getAttribute("aria-checked");
+    const is3d = await page.evaluate(() => Boolean(document.querySelector(".game-board--3d")));
+    if (before === after) failures.push("interruptor 3D não alternou");
+    if (is3d !== (after === "true")) failures.push(`mesa ${is3d ? "3D" : "2D"} não bate com o interruptor (${after})`);
+    if ((await dialog.count()) === 0) failures.push("interruptor 3D fechou a folha");
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "detached", timeout: 5000 }).catch(() => failures.push("Esc não fechou o ☰ (2)"));
+  }
+
+  // Sair: a confirmação pede; Esc cancela e a partida segue.
+  const confirm = page.getByRole("button", { name: "Leave", exact: true });
+  await trigger.click();
+  await dialog.waitFor({ state: "visible", timeout: 5000 });
+  await dialog.getByRole("button", { name: "Leave to lobby", exact: true }).click();
+  await confirm.waitFor({ state: "visible", timeout: 5000 }).catch(() => failures.push("sair não abriu a confirmação"));
+  await page.keyboard.press("Escape");
+  await confirm.waitFor({ state: "detached", timeout: 5000 }).catch(() => failures.push("Esc não cancelou a confirmação de saída"));
+  if (!(await page.locator(".game-screen").count())) failures.push("cancelar a saída tirou a partida da tela");
+
+  // Confirmado: o lobby abre e o destino de jogo diz "Continuar" (a partida foi salva).
+  await trigger.click();
+  await dialog.waitFor({ state: "visible", timeout: 5000 });
+  await dialog.getByRole("button", { name: "Leave to lobby", exact: true }).click();
+  await confirm.click();
+  await page.waitForSelector('[data-screen="shell"]', { timeout: 15000 }).catch(() => failures.push("sair não voltou ao lobby"));
+  const playLabel = await page.locator(".nf-shell-tab").first().textContent();
+  if (!/Continu/.test(playLabel ?? "")) failures.push(`lobby após sair: destino de jogo "${playLabel}", esperado "Continuar"`);
+
+  await context.close();
+  return failures;
 }
 
 const server = startServer();
@@ -459,6 +569,17 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[table ${view} ${vp.name}] OK`);
+      }
+    }
+
+    if (TABLE_VIEWS.length) {
+      const failures = await menuFlow(browser, vp, server.url);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[menu ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[menu ${vp.name}] OK`);
       }
     }
 

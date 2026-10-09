@@ -1,0 +1,69 @@
+/* Rail da mesa (UX_REWRITE_PLAN §5 H-10). Só vale com data-shell="table" no .app-root: com a
+   v2 desligada nada aqui casa. Nenhum seletor fora do .app-root[data-shell="table"]. Desktop
+   (>=1041px) apenas; o drawer abaixo disso segue o do FIT-05. */
+@media (min-width: 1041px) {
+  /* Sem o fade de rolagem: o rail não rola mais, quem rola é o log (abaixo). Também sai porque é
+     uma animação que segue com reduced-motion ligado (gate de movimento do e2e:ui2). */
+  .app-root[data-shell="table"] .command-rail::after {
+    content: none;
+  }
+
+  /* "TABLE NOTES 01" morre: o rail começa pelo console. */
+  .app-root[data-shell="table"] .command-rail > .rail-topline {
+    display: none;
+  }
+
+  /* O rodapé estático (crédito e offline) sai do rail; volta em Ajustes › Sobre (H-20). */
+  .app-root[data-shell="table"] .command-rail > .rail-footer {
+    display: none;
+  }
+
+  /* Inspetor só ocupa espaço com carta selecionada: sem ela a seção some e o log cresce. */
+  .app-root[data-shell="table"] .command-rail > .inspector-section:not(.inspector-section--docked) {
+    display: none;
+  }
+
+  /* Console em linha própria: "Round 01 · Your turn" ocupa a largura toda, sem reticências
+     (o resumo do Warden quebra linha); o End turn desce para a linha de baixo, ao lado das ações. */
+  .app-root[data-shell="table"] .command-rail .turn-console {
+    flex-wrap: wrap;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .app-root[data-shell="table"] .command-rail .turn-console-copy {
+    flex: 1 0 100%;
+  }
+
+  .app-root[data-shell="table"] .command-rail .turn-line {
+    flex-wrap: wrap;
+  }
+
+  .app-root[data-shell="table"] .command-rail .turn-console-copy strong,
+  .app-root[data-shell="table"] .command-rail .turn-line-summary {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .app-root[data-shell="table"] .command-rail .turn-console > .end-turn-button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  /* O log ocupa o que sobra do rail e rola por dentro; o mínimo mantém a lista visível quando
+     a carta selecionada empurra o resto para cima. */
+  .app-root[data-shell="table"] .command-rail > .log-section {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 160px;
+    flex-direction: column;
+  }
+
+  .app-root[data-shell="table"] .command-rail .log-section > .match-log,
+  .app-root[data-shell="table"] .command-rail .log-section > .log-groups {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
