@@ -3,8 +3,9 @@
 // viewports: overflow horizontal, alvos de toque, aria-label de botão só-ícone, piso
 // tipográfico e animações com reduced-motion. Sai != 0 se algum critério falhar.
 // Uso: npm run e2e:ui2   (SCREENS vazio = só o boot da v2, sem telas)
+//      node e2e/ui2.mjs --shots   (grava as telas em e2e/shots/ui2-kit/, fora do gate)
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,8 +20,10 @@ const VIEWPORTS = [
 ];
 // Tela = { name, query, seed? }: `query` vai após ?ui=2 e o elemento raiz da tela expõe
 // data-screen="<name>". `seed` é JS opcional (localStorage) rodado antes do boot.
-// Vazio até H-05 (KitScreen entra como `_kit`).
-const SCREENS = [];
+// H-05: a galeria de primitivas entra como `_kit` (só com a flag, ?ui=2&screen=_kit).
+const SCREENS = [
+  { name: "_kit", query: "screen=_kit" },
+];
 
 const SEED = `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
@@ -130,9 +133,81 @@ async function launch() {
   throw new Error("sem Edge/Chrome do sistema");
 }
 
+// H-06: a Sheet abre pelo teclado (foco no gatilho + Enter), o foco entra no diálogo, o body
+// trava a rolagem e Esc / fundo / X fecham devolvendo o foco ao gatilho. Com reduced-motion a
+// folha não anima. Depois: setas/Home/End do SegmentedControl e o clique do Switch.
+// Devolve a lista de falhas do fluxo (vazia = passou).
+async function interactionFlow(browser, vp, url, shotDir) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  const page = await context.newPage();
+  await page.goto(`${url}?ui=2&screen=_kit`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="_kit"]', { timeout: 30000 });
+  const trigger = page.locator('[data-kit="sheet-trigger"]');
+  const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+
+  for (const how of ["escape", "backdrop", "close"]) {
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await dialog.waitFor({ state: "visible", timeout: 5000 });
+    await page.waitForTimeout(600);
+
+    const state = await page.evaluate(() => {
+      const d = document.querySelector('[role="dialog"][aria-modal="true"]');
+      return {
+        focusInside: Boolean(d && d.contains(document.activeElement)),
+        locked: document.body.style.overflow === "hidden",
+        animation: d ? getComputedStyle(d).animationName : "sem diálogo",
+        running: document.getAnimations().filter((a) => a.playState === "running").map((a) => a.animationName || a.constructor.name),
+      };
+    });
+    if (!state.focusInside) failures.push(`${how}: foco não entrou no diálogo`);
+    if (!state.locked) failures.push(`${how}: rolagem do body não travou`);
+    if (state.animation !== "none") failures.push(`${how}: reduced-motion mas o diálogo anima (${state.animation})`);
+    if (state.running.length) failures.push(`${how}: animações em curso com reduced-motion (${state.running.join(", ")})`);
+    if (shotDir && how === "escape") await page.screenshot({ path: join(shotDir, `sheet-open-${vp.name}.png`) });
+
+    if (how === "escape") await page.keyboard.press("Escape");
+    else if (how === "backdrop") await page.locator(".nf-sheet-backdrop").click({ position: { x: 4, y: 4 } });
+    else await dialog.locator(".nf-sheet-head button").click();
+    await dialog.waitFor({ state: "detached", timeout: 5000 }).catch(() => failures.push(`${how}: diálogo não fechou`));
+
+    const back = await page.evaluate(() => document.activeElement?.getAttribute("data-kit") ?? null);
+    if (back !== "sheet-trigger") failures.push(`${how}: foco não voltou ao gatilho (ficou em ${back})`);
+    const unlocked = await page.evaluate(() => document.body.style.overflow !== "hidden");
+    if (!unlocked) failures.push(`${how}: rolagem do body não foi liberada`);
+  }
+
+  // SegmentedControl: setas movem e selecionam, com volta nas pontas; Home/End vão às pontas.
+  const radioState = () => page.evaluate(() => {
+    const radios = [...document.querySelectorAll('[role="radio"]')];
+    return { checked: radios.findIndex((r) => r.getAttribute("aria-checked") === "true"), focused: radios.indexOf(document.activeElement) };
+  });
+  await page.locator('[role="radio"]').nth(0).focus();
+  for (const [key, expected] of [["ArrowRight", 1], ["ArrowRight", 2], ["ArrowRight", 0], ["ArrowLeft", 2], ["Home", 0], ["End", 2]]) {
+    await page.keyboard.press(key);
+    const { checked, focused } = await radioState();
+    if (checked !== expected || focused !== expected) failures.push(`radio ${key}: esperado ${expected}, marcado ${checked}, foco ${focused}`);
+  }
+
+  // Switch: clique alterna aria-checked.
+  const toggle = page.locator('[role="switch"]');
+  const before = await toggle.getAttribute("aria-checked");
+  await toggle.click();
+  const after = await toggle.getAttribute("aria-checked");
+  if (before === after) failures.push(`switch não alternou (${before})`);
+
+  await context.close();
+  return failures;
+}
+
 const server = startServer();
 let browser;
 let problems = 0;
+// --shots grava as telas e a folha aberta em e2e/shots/ui2-kit/ (fora do gate: é para olhar).
+const shotDir = process.argv.includes("--shots") ? join(ROOT, "e2e", "shots", "ui2-kit") : null;
+if (shotDir) mkdirSync(shotDir, { recursive: true });
 try {
   await server.ready();
   browser = await launch();
@@ -173,7 +248,19 @@ try {
       } else {
         console.log(`[${screen.name} ${vp.name}] OK`);
       }
+      if (shotDir) await p.screenshot({ path: join(shotDir, `${screen.name}-${vp.name}.png`), fullPage: true });
       await ctx.close();
+    }
+
+    if (SCREENS.some((screen) => screen.name === "_kit")) {
+      const failures = await interactionFlow(browser, vp, server.url, shotDir);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[flow ${vp.name}] OK`);
+      }
     }
   }
 } finally {

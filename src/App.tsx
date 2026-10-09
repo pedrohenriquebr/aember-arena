@@ -105,6 +105,7 @@ import { useHandDrag } from "./components/useHandDrag";
 import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 import { readUiFlag } from "./ui/flag";
+import { KitScreen } from "./ui/screens/KitScreen";
 
 const RANDOM_RIVAL_KEY = "aember-arena-random-rival";
 
@@ -4153,6 +4154,11 @@ function App() {
       <Box size={16} />
     </button>
   );
+
+  // H-05: a galeria de primitivas só existe com ?ui=2&screen=_kit; sem a flag o App é o de hoje.
+  if (ui2 === "2" && new URLSearchParams(window.location.search).get("screen") === "_kit") {
+    return <KitScreen t={t} />;
+  }
 
   return (
     <div className="app-root">
