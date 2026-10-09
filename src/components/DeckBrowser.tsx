@@ -1,28 +1,13 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, CloudOff, LoaderCircle, Search, SearchX, Swords, WifiOff, X } from "lucide-react";
 import type { DeckInfo } from "../lib/game";
-import { fetchDeckPage, VaultError, vaultErrorText } from "../lib/keyforgeApi";
+import { vaultErrorText } from "../lib/keyforgeApi";
 import type { Translator } from "../lib/i18n";
 import { sound } from "../lib/sound";
 import { HouseMark, DeckTile } from "./DeckTile";
 import { Pagination } from "./Pagination";
+import { useVaultBrowse, VAULT_ORDERINGS, VAULT_PAGE_SIZE, type BrowseState } from "./useVaultBrowse";
 
-const PAGE_SIZE = 9;
-
-const ORDERINGS: { id: string; key: string }[] = [
-  { id: "-date", key: "browse.sortNewest" },
-  { id: "date", key: "browse.sortOldest" },
-  { id: "name", key: "browse.sortName" },
-  { id: "-power_level", key: "browse.sortPower" },
-];
-
-export interface BrowseState {
-  page: number;
-  search: string;
-  ordering: string;
-}
-
-const INITIAL_BROWSE: BrowseState = { page: 1, search: "", ordering: "-date" };
+export type { BrowseState } from "./useVaultBrowse";
 
 export function DeckBrowser({
   t,
@@ -46,59 +31,9 @@ export function DeckBrowser({
   state?: BrowseState;
   onStateChange?: (next: BrowseState) => void;
 }) {
-  const [internalState, setInternalState] = useState<BrowseState>(INITIAL_BROWSE);
-  const view = state ?? internalState;
+  const { view, pendingSearch, setPendingSearch, decks, count, loading, error, noResults, totalPages, setView, submitSearch, clearSearch } = useVaultBrowse({ state, onStateChange });
   const { page, search, ordering } = view;
-  const setView = (patch: Partial<BrowseState>) => {
-    const next = { ...view, ...patch };
-    if (onStateChange) onStateChange(next);
-    else setInternalState(next);
-  };
-  const [pendingSearch, setPendingSearch] = useState(search);
-  const [decks, setDecks] = useState<DeckInfo[]>([]);
-  const [count, setCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
-  const requestRef = useRef(0);
-
-  useEffect(() => {
-    const requestId = ++requestRef.current;
-    setLoading(true);
-    setError(null);
-
-    fetchDeckPage({ page, pageSize: PAGE_SIZE, search, ordering })
-      .then((result) => {
-        if (requestId !== requestRef.current) return;
-        setDecks(result.decks);
-        setCount(result.count);
-      })
-      .catch((cause: unknown) => {
-        if (requestId !== requestRef.current) return;
-        setDecks([]);
-        setCount(0);
-        setError(cause ?? new VaultError("browse.failed"));
-        if (!(cause instanceof VaultError && cause.key === "vault.noResults")) sound.play("error");
-      })
-      .finally(() => {
-        if (requestId === requestRef.current) setLoading(false);
-      });
-
-    return () => {
-      requestRef.current += 1;
-    };
-  }, [page, search, ordering]);
-
-  // An empty result for a search is not a failure: it gets its own state
-  // instead of the "Vault is out of reach" screen.
-  const noResults = error instanceof VaultError && error.key === "vault.noResults";
   const errorText = error ? vaultErrorText(error, t) : "";
-  const totalPages = Math.max(1, Math.min(Math.ceil(count / PAGE_SIZE), 5000));
-
-  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    sound.play("click");
-    setView({ page: 1, search: pendingSearch.trim() });
-  };
 
   return (
     <div className="screen browse-screen">
@@ -122,14 +57,14 @@ export function DeckBrowser({
             aria-label={t("browse.searchPlaceholder")}
           />
           {pendingSearch && (
-            <button type="button" className="search-clear" onClick={() => { setPendingSearch(""); setView({ page: 1, search: "" }); }} aria-label={t("common.close")}>
+            <button type="button" className="search-clear" onClick={() => { clearSearch(); }} aria-label={t("common.close")}>
               ×
             </button>
           )}
         </form>
 
         <div className="browse-sorts" role="group" aria-label={t("browse.sortLabel")}>
-          {ORDERINGS.map((item) => (
+          {VAULT_ORDERINGS.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -166,7 +101,7 @@ export function DeckBrowser({
 
       {loading && (
         <div className="deck-grid">
-          {Array.from({ length: PAGE_SIZE }).map((_, index) => (
+          {Array.from({ length: VAULT_PAGE_SIZE }).map((_, index) => (
             <div className="deck-skeleton" key={index}>
               <span className="skeleton-art" />
               <span className="skeleton-lines"><i /><i /><i /></span>
@@ -180,7 +115,7 @@ export function DeckBrowser({
           <span className="browse-empty-icon"><SearchX size={22} /></span>
           <strong>{t("browse.noResultsTitle", { query: search })}</strong>
           <p>{t("browse.noResultsBody")}</p>
-          <button type="button" className="ghost-button" onClick={() => { sound.play("click"); setPendingSearch(""); setView({ page: 1, search: "" }); }}>
+          <button type="button" className="ghost-button" onClick={() => { sound.play("click"); clearSearch(); }}>
             <X size={15} /> {t("browse.clearSearch")}
           </button>
         </div>

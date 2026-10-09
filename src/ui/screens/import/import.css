@@ -1,0 +1,123 @@
+/* Folha de importação da v2 (UX_REWRITE_PLAN §5 H-17): campo único (UUID ou link), pré-visualização
+   e as duas saídas. Só tokens --nf-* / --space-* / --fs-* / --radius-* (lint:ui2). Mobile primeiro;
+   o desktop entra em @media (min-width) junto de cada seletor. */
+
+.nf-import-intro,
+.nf-import-note {
+  margin: 0;
+  color: var(--nf-text-2);
+  font-size: var(--fs-sm);
+}
+
+.nf-import-form {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.nf-import-form label {
+  color: var(--nf-text-3);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nf-import-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.nf-import-row input {
+  flex: 1 1 200px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--radius-md);
+  background: var(--nf-s1);
+  color: var(--nf-text);
+  font: inherit;
+  /* 16px: abaixo disso o iOS dá zoom no campo (piso do CLAUDE.md). */
+  font-size: var(--fs-input);
+}
+.nf-import-row input:focus-visible {
+  outline: 2px solid var(--nf-accent);
+  outline-offset: 2px;
+}
+.nf-import-row input[aria-invalid="true"] {
+  border-color: var(--nf-ember);
+}
+
+.nf-import-hint {
+  color: var(--nf-text-3);
+  font-size: var(--fs-xs);
+}
+.nf-import-hint--error {
+  color: var(--nf-ember);
+}
+
+.nf-import-error {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--nf-ember);
+  border-radius: var(--radius-md);
+  color: var(--nf-text);
+  font-size: var(--fs-sm);
+}
+
+/* C e S usam a mesma moldura: a altura do preview não muda quando o deck chega. */
+.nf-import-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.nf-import-preview .card-art {
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+.nf-import-copy {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.nf-import-source {
+  margin: 0;
+  color: var(--nf-verdant);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.nf-import-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--nf-font-display);
+  font-size: var(--fs-xl);
+  color: var(--nf-text);
+}
+.nf-import-houses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--nf-text-2);
+  font-size: var(--fs-sm);
+}
+.nf-import-houses li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.nf-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.nf-import-actions .nf-btn {
+  flex: 1 1 160px;
+}

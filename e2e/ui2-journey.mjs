@@ -169,6 +169,24 @@ async function scenarioD(browser) {
   await context.close();
 }
 
+// H-16: Lobby → ⊙ do tile (abre o Detalhe) → "Jogar com este deck" → Manter. O total são 3 toques
+// (o ⊙ conta); a partir do Detalhe são 2, que é a conta que o plano pede para o CTA.
+async function scenarioH(browser) {
+  const { context, page } = await newPage(browser);
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await resetClicks(page);
+  await page.locator(".nf-shelf-grid .nf-tile-actions .nf-btn--ghost").first().click();
+  await page.waitForSelector('[data-screen="detail"]', { timeout: 15000 });
+  const toDetail = await clicks(page);
+  await page.locator('[data-screen="detail"] [data-action="play-deck"]').click();
+  await keepOpeningHand(page);
+  const total = await clicks(page);
+  report.push(`[journey] H a partir do Detalhe: ${total - toDetail} toque(s) até o Manter`);
+  check("H Tile ⊙ → Jogar com este deck → Manter", total, 3);
+  await context.close();
+}
+
 // E e F partem do mesmo save: uma partida jogada (um turno passado), depois recarregada.
 // G: pass-and-play pela folha (código novo: playDeck no 2P). Não conta cliques: é o caminho de
 // personalização, não o caminho feliz (plano §3.2). Só exige que a mesa de dois jogadores abra.
@@ -235,6 +253,7 @@ try {
   await scenarioD(browser);
   await scenarioEF(browser);
   await scenarioG(browser);
+  await scenarioH(browser);
 } catch (err) {
   failures.push(`exceção: ${err.message.split("\n")[0]}`);
 } finally {

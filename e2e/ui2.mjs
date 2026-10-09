@@ -639,6 +639,300 @@ async function sheetFlow(browser, vp, url) {
   return failures;
 }
 
+// H-15: a biblioteca (S4) na casca. O Vault é mockado (page.route) com 9 decks por página e 90 no
+// total. Confere: Meus lista os iniciais; Vault mostra 9 tiles e paginação compacta SEM números no
+// DOM; a busca e a página sobrevivem à ida e volta do Detalhe (BUG-15); offline o banner aparece e
+// Meus segue de pé; a AUDITORIA (alvos, rótulos, piso, movimento) passa nas duas abas.
+// Devolve a lista de falhas (vazia = passou).
+const VAULT_FILLER = { id: "grunt-lib", card_title: "Grunt", house: "Brobnar", card_type: "Creature", card_text: "", amber: 0, power: 3, armor: 0, front_image: "" };
+async function libraryFlow(browser, vp, url, shotDir) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  const searches = [];
+  await context.route("https://www.keyforgegame.com/api/decks/**", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    searches.push({ page: Number(params.get("page")), search: params.get("search") ?? "" });
+    const data = Array.from({ length: 9 }, (_, i) => ({
+      id: `aaaaaaaa-0000-4000-8000-00000000000${i}`,
+      name: `Vault Deck ${i}`,
+      expansion: 341,
+      _links: { houses: ["Brobnar"], cards: Array(36).fill(VAULT_FILLER.id) },
+    }));
+    return route.fulfill({ json: { count: 90, data, _linked: { cards: [VAULT_FILLER] } } });
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+  const auditInto = async (label) => {
+    const audit = await page.evaluate(AUDIT, '[data-screen="library"]');
+    for (const [key, items] of Object.entries(audit)) {
+      if (Array.isArray(items) ? items.length : items !== null) failures.push(`${label} ${key}: ${Array.isArray(items) ? items.slice(0, 4).join("; ") : items}`);
+    }
+  };
+
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="shell"]', { timeout: 30000 });
+  await page.locator(".nf-shell-tab").nth(1).click();
+  await page.waitForSelector('[data-screen="library"]', { timeout: 15000 });
+  // A transição do ícone da aba de destino (clique recém-feito) segue até ~600ms: a auditoria espera.
+  await page.waitForTimeout(700);
+
+  // Meus: só os iniciais (dois tiles), sem o banner de offline.
+  const mine = await page.locator('[data-screen="library"] .nf-tile--mine').count();
+  if (mine !== 2) failures.push(`Meus: ${mine} tile(s), esperado 2 (iniciais)`);
+  await auditInto("Meus");
+  if (shotDir) await page.screenshot({ path: join(shotDir, `library-mine-${vp.name}.png`), fullPage: true });
+
+  // Vault: 9 tiles da rede mockada; paginação compacta, nada numerado no DOM.
+  await page.getByRole("radio", { name: "Vault", exact: true }).click();
+  await page.waitForSelector('[data-screen="library"] .nf-tile--vault', { timeout: 20000 }).catch(() => failures.push("Vault: nenhum tile"));
+  const vault = await page.locator('[data-screen="library"] .nf-tile--vault').count();
+  if (vault !== 9) failures.push(`Vault: ${vault} tile(s), esperado 9`);
+  const numbered = await page.locator('[data-screen="library"] .pager, [data-screen="library"] .pager-pages, [data-screen="library"] .pager-slot').count();
+  if (numbered) failures.push(`Vault: paginação numerada no DOM (${numbered} nó(s))`);
+  await auditInto("Vault");
+  if (shotDir) await page.screenshot({ path: join(shotDir, `library-vault-${vp.name}.png`), fullPage: true });
+
+  // Página 2, busca "zeta" (volta à página 1), depois página 2 de novo: é esse estado que o Detalhe precisa devolver.
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('[data-screen="library"] .nf-pager-status')?.textContent.includes("2"), null, { timeout: 15000 }).catch(() => failures.push("próxima página não mudou o status"));
+  await page.locator(".nf-vault-search input").fill("zeta");
+  await page.locator(".nf-vault-search input").press("Enter");
+  await page.waitForFunction(() => document.querySelector('[data-screen="library"] .nf-vault-search input')?.value === "zeta", null, { timeout: 5000 }).catch(() => failures.push("busca não ficou no campo"));
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('[data-screen="library"] .nf-pager-status')?.textContent.includes("2"), null, { timeout: 15000 }).catch(() => failures.push("página 2 com busca não apareceu"));
+  if (!searches.some((s) => s.search === "zeta")) failures.push("a busca não chegou à API (search=zeta)");
+
+  // Ida ao Detalhe (v2, H-16) e volta: página 2 e busca "zeta" preservadas.
+  await page.locator('[data-screen="library"] .nf-tile--vault .nf-tile-select').first().click();
+  await page.waitForSelector('[data-screen="detail"]', { timeout: 15000 }).catch(() => failures.push("tile da Vault não abriu o Detalhe"));
+  await page.locator('[data-screen="detail"] .nf-detail-top button').click();
+  await page.waitForSelector('[data-screen="library"]', { timeout: 15000 }).catch(() => failures.push("voltar do Detalhe não devolveu a biblioteca"));
+  await page.waitForFunction(() => document.querySelector('[data-screen="library"] .nf-pager-status')?.textContent.includes("2"), null, { timeout: 15000 }).catch(() => failures.push("voltar do Detalhe perdeu a página"));
+  const kept = await page.locator('[data-screen="library"] .nf-vault-search input').inputValue();
+  if (kept !== "zeta") failures.push(`voltar do Detalhe perdeu a busca (campo "${kept}")`);
+
+  // Offline (sem rede, sem reload): o banner aparece na Vault; Meus segue com os seus decks.
+  await context.setOffline(true);
+  await page.waitForSelector('[data-screen="library"] .nf-banner', { timeout: 5000 }).catch(() => failures.push("offline: sem banner"));
+  const offlineVault = await page.locator('[data-screen="library"] .nf-tile--vault').count();
+  if (offlineVault !== 0) failures.push(`offline: ${offlineVault} tile(s) da Vault, esperado 0`);
+  await page.getByRole("radio", { name: "Mine", exact: true }).click();
+  const offlineMine = await page.locator('[data-screen="library"] .nf-tile--mine').count();
+  if (offlineMine !== 2) failures.push(`offline: Meus com ${offlineMine} tile(s), esperado 2`);
+  await context.setOffline(false);
+
+  if (errors.length) failures.push(`erro de página: ${errors.join("; ")}`);
+  await context.close();
+  return failures;
+}
+
+// H-16: o Detalhe do deck (S5) a partir do Lobby (o ⊙ do tile). Confere: a carta escolhida vai para
+// o painel (hover no desktop; toque abre a folha no celular); nenhum popup de zoom fixo fica visível;
+// nada fixed/absolute cobre o stat strip; o CTA "Jogar com este deck" tem >= 44px e cabe na dobra
+// (390×844 e 1280×800); a aba Estatísticas renderiza; a AUDITORIA passa; "voltar" devolve ao Lobby.
+// Devolve a lista de falhas (vazia = passou).
+async function detailFlow(browser, vp, url, shotDir) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+  const desktop = vp.width >= 1041;
+  const audit = async (label, scope) => {
+    const result = await page.evaluate(AUDIT, scope);
+    for (const [key, items] of Object.entries(result)) {
+      if (Array.isArray(items) ? items.length : items !== null) failures.push(`${label} ${key}: ${Array.isArray(items) ? items.slice(0, 4).join("; ") : items}`);
+    }
+  };
+
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.locator('.nf-shelf-grid .nf-tile-actions .nf-btn--ghost').first().click();
+  await page.waitForSelector('[data-screen="detail"]', { timeout: 15000 }).catch(() => failures.push("⊙ do tile não abriu o Detalhe v2"));
+  await page.waitForTimeout(700);
+
+  const cards = page.locator('[data-screen="detail"] .nf-detail-card');
+  if ((await cards.count()) < 3) failures.push(`Detalhe: ${await cards.count()} carta(s), esperado >= 3`);
+
+  // Nada fixed/absolute visível cobre o stat strip (o leque do hero e o painel ficam fora dele).
+  const overlap = await page.evaluate(() => {
+    const strip = document.querySelector('[data-screen="detail"] .nf-stat-strip');
+    if (!strip) return "sem stat strip";
+    const r = strip.getBoundingClientRect();
+    const hits = [];
+    for (const el of document.querySelectorAll("body *")) {
+      if (strip.contains(el) || el.contains(strip)) continue;
+      const cs = getComputedStyle(el);
+      if (cs.position !== "fixed" && cs.position !== "absolute") continue;
+      // Decoração que não recebe ponteiro não "cobre" nada de verdade: o fx-layer
+      // (partículas) é um canvas full-screen pointer-events:none por desenho.
+      if (cs.pointerEvents === "none") continue;
+      if (cs.visibility === "hidden" || cs.opacity === "0") continue;
+      const b = el.getBoundingClientRect();
+      if (b.width === 0 || b.height === 0) continue;
+      if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) hits.push(el.className || el.tagName);
+    }
+    return hits.length ? hits.slice(0, 3).join(" | ") : null;
+  });
+  if (overlap) failures.push(`stat strip coberto por elemento fixed/absolute: ${overlap}`);
+
+  // CTA: >= 44px e inteiro na dobra (sticky no pé da coluna).
+  const cta = await page.evaluate(() => {
+    const b = document.querySelector('[data-screen="detail"] [data-action="play-deck"]')?.getBoundingClientRect();
+    return b ? { h: b.height, top: b.top, bottom: b.bottom, vp: window.innerHeight } : null;
+  });
+  if (!cta) failures.push("CTA \"Jogar com este deck\" ausente");
+  else {
+    if (cta.h < 44) failures.push(`CTA com ${Math.round(cta.h)}px de altura (mínimo 44)`);
+    if (cta.top < 0 || cta.bottom > cta.vp) failures.push(`CTA fora da dobra (${Math.round(cta.top)}–${Math.round(cta.bottom)} de ${cta.vp})`);
+  }
+
+  if (desktop) {
+    // Hover atualiza o painel docado e não abre folha nem popup de zoom fixo.
+    const third = cards.nth(2);
+    await third.hover();
+    await page.waitForTimeout(200);
+    const expected = (await third.locator(".nf-detail-card-name").textContent())?.trim();
+    const shown = (await page.locator('[data-screen="detail"] .nf-pane-title').textContent())?.trim();
+    if (shown !== expected) failures.push(`hover: painel mostra "${shown}", esperado "${expected}"`);
+    const fixedVisible = await page.evaluate(() => [...document.querySelectorAll("body *")].filter((el) => {
+      const cs = getComputedStyle(el);
+      // Decoração passiva (fx-layer etc.) não é "popup de zoom": pointer-events
+      // none não interage nem cobre.
+      if (cs.pointerEvents === "none" || cs.visibility === "hidden" || cs.opacity === "0") return false;
+      const b = el.getBoundingClientRect();
+      return cs.position === "fixed" && b.width > 0 && b.height > 0;
+    }).map((el) => el.className || el.tagName));
+    if (fixedVisible.length) failures.push(`hover: ${fixedVisible.length} elemento(s) fixed visível(is) (popup de zoom?): ${fixedVisible.slice(0, 3).join(" | ")}`);
+    if (await page.locator('[role="dialog"][aria-modal="true"]').count()) failures.push("hover abriu uma folha no desktop");
+  } else {
+    // Toque: a folha mostra a carta tocada e Esc a fecha.
+    await cards.nth(2).click();
+    await page.locator('[role="dialog"][aria-modal="true"]').waitFor({ state: "visible", timeout: 5000 }).catch(() => failures.push("toque na carta não abriu a folha"));
+    await page.waitForTimeout(600);
+    const expected = (await cards.nth(2).locator(".nf-detail-card-name").textContent())?.trim();
+    const sheetTitle = (await page.locator('[role="dialog"][aria-modal="true"] .nf-sheet-title').textContent().catch(() => ""))?.trim();
+    if (sheetTitle !== expected) failures.push(`folha mostra "${sheetTitle}", esperado "${expected}"`);
+    await audit("folha da carta", '[role="dialog"][aria-modal="true"]');
+    await page.keyboard.press("Escape");
+    await page.locator('[role="dialog"][aria-modal="true"]').waitFor({ state: "detached", timeout: 5000 }).catch(() => failures.push("Esc não fechou a folha da carta"));
+  }
+
+  await audit("detalhe", '[data-screen="detail"]');
+  if (shotDir) await page.screenshot({ path: join(shotDir, `detail-cards-${vp.name}.png`), fullPage: true });
+
+  await page.getByRole("radio", { name: "Statistics", exact: true }).click();
+  await page.waitForSelector('[data-screen="detail"] .nf-detail-stats', { timeout: 5000 }).catch(() => failures.push("aba Estatísticas não abriu"));
+  await page.waitForTimeout(700);
+  await audit("estatísticas", '[data-screen="detail"]');
+  if (shotDir) await page.screenshot({ path: join(shotDir, `detail-stats-${vp.name}.png`), fullPage: true });
+
+  await page.locator('[data-screen="detail"] .nf-detail-top button').click();
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 15000 }).catch(() => failures.push("voltar do Detalhe não devolveu ao Lobby"));
+
+  if (errors.length) failures.push(`erro de página: ${errors.join("; ")}`);
+  await context.close();
+  return failures;
+}
+
+// H-17: a folha de importação (S6) sobre o Lobby. O deck é um id próprio do harness (não é um
+// inicial, então o teste não passa por acaso). Confere: ID inválido avisa sem buscar; o UUID vira
+// pré-visualização com UMA busca; "Adicionar e jogar" leva à mão (o deck entra na biblioteca com
+// saved:true e sobrevive ao reload); sem rede o mesmo UUID volta do cache ("Da cópia offline");
+// um UUID desconhecido sem cache mostra o erro. Devolve a lista de falhas (vazia = passou).
+const IMPORT_ID = "aaaaaaaa-1111-4222-8333-444444444444";
+const IMPORT_MISS = "bbbbbbbb-1111-4222-8333-444444444444";
+async function importFlow(browser, vp, url, shotDir) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  let fetches = 0;
+  // setOffline não corta requisições que um route já atende: o mock recusa à mão quando "sem rede".
+  let offline = false;
+  await context.route("https://www.keyforgegame.com/api/decks/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (offline) return route.abort("internetdisconnected");
+    if (!path.includes(IMPORT_ID)) return route.fulfill({ status: 404, json: {} });
+    fetches += 1;
+    return route.fulfill({
+      json: {
+        data: { id: IMPORT_ID, name: "Harness Import Deck", expansion: 341, _links: { houses: ["Brobnar"], cards: Array(36).fill(VAULT_FILLER.id) } },
+        _linked: { cards: [VAULT_FILLER] },
+      },
+    });
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (err) => errors.push(err.message));
+  const sheet = '[role="dialog"][aria-modal="true"]';
+  const input = `${sheet} input[type="text"]`;
+
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.getByRole("button", { name: "Import deck", exact: true }).first().click();
+  await page.waitForSelector(input, { timeout: 10000 }).catch(() => failures.push("Importar não abriu a folha"));
+
+  // ID inválido: aviso, botão desligado, nenhuma busca.
+  await page.locator(input).fill("nao-e-um-deck");
+  const hintError = await page.locator(`${sheet} .nf-import-hint--error`).count();
+  if (!hintError) failures.push("ID inválido sem aviso");
+  if (!(await page.locator(`${sheet} button[type="submit"]`).isDisabled())) failures.push("ID inválido deixou o botão ligado");
+  if (fetches) failures.push(`ID inválido buscou na rede (${fetches})`);
+
+  // UUID: uma busca, pré-visualização com o nome e a casa.
+  await page.locator(input).fill(IMPORT_ID);
+  await page.locator(input).press("Enter");
+  await page.waitForSelector(`${sheet} .nf-import-name`, { timeout: 15000 }).catch(() => failures.push("UUID não virou pré-visualização"));
+  const name = (await page.locator(`${sheet} .nf-import-name`).textContent().catch(() => ""))?.trim();
+  if (name !== "Harness Import Deck") failures.push(`pré-visualização mostra "${name}"`);
+  if (fetches !== 1) failures.push(`${fetches} busca(s) na rede, esperado 1`);
+  await page.waitForTimeout(500);
+  const audit = await page.evaluate(AUDIT, sheet);
+  for (const [key, items] of Object.entries(audit)) {
+    if (Array.isArray(items) ? items.length : items !== null) failures.push(`folha ${key}: ${Array.isArray(items) ? items.slice(0, 4).join("; ") : items}`);
+  }
+  if (shotDir) await page.screenshot({ path: join(shotDir, `import-preview-${vp.name}.png`) });
+
+  // Adicionar e jogar: a folha fecha e a partida abre na mão inicial.
+  await page.locator(`${sheet} [data-action="import-play"]`).click();
+  await page.locator(".mulligan-keep").waitFor({ state: "visible", timeout: 20000 }).catch(() => failures.push("Adicionar e jogar não abriu a partida"));
+  if (await page.locator(`${sheet} .nf-import-form`).count()) failures.push("a folha continuou aberta depois de Adicionar e jogar");
+
+  // Reload: o deck continua na biblioteca (saved:true). A partida interrompida pode aparecer no Lobby;
+  // o que importa é o deck estar na prateleira.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 }).catch(() => failures.push("reload sem Lobby"));
+  await page.waitForTimeout(500);
+  const shelved = await page.locator('[data-screen="lobby"]').getByText("Harness Import Deck").count();
+  if (!shelved) failures.push("deck importado sumiu da biblioteca depois do reload (saved:true)");
+
+  // Sem rede: o mesmo UUID volta do cache, e a folha diz de onde veio.
+  offline = true;
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "Import deck", exact: true }).first().click();
+  await page.locator(input).fill(IMPORT_ID);
+  await page.locator(input).press("Enter");
+  await page.waitForSelector(`${sheet} .nf-import-source`, { timeout: 15000 }).catch(() => failures.push("offline: sem pré-visualização do cache"));
+  const source = (await page.locator(`${sheet} .nf-import-source`).textContent().catch(() => ""))?.trim();
+  // O SEED desta harness semeia language:"en": o rótulo renderiza em inglês.
+  if (source !== "From offline copy") failures.push(`offline: origem "${source}", esperado "From offline copy"`);
+  offline = false;
+  await context.setOffline(false);
+
+  // UUID desconhecido e sem cache: a folha mostra o erro, sem pré-visualização.
+  await page.locator(input).fill(IMPORT_MISS);
+  await page.locator(input).press("Enter");
+  await page.waitForSelector(`${sheet} .nf-import-error`, { timeout: 15000 }).catch(() => failures.push("UUID desconhecido não mostrou erro"));
+  if (await page.locator(`${sheet} .nf-import-name`).count()) failures.push("UUID desconhecido mostrou pré-visualização");
+
+  if (errors.length) failures.push(`erro de página: ${errors.join("; ")}`);
+  await context.close();
+  return failures;
+}
+
 const server = startServer();
 let browser;
 let problems = 0;
@@ -744,6 +1038,39 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[sheet ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const failures = await libraryFlow(browser, vp, server.url, shotDir);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[library-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[library-flow ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const failures = await detailFlow(browser, vp, server.url, shotDir);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[detail-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[detail-flow ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const failures = await importFlow(browser, vp, server.url, shotDir);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[import-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[import-flow ${vp.name}] OK`);
       }
     }
 

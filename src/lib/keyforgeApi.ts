@@ -1,10 +1,10 @@
 import { cacheDeck, countCatalogCards, getCachedDeck, listCatalogCardHashes, putCatalogCards } from "./cache";
 import { textHash } from "./cardText";
+import { parseDeckId } from "./deckId";
 import type { CardFace, DeckInfo } from "./game";
 import type { Translator } from "./i18n";
 
 const DECK_API = "https://www.keyforgegame.com/api/decks";
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 /** Catalog sync defaults (plano §3): the Vault caps page_size at 10 decks, and
     one run walks a bounded number of pages so the button stays responsive. */
 export const CARD_PAGE_SIZE = 10;
@@ -100,9 +100,9 @@ function normaliseCard(value: unknown): CardFace | null {
 }
 
 export function extractDeckId(input: string): string {
-  const id = input.trim().match(UUID_PATTERN)?.[0];
+  const id = parseDeckId(input);
   if (!id) throw new VaultError("vault.badId");
-  return id.toLowerCase();
+  return id;
 }
 
 function readHouses(links: ApiRecord, cards: CardFace[]): string[] {

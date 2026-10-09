@@ -107,6 +107,10 @@ import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 import { readUiFlag } from "./ui/flag";
 import { LobbyScreen } from "./ui/screens/lobby/LobbyScreen";
+import { LibraryScreen, type LibraryTab } from "./ui/screens/library/LibraryScreen";
+import { ImportSheet } from "./ui/screens/import/ImportSheet";
+import { DeckDetail } from "./ui/screens/deck/DeckDetail";
+import type { LibrarySort } from "./ui/lib/library";
 import { resumeInfoOf } from "./ui/lib/resume";
 import { resolvePassDecks } from "./ui/lib/passDecks";
 import { presetOf, applyPreset } from "./ui/lib/presets";
@@ -2710,6 +2714,11 @@ function App() {
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
   // BUG-15: the Vault view state survives browsing into a deck and back.
   const [browseState, setBrowseState] = useState<BrowseState>({ page: 1, search: "", ordering: "-date" });
+  // UX_REWRITE_PLAN §5 H-15: aba e ordem da biblioteca (v2) vivem aqui para sobreviver ao Detalhe.
+  const [libraryTab, setLibraryTab] = useState<LibraryTab>("mine");
+  const [librarySort, setLibrarySort] = useState<LibrarySort>("shelf");
+  // UX_REWRITE_PLAN §5 H-16: de onde o Detalhe (v2) foi aberto; o "voltar" devolve para lá.
+  const [inspectOrigin, setInspectOrigin] = useState<"home" | "browse">("home");
   // FEAT-01: the interrupted match found at mount, offered on Home.
   const [resumeMatch, setResumeMatch] = useState<SavedMatch | null>(null);
   const [boundaryEpoch, setBoundaryEpoch] = useState(0);
@@ -4010,15 +4019,17 @@ function App() {
     }
   }
 
-  async function syncCurrentDeck() {
+  async function syncCurrentDeck(inspected?: DeckInfo) {
     if (syncing) return;
     setSyncing(true);
     await updateAppShell();
     // Sync the deck the player is looking at — the match deck on the board, the
     // selected deck anywhere else — and never re-point the selection (BUG-05).
-    const target = screen === "game" ? currentDeck : selectedDeck;
+    // H-16: o Detalhe passa o deck que está aberto (pode não ser o selecionado).
+    const target = inspected ?? (screen === "game" ? currentDeck : selectedDeck);
     try {
       const deck = await fetchKeyforgeDeck(target.id);
+      if (inspected) setInspectDeck(deck);
       if (screen === "game") {
         setCurrentDeck(deck);
         // A live match reflects the fresh card data (refreshGameFaces had no
@@ -4029,7 +4040,7 @@ function App() {
           // pela ref paralela; aqui a ref ainda aponta o deck antigo).
           commitGame(gameRef.current, next, { kind: "sync", deck: deck.name });
         }
-      } else {
+      } else if (target.id === selectedDeck.id) {
         setSelectedDeck(deck);
       }
       setSavedDecks((prev) => prev.map((item) => (item.id === deck.id ? { ...deck, favorite: item.favorite } : item)));
@@ -4119,7 +4130,8 @@ function App() {
     }
   }
 
-  function useCandidateDeck() {
+  // H-17: playAfter = "Adicionar e jogar" (a folha v2); o v1 chama sem ele e só guarda.
+  function useCandidateDeck(playAfter = false) {
     if (!deckCandidate) return;
     const deck = deckCandidate;
     setSavedDecks((prev) => {
@@ -4142,6 +4154,7 @@ function App() {
       // Deck is already cached in IndexedDB when available.
     }
     showToast(t("toast.deckReady", { name: deck.name }));
+    if (playAfter) playDeck(deck);
   }
 
   function openDeckModal() {
@@ -4157,6 +4170,8 @@ function App() {
     setInspectDeck(deck);
     setInspectStats(null);
     void getDeckStats(deck.id).then(setInspectStats);
+    // H-16: o "voltar" do Detalhe devolve à tela de onde se veio (Lobby ou Decks).
+    setInspectOrigin(screen === "browse" ? "browse" : "home");
     setScreen("inspect");
     writeInspectPointer(deck.id);
   }
@@ -4408,7 +4423,7 @@ function App() {
             onSelectDeck={(deck) => { sound.play("select"); setSelectedDeck(deck); }}
             onInspect={openInspector}
             onImport={() => { sound.play("click"); openDeckModal(); }}
-            onExplore={() => { sound.play("click"); setScreen("browse"); }}
+            onExplore={() => { sound.play("click"); setLibraryTab("vault"); setScreen("browse"); }}
             onToggleFavorite={toggleFavorite}
             onRemoveDeck={setDeckToRemove}
             onReplay={openReplay}
@@ -4433,7 +4448,28 @@ function App() {
           />
         )}
 
-        {screen === "browse" && (
+        {screen === "browse" && ui2 === "2" && (
+          <LibraryScreen
+            t={t}
+            savedDecks={savedDecks}
+            starterIds={STARTER_IDS}
+            selectedId={selectedDeck.id}
+            tab={libraryTab}
+            onTab={setLibraryTab}
+            sort={librarySort}
+            onSort={setLibrarySort}
+            browse={browseState}
+            onBrowse={setBrowseState}
+            offline={!online}
+            onInspect={openInspector}
+            onPlay={playDeck}
+            onToggleFavorite={toggleFavorite}
+            onRemoveDeck={setDeckToRemove}
+            onImport={() => { sound.play("click"); openDeckModal(); }}
+          />
+        )}
+
+        {screen === "browse" && ui2 !== "2" && (
           <DeckBrowser
             t={t}
             state={browseState}
@@ -4446,7 +4482,21 @@ function App() {
           />
         )}
 
-        {screen === "inspect" && inspectDeck && (
+        {screen === "inspect" && inspectDeck && ui2 === "2" && (
+          <DeckDetail
+            key={inspectDeck.id}
+            t={t}
+            deck={inspectDeck}
+            selected={selectedDeck.id === inspectDeck.id}
+            stats={inspectStats}
+            syncing={syncing}
+            onBack={() => { sound.play("click"); writeInspectPointer(null); setScreen(inspectOrigin); }}
+            onPlay={(deck) => { if (!savedDecks.some((item) => item.id === deck.id)) adoptDeck(deck); playDeck(deck); }}
+            onSync={() => void syncCurrentDeck(inspectDeck)}
+          />
+        )}
+
+        {screen === "inspect" && inspectDeck && ui2 !== "2" && (
           <DeckInspector
             deck={inspectDeck}
             t={t}
@@ -4882,7 +4932,23 @@ function App() {
         />
       )}
 
-      {deckModalOpen && (
+      {deckModalOpen && ui2 === "2" && (
+        <ImportSheet
+          t={t}
+          deckInput={deckInput}
+          setDeckInput={setDeckInput}
+          candidate={deckCandidate}
+          loading={deckLoading}
+          error={deckError}
+          fromCache={deckFromCache}
+          onFetch={(event) => void fetchDeck(event)}
+          onAdd={() => useCandidateDeck(false)}
+          onAddAndPlay={() => useCandidateDeck(true)}
+          onClose={() => setDeckModalOpen(false)}
+        />
+      )}
+
+      {deckModalOpen && ui2 !== "2" && (
         <DeckModal
           currentDeck={selectedDeck}
           deckInput={deckInput}
@@ -4893,7 +4959,7 @@ function App() {
           fromCache={deckFromCache}
           t={t}
           onFetch={(event) => void fetchDeck(event)}
-          onUseDeck={useCandidateDeck}
+          onUseDeck={() => useCandidateDeck(false)}
           onClose={() => setDeckModalOpen(false)}
         />
       )}
