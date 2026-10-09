@@ -1,0 +1,36 @@
+/* Table shell da v2 (UX_REWRITE_PLAN §5 H-08): na partida o header e a tab bar somem e o
+   palco recebe os pixels. Só vale com data-shell="table" no .app-root (ui2 && partida), então
+   com a v2 desligada nada aqui casa. Nenhum seletor fora do .app-root[data-shell="table"]. */
+
+/* Zerar as alturas do chrome faz as duas linhas 1fr do palco crescerem sozinhas (ver
+   .game-board--stage em index.css). O safe-area do home indicator não some: entra em
+   --tabbar-g (que o --stage-off já desconta) e em --tabbar-h (docks e gavetas de baixo). */
+.app-root[data-shell="table"] {
+  --header-h: 0px;
+  --title-h: 0px;
+  --tabbar-g: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: env(safe-area-inset-bottom, 0px);
+}
+
+.app-root[data-shell="table"] .app-header,
+.app-root[data-shell="table"] .mobile-tabs {
+  display: none;
+}
+
+/* NÃO zerar a altura do heading: calc(var(--title-h) - 6px) vira inválido e cai em height:auto.
+   Oculta visualmente (clip) e mantém o H1 na árvore de acessibilidade. */
+.app-root[data-shell="table"] .match-heading {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* O notch era o padding do header; sem header ele vira o topo do main. A base do main some
+   (a tab bar não existe mais). As laterais ficam com o layout de cada perfil. */
+.app-root[data-shell="table"] .app-main {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: 0;
+}
