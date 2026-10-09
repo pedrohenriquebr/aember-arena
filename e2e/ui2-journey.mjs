@@ -145,7 +145,7 @@ async function scenarioC(browser) {
   await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
   await page.locator(".nf-shell-tab").nth(2).click();
-  await page.waitForSelector(".config-screen", { timeout: 15000 });
+  await page.waitForSelector('[data-screen="settings"]', { timeout: 15000 });
   await resetClicks(page);
   await page.locator(".nf-shell-tab").nth(0).click();
   await page.waitForSelector('[data-screen="lobby"]', { timeout: 15000 });

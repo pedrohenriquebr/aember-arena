@@ -16,6 +16,7 @@ import "./ui/screens/library/library.css";
 import "./ui/screens/deck/deck.css";
 import "./ui/screens/import/import.css";
 import "./ui/screens/match.css";
+import "./ui/screens/settings/settings.css";
 import App from "./App";
 import { applyTheme, readTheme } from "./ui/theme";
 

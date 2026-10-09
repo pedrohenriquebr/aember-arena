@@ -119,6 +119,7 @@ import { KitScreen } from "./ui/screens/KitScreen";
 import { LobbyShell } from "./ui/shell/LobbyShell";
 import { TableMenu } from "./ui/shell/TableMenu";
 import { destinationOf } from "./ui/shell/shellNav";
+import { SettingsScreen } from "./ui/screens/settings/SettingsScreen";
 
 const RANDOM_RIVAL_KEY = "aember-arena-random-rival";
 
@@ -2710,7 +2711,9 @@ function App() {
   // H-13: a MatchSheet (S3) aberta pela linha "contra …" do Lobby.
   const [matchSheetOpen, setMatchSheetOpen] = useState(false);
 
-  const [screen, setScreen] = useState<Screen>("home");
+  // H-18: ?ui=2&screen=settings abre Ajustes direto (gate e2e:ui2); sem a v2 a rota não existe.
+  const [screen, setScreen] = useState<Screen>(() =>
+    ui2 === "2" && new URLSearchParams(window.location.search).get("screen") === "settings" ? "settings" : "home");
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
   // BUG-15: the Vault view state survives browsing into a deck and back.
   const [browseState, setBrowseState] = useState<BrowseState>({ page: 1, search: "", ordering: "-date" });
@@ -4507,7 +4510,34 @@ function App() {
           />
         )}
 
-        {(screen === "config" || screen === "settings") && (
+        {/* H-18: com a v2, Ajustes é a central nova (S7); a v1 segue com a ConfigScreen de sempre. */}
+        {screen === "settings" && ui2 === "2" && (
+          <SettingsScreen
+            t={t}
+            settings={settings}
+            onChange={setSettings}
+            hasHover={hasHover}
+            languageMenu={<LanguageMenu language={language} onChange={setLanguage} label={t("nav.language")} />}
+            formatDelay={(ms) => delaySeconds(ms, settings.language)}
+            online={online}
+            catalogCount={catalogCount}
+            catalogSync={catalogSync}
+            onSyncCatalog={() => { sound.play("click"); void syncCatalogNow(); }}
+            onCancelCatalog={() => { sound.play("click"); catalogAbortRef.current?.abort(); }}
+            onSyncDeck={() => { sound.play("click"); void syncCurrentDeck(); }}
+            deckSyncing={syncing}
+            updateReady={updateReady}
+            onReloadUpdate={reloadForUpdate}
+            llm={llm}
+            onLlmChange={setLlm}
+            llmRun={llmRun}
+            onLlmTranslate={() => { sound.play("click"); void translateNow(); }}
+            onLlmCancel={() => { sound.play("click"); llmAbortRef.current?.abort(); }}
+            onOpenTutorial={() => { sound.play("click"); setTutorialOpen(true); }}
+          />
+        )}
+
+        {(screen === "config" || (screen === "settings" && ui2 !== "2")) && (
           <ConfigScreen
             t={t}
             settings={settings}

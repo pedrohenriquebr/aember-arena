@@ -1,0 +1,294 @@
+/* Ajustes da v2 (UX_REWRITE_PLAN §2 S7, §1.6.2). Só tokens --nf-* / --space-* / --fs-* /
+   --radius-* / --dur-* (lint:ui2). Mobile primeiro: as abas quebram em linha; no desktop
+   (≥701px) viram coluna à esquerda do painel. Os seletores .u-theme-* são do ThemePicker. */
+
+.nf-settings {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: var(--nf-w-content);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-3);
+}
+@media (min-width: 701px) {
+  .nf-settings { padding: var(--space-5) var(--space-6); }
+}
+
+.nf-settings-title {
+  margin: 0;
+  font-family: var(--nf-font-display);
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  color: var(--nf-text);
+}
+
+.nf-settings-layout {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+@media (min-width: 701px) {
+  .nf-settings-layout {
+    grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-6);
+  }
+}
+
+.nf-settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+@media (min-width: 701px) {
+  .nf-settings-tabs { flex-direction: column; flex-wrap: nowrap; }
+}
+
+.nf-settings-tab {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--nf-text-2);
+  font-family: var(--nf-font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.nf-settings-tab:focus-visible {
+  outline: 2px solid var(--nf-accent-hi);
+  outline-offset: 3px;
+}
+/* Movimento some com reduced-motion do SO ou o toggle de animações (convenção primitives.css). */
+@media (prefers-reduced-motion: reduce) {
+  .nf-settings-tab { transition: none; }
+}
+html.reduce-motion .nf-settings-tab { transition: none; }
+.nf-settings-tab.is-active {
+  border-color: var(--nf-line-strong);
+  background: var(--nf-s3);
+  color: var(--nf-text);
+}
+@media (hover: hover) {
+  .nf-settings-tab:hover:not(.is-active) { background: var(--nf-s2); color: var(--nf-text); }
+}
+
+.nf-settings-panel {
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s1);
+}
+
+.u-settings-list {
+  display: grid;
+  min-width: 0;
+}
+/* Mobile: o controle desce para a linha de baixo, à esquerda, e pode ocupar a largura. */
+.u-settings-list .nf-setting {
+  flex-wrap: wrap;
+}
+.u-settings-list .nf-setting-control {
+  flex: 1 1 100%;
+  justify-content: flex-start;
+  max-width: 100%;
+}
+/* O seletor de idioma é slot do App (lang-* do index.css): em Ajustes vale o alvo de 44px. */
+.nf-settings .lang-trigger,
+.nf-settings .lang-option { min-height: 44px; }
+
+/* ---- Dados e offline (H-19): cards de catálogo/status, barra de progresso ---- */
+.u-settings-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s2);
+}
+.u-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.u-progress {
+  height: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--nf-s3);
+}
+.u-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--nf-accent);
+  transition: width var(--dur-base) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .u-progress-fill { transition: none; }
+}
+html.reduce-motion .u-progress-fill { transition: none; }
+.u-settings-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+.u-build-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-sm);
+  color: var(--nf-text-2);
+}
+.u-settings-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--nf-text-2);
+  font-size: var(--fs-xs);
+}
+.u-settings-note--warn {
+  color: var(--nf-ember);
+}
+
+/* ---- Sobre (H-20) e Laboratório: links externos e o LlmSettings vindo da v1 ---- */
+.u-about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  color: var(--nf-accent-hi);
+  font-size: var(--fs-xs);
+}
+/* O LlmSettings entra sem alteração; em Ajustes os alvos dele valem 44px (H-03). */
+.nf-settings .llm-link { min-height: 44px; }
+@media (min-width: 701px) {
+  .u-settings-list .nf-setting { flex-wrap: nowrap; }
+  .u-settings-list .nf-setting-control { flex: none; justify-content: flex-end; }
+}
+
+/* ---- Tema (ThemePicker, §1.6.2) ---- */
+.u-settings-theme {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--nf-line);
+}
+.u-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
+  gap: var(--space-3);
+}
+.u-theme-slot {
+  position: relative;
+  border-radius: var(--radius-lg);
+}
+/* O anel é do tema VIGENTE: o slot fica fora do data-theme do cartão. */
+.u-theme-slot[data-lit="true"] {
+  box-shadow: var(--nf-lit-accent);
+}
+.u-theme-card {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 1px solid var(--nf-edge);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s2);
+  color: var(--nf-text);
+  font-family: var(--nf-font-ui);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.u-theme-card:focus-visible {
+  outline: 2px solid var(--nf-accent-hi);
+  outline-offset: 3px;
+}
+.u-theme-card strong {
+  font-size: var(--fs-sm);
+  color: var(--nf-text);
+}
+.u-theme-card small {
+  font-size: var(--fs-xs);
+  color: var(--nf-text-2);
+}
+.u-theme-check {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--nf-ether);
+  border-radius: 50%;
+  background: var(--nf-s2);
+  color: var(--nf-ether);
+}
+.u-theme-slot[data-lit="true"] .u-theme-check {
+  display: inline-flex;
+}
+
+.u-theme-preview {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--nf-void);
+}
+.u-theme-preview-panel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--radius-sm);
+  background: var(--nf-s2);
+}
+.u-theme-preview-line {
+  width: 45%;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--nf-text-3);
+}
+.u-theme-preview-line--wide {
+  width: 70%;
+  background: var(--nf-text);
+}
+.u-theme-preview-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.u-theme-preview-button {
+  width: 40%;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--nf-accent);
+}
+.u-theme-preview-chip {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--nf-ether);
+  border-radius: 50%;
+}
+.u-theme-preview-felt {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--nf-felt);
+}
+
+.u-theme-note {
+  margin: 0;
+  color: var(--nf-text-2);
+  font-size: var(--fs-xs);
+}

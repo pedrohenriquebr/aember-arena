@@ -32,6 +32,8 @@ const SCREENS = [
   { name: "lobby", query: "", scope: '[data-screen="lobby"]' },
   { name: "lobby", label: "lobby-loading", query: "state=loading", scope: '[data-screen="lobby"]' },
   { name: "lobby", label: "lobby-empty", query: "state=empty", scope: '[data-screen="lobby"]' },
+  // H-18: Ajustes (S7) abre direto por ?screen=settings; a aba Jogo é a medida aqui, a Interface no settingsFlow.
+  { name: "settings", query: "screen=settings", scope: '[data-screen="settings"]' },
 ];
 
 // H-02c: --theme <id> semeia o tema salvo e roda os checks naquele tema (forja é o padrão).
@@ -243,6 +245,175 @@ async function themeFlow(browser, vp, url) {
   return failures;
 }
 
+// H-18 (§5 H-18): Ajustes › Interface. Clicar no tema troca data-theme NO MESMO FRAME (o clique
+// é síncrono, lido logo depois) e persiste; "forja" tira o atributo; os 4 cartões têm --nf-accent
+// distinto; setas movem o foco e Enter/Espaço aplicam; recarregar mantém o tema SEM flash: o
+// primeiro backgroundColor do shell já é o --nf-void do tema salvo. Todas as abas são auditadas.
+const FLASH_PROBE = `(() => {
+  let first = null;
+  const look = () => {
+    if (first !== null) return;
+    const shell = document.querySelector(".nf-shell");
+    if (shell) { first = getComputedStyle(shell).backgroundColor; window.__firstShellBg = first; }
+  };
+  new MutationObserver(look).observe(document, { childList: true, subtree: true });
+})();`;
+
+async function settingsFlow(browser, vp, url, shotDir) {
+  const failures = [];
+  // Sem SEED aqui: ele regravaria o tema a cada navegação e o reload abaixo não provaria nada.
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(`localStorage.setItem("aember-arena-tutorial-seen", "1")`);
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  // A aba Jogo abre por padrão; os cartões de tema vivem na Interface.
+  const openInterface = async () => {
+    await page.locator('[data-screen="settings"] [role="tab"]', { hasText: /Interface/ }).click();
+    await page.waitForSelector('[data-screen="settings"] .u-theme-card', { timeout: 30000 });
+  };
+  await page.goto(`${url}?ui=2&screen=settings`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="settings"]', { timeout: 30000 });
+  await openInterface();
+  if (shotDir) await page.screenshot({ path: join(shotDir, `settings-theme-${vp.name}.png`) });
+  const cardOf = (id) => page.locator(`.u-theme-card[data-theme="${id}"]`);
+  const activeTheme = () => page.evaluate(() => document.activeElement?.getAttribute("data-theme") ?? null);
+  const appliedTheme = () => page.evaluate(() => document.documentElement.dataset.theme ?? null);
+
+  // Clique: o dataset já está novo quando o clique devolve o controle (mesmo frame).
+  const sameFrame = await page.evaluate(() => {
+    document.querySelector('.u-theme-card[data-theme="aco"]').click();
+    return document.documentElement.dataset.theme ?? null;
+  });
+  if (sameFrame !== "aco") failures.push(`clique em aco: data-theme "${sameFrame}" no mesmo frame, esperado "aco"`);
+  const stored = await page.evaluate(() => localStorage.getItem("aember-arena-theme"));
+  if (stored !== "aco") failures.push(`localStorage após aco: "${stored}", esperado "aco"`);
+
+  await cardOf("forja").click();
+  if (await page.evaluate(() => document.documentElement.hasAttribute("data-theme"))) failures.push("forja deixou data-theme na raiz (deveria remover)");
+
+  const accents = await page.evaluate(() => [...document.querySelectorAll(".u-theme-card")].map((el) => getComputedStyle(el).getPropertyValue("--nf-accent").trim()));
+  if (accents.length !== 4 || new Set(accents).size !== 4) failures.push(`--nf-accent dos 4 cartões não é distinto: ${accents.join(" | ")}`);
+
+  // Teclado: a seta move só o foco; Enter e Espaço aplicam.
+  await cardOf("forja").focus();
+  await page.keyboard.press("ArrowRight");
+  if ((await activeTheme()) !== "aco") failures.push(`seta direita: foco em "${await activeTheme()}", esperado "aco"`);
+  if ((await appliedTheme()) !== null) failures.push("seta mudou o tema (deveria só mover o foco)");
+  await page.keyboard.press("Enter");
+  if ((await appliedTheme()) !== "aco") failures.push(`Enter no foco: tema "${await appliedTheme()}", esperado "aco"`);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Space");
+  if ((await appliedTheme()) !== "claro") failures.push(`Espaço no foco: tema "${await appliedTheme()}", esperado "claro"`);
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  if ((await activeTheme()) !== "forja") failures.push(`setas à esquerda: foco em "${await activeTheme()}", esperado "forja"`);
+
+  // Persistência e reload sem flash: o tema salvo é o arcano, lido de volta no MESMO storage.
+  await cardOf("arcano").click();
+  await context.addInitScript(FLASH_PROBE);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="settings"]', { timeout: 30000 });
+  await openInterface();
+  const reload = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.backgroundColor = "var(--nf-void)";
+    document.body.append(probe);
+    const voidColor = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { theme: document.documentElement.dataset.theme ?? null, first: window.__firstShellBg, voidColor };
+  });
+  if (reload.theme !== "arcano") failures.push(`reload: data-theme "${reload.theme}", esperado "arcano"`);
+  if (reload.first !== reload.voidColor) failures.push(`reload com flash: 1º fundo do shell ${reload.first}, --nf-void do tema salvo ${reload.voidColor}`);
+
+  // Auditoria de TODAS as abas: cada uma é aberta antes de medir (alvos, texto, movimento).
+  // O settle de 600ms é o do critério 5 (H-03): nada pode seguir em curso depois dele.
+  const tabs = page.locator('[data-screen="settings"] [role="tab"]');
+  const tabCount = await tabs.count();
+  for (let index = 0; index < tabCount; index += 1) {
+    await tabs.nth(index).click();
+    await page.waitForTimeout(700);
+    if (shotDir) await page.screenshot({ path: join(shotDir, `settings-tab${index}-${vp.name}.png`) });
+    const audit = await page.evaluate(AUDIT, '[data-screen="settings"]');
+    if (failed(audit)) {
+      for (const [key, items] of Object.entries(audit)) {
+        if (Array.isArray(items) ? items.length : items !== null) failures.push(`aba ${index} ${key}: ${Array.isArray(items) ? items.slice(0, 6).join("; ") : items}`);
+      }
+    }
+  }
+  if (errors.length) failures.push(`erro de página: ${errors.join("; ")}`);
+  await context.close();
+  return failures;
+}
+
+// H-19 (§5 H-19): Ajustes › Dados e offline. O catálogo vem MOCKADO (a rota do Vault
+// responde páginas com atraso): a barra de progresso avança (n/total) e o Cancelar
+// interrompe entre páginas, com o botão de sync de volta ao repouso. O status do app
+// mostra o BUILD_ID lido do sw.js e documenta o ?swreset=1; nunca um texto "ONLINE" fixo.
+async function dataFlow(browser, vp, url, shotDir) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(SEED);
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+
+  // Mock do Master Vault: cartas novas por página e latência para o cancelo cair entre páginas.
+  await page.route((target) => target.href.includes("keyforgegame.com/api/decks"), async (route) => {
+    await new Promise((r) => setTimeout(r, 150));
+    const pageNo = Number(new URL(route.request().url()).searchParams.get("page")) || 1;
+    const cards = Array.from({ length: 4 }, (_, i) => ({
+      id: `mock-${pageNo}-${i}`,
+      card_title: `Mock ${pageNo}-${i}`,
+      house: "brobnar",
+      card_type: "Action",
+      card_text: `Mock effect ${pageNo}-${i}.`,
+    }));
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ count: 40, data: [], _linked: { cards } }) });
+  });
+
+  await page.goto(`${url}?ui=2&screen=settings`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="settings"]', { timeout: 30000 });
+  await page.locator('[data-screen="settings"] [role="tab"]', { hasText: /Data|Dados/ }).click();
+  await page.waitForSelector('[data-screen="settings"] .u-settings-card', { timeout: 15000 });
+  if (shotDir) await page.screenshot({ path: join(shotDir, `settings-data-${vp.name}.png`) });
+
+  // Sincronizar: a barra aparece e o valor avança além da primeira página.
+  await page.locator('[data-screen="settings"] .u-settings-actions button').first().click();
+  await page.waitForSelector('[data-screen="settings"] [role="progressbar"]', { timeout: 5000 }).catch(() => failures.push("barra de progresso não apareceu ao sincronizar"));
+  if (shotDir) await page.screenshot({ path: join(shotDir, `settings-data-progress-${vp.name}.png`) });
+  await page.waitForFunction(() => {
+    const bar = document.querySelector('[data-screen="settings"] [role="progressbar"]');
+    return Boolean(bar) && Number(bar.getAttribute("aria-valuenow")) >= 2;
+  }, undefined, { timeout: 15000 }).catch(() => failures.push("barra não progrediu (aria-valuenow < 2)"));
+
+  // Cancelar: a barra some e o sync volta a ficar habilitado.
+  await page.locator('[data-screen="settings"] button', { hasText: /^Cancel/ }).click();
+  await page.waitForSelector('[data-screen="settings"] [role="progressbar"]', { state: "detached", timeout: 5000 }).catch(() => failures.push("barra não sumiu após cancelar"));
+  if (await page.locator('[data-screen="settings"] .u-settings-actions button').first().isDisabled()) {
+    failures.push("botão de sync segue desabilitado após cancelar");
+  }
+
+  // Status do app: BUILD_ID preenchido, ?swreset=1 documentado e nenhum "ONLINE" fixo.
+  const text = await page.evaluate(() => document.querySelector('[data-screen="settings"]')?.innerText ?? "");
+  const build = await page.evaluate(() => document.querySelector(".u-build-id")?.textContent ?? "");
+  if (!build.trim()) failures.push("linha do BUILD_ID vazia");
+  if (!text.includes("?swreset=1")) failures.push("?swreset=1 não documentado na aba Dados");
+  if (/\bONLINE\b/.test(text)) failures.push(`texto "ONLINE" fixo na aba Dados: "${text.match(/\bONLINE\b.*/)?.[0]}"`);
+
+  // O toast do cancelar acaba de nascer: o settle de 600ms (critério 5) o deixa terminar.
+  await page.waitForTimeout(700);
+  const audit = await page.evaluate(AUDIT, '[data-screen="settings"]');
+  if (failed(audit)) {
+    for (const [key, items] of Object.entries(audit)) {
+      if (Array.isArray(items) ? items.length : items !== null) failures.push(`aba Dados ${key}: ${Array.isArray(items) ? items.slice(0, 6).join("; ") : items}`);
+    }
+  }
+  if (errors.length) failures.push(`erro de página: ${errors.join("; ")}`);
+  await context.close();
+  return failures;
+}
+
 // H-07: a casca do lobby. O Tab percorre marca → 3 destinos → mudo → idioma (a ordem do DOM);
 // aria-current acende só o destino da tela; Decks e Ajustes trocam de tela sem sair da casca.
 // Devolve a lista de falhas (vazia = passou).
@@ -281,7 +452,7 @@ async function shellFlow(browser, vp, url) {
   await expectCurrent("após Decks", [false, true, false]);
 
   await page.locator(".nf-shell-tab").nth(2).click();
-  await page.waitForSelector(".config-screen", { timeout: 15000 }).catch(() => failures.push("Ajustes não abriu a tela de configuração"));
+  await page.waitForSelector('[data-screen="settings"]', { timeout: 15000 }).catch(() => failures.push("Ajustes não abriu a tela de Ajustes da v2"));
   await expectCurrent("após Ajustes", [false, false, true]);
 
   await page.locator(".nf-shell-brand").click();
@@ -394,15 +565,13 @@ const RAIL_MEASURE = () => {
   return out;
 };
 
-// Casca -> Ajustes -> partida demo (mulligan mantido) -> turno do jogador pronto.
+// Casca -> Jogar (lobby) -> partida demo (mulligan mantido) -> turno do jogador pronto.
+// H-18: Ajustes deixou de levar ao wizard v1; a partida começa pelo Jogar do lobby (H-11).
 async function openTable(page, url) {
   await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-screen="shell"]', { timeout: 30000 });
-  await page.locator(".nf-shell-tab").nth(2).click();
-  await page.waitForSelector(".config-screen", { timeout: 15000 });
-  const pills = page.locator(".config-screen .config-step-pill");
-  await pills.nth((await pills.count()) - 1).click();
-  await page.locator(".config-nav .cta-button").click();
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.locator('[data-action="play"]').click();
   await page.waitForSelector(".game-screen", { timeout: 20000 });
   const keep = page.locator(".mulligan-keep");
   if (await keep.count()) await keep.click();
@@ -1093,6 +1262,28 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[theme-flow ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const failures = await settingsFlow(browser, vp, server.url, shotDir);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[settings-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[settings-flow ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const failures = await dataFlow(browser, vp, server.url, shotDir);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[data-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[data-flow ${vp.name}] OK`);
       }
     }
   }
