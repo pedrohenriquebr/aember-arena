@@ -3,12 +3,16 @@
 // ?ui=2 com storage limpo e mede cada cenário pelo listener de captura do próprio documento.
 // Cenários: A Jogar→Manter (esperado 2) · B tile→Jogar→Manter (2) · C aba Jogar→Jogar→Manter a
 // partir de Ajustes (3) · D força Duro→Jogar→Manter (3) · E Continuar após reload (1) · F abandono
-// só com partida viva (confirma e cancela) · S smoke v2: dois turnos do Warden na mesa.
+// só com partida viva (confirma e cancela) · S smoke v2: dois turnos do Warden na mesa ·
+// R (H-22) partida fechada → S9 (1) → Revanche → Manter (2) · O (H-23) onboarding → mesa (3),
+// reload no passo 2 retoma, settings gravadas não mostram o onboarding · K (H-24) três dicas
+// avançam pelo jogo e somem (não voltam); Pular dicas encerra no ato.
 // Uso: npm run e2e:journey   (sai != 0 se algum critério falhar)
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { closeSavedMatch, readResult, resultProblems } from "./ui2-fixtures.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 5212;
@@ -190,6 +194,151 @@ async function scenarioH(browser) {
 // E e F partem do mesmo save: uma partida jogada (um turno passado), depois recarregada.
 // G: pass-and-play pela folha (código novo: playDeck no 2P). Não conta cliques: é o caminho de
 // personalização, não o caminho feliz (plano §3.2). Só exige que a mesa de dois jogadores abra.
+// O (H-23): storage limpo → Começar → starter → Jogar guiada = mesa em 3 toques (sem contar o
+// Manter). O idioma troca na hora; recarregar no passo 2 retoma o passo 2; com settings gravadas
+// e sem o marcador de onboarding, o onboarding não aparece.
+const EMPTY_STORAGE = "void 0";
+const SETTINGS_ONLY = `(() => {
+  localStorage.setItem("aember-arena-settings", JSON.stringify({
+    difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: false,
+    hoverZoom: false, hints: false, language: "en", opponentMode: "mirror", gameMode: "solo",
+  }));
+})()`;
+
+async function scenarioO(browser) {
+  const { context, page } = await newPage(browser, EMPTY_STORAGE);
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="onboarding"][data-onboarding-step="1"]', { timeout: 30000 });
+  await resetClicks(page);
+
+  // Idioma aplica na hora: sem recarregar, o título e o botão mudam para pt-BR.
+  await page.getByRole("radio", { name: /PT/ }).click();
+  if (!(await page.getByText("Bem-vindo ao Aember Arena").count())) failures.push("O: idioma pt-BR não aplicou na hora");
+  await page.getByRole("radio", { name: /EN/ }).click();
+  // Trocar o idioma é escolha à parte: o caminho medido começa em Começar.
+  await resetClicks(page);
+
+  await page.locator('[data-screen="onboarding"] .nf-btn--primary').click();
+  await page.waitForSelector('[data-onboarding-step="2"]', { timeout: 10000 });
+  await page.locator('[data-screen="onboarding"] [role="radio"]').nth(1).click();
+  await page.locator('[data-screen="onboarding"] .nf-btn--primary').click();
+  await page.waitForSelector(".game-screen", { timeout: 20000 });
+  check("O Começar → starter → Jogar guiada → mesa", await clicks(page), 3);
+  const hints = await page.evaluate(() => JSON.parse(localStorage.getItem("aember-arena-settings") ?? "{}").hints);
+  if (hints !== true) failures.push("O: a partida guiada não ligou as dicas (settings.hints)");
+  if (await page.locator('[data-screen="onboarding"]').count()) failures.push("O: onboarding ficou aberto na mesa");
+  await context.close();
+
+  // Reload no passo 2 retoma o passo 2 (o storage guarda o passo, não só o "já viu").
+  const again = await newPage(browser, EMPTY_STORAGE);
+  await again.page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await again.page.locator('[data-screen="onboarding"] .nf-btn--primary').click();
+  await again.page.waitForSelector('[data-onboarding-step="2"]', { timeout: 10000 });
+  await again.page.reload({ waitUntil: "domcontentloaded" });
+  await again.page.waitForSelector('[data-onboarding-step="2"]', { timeout: 30000 }).catch(() => {});
+  if (!(await again.page.locator('[data-onboarding-step="2"]').count())) failures.push("O: reload no passo 2 não retomou o passo 2");
+  report.push("[journey] O reload no passo 2 retoma o passo 2 OK");
+  await again.context.close();
+
+  // Settings gravadas sem o marcador de onboarding: o onboarding não aparece (não é emboscada).
+  const existing = await newPage(browser, SETTINGS_ONLY);
+  await existing.page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await existing.page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  if (await existing.page.locator('[data-screen="onboarding"]').count()) failures.push("O: onboarding apareceu com settings gravadas");
+  report.push("[journey] O com settings gravadas o onboarding não aparece OK");
+  await existing.context.close();
+}
+
+// K (H-24): a partida guiada mostra as três dicas, cada uma avança pelo que o jogador faz (casa,
+// carta, fim de turno) e some ao terminar; não volta ao recarregar. "Pular dicas" encerra no ato.
+const COACH_LAYER = (step) => `[data-coach-layer="${step}"]`;
+async function startGuided(page) {
+  await page.waitForSelector('[data-onboarding-step="1"]', { timeout: 30000 });
+  await page.locator('[data-screen="onboarding"] .nf-btn--primary').click();
+  await page.waitForSelector('[data-onboarding-step="2"]', { timeout: 10000 });
+  await page.locator('[data-screen="onboarding"] .nf-btn--primary').click();
+  await page.waitForSelector(".game-screen", { timeout: 20000 });
+  await keepOpeningHand(page);
+}
+
+async function scenarioK(browser) {
+  const { context, page } = await newPage(browser, EMPTY_STORAGE);
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await startGuided(page);
+  await page.waitForSelector(COACH_LAYER("pickHouse"), { timeout: 10000 }).catch(() => {});
+  if (!(await page.locator(COACH_LAYER("pickHouse")).count())) failures.push("K: a partida guiada não abriu a dica da casa");
+
+  await page.locator('[data-coach="pickHouse"] .house-choice').first().click();
+  await page.waitForSelector(COACH_LAYER("playCard"), { timeout: 10000 }).catch(() => {});
+  if (!(await page.locator(COACH_LAYER("playCard")).count())) failures.push("K: escolher a casa não avançou para a dica da carta");
+
+  // Uma carta da casa escolhida (a que o estado diz ser jogável), selecionada e jogada pelo painel.
+  const cardId = await page.evaluate(() => {
+    const game = JSON.parse(localStorage.getItem("aember-arena-match")).game;
+    return game.players[0].hand.find((card) => card.face.house === game.activeHouse)?.instanceId ?? null;
+  });
+  if (!cardId) failures.push("K: nenhuma carta da casa escolhida na mão");
+  else {
+    await page.locator(`.hand-track [data-iid="${cardId}"]`).first().click();
+    await page.locator(".primary-action").first().click();
+  }
+  await page.waitForSelector(COACH_LAYER("endTurn"), { timeout: 10000 }).catch(() => {});
+  if (!(await page.locator(COACH_LAYER("endTurn")).count())) failures.push("K: jogar a carta não avançou para a dica do fim de turno");
+
+  await page.locator(".end-turn-button").click();
+  await page.waitForSelector(COACH_LAYER("endTurn"), { state: "detached", timeout: 15000 }).catch(() => {});
+  if (await page.locator('[data-coach-layer]').count()) failures.push("K: a dica não sumiu após o terceiro passo");
+  const stored = await page.evaluate(() => localStorage.getItem("aember-arena-coach"));
+  if (stored !== "done") failures.push(`K: storage da dica = ${stored}, esperado done`);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.locator('[data-action="continue"]').click();
+  await page.waitForSelector(".game-screen", { timeout: 20000 });
+  if (await page.locator('[data-coach-layer]').count()) failures.push("K: a dica voltou ao recarregar");
+  report.push("[journey] K três dicas (casa → carta → fim de turno) somem e não voltam OK");
+  await context.close();
+
+  // Pular dicas encerra no mesmo passo e não volta.
+  const skipping = await newPage(browser, EMPTY_STORAGE);
+  await skipping.page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await startGuided(skipping.page);
+  await skipping.page.waitForSelector(COACH_LAYER("pickHouse"), { timeout: 10000 }).catch(() => {});
+  await skipping.page.locator('[data-coach-layer="pickHouse"] .nf-btn--ghost').click();
+  if (await skipping.page.locator('[data-coach-layer]').count()) failures.push("K: Pular dicas não fechou o balão");
+  await skipping.page.reload({ waitUntil: "domcontentloaded" });
+  await skipping.page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await skipping.page.locator('[data-action="continue"]').click();
+  await skipping.page.waitForSelector(".game-screen", { timeout: 20000 });
+  if (await skipping.page.locator('[data-coach-layer]').count()) failures.push("K: Pular dicas voltou após reload");
+  report.push("[journey] K pular dicas encerra e não volta OK");
+  await skipping.context.close();
+}
+
+// R (H-22): partida fechada com vitória do jogador → Continuar abre a S9 (1 clique) → Revanche →
+// Manter → mesa (2 cliques). O resultado é conferido com a mesma leitura do ui2.mjs.
+async function scenarioR(browser) {
+  const { context, page } = await newPage(browser);
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.locator('[data-action="play"]').click();
+  await keepOpeningHand(page);
+  await closeSavedMatch(page, 0);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await resetClicks(page);
+  await page.locator('[data-action="continue"]').click();
+  await page.waitForSelector('[data-screen="result"]', { timeout: 20000 });
+  await page.waitForSelector('[data-screen="result"] .nf-result-record', { timeout: 20000 }).catch(() => {});
+  check("R Continuar (partida fechada) → resultado", await clicks(page), 1);
+  for (const problem of resultProblems(await readResult(page), 0)) failures.push(`R: ${problem}`);
+
+  await resetClicks(page);
+  await page.locator('[data-screen="result"] .nf-btn--primary').click();
+  await keepOpeningHand(page);
+  check("R Revanche → Manter → mesa", await clicks(page), 2);
+  await context.close();
+}
+
 async function scenarioG(browser) {
   const { context, page } = await newPage(browser);
   await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
@@ -254,6 +403,9 @@ try {
   await scenarioEF(browser);
   await scenarioG(browser);
   await scenarioH(browser);
+  await scenarioR(browser);
+  await scenarioO(browser);
+  await scenarioK(browser);
 } catch (err) {
   failures.push(`exceção: ${err.message.split("\n")[0]}`);
 } finally {

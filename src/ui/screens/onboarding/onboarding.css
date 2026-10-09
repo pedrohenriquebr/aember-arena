@@ -1,0 +1,69 @@
+/* Onboarding da v2 (UX_REWRITE_PLAN §2 S1 / §5 H-23). Overlay fixo sobre a tela inicial: não soma
+   altura ao layout. Só tokens --nf-* / --space-* / --fs-* (lint:ui2). Mobile primeiro: os dois
+   starters empilham; a partir de 701px ficam lado a lado. */
+
+.nf-onb-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  background: var(--nf-scrim);
+  overflow-y: auto;
+}
+.nf-onb {
+  width: min(100%, var(--nf-w-read));
+  max-height: 100%;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s1);
+  box-shadow: var(--nf-elev-3);
+  animation: nf-onb-in var(--dur-base) var(--ease-out) backwards;
+}
+.nf-onb-title:focus { outline: none; }
+
+.nf-onb-progress {
+  margin: 0;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nf-text-2);
+}
+.nf-onb-title {
+  margin: 0;
+  font-family: var(--nf-font-display);
+  font-size: var(--fs-2xl);
+  color: var(--nf-text);
+}
+.nf-onb-body { margin: 0; font-size: var(--fs-base); color: var(--nf-text-2); }
+.nf-onb-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.nf-onb-starters { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+@media (min-width: 701px) {
+  .nf-onb-starters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.nf-onb-starter {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s2);
+  cursor: pointer;
+}
+.nf-onb-starter.is-picked { border-color: var(--nf-aember); }
+.nf-onb-starter:focus-visible { outline: 2px solid var(--nf-accent); outline-offset: 2px; }
+.nf-onb-state { font-size: var(--fs-xs); color: var(--nf-text-2); }
+.nf-onb-starter.is-picked .nf-onb-state { color: var(--nf-aember); }
+
+@keyframes nf-onb-in { from { opacity: 0; transform: translateY(var(--space-3)); } }
+@media (prefers-reduced-motion: reduce) {
+  .nf-onb { animation: none; }
+}
+html.reduce-motion .nf-onb { animation: none; }

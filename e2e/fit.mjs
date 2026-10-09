@@ -13,6 +13,7 @@ const PORT = 5209;
 const VIEW3D = process.argv.includes("--view") && process.argv[process.argv.indexOf("--view") + 1] === "3d";
 // H-02c: --theme <id> semeia o tema; o encaixe tem de ser idêntico em qualquer tema (§1.6.3.5).
 const THEME = process.argv.includes("--theme") ? process.argv[process.argv.indexOf("--theme") + 1] : null;
+const COACH = process.argv.includes("--coach");
 const VIEWPORTS = [
   { name: "1280x800", width: 1280, height: 800 },
   { name: "1296x668", width: 1296, height: 668 },
@@ -264,6 +265,27 @@ try {
     }
     if (vp.width < 1041) await checkDrawer(page, vp);
     await context.close();
+  }
+  // UX_REWRITE_PLAN §5 H-24: --coach mede a mesa da v2 com o coachmark ativo (overlay fixo, folga zero).
+  if (COACH) {
+    for (const vp of VIEWPORTS) {
+      const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+      await context.addInitScript(SEED());
+      await context.addInitScript(`localStorage.setItem("aember-arena-coach", "pickHouse");`);
+      const page = await context.newPage();
+      await page.goto(`${server.url}?ui=2`, { waitUntil: "domcontentloaded" });
+      await page.waitForSelector('[data-action="play"]', { timeout: 30000 });
+      await page.locator('[data-action="play"]').click();
+      const keep = page.locator(".mulligan-keep");
+      await keep.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
+      if (await keep.count()) await keep.click();
+      await page.waitForSelector(".mulligan-shade", { state: "detached", timeout: 20000 }).catch(() => {});
+      await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 90000 });
+      await page.waitForTimeout(700);
+      if (!(await page.locator('[data-coach-layer="pickHouse"]').count())) failures.push(`${vp.name} [coach]: coachmark não apareceu`);
+      await report(page, vp, "coach");
+      await context.close();
+    }
   }
   await browser.close();
 } finally {

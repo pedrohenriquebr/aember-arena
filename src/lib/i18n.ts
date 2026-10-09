@@ -693,6 +693,36 @@ export const DICT: Record<string, [string, string]> = {
   "ui.tile.play": ["Play", "Jogar"],
   "ui.tile.details": ["Deck details", "Detalhes do deck"],
   "ui.tile.more": ["More options", "Mais opções"],
+  // UX_REWRITE_PLAN §2 S9 (H-22): fim de partida.
+  "ui.result.keys": ["Keys forged", "Chaves forjadas"],
+  "ui.result.duel": ["Duel", "Duelo"],
+  "ui.result.timeline": ["Keys forged, by round", "Chaves forjadas, por rodada"],
+  "ui.result.timelineEmpty": ["No key was forged in this match.", "Nenhuma chave foi forjada nesta partida."],
+  "ui.result.timelinePartial": ["Early keys are missing: the log keeps only the latest moves.", "Faltam chaves do início: o log guarda só as jogadas mais recentes."],
+  "ui.result.mark": ["Round {round} · {side}", "Rodada {round} · {side}"],
+  "ui.result.record": ["Deck record", "Recorde do deck"],
+  "ui.result.deltaWin": ["+1 win", "+1 vitória"],
+  "ui.result.deltaLoss": ["+1 loss", "+1 derrota"],
+  "ui.result.chooseDeck": ["Change deck", "Trocar deck"],
+  "ui.result.lobby": ["Lobby", "Lobby"],
+  // UX_REWRITE_PLAN §2 S1 (H-23): onboarding (passos 1-2).
+  "ui.onboarding.progress": ["Step {step} of {total}", "Passo {step} de {total}"],
+  "ui.onboarding.welcomeTitle": ["Welcome to Aember Arena", "Bem-vindo ao Aember Arena"],
+  "ui.onboarding.welcomeBody": ["Play a solo KeyForge match against the Ember Warden. It runs offline, with no account.", "Jogue uma partida solo de KeyForge contra o Ember Warden. Funciona offline, sem conta."],
+  "ui.onboarding.start": ["Start", "Começar"],
+  "ui.onboarding.skip": ["Skip for now", "Pular por enquanto"],
+  "ui.onboarding.pickTitle": ["Choose your archetype", "Escolha seu arquétipo"],
+  "ui.onboarding.pickBody": ["Two starter decks, both playable offline. The one marked is ready to go.", "Dois baralhos iniciais, ambos jogáveis offline. O marcado já está pronto."],
+  "ui.onboarding.picked": ["Selected", "Selecionado"],
+  "ui.onboarding.pick": ["Select", "Selecionar"],
+  "ui.onboarding.play": ["Play guided match", "Jogar partida guiada"],
+  "ui.onboarding.back": ["Back", "Voltar"],
+  // UX_REWRITE_PLAN §5 H-24: coachmarks da partida guiada (um por passo da máquina em ui/lib/coach.ts).
+  "ui.coach.count": ["Tip {n} of {total}", "Dica {n} de {total}"],
+  "ui.coach.pickHouse": ["Pick a house. Only its cards can be played this turn.", "Escolha uma casa. Só as cartas dela podem ser jogadas neste turno."],
+  "ui.coach.playCard": ["Play a card of that house: tap it in your hand.", "Jogue uma carta dessa casa: toque nela na sua mão."],
+  "ui.coach.endTurn": ["When you're done, end your turn.", "Quando terminar, encerre seu turno."],
+  "ui.coach.skip": ["Skip tips", "Pular dicas"],
 };
 
 

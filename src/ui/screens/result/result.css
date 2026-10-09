@@ -1,0 +1,108 @@
+/* Fim de partida da v2 (UX_REWRITE_PLAN §2 S9 / §5 H-22). Só tokens --nf-* / --space-* / --fs-*
+   (lint:ui2). O overlay é position: fixed sobre a mesa: não soma altura ao palco (folga zero). */
+
+.nf-result-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  background: var(--nf-scrim);
+  overflow-y: auto;
+}
+.nf-result {
+  width: min(100%, var(--nf-w-read));
+  max-height: 100%;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s1);
+  box-shadow: var(--nf-elev-3);
+  animation: nf-result-in var(--dur-base) var(--ease-out) backwards;
+}
+.nf-result:focus { outline: none; }
+.nf-result--won { border-color: var(--nf-verdant); }
+.nf-result--lost { border-color: var(--nf-ember); }
+
+.nf-result-head { display: grid; justify-items: center; gap: var(--space-2); text-align: center; }
+.nf-result-emblem {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-pill);
+  background: var(--nf-s2);
+  color: var(--nf-aember);
+}
+.nf-result--won .nf-result-emblem { color: var(--nf-verdant); }
+.nf-result--lost .nf-result-emblem { color: var(--nf-ember); }
+.nf-result-eyebrow {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nf-text-2);
+}
+.nf-result h2 {
+  margin: 0;
+  font-family: var(--nf-font-display);
+  font-size: var(--fs-2xl);
+  color: var(--nf-text);
+}
+.nf-result-sub { margin: 0; font-size: var(--fs-sm); color: var(--nf-text-2); }
+
+/* Revanche é o único primary (a regra do kit); os demais caem no ghost/secondary. */
+.nf-result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+
+.nf-result-block { display: grid; gap: var(--space-2); min-width: 0; }
+.nf-result-h {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nf-text-2);
+}
+.nf-result-rounds,
+.nf-result-note,
+.nf-result-seed { margin: 0; font-size: var(--fs-sm); color: var(--nf-text-2); }
+.nf-result-seed { overflow-wrap: anywhere; user-select: all; }
+
+.nf-result-duel-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.nf-result-duel-table th,
+.nf-result-duel-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--nf-line);
+}
+.nf-result-duel-table thead th { font-weight: 600; color: var(--nf-text); }
+.nf-result-duel-table th[scope="row"] { font-weight: 400; color: var(--nf-text-2); text-align: start; }
+.nf-result-duel-table td,
+.nf-result-duel-table thead th {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.nf-result-duel-table td { font-size: var(--fs-base); font-weight: 600; color: var(--nf-text); }
+
+.nf-result-marks { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.nf-result-mark {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-xs);
+  color: var(--nf-text);
+}
+.nf-result-mark[data-side="0"] { border-color: var(--nf-verdant); }
+.nf-result-mark[data-side="1"] { border-color: var(--nf-ember); }
+
+.nf-result-record { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3); }
+.nf-result-record strong { font-size: var(--fs-base); color: var(--nf-text); }
+.nf-result-delta { font-size: var(--fs-xs); color: var(--nf-aember); }
+
+@keyframes nf-result-in { from { opacity: 0; transform: translateY(var(--space-3)); } }
+@media (prefers-reduced-motion: reduce) {
+  .nf-result { animation: none; }
+}
+html.reduce-motion .nf-result { animation: none; }

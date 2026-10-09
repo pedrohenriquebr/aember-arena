@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { closeSavedMatch, readResult, resultProblems } from "./ui2-fixtures.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 5211;
@@ -1102,6 +1103,55 @@ async function importFlow(browser, vp, url, shotDir) {
   return failures;
 }
 
+// H-22 (S9): a partida salva é fechada com cada vencedor e o resultado é lido na tela. Mede o
+// layout/a11y do overlay (AUDIT), os seis stats dos dois lados e o primário único. Com
+// reduced-motion os valores finais aparecem sem contagem; com animações, a contagem termina em <= 900ms.
+async function resultFlow(browser, vp, url) {
+  const failures = [];
+  const reports = [];
+  for (const winner of [0, 1]) {
+    const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+    await context.addInitScript(SEED);
+    const page = await context.newPage();
+    await openTable(page, url);
+    await closeSavedMatch(page, winner);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+    await page.locator('[data-action="continue"]').click();
+    await page.waitForSelector('[data-screen="result"]', { timeout: 20000 });
+    // O cartão de recorde chega depois da gravação; sem ele a leitura não cobre o caso solo.
+    await page.waitForSelector('[data-screen="result"] .nf-result-record', { timeout: 20000 }).catch(() => {});
+    const read = await readResult(page);
+    for (const problem of resultProblems(read, winner)) failures.push(`vencedor ${winner}: ${problem}`);
+    // A regra de movimento vale após 600ms: a mesa ainda termina as animações do fim de jogo.
+    await page.waitForTimeout(700);
+    const audit = await page.evaluate(AUDIT, '[data-screen="result"]');
+    if (failed(audit)) {
+      failures.push(`vencedor ${winner}: AUDIT ${Object.entries(audit).filter(([, v]) => (Array.isArray(v) ? v.length : v !== null)).map(([k]) => k).join(", ")}`);
+    }
+    reports.push(`vencedor ${winner}: ${read?.marks ?? 0} marca(s) na timeline, primário "${read?.primaryText}"`);
+    await context.close();
+  }
+
+  // Animação ligada: a contagem tem de terminar nos valores finais dentro do teto.
+  const motion = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "no-preference" });
+  await motion.addInitScript(SEED.replace("animations: false", "animations: true"));
+  const page = await motion.newPage();
+  await openTable(page, url);
+  await closeSavedMatch(page, 0);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.locator('[data-action="continue"]').click();
+  await page.waitForSelector('[data-screen="result"]', { timeout: 20000 });
+  const first = await readResult(page);
+  await page.waitForTimeout(900);
+  const settled = await readResult(page);
+  for (const problem of resultProblems(settled, 0)) failures.push(`contagem: ${problem}`);
+  reports.push(`contagem: primeira leitura keys=${first?.stats.keys?.[0]} -> após 900ms keys=${settled?.stats.keys?.[0]}`);
+  await motion.close();
+  return { failures, reports };
+}
+
 const server = startServer();
 let browser;
 let problems = 0;
@@ -1184,6 +1234,18 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[menu ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const { failures, reports } = await resultFlow(browser, vp, server.url);
+      for (const line of reports) console.log(`[result-flow ${vp.name}] ${line}`);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[result-flow ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[result-flow ${vp.name}] OK`);
       }
     }
 

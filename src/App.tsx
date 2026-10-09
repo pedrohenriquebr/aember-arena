@@ -107,6 +107,11 @@ import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 import { readUiFlag } from "./ui/flag";
 import { LobbyScreen } from "./ui/screens/lobby/LobbyScreen";
+import { ResultScreen } from "./ui/screens/result/ResultScreen";
+import { OnboardingFlow } from "./ui/screens/onboarding/OnboardingFlow";
+import { clearOnboarding, saveOnboardingStep, startOnboarding, type OnboardingStep } from "./ui/lib/onboarding";
+import { advanceCoach, readCoach, skipCoach, writeCoach, type CoachSnapshot, type CoachStep } from "./ui/lib/coach";
+import { Coachmark } from "./ui/shell/Coachmark";
 import { LibraryScreen, type LibraryTab } from "./ui/screens/library/LibraryScreen";
 import { ImportSheet } from "./ui/screens/import/ImportSheet";
 import { DeckDetail } from "./ui/screens/deck/DeckDetail";
@@ -1786,6 +1791,8 @@ const BoardLane = memo(function BoardLane({
 
 function GameBoard({
   game,
+  winnerPanel = true,
+  coachAnchors = false,
   selected,
   pick,
   aiPhase,
@@ -1865,6 +1872,10 @@ function GameBoard({
   onEndTurn: () => void;
   onRematch: () => void;
   onHome: () => void;
+  /** UX_REWRITE_PLAN §5 H-22: a v2 mostra o fim de partida pelo ResultScreen (App); sem ela, o painel daqui. */
+  winnerPanel?: boolean;
+  /** UX_REWRITE_PLAN §5 H-24: data-coach nos três pontos que a dica ancora (só com a v2). */
+  coachAnchors?: boolean;
   onKeepHand: () => void;
   onMulligan: () => void;
 }) {
@@ -2002,7 +2013,7 @@ function GameBoard({
               {houseEffect && <span className="house-pill-effect">{houseEffect}</span>}
             </div>
           )}
-          <div className="house-picker" role="group" aria-label={pick?.houses ? t("game.chooseMoveHouse") : t("game.chooseHouse")}>
+          <div className="house-picker" role="group" data-coach={coachAnchors ? "pickHouse" : undefined} aria-label={pick?.houses ? t("game.chooseMoveHouse") : t("game.chooseHouse")}>
             {(pick?.houses ?? player.houses).map((house) => {
               const chosen = !pick?.houses && game.activeHouse === house;
               return (
@@ -2068,7 +2079,7 @@ function GameBoard({
               {/* FX-04: região viva do turno — a linha visível é a narrativa curta. */}
               <span className="sr-only" aria-live="polite">{narration}</span>
             </div>
-            <button className="end-turn-button" type="button" onClick={onEndTurn} disabled={!isHumanTurn} aria-label={t("game.endTurn")} title={t("game.endTurn")}>
+            <button className="end-turn-button" type="button" onClick={onEndTurn} disabled={!isHumanTurn} data-coach={coachAnchors ? "endTurn" : undefined} aria-label={t("game.endTurn")} title={t("game.endTurn")}>
               <span>{t("game.endTurn")}</span>
               <ArrowRight size={15} />
             </button>
@@ -2158,6 +2169,7 @@ function GameBoard({
         <section className="hand-zone" aria-label={t("game.yourHand")}>
           <div
             className="hand-track"
+            data-coach={coachAnchors ? "playCard" : undefined}
             /* H3D-06: --n abre o leque no 3D (rotação/arco por carta); no 2D é
                inerte. O GameBoard não é memo — nenhuma prop desce para a mão. */
             style={{ "--n": Math.max(1, player.hand.length) } as CSSProperties}
@@ -2235,7 +2247,7 @@ function GameBoard({
         </div>
       )}
 
-      {game.winner !== null && !readOnly && (
+      {winnerPanel && game.winner !== null && !readOnly && (
         <div className="winner-shade" role="dialog" aria-modal="true" aria-labelledby="winner-title">
           <div className="winner-panel" ref={winnerRef}>
             <div className="winner-emblem"><Crown size={23} /></div>
@@ -2785,7 +2797,13 @@ function App() {
   // FEAT-12b: the read-only replay viewer — derived states, never the live one.
   const [replay, setReplay] = useState<{ states: GameState[]; index: number } | null>(null);
   // Tutorial: opens by itself only on the first real visit (always on Home).
-  const [tutorialOpen, setTutorialOpen] = useState(isFirstVisit);
+  // UX_REWRITE_PLAN §5 H-23: com a v2 o primeiro contato é o OnboardingFlow (S1); o TutorialWizard abre só pelo botão.
+  const [tutorialOpen, setTutorialOpen] = useState(() => ui2 !== "2" && isFirstVisit());
+  const [onboarding, setOnboarding] = useState<OnboardingStep | null>(() => (ui2 === "2" ? startOnboarding(isFirstVisit()) : null));
+  // UX_REWRITE_PLAN §5 H-24: dicas da partida guiada (v2). "done" = nada a mostrar; o passo vive no storage.
+  const [coach, setCoach] = useState<CoachStep>(() => (ui2 === "2" ? readCoach() : "done"));
+  const coachRef = useRef<CoachStep>(coach);
+  const coachPrevRef = useRef<CoachSnapshot | null>(null);
   const replayRef = useDialogFocus<HTMLDivElement>(replay !== null);
 
   const gameRef = useRef<GameState | null>(null);
@@ -2844,14 +2862,17 @@ function App() {
   useEffect(() => { settingsRef.current = settings; }, [settings]);
   // UX_REWRITE_PLAN §5 H-12: recorde V/D do deck do hero (só a v2 lê; a v1 segue sem essa leitura).
   const [deckRecord, setDeckRecord] = useState<DeckStats | null>(null);
+  /** UX_REWRITE_PLAN §5 H-22: recorde lido DEPOIS de gravar a partida (versão da partida junto, para não mostrar o de outra). */
+  const [matchRecord, setMatchRecord] = useState<{ version: number; stats: DeckStats } | null>(null);
   const winnerOfLive = game?.winner ?? null;
+  // A volta ao Lobby (screen) relê o recorde: a gravação do fim de partida pode ter corrido depois da leitura antiga.
   useEffect(() => {
     if (ui2 !== "2") return;
     let disposed = false;
     setDeckRecord(null);
     void getDeckStats(selectedDeck.id).then((stats) => { if (!disposed) setDeckRecord(stats); });
     return () => { disposed = true; };
-  }, [ui2, selectedDeck.id, winnerOfLive]);
+  }, [ui2, selectedDeck.id, winnerOfLive, screen]);
   useEffect(() => { currentDeckRef.current = currentDeck; }, [currentDeck]);
   useEffect(() => { matchModeRef.current = matchMode; }, [matchMode]);
 
@@ -3459,8 +3480,29 @@ function App() {
     recordedMatchRef.current = matchVersion;
     // BUG2-11: as configurações congeladas no início da partida, não as atuais.
     const { opponentMode, difficulty } = matchSetupRef.current ?? settingsRef.current;
-    void recordMatchResult(currentDeck.id, game.winner === 0, opponentMode, difficulty);
+    // H-22: o recorde da S9 sai depois da gravação (sem corrida); a v1 não usa o valor.
+    void recordMatchResult(currentDeck.id, game.winner === 0, opponentMode, difficulty)
+      .then(() => getDeckStats(currentDeck.id))
+      .then((stats) => { if (stats) setMatchRecord({ version: matchVersion, stats }); });
   }, [game, matchVersion, currentDeck.id, matchMode]);
+
+  // UX_REWRITE_PLAN §5 H-24: a máquina das dicas avança por transição observada do jogador (casa, carta,
+  // troca de vez). A primeira observação de cada partida só guarda o ponto de partida.
+  useEffect(() => {
+    if (ui2 !== "2" || !game || game.winner !== null || replay || screen !== "game" || matchMode !== "solo") {
+      coachPrevRef.current = null;
+      return;
+    }
+    const next: CoachSnapshot = { activeHouse: game.activeHouse, cardsPlayed: game.players[0].cardsPlayed, yourTurn: game.activePlayer === 0 };
+    const prev = coachPrevRef.current;
+    coachPrevRef.current = next;
+    if (!prev || coachRef.current === "done") return;
+    const advanced = advanceCoach(coachRef.current, prev, next);
+    if (advanced === coachRef.current) return;
+    coachRef.current = advanced;
+    writeCoach(advanced);
+    setCoach(advanced);
+  }, [ui2, game, replay, screen, matchMode]);
 
   // AI turn loop. FEAT-13: pass-and-play has no AI — the effect stays dormant.
   // Onda 2 (plano §3): cada ação vira uma BATIDA legível, com o cálculo feito
@@ -4000,6 +4042,20 @@ function App() {
     sound.play("click");
     setScreen("home");
   }, []);
+
+  // UX_REWRITE_PLAN §5 H-23: o onboarding acaba quando o jogador joga guiado ou pula; não volta.
+  function finishOnboarding() {
+    markTutorialSeen();
+    clearOnboarding();
+    setOnboarding(null);
+  }
+
+  // UX_REWRITE_PLAN §5 H-24: "Pular dicas" encerra de qualquer passo e não volta (storage "done").
+  function dismissCoach() {
+    coachRef.current = skipCoach();
+    writeCoach(coachRef.current);
+    setCoach(coachRef.current);
+  }
 
   // FEAT-09: libera o worker novo e só recarrega quando ele assumir o controle —
   // recarregar antes disso traria a versão antiga de volta.
@@ -4611,6 +4667,8 @@ function App() {
                   passAndPlay={passAndPlay}
                   humanSide={humanSide}
                   passPending={passPending}
+                  winnerPanel={ui2 !== "2"}
+                  coachAnchors={ui2 === "2"}
                   onPassConfirm={() => { sound.play("click"); setPassPending(null); }}
                   viewSwitching={viewSwitching}
                   archivesAction={isLegalMove(game, humanSide, { type: "takeArchives" }) ? (
@@ -4936,6 +4994,30 @@ function App() {
         />
       )}
 
+      {/* UX_REWRITE_PLAN §5 H-24: balão ancorado em data-coach; portal fixo, fora do fluxo (folga zero). */}
+      {ui2 === "2" && coach !== "done" && screen === "game" && game && game.winner === null && !replay && (
+        <Coachmark t={t} step={coach} onSkip={dismissCoach} />
+      )}
+
+      {/* UX_REWRITE_PLAN §5 H-22: o fim de partida da v2 (S9) é um portal no body — o palco 3D tem
+          transform e um fixed dentro dele ficaria preso ao plano. */}
+      {ui2 === "2" && screen === "game" && game && game.winner !== null && !replay && createPortal(
+        <ResultScreen
+          t={t}
+          game={game}
+          sideNames={[localizeName(game.players[0].name, t), localizeName(game.players[1].name, t)]}
+          passAndPlay={passAndPlay}
+          animate={settings.animations}
+          record={matchRecord?.version === matchVersion ? matchRecord.stats : null}
+          canReplay={canReplay}
+          onRematch={rematch}
+          onChooseDeck={() => { sound.play("click"); setLibraryTab("mine"); setScreen("browse"); }}
+          onReplay={openReplay}
+          onLobby={goHome}
+        />,
+        document.body,
+      )}
+
       {ui2 === "2" && (
         <MatchSheet
           open={matchSheetOpen}
@@ -4948,6 +5030,30 @@ function App() {
           opponentLabel={opponentLabel}
           onChange={setSettings}
           onPlay={(deck) => { setMatchSheetOpen(false); playDeck(deck); }}
+        />
+      )}
+
+      {/* UX_REWRITE_PLAN §5 H-23: primeira visita (v2). Pular, Escape e "Jogar partida guiada" encerram; só o Home abre. */}
+      {ui2 === "2" && onboarding !== null && screen === "home" && (
+        <OnboardingFlow
+          t={t}
+          language={language}
+          onLanguage={setLanguage}
+          starters={STARTER_DECKS}
+          selectedId={selectedDeck.id}
+          step={onboarding}
+          onStep={(next) => { saveOnboardingStep(next); setOnboarding(next); }}
+          onPickDeck={setSelectedDeck}
+          onGuidedPlay={(deck) => {
+            finishOnboarding();
+            setSettings((prev) => ({ ...prev, hints: true }));
+            // H-24: a partida guiada começa no passo 1 das dicas.
+            writeCoach("pickHouse");
+            coachRef.current = "pickHouse";
+            setCoach("pickHouse");
+            playDeck(deck);
+          }}
+          onSkip={finishOnboarding}
         />
       )}
 

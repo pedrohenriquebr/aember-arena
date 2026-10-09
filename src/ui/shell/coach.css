@@ -1,0 +1,33 @@
+/* Coachmarks da partida guiada (UX_REWRITE_PLAN §5 H-24). Camada fixa fora do fluxo: não soma
+   altura à mesa. Só o balão recebe toque; o resto da camada deixa passar o clique. */
+
+.nf-coach-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+}
+.nf-coach {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  display: grid;
+  gap: var(--space-2);
+  width: min(18rem, calc(100vw - var(--space-6)));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--nf-aember);
+  border-radius: var(--radius-lg);
+  background: var(--nf-s2);
+  box-shadow: var(--nf-elev-2);
+  pointer-events: auto;
+}
+.nf-coach.is-below { transform: translate(-50%, 0); }
+
+.nf-coach-count {
+  margin: 0;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nf-aember);
+}
+.nf-coach-text { margin: 0; font-size: var(--fs-sm); color: var(--nf-text); }
+.nf-coach .nf-btn { justify-self: end; }
