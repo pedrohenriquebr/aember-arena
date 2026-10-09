@@ -143,6 +143,13 @@ ações, cobertura por set, pendências).
   inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
   de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
   `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
+- **PAUSA 09/out (dono desligou): bloco Decks (H-15/16/17) NO STASH** — `git stash pop` retoma; 983
+  specs verdes + tsc OK no stash; FALTA: 2 asserções do importFlow no `e2e/ui2.mjs` em ajuste + bateria
+  final (ui2/FIT/journey/freeze/build) → commit por lote. Lições do dia: (1) o daemon do Claude Code
+  RESSUSCITA sessões em background — matar processo falha, use `claude stop <id|nome>` (resíduos
+  ui2-baseline-e2e-investigation e debug-runner-animation-texture parados assim; a lição está na memória
+  bg-mission-hygiene); (2) sessão interativa paralela no MESMO repo = dois escritores (o Haiku detectou
+  sozinho e parou — comportamento correto).
 - **PAUSA 07/out noite (dono desligou): pill de casas NO STASH** — `git stash pop` retoma (seletor de
   casas como pill flutuante sobre a mesa, parcial do mimo; depois: ícones maiores das pilhas e sessão
   de QA jogando no navegador). Pilhas visíveis COMMITADAS (7cbb196). Estado do dia:
