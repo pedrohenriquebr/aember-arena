@@ -143,6 +143,13 @@ ações, cobertura por set, pendências).
   inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
   de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
   `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
+- **PAUSA 09/out noite (reboot do ZCode): H-25 NO STASH@{0}** — migração de tokens do board FEITA
+  (seed via script em src/index.css; 1020 specs verdes; tsc OK; FIT 2D/3D com rows idênticas nos 4
+  temas). FALTA: re-rodar `_3d-chain` e `_3d-arena` (H3D-17) — o agente suspeitava flake por timing e
+  ia re-rodar; decidir regressão-vs-flake; captures nos 4 temas + check de contraste novo; relatório.
+  Retomada: `git stash pop` → probes primeiro. Tudo até H-24 COMMITADO (1836f70); a esteira pós-H-25:
+  H-26 ZonesSheet, H-27 vazios/erros, H-28 coreografia, e o CUTOVER (H-29) aguardando as 5 decisões
+  do dono (§7) + ciclo de uso antes de remover a v1 (H-30).
 - **PAUSA 09/out (dono desligou): bloco Decks (H-15/16/17) NO STASH** — `git stash pop` retoma; 983
   specs verdes + tsc OK no stash; FALTA: 2 asserções do importFlow no `e2e/ui2.mjs` em ajuste + bateria
   final (ui2/FIT/journey/freeze/build) → commit por lote. Lições do dia: (1) o daemon do Claude Code
