@@ -565,6 +565,9 @@ export const DICT: Record<string, [string, string]> = {
   "ui.kit.empty.action": ["Import deck", "Importar deck"],
   "ui.kit.skeleton": ["Skeleton", "Esqueleto"],
   "ui.kit.skeleton.status": ["Loading the deck list…", "Carregando a lista de decks…"],
+  "ui.shell.decks": ["Decks", "Decks"],
+  "ui.shell.continue": ["Continue", "Continuar"],
+  "ui.shell.lobby": ["Lobby", "Lobby"],
 };
 
 

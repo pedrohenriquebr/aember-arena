@@ -106,6 +106,8 @@ import { useDialogFocus } from "./components/useDialogFocus";
 import { isFirstVisit, markTutorialSeen, TutorialWizard } from "./components/TutorialWizard";
 import { readUiFlag } from "./ui/flag";
 import { KitScreen } from "./ui/screens/KitScreen";
+import { LobbyShell } from "./ui/shell/LobbyShell";
+import { destinationOf } from "./ui/shell/shellNav";
 
 const RANDOM_RIVAL_KEY = "aember-arena-random-rival";
 
@@ -126,7 +128,8 @@ function writeRandomRivalId(id: string | undefined): void {
   }
 }
 
-type Screen = "home" | "config" | "game" | "browse" | "inspect";
+// "settings" é a rota da v2 para Ajustes (H-07); renderiza a mesma ConfigScreen de "config".
+type Screen = "home" | "config" | "settings" | "game" | "browse" | "inspect";
 type Selection = { zone: "hand" | "board" | "enemy"; playerIndex: 0 | 1; instanceId: string };
 /** Board pick in progress: a fight defender (`targetId` still empty) or the
     target of the move's ability / an upgrade's host. `ids` are the legal cards. */
@@ -2701,7 +2704,6 @@ function App() {
   const t = useMemo(() => createTranslator(language), [language]);
   // H-01: a flag da v2 é lida uma vez; os lotes H-07+ passam a consumi-la.
   const ui2 = useMemo(readUiFlag, []);
-  void ui2;
 
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
@@ -3168,6 +3170,7 @@ function App() {
       home: t("nav.home"),
       browse: t("nav.browse"),
       config: t("nav.config"),
+      settings: t("nav.config"),
       game: t("nav.play"),
       inspect: inspectDeck?.name ?? t("nav.home"),
     };
@@ -4141,6 +4144,12 @@ function App() {
   }, [drawerOpen]);
   // No 2P o drawer nunca fica aberto por cima da mão do outro lado.
   useEffect(() => setRailOpen(false), [humanSide]);
+  // H-08: saída provisória da mesa sem header (o H-09 assume com o ☰ do TableMenu).
+  const lobbyExit = (
+    <button type="button" className="view-toggle" aria-label={t("ui.shell.lobby")} title={t("ui.shell.lobby")} onClick={goHome}>
+      <Home size={16} />
+    </button>
+  );
   // H3D-01: atalho da visão da mesa — alterna sem sair da partida. 44px (regra 9),
   // estado no aria-pressed. Um nó só: na faixa de título ou, no perfil compacto, no console.
   const viewToggle = (
@@ -4155,64 +4164,87 @@ function App() {
     </button>
   );
 
+  // H-07: com a v2, as telas que não são a partida trocam header/tab bar pela casca do lobby.
+  const lobbyShell = ui2 === "2" && screen !== "game";
+  // H-08: na partida a casca some (header e tab bar) e o palco recebe os pixels (tableShell.css).
+  const tableShell = ui2 === "2" && screen === "game";
+
   // H-05: a galeria de primitivas só existe com ?ui=2&screen=_kit; sem a flag o App é o de hoje.
   if (ui2 === "2" && new URLSearchParams(window.location.search).get("screen") === "_kit") {
     return <KitScreen t={t} />;
   }
 
   return (
-    <div className="app-root">
-      <header className="app-header">
-        <button
-          type="button"
-          className="brand-lockup"
-          aria-label={t("nav.home")}
-          onClick={() => { sound.play("click"); setScreen("home"); }}
-        >
-          <span className="brand-symbol"><ForgeMark /></span>
-          <span className="brand-wordmark"><strong>AEMBER</strong><small>ARENA</small></span>
-        </button>
-
-        <nav className="header-nav" aria-label={t("nav.screens")}>
-          <button type="button" className={`nav-link${screen === "home" || screen === "inspect" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("home"); }}>
-            <Home size={14} /> <span>{t("nav.home")}</span>
-          </button>
-          <button type="button" className={`nav-link${screen === "browse" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("browse"); }}>
-            <BookOpen size={14} /> <span>{t("nav.browse")}</span>
-          </button>
-          <button type="button" className={`nav-link${screen === "config" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("config"); }}>
-            <Settings2 size={14} /> <span>{t("nav.config")}</span>
-          </button>
-          {game && (
-            <button type="button" className={`nav-link${screen === "game" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("game"); }}>
-              <Swords size={14} /> <span>{t("nav.play")}</span>
-            </button>
-          )}
-        </nav>
-
-        <div className="header-actions">
-          <span className={`network-state${online ? "" : " network-state--offline"}`} title={online ? t("common.online") : t("common.offline")}>
-            {online ? <Wifi size={14} /> : <WifiOff size={14} />}
-            <span>{online ? t("common.online") : t("common.offline")}</span>
-          </span>
+    <div className="app-root" data-shell={tableShell ? "table" : undefined}>
+      {lobbyShell && (
+        <LobbyShell
+          t={t}
+          active={destinationOf(screen)}
+          hasGame={Boolean(game)}
+          online={online}
+          sfx={settings.sfx}
+          brandMark={<ForgeMark />}
+          languageMenu={<LanguageMenu language={language} onChange={(next) => { setLanguage(next); showToast(t("toast.langChanged")); }} label={t("nav.language")} compact />}
+          onBrand={goHome}
+          onPlay={() => { sound.play("click"); setScreen(game ? "game" : "home"); }}
+          onDecks={() => { sound.play("click"); setScreen("browse"); }}
+          onSettings={() => { sound.play("click"); setScreen("settings"); }}
+          onToggleSfx={() => { sound.play("click"); setSettings((prev) => ({ ...prev, sfx: !prev.sfx })); }}
+        />
+      )}
+      {!lobbyShell && (
+        <header className="app-header">
           <button
             type="button"
-            className="header-icon-button"
-            aria-label={settings.sfx ? t("common.mute") : t("common.unmute")}
-            onClick={() => { sound.play("click"); setSettings((prev) => ({ ...prev, sfx: !prev.sfx })); }}
+            className="brand-lockup"
+            aria-label={t("nav.home")}
+            onClick={() => { sound.play("click"); setScreen("home"); }}
           >
-            {settings.sfx ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            <span className="brand-symbol"><ForgeMark /></span>
+            <span className="brand-wordmark"><strong>AEMBER</strong><small>ARENA</small></span>
           </button>
-          <button className="header-button header-button--subtle" type="button" aria-label={t("common.deck")} title={t("common.deck")} onClick={() => { sound.play("click"); openDeckModal(); }}>
-            <BookOpen size={15} /><span>{t("common.deck")}</span>
-          </button>
-          <button className="header-button header-button--sync" type="button" aria-label={syncing ? t("common.syncing") : t("common.sync")} title={t("common.sync")} onClick={() => void syncCurrentDeck()} disabled={syncing}>
-            {syncing ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
-            <span>{syncing ? t("common.syncing") : t("common.sync")}</span>
-          </button>
-          <LanguageMenu language={language} onChange={(next) => { setLanguage(next); showToast(t("toast.langChanged")); }} label={t("nav.language")} compact />
-        </div>
-      </header>
+
+          <nav className="header-nav" aria-label={t("nav.screens")}>
+            <button type="button" className={`nav-link${screen === "home" || screen === "inspect" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("home"); }}>
+              <Home size={14} /> <span>{t("nav.home")}</span>
+            </button>
+            <button type="button" className={`nav-link${screen === "browse" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("browse"); }}>
+              <BookOpen size={14} /> <span>{t("nav.browse")}</span>
+            </button>
+            <button type="button" className={`nav-link${screen === "config" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("config"); }}>
+              <Settings2 size={14} /> <span>{t("nav.config")}</span>
+            </button>
+            {game && (
+              <button type="button" className={`nav-link${screen === "game" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("game"); }}>
+                <Swords size={14} /> <span>{t("nav.play")}</span>
+              </button>
+            )}
+          </nav>
+
+          <div className="header-actions">
+            <span className={`network-state${online ? "" : " network-state--offline"}`} title={online ? t("common.online") : t("common.offline")}>
+              {online ? <Wifi size={14} /> : <WifiOff size={14} />}
+              <span>{online ? t("common.online") : t("common.offline")}</span>
+            </span>
+            <button
+              type="button"
+              className="header-icon-button"
+              aria-label={settings.sfx ? t("common.mute") : t("common.unmute")}
+              onClick={() => { sound.play("click"); setSettings((prev) => ({ ...prev, sfx: !prev.sfx })); }}
+            >
+              {settings.sfx ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+            <button className="header-button header-button--subtle" type="button" aria-label={t("common.deck")} title={t("common.deck")} onClick={() => { sound.play("click"); openDeckModal(); }}>
+              <BookOpen size={15} /><span>{t("common.deck")}</span>
+            </button>
+            <button className="header-button header-button--sync" type="button" aria-label={syncing ? t("common.syncing") : t("common.sync")} title={t("common.sync")} onClick={() => void syncCurrentDeck()} disabled={syncing}>
+              {syncing ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />}
+              <span>{syncing ? t("common.syncing") : t("common.sync")}</span>
+            </button>
+            <LanguageMenu language={language} onChange={(next) => { setLanguage(next); showToast(t("toast.langChanged")); }} label={t("nav.language")} compact />
+          </div>
+        </header>
+      )}
 
       {toast && (
         <div className={`toast-message toast-message--${toast.kind}`} role="status">
@@ -4326,7 +4358,7 @@ function App() {
           />
         )}
 
-        {screen === "config" && (
+        {(screen === "config" || screen === "settings") && (
           <ConfigScreen
             t={t}
             settings={settings}
@@ -4369,7 +4401,8 @@ function App() {
                     {/* BUG2-12: no 2P o título acompanha o lado ativo (o board gira junto). */}
                     <h1>{passAndPlay ? localizeName(game.players[humanSide].deckName, t) : currentDeck.name}</h1>
                   </div>
-                  {!compactStage && <div className="match-actions">{viewToggle}</div>}
+                  {/* H-08: no table shell o heading está oculto; o toggle migra para o console. */}
+                  {!compactStage && !tableShell && <div className="match-actions">{viewToggle}</div>}
                 </div>
 
                 <GameBoard
@@ -4417,6 +4450,7 @@ function App() {
                   consoleExtra={compactStage || drawerMode ? (
                     <>
                       {compactStage && viewToggle}
+                      {tableShell && lobbyExit}
                       {drawerMode && !passAndPlay && (
                         <button type="button" className="view-toggle" aria-label={t("game.undo")} title={undo?.blocked ? t("game.undoBlocked") : t("game.undo")} onClick={undoLastMove} disabled={!undoable}>
                           <RotateCcw size={16} />
@@ -4447,7 +4481,10 @@ function App() {
                   {drawerOpen ? (
                     <button type="button" className="quiet-icon-button rail-close" onClick={() => setRailOpen(false)} aria-label={t("rail.close")}><X size={14} /></button>
                   ) : (
-                    <span className="table-number">01</span>
+                    <>
+                      {tableShell && !compactStage && !drawerMode && <>{viewToggle}{lobbyExit}</>}
+                      <span className="table-number">01</span>
+                    </>
                   )}
                 </div>
                 <SelectedCardPanel
@@ -4631,20 +4668,22 @@ function App() {
         </ErrorBoundary>
       </main>
 
-      <nav className="mobile-tabs" aria-label={t("nav.screens")}>
-        <button type="button" className={`mobile-tab${screen === "home" || screen === "inspect" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("home"); }}>
-          <Home size={17} /><span>{t("nav.home")}</span>
-        </button>
-        <button type="button" className={`mobile-tab${screen === "browse" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("browse"); }}>
-          <BookOpen size={17} /><span>{t("nav.browse")}</span>
-        </button>
-        <button type="button" className={`mobile-tab${screen === "config" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("config"); }}>
-          <Settings2 size={17} /><span>{t("nav.config")}</span>
-        </button>
-        <button type="button" className={`mobile-tab${screen === "game" ? " is-active" : ""}`} onClick={() => { sound.play("click"); if (game) setScreen("game"); }} disabled={!game}>
-          <Swords size={17} /><span>{t("nav.play")}</span>
-        </button>
-      </nav>
+      {!lobbyShell && (
+        <nav className="mobile-tabs" aria-label={t("nav.screens")}>
+          <button type="button" className={`mobile-tab${screen === "home" || screen === "inspect" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("home"); }}>
+            <Home size={17} /><span>{t("nav.home")}</span>
+          </button>
+          <button type="button" className={`mobile-tab${screen === "browse" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("browse"); }}>
+            <BookOpen size={17} /><span>{t("nav.browse")}</span>
+          </button>
+          <button type="button" className={`mobile-tab${screen === "config" ? " is-active" : ""}`} onClick={() => { sound.play("click"); setScreen("config"); }}>
+            <Settings2 size={17} /><span>{t("nav.config")}</span>
+          </button>
+          <button type="button" className={`mobile-tab${screen === "game" ? " is-active" : ""}`} onClick={() => { sound.play("click"); if (game) setScreen("game"); }} disabled={!game}>
+            <Swords size={17} /><span>{t("nav.play")}</span>
+          </button>
+        </nav>
+      )}
 
       {deckToRemove && (
         <ConfirmDialog
@@ -4673,7 +4712,7 @@ function App() {
       )}
 
       {/* Never over a match: only Home and Settings open it. */}
-      {tutorialOpen && (screen === "home" || screen === "config") && (
+      {tutorialOpen && (screen === "home" || screen === "config" || screen === "settings") && (
         <TutorialWizard
           t={t}
           houses={selectedDeck.houses}

@@ -1,0 +1,113 @@
+/* Casca do lobby da v2 (UX_REWRITE_PLAN §5 H-07): substitui app-header + mobile-tabs nas
+   telas que não são a partida. Mobile: marca e ações numa linha, os três destinos na de
+   baixo (alvos de 44px). Desktop (≥701px): tudo numa linha. Só classes .nf-shell*. */
+.nf-shell {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand actions"
+    "nav nav";
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: env(safe-area-inset-top, 0px) var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--nf-line);
+  background: var(--nf-void);
+}
+
+@media (min-width: 701px) {
+  .nf-shell {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "brand nav actions";
+    gap: var(--space-4);
+    padding: env(safe-area-inset-top, 0px) clamp(var(--space-4), 2.6vw, var(--space-6)) 0;
+    min-height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  }
+}
+
+.nf-shell-brand {
+  grid-area: brand;
+  justify-self: start;
+  min-height: 44px;
+}
+
+.nf-shell-nav {
+  display: flex;
+  grid-area: nav;
+  gap: var(--space-1);
+}
+
+@media (min-width: 701px) {
+  .nf-shell-nav {
+    justify-self: center;
+  }
+}
+
+.nf-shell-tab {
+  display: inline-flex;
+  flex: 1;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--nf-text-2);
+  font-family: var(--nf-font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+@media (min-width: 701px) {
+  .nf-shell-tab {
+    flex: none;
+  }
+}
+
+.nf-shell-tab:focus-visible {
+  outline: 2px solid var(--nf-amber-hi);
+  outline-offset: 2px;
+  box-shadow: var(--elev-focus);
+}
+
+/* Destino atual: fundo + filete na base. A forma (não só a cor) marca o estado. */
+.nf-shell-tab[aria-current="page"] {
+  border-color: var(--nf-line-strong);
+  background: var(--nf-s3);
+  color: var(--nf-text);
+  box-shadow: inset 0 -2px 0 var(--nf-amber);
+}
+
+.nf-shell-actions {
+  display: flex;
+  grid-area: actions;
+  align-items: center;
+  justify-self: end;
+  gap: var(--space-1);
+}
+
+.nf-shell-net {
+  width: 10px;
+  height: 10px;
+  margin: 0 var(--space-1);
+  border-radius: 50%;
+  background: var(--nf-verdant);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nf-verdant) 25%, transparent);
+}
+
+.nf-shell-net--off {
+  border: 2px solid var(--nf-ember);
+  background: transparent;
+  box-shadow: none;
+}
+
+/* O seletor de idioma é da v1 (31px); na casca ele precisa do alvo de 44px. */
+.nf-shell .lang-trigger {
+  height: 44px;
+}
