@@ -422,6 +422,9 @@ async function dataFlow(browser, vp, url, shotDir) {
   if (!build.trim()) failures.push("linha do BUILD_ID vazia");
   if (!text.includes("?swreset=1")) failures.push("?swreset=1 não documentado na aba Dados");
   if (/\bONLINE\b/.test(text)) failures.push(`texto "ONLINE" fixo na aba Dados: "${text.match(/\bONLINE\b.*/)?.[0]}"`);
+  // ART_OFFLINE: o card de artes existe e avisa o custo de quota (~7 MB por arte no contador).
+  if ((await page.locator('[data-screen="settings"] .u-art').count()) !== 1) failures.push('card "Artes offline" ausente na aba Dados');
+  if (!text.includes("7 MB")) failures.push('aviso de custo das artes (7 MB) ausente na aba Dados');
 
   // O toast do cancelar acaba de nascer: o settle de 600ms (critério 5) o deixa terminar.
   await page.waitForTimeout(700);
