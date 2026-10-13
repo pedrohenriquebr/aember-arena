@@ -12,7 +12,7 @@ const HOUSE_CACHE = "aember-arena-houses-v1";
 const ART_CACHE = "aember-arena-art-v1";
 // Relative paths: resolved against the service worker script URL, so the shell
 // precache works at the deployment root, under a subpath, wherever the SW is.
-const SHELL_URLS = ["./", "./index.html", "./manifest.webmanifest", "./forge-icon.svg"];
+const SHELL_URLS = ["./", "./index.html", "./manifest.webmanifest", "./forge-icon.svg", "./forge-icon-192.png", "./forge-icon-512.png"];
 const ART_HOSTS = ["mastervault-storage-prod.s3.amazonaws.com", "cdn.keyforgegame.com"];
 
 // BUG2-05: the S3 buckets answer WITHOUT Access-Control-Allow-Origin (verified
