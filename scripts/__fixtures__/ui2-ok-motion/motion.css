@@ -1,0 +1,11 @@
+/* Fixture de PROVA do lint:ui2 (H-28) — tem de passar: movimento só por tokens + reduced-motion no arquivo. */
+.ok-enter {
+  animation: nf-rise var(--dur-enter) var(--ease-emph) backwards;
+  animation-delay: calc(min(var(--i, 0), 5) * var(--nf-stagger));
+}
+.ok-loop {
+  animation: nf-shimmer var(--dur-shimmer) var(--ease-linear) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ok-enter { animation: nf-fade var(--dur-fast) var(--ease-out) backwards; }
+}

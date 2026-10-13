@@ -1,0 +1,11 @@
+/* Fixture de PROVA do lint:ui2 (H-28) — tem de falhar. Duração, easing e reduced-motion fora dos tokens. */
+.bad-shimmer {
+  animation: nf-shimmer 1.4s linear infinite;
+}
+.bad-fade {
+  transition: opacity 0.2s ease-out;
+  animation-delay: -2s;
+}
+.bad-ok-but-no-guard {
+  animation: nf-fade var(--dur-base) var(--ease-out) backwards;
+}

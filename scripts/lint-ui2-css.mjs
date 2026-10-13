@@ -61,6 +61,12 @@ const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 const RGBA = /\brgba?\(/g;
 // gap/margin/padding com px que não seja hairline (0/1/2): use var(--space-*).
 const SPACING = /\b(gap|margin|padding)[^;{}]*?\b(\d+(?:\.\d+)?)px\b/g;
+// H-28: movimento só por tokens. Cada declaração de animation/transition (e suas -duration/-delay/
+// -timing-function) é lida SEM os var(): sobra tempo literal (ms/s) ou easing literal → reprova.
+const MOTION = /(?<![\w-])(animation|transition)(-duration|-delay|-timing-function)?\s*:\s*([^;{}]+)/g;
+const TIME_LITERAL = /\d(?:\.\d+)?(?:ms|s)(?![\w-])/;
+const EASE_LITERAL = /(?<![\w-])(linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end)(?![\w-])|cubic-bezier\(|steps\(/;
+const MOTION_GUARD = /prefers-reduced-motion|reduce-motion/;
 
 const violations = [];
 const files = walk(target).filter((f) => EXTENSIONS.test(f) && !EXEMPT.test(relative(target, f).replace(/\\/g, "/")));
@@ -82,6 +88,18 @@ for (const file of files) {
       if (["0", "1", "2"].includes(m[2])) continue;
       report(m.index, `${m[1]} px literal (use var(--space-*))`, m[0]);
     }
+
+    let motionDecls = 0;
+    for (const m of src.matchAll(MOTION)) {
+      motionDecls += 1;
+      const bare = m[3].replace(/var\([^)]*\)/g, "");
+      const kind = `${m[1]}${m[2] ?? ""}`;
+      if (TIME_LITERAL.test(bare)) report(m.index, `${kind} com duração literal (use var(--dur-*))`, m[0]);
+      if (EASE_LITERAL.test(bare)) report(m.index, `${kind} com easing literal (use var(--ease-*))`, m[0]);
+    }
+    // Todo arquivo com movimento tem de ter a regra de reduced-motion (o global `.reduce-motion *`
+    // encurta a duração, mas cada tela declara a sua: §1.5).
+    if (motionDecls && !MOTION_GUARD.test(src)) report(0, "animation/transition sem regra reduced-motion neste arquivo", `${motionDecls} declaração(ões)`);
   }
 }
 
