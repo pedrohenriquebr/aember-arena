@@ -35,6 +35,8 @@ const SCREENS = [
   { name: "lobby", label: "lobby-empty", query: "state=empty", scope: '[data-screen="lobby"]' },
   // H-18: Ajustes (S7) abre direto por ?screen=settings; a aba Jogo é a medida aqui, a Interface no settingsFlow.
   { name: "settings", query: "screen=settings", scope: '[data-screen="settings"]' },
+  // H-28: a Biblioteca (S4) abre direto por ?screen=browse; a entrada dela (.nf-screen-enter) entra no item 5.
+  { name: "library", query: "screen=browse", scope: '[data-screen="library"]' },
 ];
 
 // H-02c: --theme <id> semeia o tema salvo e roda os checks naquele tema (forja é o padrão).
@@ -668,7 +670,7 @@ async function openTable(page, url) {
   await page.waitForTimeout(700);
 }
 
-async function tableFlow(browser, vp, url, view) {
+async function tableFlow(browser, vp, url, view, shotDir = null) {
   const failures = [];
   const reports = [];
   const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
@@ -687,6 +689,17 @@ async function tableFlow(browser, vp, url, view) {
     if (m.handBottom !== null && m.handBottom > m.vp + 0.5 && !m.is3d) failures.push(`${label}: mão cortada (bottom ${m.handBottom} > ${m.vp})`);
   };
   check(await page.evaluate(TABLE_MEASURE), "mesa vazia");
+  // H-27: a mesa vazia tem o estado vazio da v2 nas fileiras (orbe + 1 linha) e a mão cheia não
+  // mostra o da mão. O print sai com o --shots (2D e 3D, para olhar a hierarquia).
+  const empty = await page.evaluate(() => ({
+    lines: document.querySelectorAll(".empty-battleline.nf-empty-line").length,
+    orbits: document.querySelectorAll(".nf-empty-line .empty-orbit svg").length,
+    handEmpty: document.querySelectorAll(".nf-empty-hand").length,
+  }));
+  reports.push(`mesa vazia: ${empty.lines} fileira(s) vazia(s) com a v2, ${empty.handEmpty} mão(s) vazia(s)`);
+  if (empty.lines < 1) failures.push("mesa vazia: nenhuma fileira com o estado vazio da v2 (.nf-empty-line)");
+  if (empty.orbits !== empty.lines) failures.push("mesa vazia: fileira sem o orbe (ícone)");
+  if (shotDir) await page.screenshot({ path: join(shotDir, `table-empty-${view}-${vp.name}.png`) });
   if (vp.width >= 1041) {
     const railIssues = await page.evaluate(RAIL_MEASURE);
     reports.push(`trilho: ${railIssues.length ? railIssues.join("; ") : "ok"}`);
@@ -801,6 +814,151 @@ async function menuFlow(browser, vp, url) {
   await page.waitForSelector('[data-screen="shell"]', { timeout: 15000 }).catch(() => failures.push("sair não voltou ao lobby"));
   const playLabel = await page.locator(".nf-shell-tab").first().textContent();
   if (!/Continu/.test(playLabel ?? "")) failures.push(`lobby após sair: destino de jogo "${playLabel}", esperado "Continuar"`);
+
+  await context.close();
+  return failures;
+}
+
+// H-26: as pilhas da mesa (ZonesSheet). O chip do descarte do Warden abre a aba dele; o chip dos
+// seus arquivos abre Arquivos; em Arquivos os do Warden aparecem só como contagem (nenhuma carta
+// no DOM, e o número bate com o chip virado); Purgadas é uma aba; Esc fecha e devolve o foco ao
+// chip. Devolve a lista de falhas (vazia = passou).
+async function zonesFlow(browser, vp, url, shotDir) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(seedFor("2d"));
+  const page = await context.newPage();
+  await openTable(page, url);
+  const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+  const selectedTab = () => page.evaluate(() => [...document.querySelectorAll(".nf-zones-tabs [role=radio]")].findIndex((r) => r.getAttribute("aria-checked") === "true"));
+  const focusedIs = (selector) => page.evaluate((sel) => Boolean(document.activeElement?.matches(sel)), selector);
+  const openChip = async (selector, label) => {
+    await page.locator(selector).click();
+    await dialog.waitFor({ state: "visible", timeout: 5000 }).catch(() => failures.push(`${label}: a folha não abriu`));
+    await page.waitForTimeout(600);
+  };
+  const closeWithEsc = async (selector, label) => {
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "detached", timeout: 5000 }).catch(() => failures.push(`${label}: Esc não fechou`));
+    if (!(await focusedIs(selector))) failures.push(`${label}: foco não voltou ao chip`);
+  };
+
+  const oppDiscard = '.pile-chip[data-pile="discard"][data-side="1"]';
+  const ownArchive = '.pile-chip[data-pile="archive"][data-side="0"]';
+  const oppArchiveHidden = '.pile-chip--hidden[data-pile="archive"][data-side="1"]';
+
+  // 1) chip do descarte do Warden → aba "Descarte (Warden)" (índice 1).
+  await openChip(oppDiscard, "chip descarte Warden");
+  if ((await selectedTab()) !== 1) failures.push(`chip descarte Warden abriu a aba ${await selectedTab()}, esperado 1`);
+  if ((await page.locator('[data-zones-tab="discardOpp"]').count()) !== 1) failures.push("chip descarte Warden: painel discardOpp ausente");
+  if ((await page.locator(".nf-zones-tabs [role=radio]").count()) !== 4) failures.push("pilhas: esperadas 4 abas");
+  const audit = await page.evaluate(AUDIT, '[role="dialog"][aria-modal="true"]');
+  for (const [key, items] of Object.entries(audit)) {
+    if (Array.isArray(items) ? items.length : items !== null) failures.push(`pilhas ${key}: ${Array.isArray(items) ? items.slice(0, 4).join("; ") : items}`);
+  }
+  if (shotDir) await page.screenshot({ path: join(shotDir, `zones-discard-${vp.name}.png`) });
+  await closeWithEsc(oppDiscard, "descarte Warden");
+
+  // 2) arquivos do próprio lado → aba Arquivos (índice 2). Os do Warden: só contagem.
+  await openChip(ownArchive, "chip seus arquivos");
+  if ((await selectedTab()) !== 2) failures.push(`chip arquivos abriu a aba ${await selectedTab()}, esperado 2`);
+  const hidden = await page.evaluate(() => {
+    const section = document.querySelector('[data-zones-section="archives-opp"]');
+    return section ? { cards: section.querySelectorAll(".nf-zones-card").length, text: section.textContent ?? "" } : null;
+  });
+  const hiddenCount = await page.locator(`${oppArchiveHidden} b`).textContent();
+  if (!hidden) failures.push("Arquivos: seção do Warden ausente");
+  else {
+    if (hidden.cards !== 0) failures.push(`Arquivos do Warden expõem ${hidden.cards} carta(s) — deveria ser só contagem`);
+    if (!hidden.text.includes(String(hiddenCount).trim())) failures.push(`Arquivos do Warden: contagem "${hidden.text}" não bate com o chip (${hiddenCount})`);
+  }
+  if (shotDir) await page.screenshot({ path: join(shotDir, `zones-archives-${vp.name}.png`) });
+  await closeWithEsc(ownArchive, "arquivos");
+
+  // 3) Purgadas é uma aba alcançável (índice 3) e troca o painel.
+  await openChip(oppDiscard, "chip descarte Warden (2)");
+  await page.locator(".nf-zones-tabs [role=radio]").nth(3).click();
+  if ((await page.locator('[data-zones-tab="purged"]').count()) !== 1) failures.push("aba Purgadas não trocou o painel");
+  await closeWithEsc(oppDiscard, "purgadas");
+
+  await context.close();
+  return failures;
+}
+
+// H-28 (§5 H-28): a entrada do Lobby roda em --dur-enter (420ms ±20) e a cascata para no 5º item
+// (≤ 5 × --nf-stagger = 300ms). Com a animação LIGADA (o reduced-motion trocaria o tempo por
+// --dur-fast): um observador de rAF guarda a duração de cada nf-rise que nasce na página.
+const RISE_OBSERVER = () => {
+  window.__riseDur = [];
+  const seen = new WeakSet();
+  const tick = () => {
+    for (const anim of document.getAnimations()) {
+      if (anim.animationName !== "nf-rise" || seen.has(anim)) continue;
+      seen.add(anim);
+      window.__riseDur.push(anim.effect.getComputedTiming().duration);
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+};
+async function motionFlow(browser, vp, url) {
+  const failures = [];
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "no-preference" });
+  await context.addInitScript(seedFor("2d").replace("animations: false", "animations: true"));
+  await context.addInitScript(RISE_OBSERVER);
+  const page = await context.newPage();
+  await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.waitForTimeout(900);
+  const probe = await page.evaluate(() => ({
+    durations: window.__riseDur,
+    delays: [...document.querySelectorAll(".nf-lobby [data-enter]")].map((el) => {
+      const raw = getComputedStyle(el).animationDelay;
+      return raw.endsWith("ms") ? parseFloat(raw) : parseFloat(raw) * 1000;
+    }),
+  }));
+  if (!probe.durations.length) failures.push("lobby: nenhuma entrada nf-rise observada (a cascata não animou)");
+  for (const d of probe.durations) {
+    if (Math.abs(d - 420) > 20) failures.push(`lobby: entrada de ${d}ms, esperado --dur-enter 420ms ±20`);
+  }
+  const worstDelay = probe.delays.length ? Math.max(...probe.delays) : 0;
+  if (worstDelay > 5 * 60 + 1) failures.push(`lobby: cascata de ${worstDelay}ms, teto de 5 itens = 300ms`);
+  await context.close();
+  return { failures, reports: [`lobby: ${probe.durations.length} entrada(s) em ${probe.durations.map((d) => Math.round(d)).join("/")}ms; maior atraso ${Math.round(worstDelay)}ms`] };
+}
+
+// H-27: a fronteira de erro da v2. Com a partida salva, ?ui=2&crash=1 (só dev) lança num filho:
+// o fallback aparece, o save (aember-arena-match) fica byte a byte igual e "Voltar ao Lobby"
+// leva ao lobby, onde "Continuar" retoma a mesma partida. Devolve a lista de falhas.
+async function crashFlow(browser, vp, url) {
+  const failures = [];
+  const SAVE = "aember-arena-match";
+  const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
+  await context.addInitScript(seedFor("2d"));
+  const page = await context.newPage();
+  await openTable(page, url);
+  const before = await page.evaluate((key) => localStorage.getItem(key), SAVE);
+  if (!before) failures.push("crash: a partida não foi salva antes do erro");
+
+  await page.goto(`${url}?ui=2&crash=1`, { waitUntil: "domcontentloaded" });
+  const alert = page.locator(".nf-error[role=alert]");
+  await alert.waitFor({ state: "visible", timeout: 15000 }).catch(() => failures.push("crash: o fallback da v2 não apareceu"));
+  if (await alert.count()) {
+    const audit = await page.evaluate(AUDIT, ".nf-error");
+    for (const [key, items] of Object.entries(audit)) {
+      if (Array.isArray(items) ? items.length : items !== null) failures.push(`crash ${key}: ${Array.isArray(items) ? items.slice(0, 4).join("; ") : items}`);
+    }
+  }
+  const afterCrash = await page.evaluate((key) => localStorage.getItem(key), SAVE);
+  if (afterCrash !== before) failures.push("crash: o save da partida mudou ou sumiu com o erro");
+
+  await page.locator(".nf-error button").click();
+  await page.waitForSelector('[data-screen="shell"]', { timeout: 15000 }).catch(() => failures.push("crash: o botão não voltou ao lobby"));
+  if ((await page.locator(".nf-error[role=alert]").count()) !== 0) failures.push("crash: o fallback continuou depois do reset");
+  const afterReset = await page.evaluate((key) => localStorage.getItem(key), SAVE);
+  if (afterReset !== before) failures.push("crash: o save mudou depois de voltar ao lobby");
+  const playLabel = await page.locator(".nf-shell-tab").first().textContent();
+  if (!/Continu/.test(playLabel ?? "")) failures.push(`crash: lobby sem "Continuar" (destino "${playLabel}")`);
 
   await context.close();
   return failures;
@@ -1318,7 +1476,7 @@ try {
     }
 
     for (const view of TABLE_VIEWS) {
-      const { failures, reports } = await tableFlow(browser, vp, server.url, view);
+      const { failures, reports } = await tableFlow(browser, vp, server.url, view, shotDir);
       for (const line of reports) console.log(`[table ${view} ${vp.name}] ${line}`);
       if (failures.length) {
         problems += 1;
@@ -1337,6 +1495,28 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[menu ${vp.name}] OK`);
+      }
+    }
+
+    if (TABLE_VIEWS.length) {
+      const failures = await crashFlow(browser, vp, server.url);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[crash ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[crash ${vp.name}] OK`);
+      }
+    }
+
+    if (TABLE_VIEWS.length) {
+      const failures = await zonesFlow(browser, vp, server.url, shotDir);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[zones ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[zones ${vp.name}] OK`);
       }
     }
 
@@ -1361,6 +1541,18 @@ try {
         for (const failure of failures) console.log(`    ${failure}`);
       } else {
         console.log(`[lobby-flow ${vp.name}] OK`);
+      }
+    }
+
+    {
+      const { failures, reports } = await motionFlow(browser, vp, server.url);
+      for (const line of reports) console.log(`[motion ${vp.name}] ${line}`);
+      if (failures.length) {
+        problems += 1;
+        console.log(`[motion ${vp.name}] FALHA`);
+        for (const failure of failures) console.log(`    ${failure}`);
+      } else {
+        console.log(`[motion ${vp.name}] OK`);
       }
     }
 

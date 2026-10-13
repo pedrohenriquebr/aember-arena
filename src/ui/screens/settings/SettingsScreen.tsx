@@ -69,7 +69,7 @@ export function SettingsScreen({ t, settings, onChange, hasHover, languageMenu, 
   };
 
   return (
-    <div className="nf-settings" data-screen="settings">
+    <div className="nf-settings nf-screen-enter" data-screen="settings">
       <h1 className="nf-settings-title">{t("ui.settings.title")}</h1>
       <div className="nf-settings-layout">
         <div role="tablist" aria-label={t("ui.settings.tabs")} className="nf-settings-tabs">
@@ -92,7 +92,8 @@ export function SettingsScreen({ t, settings, onChange, hasHover, languageMenu, 
           ))}
         </div>
 
-        <div role="tabpanel" id={`settings-panel-${tab}`} aria-labelledby={`settings-tab-${tab}`} className="nf-settings-panel">
+        {/* key por aba: a troca remonta o painel e o cruzamento de opacidade roda (H-28). */}
+        <div key={tab} role="tabpanel" id={`settings-panel-${tab}`} aria-labelledby={`settings-tab-${tab}`} className="nf-settings-panel nf-tab-panel">
           {tab === "game" && <GameTab t={t} settings={settings} onChange={onChange} formatDelay={formatDelay} />}
           {tab === "interface" && (
             <InterfaceTab

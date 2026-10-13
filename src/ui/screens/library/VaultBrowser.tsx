@@ -28,7 +28,7 @@ export function VaultBrowser({ t, state, onStateChange, offline, onInspect }: {
   const { page, search, ordering } = view;
 
   return (
-    <section className="nf-vault" aria-label={t("ui.library.tabVault")}>
+    <section className="nf-vault nf-tab-panel" aria-label={t("ui.library.tabVault")}>
       {offline && (
         <p className="nf-banner" role="status">
           <WifiOff size={16} aria-hidden="true" />

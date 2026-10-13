@@ -34,3 +34,29 @@
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: 0;
 }
+
+/* H-27 — estados vazios da mesa (só a v2: a classe nf-* é anexada no App). A caixa da v1 fica
+   (o min-height da fileira não muda, o FIT segue idêntico); a hierarquia é o orbe com um glow
+   suave e uma linha de texto. Os overrides 3D da fileira (VA-09/R-05) vencem por especificidade. */
+.nf-empty-line {
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  letter-spacing: 0;
+}
+.nf-empty-line .empty-orbit {
+  width: var(--space-6);
+  height: var(--space-6);
+  border-color: var(--nf-line-strong);
+  color: var(--nf-text-2);
+  box-shadow: 0 0 var(--space-5) color-mix(in srgb, var(--nf-ether) 18%, transparent);
+}
+.nf-empty-hand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--nf-text-2);
+  font-size: var(--fs-xs);
+}

@@ -71,7 +71,7 @@ export function DeckDetail({ t, deck, selected, stats, syncing, onBack, onPlay, 
   };
 
   return (
-    <div className="nf-detail" data-screen="detail">
+    <div className="nf-detail nf-screen-enter" data-screen="detail">
       <div className="nf-detail-main">
         <div className="nf-detail-top">
           <Button variant="ghost" icon={<ArrowLeft size={18} />} aria-label={t("common.back")} onClick={() => { sound.play("click"); onBack(); }} />
@@ -123,7 +123,8 @@ export function DeckDetail({ t, deck, selected, stats, syncing, onBack, onPlay, 
         />
 
         {tab === "cards" && (
-          <>
+          // Wrapper da aba: o gap do grid de nf-detail-main é replicado (deck.css) para o layout não mudar.
+          <div className="nf-detail-cards nf-tab-panel">
             <div className="nf-detail-filters">
               <label className="nf-detail-search">
                 <Search size={16} aria-hidden="true" />
@@ -185,11 +186,11 @@ export function DeckDetail({ t, deck, selected, stats, syncing, onBack, onPlay, 
                 {filtersOn && <Button variant="ghost" onClick={clearFilters}>{t("ui.detail.clearFilters")}</Button>}
               </div>
             )}
-          </>
+          </div>
         )}
 
         {tab === "stats" && (
-          <div className="nf-detail-stats">
+          <div className="nf-detail-stats nf-tab-panel">
             <section className="nf-card" aria-labelledby="nf-detail-rarity">
               <h2 id="nf-detail-rarity" className="nf-card-title">{t("ui.detail.rarity")}</h2>
               <ul className="nf-detail-list">

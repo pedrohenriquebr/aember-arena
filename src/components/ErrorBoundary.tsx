@@ -3,7 +3,9 @@
 // audit point behind BUG-01). The boundary is keyed by the parent, so bumping
 // the key remounts it fresh after a reset. It wraps the screens area of App —
 // the realistic crash site; a crash in App itself still takes the page down.
+import { TriangleAlert } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button } from "../ui/primitives/Button";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -12,6 +14,8 @@ interface ErrorBoundaryProps {
   title: string;
   body: string;
   action: string;
+  /** UX_REWRITE_PLAN §5 H-27: fallback da v2 (mesmos textos, outra casca). */
+  ui2?: boolean;
 }
 
 interface ErrorBoundaryState {
@@ -33,6 +37,22 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render(): ReactNode {
     if (!this.state.failed) return this.props.children;
+    const reset = () => {
+      this.setState({ failed: false });
+      this.props.onReset();
+    };
+    // A partida não é tocada aqui: o save (aember-arena-match) segue no storage, e o
+    // reset só leva ao lobby, onde "Continuar" a retoma.
+    if (this.props.ui2) {
+      return (
+        <div className="nf-error" role="alert">
+          <span className="nf-error-mark" aria-hidden="true"><TriangleAlert size={22} strokeWidth={1.6} /></span>
+          <h1>{this.props.title}</h1>
+          <p>{this.props.body}</p>
+          <Button variant="primary" onClick={reset}>{this.props.action}</Button>
+        </div>
+      );
+    }
     return (
       <div className="error-screen" role="alert">
         <h1>{this.props.title}</h1>
@@ -40,10 +60,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <button
           type="button"
           className="cta-button"
-          onClick={() => {
-            this.setState({ failed: false });
-            this.props.onReset();
-          }}
+          onClick={reset}
         >
           {this.props.action}
         </button>

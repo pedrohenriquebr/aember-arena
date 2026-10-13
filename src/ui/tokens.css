@@ -32,4 +32,6 @@
   --nf-font-ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --nf-font-display:"Iowan Old Style","Palatino Linotype",Georgia,serif;
   --nf-w-read:680px; --nf-w-content:1120px; --nf-w-wide:1280px; --nf-stagger:60ms;
+  /* Movimento de laço e de ambiente (H-28): o CSS da v2 não leva tempo literal — lint:ui2. */
+  --dur-shimmer:1.4s; --dur-ambient:14s; --dur-drift:18s; --ease-linear:linear;
 }

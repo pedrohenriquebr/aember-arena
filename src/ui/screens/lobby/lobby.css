@@ -206,23 +206,16 @@
   .nf-shelf-grid { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
 }
 
-/* ---- Cascata de entrada (UX_REWRITE_PLAN §1.5): ≤5 itens, fill-mode backwards ---- */
-@keyframes nf-rise {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes nf-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* ---- Cascata de entrada (UX_REWRITE_PLAN §1.5): ≤5 itens, fill-mode backwards. nf-rise/nf-fade
+   vêm do primitives.css (um só @keyframes por nome). ---- */
 .nf-lobby [data-enter] {
   animation: nf-rise var(--dur-enter) var(--ease-emph) backwards;
-  animation-delay: calc(var(--i, 0) * var(--nf-stagger));
+  animation-delay: calc(min(var(--i, 0), 5) * var(--nf-stagger));
 }
 @media (prefers-reduced-motion: reduce) {
-  .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) linear backwards; }
+  .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) var(--ease-out) backwards; }
 }
-html.reduce-motion .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) linear backwards; }
+html.reduce-motion .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) var(--ease-out) backwards; }
 
 /* ---- Partículas de Æmber (data-decor): só enfeite, somem no reduced-motion ---- */
 @keyframes nf-dust {
@@ -244,17 +237,18 @@ html.reduce-motion .nf-lobby [data-enter] { animation: nf-fade var(--dur-fast) l
   height: 4px;
   border-radius: var(--radius-pill);
   background: var(--nf-accent-hi);
-  animation: nf-dust 14s linear infinite;
+  animation: nf-dust var(--dur-ambient) var(--ease-linear) infinite;
 }
-.nf-lobby-dust i:nth-child(odd) { animation-duration: 18s; }
-.nf-lobby-dust i:nth-child(1) { left: 8%; animation-delay: -2s; }
-.nf-lobby-dust i:nth-child(2) { left: 22%; animation-delay: -7s; }
-.nf-lobby-dust i:nth-child(3) { left: 37%; animation-delay: -11s; }
-.nf-lobby-dust i:nth-child(4) { left: 51%; animation-delay: -4s; }
-.nf-lobby-dust i:nth-child(5) { left: 64%; animation-delay: -9s; }
-.nf-lobby-dust i:nth-child(6) { left: 77%; animation-delay: -13s; }
-.nf-lobby-dust i:nth-child(7) { left: 88%; animation-delay: -6s; }
-.nf-lobby-dust i:nth-child(8) { left: 95%; animation-delay: -15s; }
+/* Fases negativas em fração da --dur-ambient (-2s/14s ≈ -0,14 etc.): a poeira começa dispersa. */
+.nf-lobby-dust i:nth-child(odd) { animation-duration: var(--dur-drift); }
+.nf-lobby-dust i:nth-child(1) { left: 8%; animation-delay: calc(var(--dur-ambient) * -0.14); }
+.nf-lobby-dust i:nth-child(2) { left: 22%; animation-delay: calc(var(--dur-ambient) * -0.5); }
+.nf-lobby-dust i:nth-child(3) { left: 37%; animation-delay: calc(var(--dur-ambient) * -0.79); }
+.nf-lobby-dust i:nth-child(4) { left: 51%; animation-delay: calc(var(--dur-ambient) * -0.29); }
+.nf-lobby-dust i:nth-child(5) { left: 64%; animation-delay: calc(var(--dur-ambient) * -0.64); }
+.nf-lobby-dust i:nth-child(6) { left: 77%; animation-delay: calc(var(--dur-ambient) * -0.93); }
+.nf-lobby-dust i:nth-child(7) { left: 88%; animation-delay: calc(var(--dur-ambient) * -0.43); }
+.nf-lobby-dust i:nth-child(8) { left: 95%; animation-delay: calc(var(--dur-ambient) * -1.07); }
 @media (prefers-reduced-motion: reduce) {
   .nf-lobby-dust { display: none; }
 }

@@ -24,6 +24,13 @@
   min-width: 0;
 }
 
+/* Aba Cartas: o wrapper repete o gap que o grid de .nf-detail-main dava a cada filho direto. */
+.nf-detail-cards {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
 .nf-detail-top {
   display: flex;
   align-items: center;
@@ -285,4 +292,10 @@
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* Mesmo remédio do tile: dentro da folha da carta o fade do <img> da v1
+   disparava transições "rodando" sob reduced-motion (gate ui2, 768x1024). */
+.nf-sheet .card-art img {
+  transition: none;
 }

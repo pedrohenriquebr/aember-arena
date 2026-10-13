@@ -299,7 +299,7 @@
   border-radius: var(--radius-sm);
   background: linear-gradient(90deg, var(--nf-s2), var(--nf-s3), var(--nf-s2));
   background-size: 200% 100%;
-  animation: nf-shimmer 1.4s linear infinite;
+  animation: nf-shimmer var(--dur-shimmer) var(--ease-linear) infinite;
 }
 .nf-skeleton--block { border-radius: var(--radius-lg); }
 .nf-skeleton--circle { border-radius: 50%; }
@@ -308,12 +308,21 @@
 @keyframes nf-sheet-up { from { transform: translateY(100%); } }
 @keyframes nf-sheet-pop { from { opacity: 0; transform: translate(-50%, -46%); } }
 @keyframes nf-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes nf-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
-/* Movimento some com reduced-motion do SO ou o toggle de animações do app (html.reduce-motion). */
+/* Coreografia (UX_REWRITE_PLAN §1.5, H-28): entrada de tela sobe 12px em --dur-enter; a troca de
+   aba só cruza a opacidade. fill-mode backwards (nunca both): nada de transform residual no fim. */
+.nf-screen-enter { animation: nf-rise var(--dur-enter) var(--ease-emph) backwards; }
+.nf-tab-panel { animation: nf-fade var(--dur-base) var(--ease-out) backwards; }
+
+/* Movimento some com reduced-motion do SO ou o toggle de animações do app (html.reduce-motion).
+   A entrada de tela vira só opacidade, num tempo curto (--dur-fast). */
 @media (prefers-reduced-motion: reduce) {
   .nf-sheet,
   .nf-sheet-backdrop,
   .nf-skeleton { animation: none; }
+  .nf-screen-enter,
+  .nf-tab-panel { animation: nf-fade var(--dur-fast) var(--ease-out) backwards; }
   .nf-btn,
   .nf-seg-option,
   .nf-switch-track,
@@ -322,3 +331,5 @@
 html.reduce-motion .nf-sheet,
 html.reduce-motion .nf-sheet-backdrop,
 html.reduce-motion .nf-skeleton { animation: none; }
+html.reduce-motion .nf-screen-enter,
+html.reduce-motion .nf-tab-panel { animation: nf-fade var(--dur-fast) var(--ease-out) backwards; }

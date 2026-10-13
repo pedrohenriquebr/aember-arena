@@ -111,3 +111,37 @@
 .nf-shell .lang-trigger {
   height: 44px;
 }
+
+/* H-27 — fallback do ErrorBoundary na v2: mesma função (mostrar o erro e voltar), casca da
+   Forja. Não toca a partida: o save segue no storage e "Voltar ao Lobby" leva a "Continuar". */
+.nf-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 60dvh;
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+.nf-error-mark {
+  display: grid;
+  width: var(--space-7);
+  height: var(--space-7);
+  place-items: center;
+  border: 1px solid var(--nf-line-strong);
+  border-radius: 50%;
+  color: var(--nf-ember);
+}
+.nf-error h1 {
+  margin: 0;
+  font-family: var(--nf-font-display);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+.nf-error p {
+  max-width: 40ch;
+  margin: 0;
+  color: var(--nf-text-2);
+  font-size: var(--fs-sm);
+}

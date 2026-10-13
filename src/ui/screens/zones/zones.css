@@ -1,0 +1,101 @@
+/* ZonesSheet (UX_REWRITE_PLAN §5 H-26): pilhas por abas dentro da Sheet. Só tokens --nf-* /
+   --space-* / --fs-* / --radius-* (lint:ui2). Mobile primeiro: o grid preenche a largura da
+   folha; as abas quebram em linha quando o nome do oponente é longo. */
+.nf-zones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.nf-zones-tabs { flex-wrap: wrap; border-radius: var(--radius-lg); }
+/* O painel da aba é um bloco keyed (cruzamento de opacidade): o gap entre títulos e grids vive aqui. */
+.nf-zones-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.nf-zones-tabs .nf-seg-option { flex: 1 1 auto; white-space: normal; text-align: center; }
+
+.nf-zones-count {
+  margin: 0;
+  color: var(--nf-text-2);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.nf-zones-heading {
+  margin: var(--space-2) 0 0;
+  color: var(--nf-text-3);
+  font-family: var(--nf-font-ui);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.nf-zones-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(112px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nf-zones-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.nf-zones-caption {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.nf-zones-caption strong {
+  overflow: hidden;
+  color: var(--nf-text);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nf-zones-caption small {
+  color: var(--nf-text-2);
+  font-size: var(--fs-2xs);
+}
+.nf-zones-mv {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--nf-s3);
+  color: var(--nf-text);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+}
+
+.nf-zones-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) 0;
+  color: var(--nf-text-3);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.nf-zones-empty p { margin: 0; }
+
+/* Arquivos do oponente virados: só a contagem, sem nenhum elemento de carta. */
+.nf-zones-hidden {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--nf-line-strong);
+  border-radius: var(--radius-lg);
+  color: var(--nf-text-2);
+  font-size: var(--fs-sm);
+}
+.nf-zones-hidden p { margin: 0; }

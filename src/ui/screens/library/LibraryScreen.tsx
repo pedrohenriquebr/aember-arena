@@ -43,7 +43,7 @@ export function LibraryScreen(props: LibraryScreenProps) {
   const hasSaved = savedDecks.some((deck) => !starterIds.has(deck.id));
 
   return (
-    <div className="nf-library" data-screen="library">
+    <div className="nf-library nf-screen-enter" data-screen="library">
       <div className="nf-library-head">
         <h1 className="nf-library-title">{t("ui.library.title")}</h1>
         <Button variant="ghost" icon={<Plus size={16} />} onClick={props.onImport}>{t("ui.library.import")}</Button>
@@ -60,7 +60,7 @@ export function LibraryScreen(props: LibraryScreenProps) {
       />
 
       {tab === "mine" && (
-        <section className="nf-library-mine" aria-label={t("ui.library.tabMine")}>
+        <section className="nf-library-mine nf-tab-panel" aria-label={t("ui.library.tabMine")}>
           <div className="nf-library-sort">
             <SegmentedControl<LibrarySort>
               label={t("ui.library.sortLabel")}
