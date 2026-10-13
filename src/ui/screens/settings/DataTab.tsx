@@ -6,6 +6,7 @@ import { Button } from "../../primitives/Button";
 import { Chip } from "../../primitives/Chip";
 import { SettingRow } from "../../primitives/SettingRow";
 import { readBuildId } from "./buildId";
+import { ArtOfflineCard } from "./ArtOfflineCard";
 
 /**
  * Aba Dados e offline (UX_REWRITE_PLAN §2 S7, §5 H-19): catálogo (contagem, sincronizar,
@@ -79,6 +80,9 @@ export function DataTab({ t, online, catalogCount, catalogSync, onSyncCatalog, o
           </Button>
         }
       />
+
+      {/* ART_OFFLINE: artes por deck sob pedido; o custo de quota aparece no próprio card. */}
+      <ArtOfflineCard t={t} />
 
       <section className="u-settings-card" aria-labelledby="u-data-status-title">
         <h2 className="nf-setting-title" id="u-data-status-title">{t("ui.settings.data.appStatus")}</h2>
