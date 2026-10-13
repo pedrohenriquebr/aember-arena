@@ -38,6 +38,7 @@ import {
   Swords,
   Volume2,
   VolumeX,
+  Hand,
   Trash2,
   Wand2,
   Wifi,
@@ -123,6 +124,7 @@ import { MatchSheet } from "./ui/screens/MatchSheet";
 import { KitScreen } from "./ui/screens/KitScreen";
 import { LobbyShell } from "./ui/shell/LobbyShell";
 import { TableMenu } from "./ui/shell/TableMenu";
+import { ZonesSheet } from "./ui/screens/zones/ZonesSheet";
 import { destinationOf } from "./ui/shell/shellNav";
 import { SettingsScreen } from "./ui/screens/settings/SettingsScreen";
 
@@ -1583,6 +1585,8 @@ type BoardLaneProps = {
   targetIds?: string[];
   settings: AppSettings;
   t: Translator;
+  /** UX_REWRITE_PLAN §5 H-27: estado vazio da fileira com a hierarquia da v2. */
+  ui2?: boolean;
   /** Undefined in the replay viewer: the tiles render disabled. */
   onSelect?: (card: CardInstance) => void;
 };
@@ -1601,6 +1605,7 @@ function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
     a.hintIds !== b.hintIds ||
     a.settings !== b.settings ||
     a.t !== b.t ||
+    a.ui2 !== b.ui2 ||
     a.onSelect !== b.onSelect
   ) {
     return false;
@@ -1655,6 +1660,7 @@ const BoardLane = memo(function BoardLane({
   hintIds,
   settings,
   t,
+  ui2 = false,
   onSelect,
 }: BoardLaneProps) {
   // Visual neighbours must equal engine neighbours: creatures render in
@@ -1678,8 +1684,8 @@ const BoardLane = memo(function BoardLane({
   }
   if (!cards.length) {
     return (
-      <div className="empty-battleline">
-        <span className="empty-orbit"><Shield size={17} strokeWidth={1.3} /></span>
+      <div className={ui2 ? "empty-battleline nf-empty-line" : "empty-battleline"}>
+        <span className="empty-orbit"><Shield size={ui2 ? 20 : 17} strokeWidth={1.3} /></span>
         <span>{t("game.clearLine")}</span>
       </div>
     );
@@ -1694,8 +1700,8 @@ const BoardLane = memo(function BoardLane({
       style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, cards.length), "--na": artifacts.length, "--nu": Math.max(0, ...perHost.values()) } as CSSProperties}
     >
       {creatures.length === 0 && (
-        <div className="empty-battleline">
-          <span className="empty-orbit"><Shield size={17} strokeWidth={1.3} /></span>
+        <div className={ui2 ? "empty-battleline nf-empty-line" : "empty-battleline"}>
+          <span className="empty-orbit"><Shield size={ui2 ? 20 : 17} strokeWidth={1.3} /></span>
           <span>{t("game.clearLine")}</span>
         </div>
       )}
@@ -1793,6 +1799,7 @@ function GameBoard({
   game,
   winnerPanel = true,
   coachAnchors = false,
+  ui2 = false,
   selected,
   pick,
   aiPhase,
@@ -1876,6 +1883,8 @@ function GameBoard({
   winnerPanel?: boolean;
   /** UX_REWRITE_PLAN §5 H-24: data-coach nos três pontos que a dica ancora (só com a v2). */
   coachAnchors?: boolean;
+  /** UX_REWRITE_PLAN §5 H-26: pilhas como ZonesSheet por abas (só com a v2); v1 segue no PileDialog. */
+  ui2?: boolean;
   onKeepHand: () => void;
   onMulligan: () => void;
 }) {
@@ -2055,6 +2064,7 @@ function GameBoard({
               targetIds={pick?.ids}
               settings={settings}
               t={t}
+              ui2={ui2}
               onSelect={readOnly ? undefined : selectOpponentCard}
             />
           </section>
@@ -2142,6 +2152,7 @@ function GameBoard({
               targetIds={pick?.ids}
               settings={settings}
               t={t}
+              ui2={ui2}
               onSelect={readOnly ? undefined : selectPlayerCard}
             />
           </section>
@@ -2192,7 +2203,12 @@ function GameBoard({
                 />
               );
             })}
-            {!handHidden && !player.hand.length && <div className="empty-hand">{t("game.handEmpty")}</div>}
+            {!handHidden && !player.hand.length && (ui2 ? (
+              <div className="empty-hand nf-empty-hand">
+                <Hand size={18} strokeWidth={1.5} aria-hidden="true" />
+                <span>{t("ui.table.handEmpty")}</span>
+              </div>
+            ) : <div className="empty-hand">{t("game.handEmpty")}</div>)}
           </div>
           {handDrag.ghost}
         </section>
@@ -2200,7 +2216,19 @@ function GameBoard({
 
       {peek && <PeekDialog peek={peek} t={t} onClose={() => setOpenPeek(undefined)} />}
 
-      {pile && (
+      {/* H-26: com a v2 as pilhas são uma Sheet por abas; o PileDialog segue só na v1 (sai com H-30). */}
+      {pile && ui2 && (
+        <ZonesSheet
+          key={`${pile.kind}-${pile.side}`}
+          t={t}
+          initial={pile.kind === "archives" ? "archives" : pile.side === humanSide ? "discardYou" : "discardOpp"}
+          players={game.players}
+          names={[localizeName(game.players[0].name, t), localizeName(game.players[1].name, t)]}
+          viewerSide={humanSide}
+          onClose={() => setPile(null)}
+        />
+      )}
+      {pile && !ui2 && (
         <PileDialog
           kind={pile.kind}
           owner={game.players[pile.side]}
@@ -2691,6 +2719,13 @@ function ConfirmDialog({
   );
 }
 
+// ---------- Crash probe (H-27, só dev) ----------
+
+/** Lança de propósito para provar a fronteira de erro (`?ui=2&crash=1`). Nunca no build. */
+function CrashProbe(): null {
+  throw new Error("aember-arena: crash probe (?ui=2&crash=1)");
+}
+
 // ---------- App ----------
 
 // Navigation pointer, not a setting: sessionStorage survives a reload but not a new session.
@@ -2724,8 +2759,11 @@ function App() {
   const [matchSheetOpen, setMatchSheetOpen] = useState(false);
 
   // H-18: ?ui=2&screen=settings abre Ajustes direto (gate e2e:ui2); sem a v2 a rota não existe.
-  const [screen, setScreen] = useState<Screen>(() =>
-    ui2 === "2" && new URLSearchParams(window.location.search).get("screen") === "settings" ? "settings" : "home");
+  // H-28: ?ui=2&screen=browse abre a Biblioteca direto, para o gate medir a entrada dela.
+  const [screen, setScreen] = useState<Screen>(() => {
+    const requested = ui2 === "2" ? new URLSearchParams(window.location.search).get("screen") : null;
+    return requested === "settings" || requested === "browse" ? requested : "home";
+  });
   const [selectedDeck, setSelectedDeck] = useState<DeckInfo>(DEMO_DECK);
   // BUG-15: the Vault view state survives browsing into a deck and back.
   const [browseState, setBrowseState] = useState<BrowseState>({ page: 1, search: "", ordering: "-date" });
@@ -4442,10 +4480,14 @@ function App() {
             setPick(null);
             setBoundaryEpoch((epoch) => epoch + 1);
           }}
+          ui2={ui2 === "2"}
           title={t("error.title")}
-          body={t("error.body")}
-          action={t("error.back")}
+          body={ui2 === "2" ? t("ui.error.body") : t("error.body")}
+          action={ui2 === "2" ? t("ui.error.back") : t("error.back")}
         >
+        {/* H-27 gate (?ui=2&crash=1, só em dev): o filho lança UMA vez — o reset remonta a
+            fronteira e o probe sai, para provar o fallback sem apagar aember-arena-match. */}
+        {import.meta.env.DEV && ui2 === "2" && boundaryEpoch === 0 && new URLSearchParams(window.location.search).get("crash") === "1" && <CrashProbe />}
         {screen === "home" && ui2 !== "2" && resumeMatch && (
           <button
             type="button"
@@ -4669,6 +4711,7 @@ function App() {
                   passPending={passPending}
                   winnerPanel={ui2 !== "2"}
                   coachAnchors={ui2 === "2"}
+                  ui2={ui2 === "2"}
                   onPassConfirm={() => { sound.play("click"); setPassPending(null); }}
                   viewSwitching={viewSwitching}
                   archivesAction={isLegalMove(game, humanSide, { type: "takeArchives" }) ? (
@@ -4867,6 +4910,7 @@ function App() {
           <div className="replay-overlay" ref={replayRef} role="dialog" aria-modal="true" aria-label={t("game.replay")}>
             <GameBoard
               game={replay.states[replay.index]}
+              ui2={ui2 === "2"}
               selected={null}
               pick={null}
               aiPhase="idle"
