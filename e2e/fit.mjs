@@ -197,15 +197,21 @@ async function report(page, vp, label) {
 
 // FIT-05: o drawer abre pelo botao do console, guarda as funcoes do rail, fecha com
 // Esc/backdrop/X e devolve o foco ao botao.
+// H-29 (v2): a mesa não tem mais o botão do rail; a gaveta abre pela ☰ → "Table notes"
+// (TableMenu.tsx, onOpenNotes) e o foco volta à ☰. O mesmo gatilho serve às três saídas.
 async function checkDrawer(page, vp) {
   const bad = (msg) => { console.log(`   ! drawer: ${msg}`); failures.push(`${vp.name} [drawer]: ${msg}`); };
-  const btn = page.locator('button[aria-controls="command-rail"]');
-  if (!(await btn.count())) return bad("botao do drawer ausente");
+  const btn = page.locator(".table-menu-trigger");
+  if (!(await btn.count())) return bad("botao ☰ ausente");
   const box = await btn.boundingBox();
   if (!box || box.width < 44 || box.height < 44) bad(`alvo < 44px (${box?.width}x${box?.height})`);
   const rail = page.locator(".command-rail");
-  for (const how of ["Escape", "backdrop", "X"]) {
+  const openDrawer = async () => {
     await btn.click();
+    await page.getByRole("button", { name: "Table notes", exact: true }).click();
+  };
+  for (const how of ["Escape", "backdrop", "X"]) {
+    await openDrawer();
     await page.waitForTimeout(150);
     if (!(await rail.evaluate((el) => el.classList.contains("is-open")))) return bad("nao abriu");
     if (how === "Escape") {
@@ -220,7 +226,7 @@ async function checkDrawer(page, vp) {
     await page.waitForTimeout(150);
     if (await rail.evaluate((el) => el.classList.contains("is-open"))) bad(`nao fechou via ${how}`);
   }
-  if (!(await page.evaluate(() => document.activeElement?.getAttribute("aria-controls") === "command-rail"))) bad("foco nao voltou ao botao");
+  if (!(await page.evaluate(() => document.activeElement?.classList.contains("table-menu-trigger")))) bad("foco nao voltou a ☰");
   console.log(`   drawer ${failures.some((f) => f.includes(`${vp.name} [drawer]`)) ? "FAIL" : "OK"}`);
 }
 
@@ -233,14 +239,10 @@ try {
     const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
     await context.addInitScript(SEED());
     const page = await context.newPage();
+    // H-29: o padrão é a v2 — o Lobby traz "Jogar" (data-action="play") direto para a partida.
     await page.goto(server.url, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector(".home-screen", { timeout: 30000 });
-    // JS click: no celular o header-nav some (a navegação é a tab bar).
-    await page.evaluate(() => document.querySelectorAll(".header-nav .nav-link")[2]?.click());
-    await page.waitForSelector(".config-screen", { timeout: 15000 });
-    const pills = page.locator(".config-screen .config-step-pill");
-    await pills.nth((await pills.count()) - 1).click();
-    await page.locator(".config-nav .cta-button").click();
+    await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+    await page.locator('[data-action="play"]').click();
     await page.waitForSelector(".game-screen", { timeout: 20000 });
     const keep = page.locator(".mulligan-keep");
     if (await keep.count()) await keep.click();
@@ -256,8 +258,8 @@ try {
       console.log(`   (mesa cheia pulada: ${patched})`);
     } else {
       await page.reload({ waitUntil: "domcontentloaded" });
-      await page.waitForSelector(".home-screen", { timeout: 20000 });
-      await page.locator(".resume-bar").first().click();
+      await page.waitForSelector('[data-screen="lobby"]', { timeout: 20000 });
+      await page.locator('[data-action="continue"]').first().click();
       await page.waitForSelector(".game-screen", { timeout: 20000 });
       await page.waitForFunction(() => !document.querySelector(".end-turn-button")?.disabled, null, { timeout: 60000 });
       await page.waitForTimeout(700);

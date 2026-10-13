@@ -154,11 +154,11 @@ try {
   await page.goto(server.url, { waitUntil: "domcontentloaded" });
   await page.evaluate(SEED);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".home-screen", { timeout: 30000 });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
   const fixture = await page.evaluate(FIXTURE);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".home-screen", { timeout: 30000 });
-  await page.locator(".resume-bar").first().click();
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.locator('[data-action="continue"]').first().click();
   await page.waitForSelector(".game-screen", { timeout: 20000 });
   await page.waitForTimeout(700);
   mkdirSync(SHOTS, { recursive: true });
@@ -298,7 +298,10 @@ try {
   });
   if (during.error) check("H3D-08: toggle do modo no meio do voo", false, JSON.stringify(during));
   else {
-    await page.locator(".view-toggle").click();
+    // v2 (H-29): o modo troca pelo interruptor da ☰ (TableMenu); o .view-toggle agora abre o menu.
+    await page.locator(".table-menu-trigger").click();
+    await page.locator('[role="dialog"][aria-modal="true"] [role="switch"]').first().click();
+    await page.keyboard.press("Escape");
     await page.waitForTimeout(250);
     const after = await page.evaluate(() => ({
       ghosts: document.querySelectorAll(".fx-ghost, .fx-gone").length,

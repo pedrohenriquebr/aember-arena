@@ -89,11 +89,11 @@ async function open(browser, server, houseIndex, motion) {
   await page.goto(server.url, { waitUntil: "domcontentloaded" });
   await page.evaluate(SEED);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".home-screen", { timeout: 30000 });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
   const info = await page.evaluate(FIXTURE(houseIndex));
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".home-screen", { timeout: 30000 });
-  await page.locator(".resume-bar").first().click();
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+  await page.locator('[data-action="continue"]').first().click();
   await page.waitForSelector(".game-screen", { timeout: 20000 });
   await page.waitForTimeout(500);
   return { context, page, info };

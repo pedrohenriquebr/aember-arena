@@ -71,6 +71,11 @@
 //   6. Cadeia 3D (VIEW3D H3D-02) -> "node e2e/probes/_3d-chain.mjs": sem agrupamento
 //      do .table-plane ate a .board-piece, projecao viva e o leque. Os dois pulam
 //      com --skip-probes.
+//   7. Encaixe (fit.mjs) 2D e 3D nos 4 temas (H-29, UX_REWRITE §1.6.3.5): o encaixe
+//      tem de ser identico em qualquer tema.
+//   8. Gate da v2 (ui2.mjs) nos 4 temas (H-29).
+//   9. Capture no padrao (forja) + 1 tema escuro (arcano) + Claro (H-29); os PNGs vao
+//      para e2e/shots/acceptance-<rotulo> (so prova que o harness roda em cada tema).
 //
 // Sai != 0 listando TODAS as violacoes.
 // Uso: node e2e/acceptance.mjs [--max-gzip-kb N] [--block-max-lines N] [--skip-floor] [--skip-floor3d] [--skip-probes] [--port N]
@@ -133,9 +138,9 @@ console.log("== ACCEPTANCE (T1) ==");
 
 // 1) Piso tipografico
 if (skipFloor) {
-  console.log("\n[1/6] piso tipografico: PULADO (--skip-floor)");
+  console.log("\n[1/9] piso tipografico: PULADO (--skip-floor)");
 } else {
-  console.log(`\n[1/6] piso tipografico (node e2e/capture.mjs --floor-only @360x800, 5 telas):`);
+  console.log(`\n[1/9] piso tipografico (node e2e/capture.mjs --floor-only @360x800, 5 telas):`);
   const res = spawnSync(process.execPath, [join(ROOT, "e2e", "capture.mjs"), "--floor-only", "--port", String(floorPort)], {
     cwd: ROOT,
     encoding: "utf8",
@@ -151,7 +156,7 @@ if (skipFloor) {
 }
 
 // 2) Tamanho de bundle (informativo — teto aposentado pelo dono, 02/out/2026)
-console.log(`\n[2/6] tamanho de bundle (dist/index.html, zlib level 9) — informativo, teto aposentado:`);
+console.log(`\n[2/9] tamanho de bundle (dist/index.html, zlib level 9) — informativo, teto aposentado:`);
 const gzipKb = measureGzipKb();
 if (gzipKb === null) {
   console.log('  dist/index.html ausente - rode "npm run build" antes do acceptance (sem bloqueio)');
@@ -160,7 +165,7 @@ if (gzipKb === null) {
 }
 
 // 3) Bloco @media (max-width: 700px)
-console.log(`\n[3/6] bloco "${MEDIA_QUERY}" em src/index.css (max ${blockMaxLines} linhas):`);
+console.log(`\n[3/9] bloco "${MEDIA_QUERY}" em src/index.css (max ${blockMaxLines} linhas):`);
 const block = measureMediaBlock(CSS_PATH, MEDIA_QUERY);
 if (!block) {
   violations.push("css: bloco @media (max-width: 700px) nao encontrado em src/index.css");
@@ -176,9 +181,9 @@ if (!block) {
 
 // 4) Piso visual do 3D (H3D-11)
 if (skipFloor3d) {
-  console.log("\n[4/6] piso visual 3D: PULADO (--skip-floor3d)");
+  console.log("\n[4/9] piso visual 3D: PULADO (--skip-floor3d)");
 } else {
-  console.log(`\n[4/6] piso visual 3D (node e2e/capture.mjs --floor-only --view 3d @360/768/1280/1440):`);
+  console.log(`\n[4/9] piso visual 3D (node e2e/capture.mjs --floor-only --view 3d @360/768/1280/1440):`);
   const res = spawnSync(process.execPath, [join(ROOT, "e2e", "capture.mjs"), "--floor-only", "--view", "3d", "--port", String(floorPort + 1)], {
     cwd: ROOT,
     encoding: "utf8",
@@ -196,15 +201,41 @@ if (skipFloor3d) {
 // 5) e 6) Probes do 3D (cada um sobe o proprio dev server)
 for (const [n, label, file] of [[5, "layout Arena", "_3d-arena.mjs"], [6, "cadeia 3D", "_3d-chain.mjs"]]) {
   if (skipProbes) {
-    console.log(`\n[${n}/6] ${label}: PULADO (--skip-probes)`);
+    console.log(`\n[${n}/9] ${label}: PULADO (--skip-probes)`);
     continue;
   }
-  console.log(`\n[${n}/6] ${label} (node e2e/probes/${file}):`);
+  console.log(`\n[${n}/9] ${label} (node e2e/probes/${file}):`);
   const res = spawnSync(process.execPath, [join(ROOT, "e2e", "probes", file)], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   // So as falhas e o veredito: o log completo de cada probe e longo.
   for (const line of (res.stdout ?? "").split(/\r?\n/).filter((l) => /^(FAIL|FALHAS|ARENA|OK:)/.test(l))) console.log(`  ${line}`);
   if (res.error) violations.push(`${label}: nao conseguiu executar ${file} (${res.error.message})`);
   else if (res.status !== 0) violations.push(`${label}: ${file} saiu com code ${res.status} (falhas listadas acima)`);
+}
+
+// Um passo = um harness em subprocesso (cada um sobe o seu dev server); a saida do
+// harness passa inteira para o log e so o exit code vira violacao.
+function runStep(label, script, args = []) {
+  const res = spawnSync(process.execPath, [join(ROOT, "e2e", script), ...args], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (res.stdout) process.stdout.write(res.stdout);
+  if (res.stderr) process.stderr.write(res.stderr);
+  if (res.error) violations.push(`${label}: nao conseguiu executar ${script} (${res.error.message})`);
+  else if (res.status !== 0) violations.push(`${label}: ${script} saiu com code ${res.status}`);
+}
+
+const THEMES = ["forja", "aco", "claro", "arcano"];
+
+console.log("\n[7/9] encaixe 2D e 3D nos 4 temas (node e2e/fit.mjs [--view 3d] --theme <id>):");
+for (const theme of THEMES) {
+  runStep(`fit 2D ${theme}`, "fit.mjs", ["--theme", theme]);
+  runStep(`fit 3D ${theme}`, "fit.mjs", ["--view", "3d", "--theme", theme]);
+}
+
+console.log("\n[8/9] gate da v2 nos 4 temas (node e2e/ui2.mjs --theme <id>):");
+for (const theme of THEMES) runStep(`ui2 ${theme}`, "ui2.mjs", ["--theme", theme]);
+
+console.log("\n[9/9] capture no padrao (forja), 1 tema escuro (arcano) e o Claro:");
+for (const [label, args] of [["padrao", []], ["arcano", ["--theme", "arcano"]], ["claro", ["--theme", "claro"]]]) {
+  runStep(`capture ${label}`, "capture.mjs", ["--out", `e2e/shots/acceptance-${label}`, ...args]);
 }
 
 console.log("\n== RESULTADO ==");

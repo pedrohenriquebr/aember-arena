@@ -11,7 +11,7 @@ function memoryStore(initial?: string) {
   return { data, store };
 }
 
-describe("H-01 flag ui2 (plano UX_REWRITE §5 H-01)", () => {
+describe("flag ui2 (plano UX_REWRITE §5 H-01, cutover H-29)", () => {
   it("?ui=2 vence e persiste no storage", () => {
     const { data, store } = memoryStore();
     expect(readUiFlag("?ui=2", store)).toBe("2");
@@ -20,26 +20,37 @@ describe("H-01 flag ui2 (plano UX_REWRITE §5 H-01)", () => {
     expect(readUiFlag("", store)).toBe("2");
   });
 
-  it("?ui=1 reverte a v2 e persiste a reversão", () => {
+  it("?ui=1 é o escape da v1 e persiste a reversão", () => {
     const { data, store } = memoryStore("2");
     expect(readUiFlag("?ui=1", store)).toBe("1");
     expect(data.get("aember-arena-ui")).toBe("1");
     expect(readUiFlag("", store)).toBe("1");
   });
 
-  it("sem storage (null) lê como \"1\"", () => {
-    expect(readUiFlag("", null)).toBe("1");
-    // o param ainda vale sem storage: a sessão inteira fica na v2
+  it("padrão é \"2\" (H-29): sem storage e sem param, a v2 é o app", () => {
+    const { store } = memoryStore();
+    expect(readUiFlag("", store)).toBe("2");
+    expect(readUiFlag("", null)).toBe("2");
+  });
+
+  it("escape gravado (\"1\") vale até um ?ui=2 explícito", () => {
+    const { store } = memoryStore("1");
+    expect(readUiFlag("", store)).toBe("1");
+    expect(readUiFlag("?ui=2", store)).toBe("2");
+  });
+
+  it("sem storage (null) o param ainda vale para a sessão inteira", () => {
+    expect(readUiFlag("?ui=1", null)).toBe("1");
     expect(readUiFlag("?ui=2", null)).toBe("2");
   });
 
   it("valor inválido é ignorado e cai no storage", () => {
-    const stored2 = memoryStore("2");
-    expect(readUiFlag("?ui=3", stored2.store)).toBe("2");
-    expect(stored2.data.get("aember-arena-ui")).toBe("2");
+    const stored1 = memoryStore("1");
+    expect(readUiFlag("?ui=3", stored1.store)).toBe("1");
+    expect(stored1.data.get("aember-arena-ui")).toBe("1");
 
     const empty = memoryStore();
-    expect(readUiFlag("?ui=3", empty.store)).toBe("1");
+    expect(readUiFlag("?ui=3", empty.store)).toBe("2");
     expect(empty.data.has("aember-arena-ui")).toBe(false);
   });
 
@@ -48,7 +59,8 @@ describe("H-01 flag ui2 (plano UX_REWRITE §5 H-01)", () => {
       getItem: () => { throw new Error("quota"); },
       setItem: () => { throw new Error("quota"); },
     };
-    expect(readUiFlag("", broken)).toBe("1");
+    expect(readUiFlag("", broken)).toBe("2");
+    expect(readUiFlag("?ui=1", broken)).toBe("1");
     expect(readUiFlag("?ui=2", broken)).toBe("2");
   });
 });

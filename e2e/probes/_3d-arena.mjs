@@ -219,13 +219,13 @@ try {
     await page.goto(server.url, { waitUntil: "domcontentloaded" });
     await page.evaluate(SEED);
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForSelector(".home-screen", { timeout: 30000 });
+    await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
 
     for (const spec of SEEDS) {
       await page.evaluate(FIXTURE(spec));
       await page.reload({ waitUntil: "domcontentloaded" });
-      await page.waitForSelector(".home-screen", { timeout: 30000 });
-      await page.locator(".resume-bar").first().click();
+      await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+      await page.locator('[data-action="continue"]').first().click();
       await page.waitForSelector(".game-screen", { timeout: 20000 });
       if (BREAK) await page.addStyleTag({ content: ".game-board--3d .board-lane { display: flex !important; }" });
       await page.waitForTimeout(600);
@@ -243,7 +243,9 @@ try {
         check(`${t} H3D-14: board no palco (game-board--stage)`, m.stage);
         check(`${t} H3D-14: plano em grid de 3 linhas`, m.plane.display === "grid" && px(m.plane.rows).length === 3, JSON.stringify(m.plane));
         check(`${t} H3D-14: documento sem scroll`, m.docScroll <= m.innerHeight + 1, `scrollHeight ${m.docScroll} / viewport ${m.innerHeight}`);
-        check(`${t} H3D-14: linhas <= altura do palco`, m.rowsSum <= m.contentH + 1, `soma ${m.rowsSum} / palco ${m.contentH}`);
+        // H3D-19 mudou o design: o avatar INVADE a mesa de proposito (12px + 56-64px de
+        // band) para a leitura 3D; as linhas podem transbordar o palco nesse orcamento.
+        check(`${t} H3D-14: linhas <= altura do palco + invasao H3D-19 (64px)`, m.rowsSum <= m.contentH + 65, `soma ${m.rowsSum} / palco ${m.contentH}`);
         const worst = m.hand.length ? Math.min(...m.hand.map((c) => c.frac)) : 0;
         check(`${t} H3D-14: mao com >= 70% visivel por carta (pontas incluidas)`, m.hand.length > 0 && worst >= 0.7, `${m.hand.length} cartas, pior ${r1(worst * 100)}%`);
         // Carta em foco: a selecionada sobe e aparece inteira.
@@ -513,8 +515,8 @@ try {
     await page.evaluate(motionSeed);
     await page.evaluate(FIXTURE(SEEDS.find((s) => s.tag === "states")));
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForSelector(".home-screen", { timeout: 30000 });
-    await page.locator(".resume-bar").first().click();
+    await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+    await page.locator('[data-action="continue"]').first().click();
     await page.waitForSelector(".game-screen", { timeout: 20000 });
     await page.waitForTimeout(900);
     const mo = await page.evaluate(() => {

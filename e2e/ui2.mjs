@@ -55,9 +55,10 @@ const SEED = `(() => {
   ${THEME ? `localStorage.setItem("aember-arena-theme", "${THEME}");` : ""}
 })()`;
 
-// Roda no browser. Devolve só o que falhou (lista vazia = passou).
+// Roda no browser. Devolve só o que falhou (lista vazia = passou). Async só por causa do
+// settle do movimento (item 5): o page.evaluate espera a promessa.
 // scope (opcional): alvo, rótulo e texto medem só dentro dele; overflow e movimento seguem na página.
-const AUDIT = (scope) => {
+const AUDIT = async (scope) => {
   const out = { overflow: null, targets: [], unlabeled: [], smallText: [], motion: [] };
   const root = (scope && document.querySelector(scope)) || document.body;
   const sw = document.documentElement.scrollWidth;
@@ -105,17 +106,31 @@ const AUDIT = (scope) => {
   }
 
   // 5: com reduced-motion nada roda após 600ms, exceto infinite marcado data-decor.
-  for (const anim of document.getAnimations()) {
-    if (anim.playState !== "running") continue;
-    const timing = anim.effect?.getComputedTiming();
-    const decor = anim.effect?.target?.closest?.("[data-decor]");
-    if (timing?.iterations === Infinity && decor) continue;
-    // Diagnóstico: propriedade em transição + marcação do alvo (o className de <img> e de quem
-    // não tem classe volta vazio e antes saía "?", sem dizer qual elemento era).
-    const target = anim.effect?.target;
-    const prop = anim.transitionProperty || anim.animationName || anim.constructor.name;
-    out.motion.push(`${prop} em ${target?.className || "?"} <${target?.outerHTML?.slice(0, 100) ?? "sem alvo"}>`);
+  // Julgar uma amostra única flakeia sob carga: uma transição de 150ms ainda no meio conta
+  // como "rodando". Por isso o gate ESPERA o settle (poll de getAnimations, teto 2s) e só
+  // falha se a animação persistir após o teto — aí lista os elementos.
+  const motionLeft = () => {
+    const left = [];
+    for (const anim of document.getAnimations()) {
+      if (anim.playState !== "running") continue;
+      const timing = anim.effect?.getComputedTiming();
+      const decor = anim.effect?.target?.closest?.("[data-decor]");
+      if (timing?.iterations === Infinity && decor) continue;
+      // Diagnóstico: propriedade em transição + marcação do alvo (o className de <img> e de quem
+      // não tem classe volta vazio e antes saía "?", sem dizer qual elemento era).
+      const target = anim.effect?.target;
+      const prop = anim.transitionProperty || anim.animationName || anim.constructor.name;
+      left.push(`${prop} em ${target?.className || "?"} <${target?.outerHTML?.slice(0, 100) ?? "sem alvo"}>`);
+    }
+    return left;
+  };
+  const deadline = performance.now() + 2000;
+  let left = motionLeft();
+  while (left.length && performance.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    left = motionLeft();
   }
+  out.motion = left;
 
   return out;
 };
@@ -909,7 +924,13 @@ async function motionFlow(browser, vp, url) {
   const page = await context.newPage();
   await page.goto(`${url}?ui=2`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
-  await page.waitForTimeout(900);
+  // Espera a cascata ASSENTAR (teto 3s), em vez de um sleep fixo: sob carga a entrada pode
+  // começar depois dos 900ms e o gate lia zero entradas. Sem nf-rise em curso = settle.
+  await page.waitForFunction(
+    () => window.__riseDur.length > 0 && !document.getAnimations().some((a) => a.playState === "running" && a.animationName === "nf-rise"),
+    null,
+    { timeout: 3000 },
+  ).catch(() => {});
   const probe = await page.evaluate(() => ({
     durations: window.__riseDur,
     delays: [...document.querySelectorAll(".nf-lobby [data-enter]")].map((el) => {

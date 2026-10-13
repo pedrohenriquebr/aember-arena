@@ -226,13 +226,13 @@ try {
         await page.goto(server.url, { waitUntil: "domcontentloaded" });
         await page.evaluate(SEED());
         await page.reload({ waitUntil: "domcontentloaded" });
-        await page.waitForSelector(".home-screen", { timeout: 30000 });
+        await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
 
         for (const [n, att] of [[1, false], [6, false], [12, false], [6, true]]) {
           const fixture = await page.evaluate(FIXTURE(n, att));
           await page.reload({ waitUntil: "domcontentloaded" });
-          await page.waitForSelector(".home-screen", { timeout: 30000 });
-          await page.locator(".resume-bar").first().click();
+          await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+          await page.locator('[data-action="continue"]').first().click();
           await page.waitForSelector(".game-screen", { timeout: 20000 });
           await page.waitForTimeout(700);
 
@@ -407,11 +407,11 @@ try {
           await page.goto(server.url, { waitUntil: "domcontentloaded" });
           await page.evaluate(gateSeed);
           await page.reload({ waitUntil: "domcontentloaded" });
-          await page.waitForSelector(".home-screen", { timeout: 30000 });
+          await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
           await page.evaluate(FIXTURE(2));
           await page.reload({ waitUntil: "domcontentloaded" });
-          await page.waitForSelector(".home-screen", { timeout: 30000 });
-          await page.locator(".resume-bar").first().click();
+          await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
+          await page.locator('[data-action="continue"]').first().click();
           await page.waitForSelector(".game-screen", { timeout: 20000 });
           await page.waitForTimeout(500);
           const box = await page.locator(".game-board").boundingBox();

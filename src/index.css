@@ -8767,6 +8767,38 @@ button.pile-chip:focus-visible {
     .game-board--3d .battle-zone--player { --card-w-3d: 92px; }
   }
 
+  /* Retune da mesa v2 (H-08 table shell, H3D-14/15/17): sem header/tabs o palco ganha
+     52-108px, e o plano mais alto projeta o lado de perto mais forte (1,2-1,3x contra
+     1,14x do v1). Com a calibração antiga a razão oponente/jogador caía a 0,62-0,72, as
+     tiras de upgrade do jogador encolhiam para ~30px e uma criatura de 12 saía do board.
+     Escopo SÓ com data-shell="table" (v2 na partida): o v1 e o 2D não veem nada disto. */
+  @media (min-width: 1041px) and (min-height: 760px) and (max-height: 959px) {
+    .app-root[data-shell="table"] .game-board--3d .battle-zone--player { --card-w-3d: 102px; }
+  }
+
+  @media (min-width: 701px) and (max-width: 1040px) and (min-height: 760px) and (max-height: 959px) {
+    .app-root[data-shell="table"] .game-board--3d .battle-zone--player { --card-w-3d: 90px; }
+  }
+
+  /* Tablet em pé na v2: 12 criaturas do jogador (lane projetada ~1,24x) passavam do
+     board por 1 carta; 52px de recuo fecham a borda sem encolher as criaturas. */
+  @media (min-width: 701px) and (max-width: 1040px) and (min-height: 960px) {
+    .app-root[data-shell="table"] .game-board--3d .battle-zone--player .board-lane { padding-inline: max(52px, 7%); }
+  }
+
+  /* 1080p na v2: a tira do upgrade do jogador só passa de 44px com 50px de plano (o
+     lado de perto projeta menos a altura da tira); o oponente pede 54px para o alcance
+     das 2 tiras ficar >= 88px. Os artefatos do jogador andam 24px para a esquerda: o 2º
+     encostava na tira do hospedeiro (9px de colisão medida com a carta mais larga). */
+  @media (min-width: 1041px) and (min-height: 960px) {
+    .app-root[data-shell="table"] .game-board--3d .battle-zone--player { --card-w-3d: 106px; }
+    .app-root[data-shell="table"] .game-board--3d .battle-zone--player .board-lane { --up-h: 50px; --up-r: 52px; }
+    .app-root[data-shell="table"] .game-board--3d .battle-zone--opponent .board-lane { --up-h: 54px; --up-r: 56px; }
+    .app-root[data-shell="table"] .game-board--3d .battle-zone--player .board-piece--artifact {
+      margin-inline-start: calc((var(--acol, 1) - 1) * var(--a-slot) - 24px);
+    }
+  }
+
   @media (min-width: 701px) {
 
     .game-board--3d .board-lane .card-tile--board .card-art {

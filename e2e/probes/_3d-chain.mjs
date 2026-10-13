@@ -180,7 +180,9 @@ try {
   // So o hook fica em init script (o SEED e aplicado depois do primeiro goto).
   await context.addInitScript(HOOK);
   const page = await context.newPage();
-  await page.goto(server.url, { waitUntil: "domcontentloaded" });
+  // H-29: esta cadeia mede o .view-toggle e o wizard da v1, então roda no escape ?ui=1 até
+  // H-30; a v2 expõe o interruptor 3D na ☰ (coberto pelo e2e:ui2 e pelo e2e:fit:3d).
+  await page.goto(server.url + "?ui=1", { waitUntil: "domcontentloaded" });
   await page.evaluate(SEED);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector(".home-screen", { timeout: 30000 });
@@ -886,7 +888,7 @@ try {
   const liteCtx = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "no-preference" });
   await liteCtx.addInitScript("Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 2 })");
   const lite = await liteCtx.newPage();
-  await lite.goto(server.url, { waitUntil: "domcontentloaded" });
+  await lite.goto(server.url + "?ui=1", { waitUntil: "domcontentloaded" });
   await lite.evaluate(SEED);
   await lite.reload({ waitUntil: "domcontentloaded" });
   await lite.waitForSelector(".home-screen", { timeout: 30000 });

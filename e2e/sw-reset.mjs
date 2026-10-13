@@ -174,6 +174,14 @@ try {
   // (a) primeira visita, perfil fresco: registra o SW do build com BUILD_ID.
   console.log(`\n(a) primeira visita — BUILD_ID esperado: ${buildId1}`);
   await page.goto(preview.url, { waitUntil: "load" });
+  // H-29: a v2 é o padrão e abre o onboarding na primeira visita, cobrindo o toast de
+  // atualização; o marcador de tutorial visto tira o perfil de teste dessa primeira visita.
+  // O passo gravado pela primeira carga (onboarding.ts) também sai: o reload retomaria o passo 1.
+  await page.evaluate(() => {
+    localStorage.setItem("aember-arena-tutorial-seen", "1");
+    localStorage.removeItem("aember-arena-onboarding");
+  });
+  await page.reload({ waitUntil: "load" });
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
   await poll(async () => {
     const keys = await cacheKeys(page);

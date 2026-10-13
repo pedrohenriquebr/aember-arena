@@ -299,3 +299,10 @@
 .nf-sheet .card-art img {
   transition: none;
 }
+
+/* Mesma classe do fix da folha: a lista de cartas (aba Cartas/Estatisticas)
+   mantinha o fade do <img> da v1 e a corrida do load virava transicao
+   amostrada sob reduced-motion (gate ui2, "Smith card art"). */
+.nf-detail-cards .card-art img {
+  transition: none;
+}

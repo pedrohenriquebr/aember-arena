@@ -60,10 +60,9 @@ let VIEW = "2d";
 // semeado e o baseline continua o da Forja (o padrão do motor de temas).
 let THEME = null;
 
-// Ordem fixa dos controles de navegacao no DOM:
-//   .header-nav .nav-link  = home, browse, config, [game]  (src/App.tsx:1341-1354)
-//   .mobile-tabs .mobile-tab = home, browse, config, game  (src/App.tsx:1539-1550)
-const NAV_INDEX = { home: 0, browse: 1, config: 2, game: 3 };
+// H-29 (v2 é o padrão): a casca do Lobby tem 3 abas (Jogar · Decks · Ajustes, shellNav.ts),
+// nessa ordem. As chaves seguem os nomes dos PNGs (home/browse/config).
+const SHELL_TAB = { home: 0, browse: 1, config: 2 };
 
 function parseArgs(argv) {
   const args = { port: DEFAULT_PORT, out: null, floorOnly: false, matchSmoke: false, baseUrl: null, view: VIEW, theme: null };
@@ -233,16 +232,7 @@ async function settle(page, ms = 600) {
 }
 
 async function navTo(page, key) {
-  const header = page.locator(".header-nav .nav-link");
-  const count = await header.count();
-  if (count > NAV_INDEX[key]) {
-    const loc = header.nth(NAV_INDEX[key]);
-    if (await loc.isVisible().catch(() => false)) {
-      await loc.click();
-      return;
-    }
-  }
-  await page.locator(".mobile-tabs .mobile-tab").nth(NAV_INDEX[key]).click();
+  await page.locator(".nf-shell-tab").nth(SHELL_TAB[key]).click();
 }
 
 async function openHome(page, base) {
@@ -251,17 +241,14 @@ async function openHome(page, base) {
   // os valores fixos (settings.ts:26-44 le na inicializacao).
   await page.evaluate(seedBody());
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".home-screen", { timeout: 30000 });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 30000 });
   await settle(page);
 }
 
-// Wizard de config tem 5 passos (difficulty, opponent, thinking, experience,
-// review - src/App.tsx:334). Vai direto ao ULTIMO pill ("review", FEAT-11)
-// e aperta o CTA, que chama onStart -> startMatch(selectedDeck) com o deck demo
-// embutido (selectedDeck default = DEMO_DECK, src/App.tsx:1008 e 1433).
+// v2 (H-29): "Jogar" no Lobby (data-action="play") inicia a partida com o deck
+// selecionado — o demo embutido por padrao (DEMO_DECK), sem o wizard da v1.
 async function startDemoMatch(page) {
-  await page.locator(".config-screen .config-step-pill").last().click();
-  await page.locator(".config-screen .cta-button").click();
+  await page.locator('[data-screen="lobby"] [data-action="play"]').click();
   await page.waitForSelector(".game-screen", { timeout: 20000 });
   // FEAT-10: a mao inicial pede a decisao de mulligan; o harness mantem a mao
   // (e espera o Warden decidir) para o board estabilizar antes de medir/printar.
@@ -331,39 +318,41 @@ async function playOneCard(page) {
 
 // Caminhada pelas 5 telas. Retorna a lista de telas visitadas; usa os callbacks
 // onScreen(screen) a cada tela estabilizada.
+// v2 (H-29): home = Lobby, config = Ajustes, browse = Biblioteca, inspect = Detalhe
+// (aberto pelo ⊙ de um tile da prateleira). A partida fica por último: na mesa a casca
+// some, então sair dela pede o ☰ — por isso a caminhada não volta depois de jogar.
 async function walkScreens(page, base, onScreen) {
   await openHome(page, base);
   await onScreen("home");
 
   await navTo(page, "config");
-  await page.waitForSelector(".config-screen", { timeout: 15000 });
+  await page.waitForSelector('[data-screen="settings"]', { timeout: 15000 });
   await settle(page);
   await onScreen("config");
 
-  await startDemoMatch(page);
-  await settle(page, 900);
-  await onScreen("game");
-
   await navTo(page, "browse");
-  await page.waitForSelector(".browse-screen", { timeout: 15000 });
+  await page.waitForSelector('[data-screen="library"]', { timeout: 15000 });
   // Browse consulta a API do Master Vault (src/components/DeckBrowser.tsx);
   // espera tiles ou estado vazio, mas segue em frente se a rede falhar.
-  await page
-    .waitForSelector(".browse-screen .deck-tile, .browse-screen .browse-empty", { timeout: 20000 })
-    .catch(() => {});
+  await page.waitForSelector('[data-screen="library"] .nf-tile', { timeout: 20000 }).catch(() => {});
   await settle(page, 900);
   await onScreen("browse");
 
   await navTo(page, "home");
-  await page.waitForSelector(".home-screen", { timeout: 15000 });
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 15000 });
   await settle(page);
-  // DeckTile: 1o botao = selecionar, 2o = inspecionar (src/components/DeckTile.tsx:58-65).
-  const inspectBtn = page.locator('.deck-grid-item .tile-action[aria-label="Open deck details"]').first();
-  if (await inspectBtn.count()) await inspectBtn.click();
-  else await page.locator(".deck-grid-item .tile-action").nth(1).click();
-  await page.waitForSelector(".inspect-screen", { timeout: 15000 });
+  // Tile da prateleira: o ⊙ (2o botão de ação) abre o Detalhe (ui2.mjs usa o mesmo seletor).
+  await page.locator('[data-screen="lobby"] .nf-shelf-grid .nf-tile-actions .nf-btn--ghost').first().click();
+  await page.waitForSelector('[data-screen="detail"]', { timeout: 15000 });
   await settle(page, 900);
   await onScreen("inspect");
+
+  await navTo(page, "home");
+  await page.waitForSelector('[data-screen="lobby"]', { timeout: 15000 });
+  await settle(page);
+  await startDemoMatch(page);
+  await settle(page, 900);
+  await onScreen("game");
 }
 
 // ---------- modo default: screenshots ----------
@@ -577,9 +566,12 @@ async function runFloorOnly(browser, base) {
         await openHome(page, base);
         await audit("home");
         await navTo(page, "config");
-        await page.waitForSelector(".config-screen", { timeout: 15000 });
+        await page.waitForSelector('[data-screen="settings"]', { timeout: 15000 });
         await settle(page);
         await audit("config");
+        await navTo(page, "home");
+        await page.waitForSelector('[data-screen="lobby"]', { timeout: 15000 });
+        await settle(page);
         await startDemoMatch(page);
         await settle(page, 900);
         const played = await playOneCard(page);
@@ -672,8 +664,6 @@ async function runMatchSmoke(browser, base, outDir) {
     const { context, page } = await newPage(browser, vp);
     try {
       await openHome(page, base);
-      await navTo(page, "config");
-      await page.waitForSelector(".config-screen", { timeout: 15000 });
       await startDemoMatch(page);
       await settle(page, 700);
       for (let i = 1; i <= 2; i += 1) {
