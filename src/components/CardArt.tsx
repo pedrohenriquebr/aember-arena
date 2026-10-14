@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Gem, Shield, Sparkles, Swords, X } from "lucide-react";
 import type { CardFace } from "../lib/game";
 import type { Translator } from "../lib/i18n";
+import { localizedArtUrl } from "../lib/artLocale";
 import { CoverageBadge } from "./CoverageBadge";
 import { HouseIcon } from "./HouseIcon";
 
@@ -31,12 +32,16 @@ const LONG_PRESS_SLOP = 12;
 function CardImage({ face, size }: { face: CardFace; size: Size }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // Carta cujo render PT o S3 recusou (403): cai para o EN original. Guarda a URL, não um
+  // boolean, para o slot não herdar o estado da carta anterior num render antes do reset.
+  const [ptMissing, setPtMissing] = useState<string | null>(null);
 
   useEffect(() => {
     setFailed(false);
     setLoaded(false);
   }, [face.image]);
 
+  const src = ptMissing === face.image ? face.image : localizedArtUrl(face.image);
   const hasImage = Boolean(face.image) && !failed;
 
   return (
@@ -60,7 +65,7 @@ function CardImage({ face, size }: { face: CardFace; size: Size }) {
       {hasImage && (
         <img
           className={loaded ? undefined : "card-img-pending"}
-          src={face.image}
+          src={src}
           alt={`${face.title} card art`}
           /* T7a — CLS: proporção real da arte Master Vault (300×420 = 5:7 ≈ 0.714,
              a mesma usada em aspect-ratio no CSS e em ZOOM_WIDTH / 0.714). Os atributos
@@ -76,7 +81,11 @@ function CardImage({ face, size }: { face: CardFace; size: Size }) {
             if (img?.complete && img.naturalWidth > 0) setLoaded(true);
           }}
           onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
+          onError={() => {
+            // Render PT ausente: uma tentativa com o EN antes do fallback tipográfico.
+            if (src === face.image) setFailed(true);
+            else setPtMissing(face.image);
+          }}
         />
       )}
     </>
