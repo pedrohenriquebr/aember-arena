@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ART_QUOTA_COST_BYTES, artStatusOf, artUrlsOf, estimateArtQuota, formatBytes } from "./artOffline";
 
 describe("ART_OFFLINE — estado e custo das artes por deck", () => {
@@ -12,6 +12,23 @@ describe("ART_OFFLINE — estado e custo das artes por deck", () => {
       { image: "https://cdn.example/c.png" },
     ]);
     expect(urls).toEqual(["https://cdn.example/a.png", "https://cdn.example/c.png"]);
+  });
+
+  it("artUrlsOf: segue o idioma da UI — PT pede o render PT do MV, EN mantém o original", () => {
+    const cards = [{ image: "https://mastervault-storage-prod.s3.amazonaws.com/media/card_front/en/341_007_CFRV9R6JG7P7_en.png" }];
+    const settings = (language: string) => vi.stubGlobal("localStorage", { getItem: () => JSON.stringify({ language }) });
+    try {
+      settings("ptBR");
+      expect(artUrlsOf(cards)).toEqual([
+        "https://mastervault-storage-prod.s3.amazonaws.com/media/card_front/pt/341_007_CFRV9R6JG7P7_pt.png",
+      ]);
+      settings("en");
+      expect(artUrlsOf(cards)).toEqual([
+        "https://mastervault-storage-prod.s3.amazonaws.com/media/card_front/en/341_007_CFRV9R6JG7P7_en.png",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("artStatusOf: nada / parcial / baixado", () => {

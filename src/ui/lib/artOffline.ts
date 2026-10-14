@@ -3,6 +3,7 @@
  * custo que o navegador cobra e a formatação do aviso. O cliente (postMessage ao SW)
  * mora em artOfflineClient.ts.
  */
+import { localizedArtUrl } from "../../lib/artLocale";
 
 /** Quota que o navegador cobra por arte opaca (medida: ~7 MB, sem relação com o tamanho real). */
 export const ART_QUOTA_COST_BYTES = 7 * 1024 * 1024;
@@ -11,9 +12,10 @@ export const ART_REAL_BYTES = 150 * 1024;
 
 export type ArtStatus = "none" | "partial" | "full";
 
-/** URLs de arte de um deck, sem repetição (o mesmo card pode estar 3x no deck). */
+/** URLs de arte de um deck, sem repetição (o mesmo card pode estar 3x no deck), no
+    idioma da UI — o cache guarda o que a tela mostra (render PT quando houver). */
 export function artUrlsOf(cards: ReadonlyArray<{ image?: string }>): string[] {
-  return [...new Set(cards.map((card) => card.image ?? "").filter((url) => url.startsWith("https://")))];
+  return [...new Set(cards.map((card) => localizedArtUrl(card.image ?? "")).filter((url) => url.startsWith("https://")))];
 }
 
 /** Estado do deck a partir de quais das suas URLs já estão no cache do SW. */
