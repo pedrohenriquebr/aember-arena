@@ -246,9 +246,15 @@ self.addEventListener("fetch", (event) => {
           if (response && response.ok) {
             const copy = response.clone();
             void caches.open(SHELL_CACHE).then((cache) => cache.put("./index.html", copy));
+            return response;
           }
-          return response;
-        }).catch(async () => (await caches.match("./") || await caches.match("./index.html"))),
+          // Nao-OK (ex.: tunel morto responde 1033 pela borda do Cloudflare):
+          // a resposta existe mas nao e o app — serve o shell cacheado em vez
+          // de expor a pagina de erro (o PWA instalado abre offline mesmo
+          // quando "a rede responde").
+          const shell = (await caches.match("./")) || (await caches.match("./index.html"));
+          return shell || response;
+        }).catch(async () => (await caches.match("./")) || (await caches.match("./index.html"))),
       );
       return;
     }
