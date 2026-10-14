@@ -5,20 +5,32 @@ Bugs reportados pelo dono durante partidas reais. Cada item: repro, causa-raiz p
 
 ---
 
-## QA-03 · Trawler não captura o âmbar do oponente (ability ausente)
+## QA-04 · Glifo privado (Æmber/dano) aparece como caractere inválido no texto exibido
+- **Reportado**: 13/out noite, dono (inspetor do Trawler: "capture all your opponent’s ." com tofu).
+- **Causa-raiz**: corpus/MV guardam Æmber e dano como glifos PUA (U+F360/F361). O parser
+  normaliza (`cardText.ts:195` readableText → `<A>`), mas os pontos de EXIBIÇÃO renderizam
+  `face.text` cru: inspetor (App.tsx:2391), zoom (CardArt.tsx:274), lightbox (CardArt.tsx:337)
+  e demais sites de `.text`.
+- **Fix desejado (dono)**: normalizar na exibição — glifo vira símbolo do app (ícone inline
+  Gem/Swords preferível a texto cru). Status: ABERTO — missão Sonnet em voo.
+
+## QA-03 · Trawler não captura o âmbar do oponente (ability ausente) — ✅ RESOLVIDO
 - **Reportado**: 13/out noite, partida do dono (PWA/celular).
 - **Carta**: Trawler (Criatura, Insondáveis, GR — "Play: If you are haunted, capture all
-  your opponent's <A>."). Inspetor mostrava 4 capturado; o dono esperava 7 (os 4 do pool +
-  3 presos no Warden).
-- **Regra correta**: (a) Play dispara na entrada em jogo MESMO exausto (exaustão bloqueia
-  reap/luta, não o gatilho); (b) "capture all your opponent's Æmber" vem do POOL do
-  oponente — âmbar já capturado em criaturas (Warden) NÃO se move; (c) só dispara se
-  o dono estiver haunted (10+ cartas no descarte PRÓPRIO).
-- **Causa-raiz**: Trawler NUNCA teve ability gerada (0 rascunhos em scripts/harvest/drafts.json,
-  ausente do seed keyteki.json) — jogou como criatura vanilla. Verificar também se a DSL
-  suporta capture-all-do-pool e a cláusula haunted como gate de ability (abilities.ts:353).
-- **Status**: ABERTO — missão Sonnet medium (mesma sessão do QA-02) em voo.
-- **Fix**: pendente.
+  your opponent's <A>.").
+- **Regras confirmadas com spec**: Play dispara na entrada MESMO exausto; captura vem do
+  POOL do oponente (âmbar capturado em criaturas NÃO se move); haunted = 10+ no descarte
+  próprio; o âmbar capturado fica NA carta (e volta ao pool do dono dela quando sai de jogo).
+- **Causa-raiz**: sem entry no seed keyteki.json e 0 drafts — mas no device do dono a captura
+  FUNCIONOU na 2ª partida (provável: impressão do Trawler no catálogo do farm + fallback por
+  textHash f77ffe5, e desta vez ele estava haunted). O seed torna o comportamento determinístico.
+- **Fix**: 2 entries no seed (GR ca5f5ab1 + MG24 a94f91e2, textHash 724798d1 com o glifo
+  U+F360; DSL = on play, if count discard gte 10, capture n:1 per {p:"amber",opp:true} s:self,
+  espelhando Drumble) + 6 specs via vendoredOverrides (loader real). 1054 specs verdes.
+- **Follow-up (fila de motor, aguardando lote)**: parentes vanilla medidos pelo Sonnet —
+  The Corpulent Collector, Gatekeeper ("all but 5"), ANT1-10NY (gatilho fim de turno), Envy
+  (After Reap condicional), Bring Low (distribuição entre criaturas) — alguns podem exigir
+  formas novas de DSL; batch com QA-01.
 
 ## QA-02 · Upgrade Under Pressure não anexa à criatura escolhida — ✅ RESOLVIDO
 - **Reportado**: 07/out noite, partida Deus Basílio (navegador do dono). Repro extra do dono
