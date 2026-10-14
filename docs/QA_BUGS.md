@@ -5,19 +5,33 @@ Bugs reportados pelo dono durante partidas reais. Cada item: repro, causa-raiz p
 
 ---
 
-## QA-02 · Upgrade Under Pressure não anexa à criatura escolhida
-- **Reportado**: 07/out noite, partida Deus Basílio (navegador do dono).
-- **Print**: Under Pressure (Upgrade, Geistoid — "This creature cannot ready") no inspetor.
-- **Repro**: jogar Under Pressure; o esperado é escolher uma criatura (qualquer linha, inclusive
-  inimiga — upgrades podem anexar no outro lado, BUG-04) e a ficha anexar a ela.
-- **Causa-raiz preliminar**: o CAMINHO DO MOTOR está correto (`game.ts:2741` — play de Upgrade
-  retorna `attachTargets`; `canPlay` exige targets > 0), então a falha é na camada de UI/fluxo:
-  ou o prompt de anexar não aparece, ou o clique na criatura não está resolvendo o attach
-  (mesma família do targeting que aa2cd9a consertou para efeitos — faltou o caso "play de
-  Upgrade"). Repro exato pendente: confirmar o que aconteceu na tela (ficou na mão? foi para
-  a battleline como criatura? anexou errado?).
-- **Status**: ABERTO — investigar fluxo de UI do attach + repro.
+## QA-03 · Trawler não captura o âmbar do oponente (ability ausente)
+- **Reportado**: 13/out noite, partida do dono (PWA/celular).
+- **Carta**: Trawler (Criatura, Insondáveis, GR — "Play: If you are haunted, capture all
+  your opponent's <A>."). Inspetor mostrava 4 capturado; o dono esperava 7 (os 4 do pool +
+  3 presos no Warden).
+- **Regra correta**: (a) Play dispara na entrada em jogo MESMO exausto (exaustão bloqueia
+  reap/luta, não o gatilho); (b) "capture all your opponent's Æmber" vem do POOL do
+  oponente — âmbar já capturado em criaturas (Warden) NÃO se move; (c) só dispara se
+  o dono estiver haunted (10+ cartas no descarte PRÓPRIO).
+- **Causa-raiz**: Trawler NUNCA teve ability gerada (0 rascunhos em scripts/harvest/drafts.json,
+  ausente do seed keyteki.json) — jogou como criatura vanilla. Verificar também se a DSL
+  suporta capture-all-do-pool e a cláusula haunted como gate de ability (abilities.ts:353).
+- **Status**: ABERTO — missão Sonnet medium (mesma sessão do QA-02) em voo.
 - **Fix**: pendente.
+
+## QA-02 · Upgrade Under Pressure não anexa à criatura escolhida — ✅ RESOLVIDO
+- **Reportado**: 07/out noite, partida Deus Basílio (navegador do dono). Repro extra do dono
+  em 13/out: upgrade no Warden inimigo animou/parou na tira de anexos do próprio lado.
+- **Causa-raiz real (13/out)**: motor CORRETO (`canReady` varre efeitos dos dois boards;
+  attach por `attachedTo` cross-side ok — BUG-04). A UI mentia: `BoardLane` constría
+  `hostCol` só com as criaturas da própria lane, então upgrade com hospedeiro inimigo
+  falhava no check e caía na tira de artefatos do dono (`--acol`).
+- **Fix**: `partitionLane` (src/lib/laneLayout.ts, puro) — BoardLane recebe `otherCards`;
+  upgrade com hospedeiro na lane oposta renderiza preso à criatura no lado do hospedeiro
+  (`--col`/`--up`), some da tira do dono; órfão segue como artefato; memo compara
+  `otherCards`. 6 specs + 1 de evidência do motor (`cannot ready` morde hospedeiro
+  inimigo). 1048 specs verdes (tsc/lint ok).
 
 ## QA-01 · Energy Vampirism não pergunta qual criatura captura/sofre o dano
 - **Reportado**: 07/out noite, partida Deus Basílio.

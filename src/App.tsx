@@ -86,6 +86,7 @@ import {
   type LogEntry,
   refreshGameFaces,
 } from "./lib/game";
+import { partitionLane } from "./lib/laneLayout";
 import { fetchKeyforgeDeck, loadDeckOrCache, syncCatalog, vaultErrorText, type CatalogProgress } from "./lib/keyforgeApi";
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
@@ -1572,6 +1573,8 @@ const PlayerBand = memo(function PlayerBand({
 
 type BoardLaneProps = {
   cards: CardInstance[];
+  /** Board da lane oposta: upgrades cruzados (QA-02) vivem lá e se desenham aqui. */
+  otherCards: CardInstance[];
   owner: 0 | 1;
   /** FEAT-13: the lane owner whose pieces may look usable right now. */
   humanSide: 0 | 1;
@@ -1610,8 +1613,11 @@ function areBoardLanePropsEqual(a: BoardLaneProps, b: BoardLaneProps): boolean {
   ) {
     return false;
   }
-  if (a.cards === b.cards) return true;
-  return a.cards.length === b.cards.length && a.cards.every((card, index) => sameCardInstance(card, b.cards[index]));
+  return sameCards(a.cards, b.cards) && sameCards(a.otherCards, b.otherCards);
+}
+
+function sameCards(a: CardInstance[], b: CardInstance[]): boolean {
+  return a === b || (a.length === b.length && a.every((card, index) => sameCardInstance(card, b[index])));
 }
 
 // H3D-16: pose orgânica por carta (inerte no 2D); o upgrade usa o id do hospedeiro.
@@ -1651,6 +1657,7 @@ function housePickEffect(move: GameMove, game: GameState, t: Translator): string
 
 const BoardLane = memo(function BoardLane({
   cards,
+  otherCards,
   owner,
   humanSide,
   activeHouse,
@@ -1667,21 +1674,12 @@ const BoardLane = memo(function BoardLane({
   // battleline order, artifacts/upgrades move to their own strip below
   // (BUG-18 — interleaved artificats made "[C1][Artifact][C2]" look
   // non-adjacent when the engine treats them as neighbours).
-  const creatures = cards.filter((card) => isCreatureCard(card));
-  const attachments = cards.filter((card) => !isCreatureCard(card));
   // H3D-17: upgrade com hospedeiro visível vira tira presa à criatura (--col/--up);
-  // o órfão cai no comportamento de artefato.
-  const hostCol = new Map(creatures.map((card, index) => [card.instanceId, index + 1]));
-  const isUpgrade = (card: CardInstance) => Boolean(card.attachedTo && hostCol.has(card.attachedTo));
-  const upgrades = attachments.filter(isUpgrade);
-  const artifacts = attachments.filter((card) => !isUpgrade(card));
-  const upgradeRank = new Map<string, number>();
+  // o órfão cai no comportamento de artefato. QA-02: o upgrade jogado no hospedeiro
+  // do adversário mora no board de quem jogou, mas aparece na lane do hospedeiro.
+  const { creatures, attachments, upgrades, artifacts, hostCol, upgradeRank } = partitionLane(cards, otherCards);
   const perHost = new Map<string, number>();
-  for (const card of upgrades) {
-    const k = (perHost.get(card.attachedTo as string) ?? 0) + 1;
-    perHost.set(card.attachedTo as string, k);
-    upgradeRank.set(card.instanceId, k);
-  }
+  for (const card of upgrades) perHost.set(card.attachedTo as string, (perHost.get(card.attachedTo as string) ?? 0) + 1);
   if (!cards.length) {
     return (
       <div className={ui2 ? "empty-battleline nf-empty-line" : "empty-battleline"}>
@@ -1697,7 +1695,7 @@ const BoardLane = memo(function BoardLane({
       /* H3D-04: --n dimensiona as cartas no 3D (clamp da lane sem scroll). O
          comparador do memo já olha `cards`, então a lane re-renderiza quando a
          contagem de criaturas muda (--nc = criaturas + anexos, do palco 2D) — nenhuma prop nova desce para o CardTile. */
-      style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, cards.length), "--na": artifacts.length, "--nu": Math.max(0, ...perHost.values()) } as CSSProperties}
+      style={{ "--n": Math.max(1, creatures.length), "--nc": Math.max(1, creatures.length + attachments.length), "--na": artifacts.length, "--nu": Math.max(0, ...perHost.values()) } as CSSProperties}
     >
       {creatures.length === 0 && (
         <div className={ui2 ? "empty-battleline nf-empty-line" : "empty-battleline"}>
@@ -1763,7 +1761,7 @@ const BoardLane = memo(function BoardLane({
       {attachments.length > 0 && (
         <div className="board-attachments" role="list" aria-label={t("game.attachments")}>
           {attachments.map((card) => {
-            const host = cards.find((item) => item.instanceId === card.attachedTo);
+            const host = creatures.find((item) => item.instanceId === card.attachedTo);
             const hostTitle = host?.face.title;
             const up = upgradeRank.get(card.instanceId);
             const place = up
@@ -2057,6 +2055,7 @@ function GameBoard({
             </div>
             <BoardLane
               cards={enemy.board}
+              otherCards={player.board}
               owner={enemySide}
               humanSide={humanSide}
               activeHouse={null}
@@ -2143,6 +2142,7 @@ function GameBoard({
             )}
             <BoardLane
               cards={player.board}
+              otherCards={enemy.board}
               owner={humanSide}
               humanSide={humanSide}
               hintIds={hintIds}
