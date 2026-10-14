@@ -258,6 +258,8 @@ export interface Ability {
   target?: Filter;
   /** The second chosen card (Lote 7 §7.1), always another card than `target`: "from one creature to another". */
   target2?: Filter;
+  /** QA-01: "a creature … a creature" — the second pick may be the first card again. Default (absent): "another". */
+  sameTarget2?: true;
   acts: Act[];
   /** Every act is a "You may" clause: the whole ability can be declined. */
   optional?: boolean;
@@ -1061,6 +1063,7 @@ function validAbility(value: unknown): value is Ability {
   if (value.of !== undefined && !validFilter(value.of)) return false;
   if (value.target !== undefined && !validFilter(value.target)) return false;
   if (value.target2 !== undefined && (!validFilter(value.target2) || value.target === undefined)) return false;
+  if (value.sameTarget2 !== undefined && (value.sameTarget2 !== true || value.target2 === undefined)) return false;
   if (value.optional !== undefined && typeof value.optional !== "boolean") return false;
   // Direct loops the budgets would only truncate (Lote 6 §6.2).
   const ons = value.on as string[];

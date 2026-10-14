@@ -45,26 +45,24 @@ Bugs reportados pelo dono durante partidas reais. Cada item: repro, causa-raiz p
   `otherCards`. 6 specs + 1 de evidência do motor (`cannot ready` morde hospedeiro
   inimigo). 1048 specs verdes (tsc/lint ok).
 
-## QA-01 · Energy Vampirism não pergunta qual criatura captura/sofre o dano
-- **Reportado**: 07/out noite, partida Deus Basílio.
-- **Print**: Energy Vampirism (Ação — "Play: A creature captures 1⭘ from its own side. For each
-  ⭘ on that creature, deal 1⭤ to a creature.").
-- **Repro**: jogar a carta; NENHUMA seleção de criatura aparece — o efeito resolve sozinho.
-- **Esperado (regra)**: os DOIS alvos são ESCOLHA DO JOGADOR — (1) qualquer criatura captura 1
-  do pool do próprio lado dela; (2) qualquer criatura em jogo sofre 1 de dano (podem ser a
-  mesma ou diferentes). Aleatório só se o print dissesse "random" (não diz).
-- **Causa-raiz (DSL do override, draft flash-free auto-aprovado)**:
-  - ato 1 `capture s:"target"` depende do `ability.target` — mas o prompt desse alvo não
-    aparece no fluxo de play de Ação (verificar por que: é o mesmo mecanismo que deveria
-    servir a QA-02);
-  - ato 2 `damage s:{pick:{type:"Creature"}}` — **`pick` = escolha AUTOMÁTICA do motor**, não
-    do jogador. O rascunho traduziu "a creature" como auto-pick. Errado.
-- **Complexidade extra**: o print tem DOIS alvos independentes numa mesma ability e a DSL de
-  hoje modela UM `ability.target` — verificar se atos podem ter alvo próprio (`s:{target:…}`)
-  ou se é um gap do motor (dois prompts sequenciais num play).
-- **Status**: ABERTO — pode ser (a) bug do override, (b) gap do motor para 2 alvos, ou (c) bug
-  de UI de prompt. Investigar na ordem.
-- **Fix**: pendente.
+## QA-01 · Energy Vampirism não pergunta qual criatura captura/sofre o dano — ✅ RESOLVIDO
+- **Reportado**: 07/out noite, partida Deus Basílio. Print: "Play: A creature captures 1⭘
+  from its own side. For each ⭘ on that creature, deal 1⭤ to a creature." Resolvia sozinho.
+- **Causa-raiz (13/out, lote de motor Sonnet medium)**: dupla. (1) O rascunho vendorizado
+  em approved.json (flash-free, auto-aprovado) traduziu o 2º "a creature" como
+  `s:{pick:{type:"Creature"}}` = escolha AUTOMÁTICA do motor. (2) Gap real na DSL:
+  `target2` (o 2º alvo do jogador) EXIGIA carta diferente da 1ª — e "A creature … a
+  creature" permite a mesma. O fluxo de UI estava correto.
+- **Fix**: campo opcional `sameTarget2:true` na Ability (validação; canResolve/fire/
+  pendingPrompt gated no campo; DSL_VERSION fica 17 por ser opcional); linha da carta
+  corrigida nos 2 ids (658893af, db02dbc6) com source "manual"; few-shot em catalogLlm
+  ensina a forma pro farm. 11 specs (qa01.test.ts): os dois prompts aparecem, mesmo alvo
+  permitido, contrato antigo (sem o campo) preservado. 1069 verdes.
+- **Follow-up do QA-03 (parentes) RESOLVIDO no mesmo lote**: semeados The Corpulent
+  Collector (2 impressões), Envy, ANT1-10NY (3 impressões) e Gatekeeper (3 impressões —
+  "all but 5" já era expressível com per:{sub:[{p:"amber",opp:true},5]}). **Bring Low
+  ficou de fora**: a DSL não tem a forma (captura distribuída entre criaturas) — gap
+  reportado, proposta pendente para lote de DSL futuro.
 
 ## Arquivados (corrigidos nesta sessão)
 - ~~Targeting sem affordance / clique cancelava a jogada em silêncio~~ → aa2cd9a (banner

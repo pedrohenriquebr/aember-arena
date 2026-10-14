@@ -1311,7 +1311,7 @@ export function canResolve(state: GameState, me: Side, source: CardInstance, abi
   if (!ability.target2) return true;
   // The second target is another card than the first.
   const seconds = everyMatch(state, me, source, ability.target2);
-  return firsts.some((first) => seconds.some((second) => second !== first));
+  return firsts.some((first) => seconds.some((second) => ability.sameTarget2 || second !== first));
 }
 
 // ---------- game actions ----------
@@ -2365,7 +2365,7 @@ function fireOwn(
       if (options.choice) options.choice.targets = undefined;
       let rest = queue;
       if (ability.target2) {
-        const legal = everyMatch(state, me, source, ability.target2, context).filter((card) => card !== context.target);
+        const legal = everyMatch(state, me, source, ability.target2, context).filter((card) => ability.sameTarget2 || card !== context.target);
         const chosen = legal.find((card) => card.instanceId === queue[0]);
         context.target2 = chosen ?? autoPick(state, me, legal, isHarmful(ability), givesControl(ability));
         if (!context.target2) continue;
@@ -2825,7 +2825,7 @@ export function pendingPrompt(state: GameState, side: Side, move: GameMove): Mov
     for (const ability of abilities) {
       if (ability.target2 && !move.targets?.length) {
         const excluded = first ?? (ability.target ? everyMatch(view, side, card, ability.target)[0]?.instanceId : undefined);
-        const ids = everyMatch(view, side, card, ability.target2).map((item) => item.instanceId).filter((id) => id !== excluded);
+        const ids = everyMatch(view, side, card, ability.target2).map((item) => item.instanceId).filter((id) => ability.sameTarget2 || id !== excluded);
         if (ids.length > 1) return { kind: "target2" as const, ids };
       }
       const spec = upToSpec(ability);

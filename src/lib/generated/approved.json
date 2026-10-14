@@ -740,6 +740,10 @@
     "target": {
      "type": "Creature"
     },
+    "target2": {
+     "type": "Creature"
+    },
+    "sameTarget2": true,
     "acts": [
      {
       "k": "capture",
@@ -750,11 +754,7 @@
      {
       "k": "damage",
       "n": 1,
-      "s": {
-       "pick": {
-        "type": "Creature"
-       }
-      },
+      "s": "target2",
       "per": {
        "of": "amber",
        "s": "target"
@@ -764,11 +764,53 @@
    }
   ],
   "textHash": "2faa6806",
-  "source": "llm",
+  "source": "manual",
   "reviewed": true,
   "generatedAt": 1791170099667,
-  "v": 10,
-  "model": "mimo-v2.6-flash-free",
+  "v": 17,
+  "model": "hand-fix QA-01",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "658893af-54cc-44af-a200-0e93a4cde3ab",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "target": {
+     "type": "Creature"
+    },
+    "target2": {
+     "type": "Creature"
+    },
+    "sameTarget2": true,
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "s": "target",
+      "own": true
+     },
+     {
+      "k": "damage",
+      "n": 1,
+      "s": "target2",
+      "per": {
+       "of": "amber",
+       "s": "target"
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "2faa6806",
+  "source": "manual",
+  "reviewed": true,
+  "generatedAt": 1791170099667,
+  "v": 17,
+  "model": "hand-fix QA-01",
   "effects": [],
   "keywords": {}
  },

@@ -558,6 +558,44 @@
   "keywords": {}
  },
  {
+  "cardId": "1a773916-d37a-4455-8a45-7acc54198c17",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "p": "amber",
+       "opp": true
+      },
+      "s": "self"
+     },
+     {
+      "k": "damage",
+      "n": 1,
+      "s": "self",
+      "per": {
+       "of": "amber",
+       "s": "self"
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "c5767a7c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
   "cardId": "1d7da940-f8c9-46dc-ac63-7b36aaed1039",
   "dsl": [
    {
@@ -918,6 +956,49 @@
    }
   ],
   "textHash": "ecacb9ea",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "39eeafff-e0ab-49e2-8476-bfd9dc29fd9d",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "p": "amber",
+       "opp": true
+      },
+      "s": "self"
+     }
+    ]
+   },
+   {
+    "on": [
+     "endOfTurn"
+    ],
+    "acts": [
+     {
+      "k": "moveAmber",
+      "s": "self",
+      "n": 1,
+      "to": "pool",
+      "opp": true
+     }
+    ]
+   }
+  ],
+  "textHash": "0394273d",
   "source": "keyteki",
   "reviewed": true,
   "generatedAt": 0,
@@ -1504,6 +1585,49 @@
   "keywords": {}
  },
  {
+  "cardId": "6d900a48-2e26-4ef3-8d85-3bb54239509e",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "p": "amber",
+       "opp": true
+      },
+      "s": "self"
+     }
+    ]
+   },
+   {
+    "on": [
+     "endOfTurn"
+    ],
+    "acts": [
+     {
+      "k": "moveAmber",
+      "s": "self",
+      "n": 1,
+      "to": "pool",
+      "opp": true
+     }
+    ]
+   }
+  ],
+  "textHash": "7eb232f9",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
   "cardId": "7194b2be-d812-44fa-ac30-2da11aa7a4f2",
   "dsl": [
    {
@@ -1603,6 +1727,46 @@
   "keywords": {}
  },
  {
+  "cardId": "74e875b8-e06f-4a05-a222-f769ca33fdd1",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "amber",
+     "opp": true,
+     "op": "gte",
+     "n": 7
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "sub": [
+        {
+         "p": "amber",
+         "opp": true
+        },
+        5
+       ]
+      },
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "435ae554",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
   "cardId": "7a6a6024-597d-45ad-85ab-ff4664afed95",
   "dsl": [
    {
@@ -1688,6 +1852,44 @@
    }
   ],
   "textHash": "d3f97ded",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "7bed5831-16b3-4af0-9f50-1becb4788cf9",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "p": "amber",
+       "opp": true
+      },
+      "s": "self"
+     },
+     {
+      "k": "damage",
+      "n": 1,
+      "s": "self",
+      "per": {
+       "of": "amber",
+       "s": "self"
+      }
+     }
+    ]
+   }
+  ],
+  "textHash": "c5767a7c",
   "source": "keyteki",
   "reviewed": true,
   "generatedAt": 0,
@@ -1855,6 +2057,46 @@
    }
   ],
   "textHash": "20182d7c",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
+ },
+ {
+  "cardId": "87197e65-0d83-42a8-bec9-9e0e1fb75f34",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "amber",
+     "opp": true,
+     "op": "gte",
+     "n": 7
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "sub": [
+        {
+         "p": "amber",
+         "opp": true
+        },
+        5
+       ]
+      },
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "fb3e5c3d",
   "source": "keyteki",
   "reviewed": true,
   "generatedAt": 0,
@@ -2172,6 +2414,48 @@
   "keywords": {}
  },
  {
+  "cardId": "9afe3a12-5280-45e0-afc7-93d0a991f4aa",
+  "dsl": [
+   {
+    "on": [
+     "reap"
+    ],
+    "if": {
+     "k": "count",
+     "of": {
+      "c": {
+       "trait": "Sin",
+       "side": "friendly"
+      }
+     },
+     "op": "gte",
+     "n": 2
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "p": "amber",
+       "opp": true
+      },
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "9f03d9e8",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {
+   "elusive": 1
+  }
+ },
+ {
   "cardId": "9d1bdcaa-1956-498f-bbec-0cc2cd5032f8",
   "dsl": [],
   "textHash": "974e130e",
@@ -2218,6 +2502,46 @@
   "keywords": {
    "taunt": 1
   }
+ },
+ {
+  "cardId": "9d97c46d-abb1-4326-85f6-56464ba279cc",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "if": {
+     "k": "amber",
+     "opp": true,
+     "op": "gte",
+     "n": 7
+    },
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "sub": [
+        {
+         "p": "amber",
+         "opp": true
+        },
+        5
+       ]
+      },
+      "s": "self"
+     }
+    ]
+   }
+  ],
+  "textHash": "2a841095",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
  },
  {
   "cardId": "9e62351c-459a-43c1-9a19-8e796a6813aa",
@@ -3662,6 +3986,49 @@
    "skirmish": 1,
    "versatile": 1
   }
+ },
+ {
+  "cardId": "f01b294f-7956-4c8a-a648-f6aac88e9e60",
+  "dsl": [
+   {
+    "on": [
+     "play"
+    ],
+    "acts": [
+     {
+      "k": "capture",
+      "n": 1,
+      "per": {
+       "p": "amber",
+       "opp": true
+      },
+      "s": "self"
+     }
+    ]
+   },
+   {
+    "on": [
+     "endOfTurn"
+    ],
+    "acts": [
+     {
+      "k": "moveAmber",
+      "s": "self",
+      "n": 1,
+      "to": "pool",
+      "opp": true
+     }
+    ]
+   }
+  ],
+  "textHash": "0394273d",
+  "source": "keyteki",
+  "reviewed": true,
+  "generatedAt": 0,
+  "v": 17,
+  "model": "keyteki-ast@d9b239b",
+  "effects": [],
+  "keywords": {}
  },
  {
   "cardId": "f053545e-55a0-4b4b-9607-67dd47021c70",
