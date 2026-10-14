@@ -95,6 +95,7 @@ import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, drawDeck, llmRea
 import { sound } from "./lib/sound";
 import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
+import { CardText } from "./components/CardText";
 import { CoverageBadge, DeckCoverageChip } from "./components/CoverageBadge";
 import { DeckTile, HouseMark } from "./components/DeckTile";
 import { LlmSettings } from "./components/LlmSettings";
@@ -2388,7 +2389,7 @@ function SelectedCardPanel({
               </div>
             </div>
           </div>
-          <p className="selected-card-text">{card.face.text || t("inspector.noText")}</p>
+          <p className="selected-card-text">{card.face.text ? <CardText text={card.face.text} t={t} /> : t("inspector.noText")}</p>
           <CoverageBadge face={card.face} t={t} />
 
           <div className="inspector-actions">

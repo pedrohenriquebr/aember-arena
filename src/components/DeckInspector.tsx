@@ -8,6 +8,7 @@ import { sound } from "../lib/sound";
 import { ZoomIn } from "lucide-react";
 import { houseColor, houseLabel } from "../lib/houses";
 import { CardArt, CardLightbox } from "./CardArt";
+import { CardText } from "./CardText";
 import { DeckCoverageChip } from "./CoverageBadge";
 import { HouseMark } from "./DeckTile";
 import { HouseIcon } from "./HouseIcon";
@@ -268,7 +269,7 @@ export function DeckInspector({
                 </div>
                 <p className="card-detail-sub">{houseLabel(active.house, t)} · {typeLabel(active.type)}{active.cardNumber ? ` · #${active.cardNumber}` : ""}</p>
                 {active.traits && <p className="card-detail-traits">{active.traits}</p>}
-                <p className="card-detail-text">{active.text || t("inspector.noText")}</p>
+                <p className="card-detail-text">{active.text ? <CardText text={active.text} t={t} /> : t("inspector.noText")}</p>
 
                 <div className="card-detail-stats">
                   {active.amber > 0 && <span><Gem size={13} /> {active.amber} {t("inspector.amber")}</span>}

@@ -9615,3 +9615,10 @@ button.pile-chip:focus-visible {
     display: none;
   }
 }
+
+/* QA-04: Æmber/dano do texto impresso como ícone inline (glifo privado do MV). */
+.card-glyph {
+  display: inline-block;
+  vertical-align: -0.12em;
+  line-height: 1;
+}

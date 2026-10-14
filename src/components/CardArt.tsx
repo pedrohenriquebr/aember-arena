@@ -4,6 +4,7 @@ import { Gem, Shield, Sparkles, Swords, X } from "lucide-react";
 import type { CardFace } from "../lib/game";
 import type { Translator } from "../lib/i18n";
 import { localizedArtUrl } from "../lib/artLocale";
+import { CardText } from "./CardText";
 import { CoverageBadge } from "./CoverageBadge";
 import { HouseIcon } from "./HouseIcon";
 
@@ -271,7 +272,7 @@ export function CardArt({
               </div>
               <div className="card-zoom-text">
                 <strong>{face.title}</strong>
-                <p>{face.text || face.traits || `${houseLabel(face.house)} · ${face.type}`}</p>
+                <p>{face.text ? <CardText text={face.text} /> : face.traits || `${houseLabel(face.house)} · ${face.type}`}</p>
               </div>
             </div>
           </div>,
@@ -334,7 +335,7 @@ export function CardLightbox({
               {face.traits && <p className="card-lightbox-traits">{face.traits}</p>}
             </div>
           </div>
-          <p className="card-lightbox-text">{face.text || t("inspector.noText")}</p>
+          <p className="card-lightbox-text">{face.text ? <CardText text={face.text} t={t} /> : t("inspector.noText")}</p>
           <CoverageBadge face={face} t={t} />
           <div className="card-lightbox-stats">
             {face.amber > 0 && <span><Gem size={14} /> {face.amber} {t("inspector.amber")}</span>}

@@ -1773,3 +1773,30 @@ function parseCardBody(face: CardFace): CardRules {
   const coverage = unknown === 0 ? "full" : understood === 0 ? "vanilla" : "partial";
   return { abilities, effects, keywords, coverage };
 }
+
+/** EXIBIÇÃO (não o motor — veja `normalisePre`): o texto do MV imprime Æmber e
+    dano como glifos de uso privado (U+F360/F361) que a fonte do app não tem
+    (tofu). Divide o texto em trechos e símbolos; os demais glifos privados são
+    ícones de decoração (bônus do Enhance, maré) sem equivalente — saem. */
+export type CardTextPart = string | { glyph: "A" | "D" };
+
+export function splitCardGlyphs(text: string): CardTextPart[] {
+  const parts: CardTextPart[] = [];
+  let buffer = "";
+  for (const ch of (text ?? "").replace(/﻿/g, "")) {
+    if (ch === "" || ch === "") {
+      if (buffer) parts.push(buffer);
+      buffer = "";
+      parts.push({ glyph: ch === "" ? "A" : "D" });
+    } else if (!/[-]/.test(ch)) buffer += ch;
+  }
+  if (buffer) parts.push(buffer);
+  return parts;
+}
+
+/** Versão em string (sem JSX): `<A>`/`<D>` no lugar dos glifos. */
+export function displayCardText(text: string): string {
+  return splitCardGlyphs(text)
+    .map((part) => (typeof part === "string" ? part : `<${part.glyph}>`))
+    .join("");
+}
