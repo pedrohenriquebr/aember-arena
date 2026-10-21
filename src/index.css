@@ -8324,6 +8324,27 @@ button.pile-chip:focus-visible {
     pointer-events: none;
   }
 
+  /* Mesa UNICA: as zonas nao tem fundo nem fio proprio (o gradiente de cada
+     metade e o border-bottom da zona do oponente partiam a mesa em dois
+     trapezios). Quem desenha a superficie e so o playmat do plano; o 2D mantem
+     o desenho de zonas (regras base, fora deste escopo). */
+  :is(.game-board--3d, .game-board--lite) .battle-zone--opponent,
+  :is(.game-board--3d, .game-board--lite) .battle-zone--player {
+    background: none;
+    border-bottom: 0;
+  }
+
+  /* O console era a ultima faixa opaca de borda a borda no meio do plano
+     (fundo --nf-s2 + border-block): a 768 e no celular ele cortava o mat em
+     duas metades. Vira uma placa translucida recuada SOBRE o mat — o tapete
+     passa por baixo e pelas laterais, um horizonte so. Altura intocada (FIT). */
+  :is(.game-board--3d, .game-board--lite) .table-plane .turn-console {
+    margin-inline: var(--space-3);
+    border-block: 0;
+    border-radius: var(--radius-md);
+    background-color: color-mix(in srgb, var(--nf-s2) 62%, transparent);
+  }
+
   /* Profundidade por tamanho: o oponente "esta mais longe" (60px ≈ 60x84) e o
      jogador mais perto (72px ≈ 72x101) — os dois acima do alvo de 44px. */
   :is(.game-board--3d, .game-board--lite) .battle-zone--opponent { --card-w-2d5: 60px; }
@@ -8455,6 +8476,7 @@ button.pile-chip:focus-visible {
            do terreno de 10% do H3D-21 — o halo largo de fundo (12%) e o miolo
            quente (26%) que marca de que lado está a vez. Continua troca seca e
            sem filter: só gradientes estáticos (§2.9). */
+        linear-gradient(90deg, transparent 4%, color-mix(in srgb, var(--nf-accent) 14%, transparent) 50%, transparent 96%) 50% 50% / 100% 1px no-repeat,
         radial-gradient(ellipse 92% 68% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 12%, transparent), transparent 78%),
         radial-gradient(ellipse 46% 32% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 26%, transparent), transparent 72%),
         radial-gradient(ellipse 60% 44% at 50% var(--turn-y, 72%), color-mix(in srgb, var(--turn-house, transparent) 10%, transparent), transparent 72%),
@@ -8467,6 +8489,10 @@ button.pile-chip:focus-visible {
         inset 0 0 28px color-mix(in srgb, var(--nf-verdant) 16%, transparent),
         inset 0 0 72px color-mix(in srgb, var(--turn-house, transparent) 15%, transparent);
       translate: calc(var(--cam-x, 0) * 12px);
+      /* O mat e COPLANAR ao plano: a perspectiva propria do 2.5D (regra acima)
+         nao vale aqui — somada a do plano ela desenhava o segundo trapezio. */
+      transform: none;
+      transform-origin: 50% 50%;
       pointer-events: none;
     }
 
