@@ -90,7 +90,10 @@ async function launch() {
   const { chromium } = await import("playwright-core");
   for (const opts of [{ channel: "msedge" }, { channel: "chrome" }, ...CANDIDATES.filter(existsSync).map((executablePath) => ({ executablePath }))]) {
     try {
-      return await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"], ...opts });
+      // --ignore-certificate-errors: nesta rede a verificacao TLS do bucket de
+      // arte do MV morre na interceptacao local (curl: exit 35; com -k, HTTP 200)
+      // e toda <img> falharia para o fallback tipografico. So o browser do probe.
+      return await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--ignore-certificate-errors"], ...opts });
     } catch { /* proximo */ }
   }
   throw new Error("sem Edge/Chrome do sistema");
@@ -118,6 +121,12 @@ try {
       await page.locator('[data-action="continue"]').first().click();
       await page.waitForSelector(".game-screen", { timeout: 20000 });
       await page.waitForTimeout(700);
+      // Contexto frio: a arte vem do S3 pela rede. Espera as <img> completarem
+      // (uma que falhou desmonta e sai do DOM) antes do tiro — 700ms fixos
+      // capturavam o fallback tipografico.
+      await page
+        .waitForFunction(() => [...document.images].every((img) => img.complete), undefined, { timeout: 20000 })
+        .catch(() => {});
       await page.screenshot({ path: join(OUT, `${theme}-${vp.w}x${vp.h}.png`) });
       console.log(`${theme} ${vp.w}x${vp.h}`);
       await context.close();
