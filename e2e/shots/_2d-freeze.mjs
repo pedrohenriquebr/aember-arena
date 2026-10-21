@@ -47,7 +47,9 @@ const FIXTURE = `(async () => {
 })()`;
 
 const child = spawn(process.execPath, [join(ROOT, "node_modules", "vite", "bin", "vite.js"), "--host", "127.0.0.1", "--port", String(PORT), "--strictPort"], { cwd: ROOT, stdio: "ignore" });
-const url = `http://127.0.0.1:${PORT}/`;
+// H-29: o padrao agora e a v2, entao o freeze da v1 roda no escape ?ui=1
+// (sem ele o app abre na v2 e o .home-screen nunca aparece).
+const url = `http://127.0.0.1:${PORT}/?ui=1`;
 for (let i = 0; i < 200; i += 1) {
   try {
     if ((await fetch(url)).ok) break;
