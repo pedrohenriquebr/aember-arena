@@ -12,7 +12,8 @@ Bugs reportados pelo dono durante partidas reais. Cada item: repro, causa-raiz p
   `face.text` cru: inspetor (App.tsx:2391), zoom (CardArt.tsx:274), lightbox (CardArt.tsx:337)
   e demais sites de `.text`.
 - **Fix desejado (dono)**: normalizar na exibição — glifo vira símbolo do app (ícone inline
-  Gem/Swords preferível a texto cru). Status: ABERTO — missão Sonnet em voo.
+  Gem/Swords preferível a texto cru). Status: ✅ RESOLVIDO (c83c8ae — Æmber/dano viram
+  ícone inline no texto exibido).
 
 ## QA-03 · Trawler não captura o âmbar do oponente (ability ausente) — ✅ RESOLVIDO
 - **Reportado**: 13/out noite, partida do dono (PWA/celular).
