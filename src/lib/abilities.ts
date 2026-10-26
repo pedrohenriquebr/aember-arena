@@ -75,6 +75,14 @@ export interface Filter {
   self?: boolean;
   /** The creature an upgrade is attached to ("This creature gets +2 armor" on an upgrade). */
   host?: boolean;
+  /** An upgrade/artifact attached to the SOURCE itself ("Gain 1A for each upgrade on ~").
+      `host` is the inverse reading (the host OF an upgrade source) and answers 0 when the
+      source is a creature — the silent zero-count the Hayden Oswin audit caught. */
+  attachedToSource?: boolean;
+  /** Readiness the chosen target had when the ability STARTED (captured by stamp before
+      any act): "Exhaust a creature. If it was ALREADY exhausted, destroy it" — a post-act
+      `exhausted` check sees the ability's own exhaust and is always true. */
+  wasExhausted?: boolean;
   /** The source's neighbors ("Each of ~'s neighbors gets +2 armor"). */
   neighborsOfSource?: boolean;
   /** "each Mars creature" (prefix `!` negates): a printed house name, `active`,
@@ -530,7 +538,12 @@ export function applyAbilityOverride(record: AbilityOverride): void {
 export function mergeAbilityOverrides(loaded: Map<string, AbilityOverride>): void {
   let changed = false;
   for (const [cardId, record] of loaded) {
-    if (overrides.has(cardId) || pending.has(cardId)) continue;
+    if (pending.has(cardId)) continue;
+    // Newest wins: a corrected vendored line (higher v) must reach devices whose
+    // store still holds the stale approval of the same card; a tie keeps the
+    // entry already live (the store's own row). Session-staged rows always win.
+    const current = overrides.get(cardId);
+    if (current && (current.v ?? 0) >= (record.v ?? 0)) continue;
     if (held) pending.set(cardId, record);
     else {
       overrides.set(cardId, record);
@@ -751,6 +764,8 @@ const FILTER_FIELDS: Record<string, 0> = {
   leftOf: 0,
   rightOf: 0,
   neighborsOfSource: 0,
+  attachedToSource: 0,
+  wasExhausted: 0,
   house: 0,
   trait: 0,
   exhausted: 0,

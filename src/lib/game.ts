@@ -850,6 +850,8 @@ interface Prior {
   target?: CardInstance;
   targetHouse?: string;
   wasNeighbors?: CardInstance[];
+  /** Readiness of the target at ability start (see Ctx.wasReady). */
+  wasReady?: boolean;
   goneCards?: { card: CardInstance; side: Side }[];
 }
 
@@ -899,6 +901,7 @@ export function conditionHolds(
         target: previous?.target,
         targetHouse: previous?.targetHouse,
         wasNeighbors: previous?.wasNeighbors,
+        wasReady: previous?.wasReady,
         goneCards: previous?.goneCards,
       },
       condition.of,
@@ -1036,6 +1039,7 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
     (!filter.ready || (card.ready && !card.stunned)) &&
     (!filter.self || card === source) &&
     (!filter.host || card.instanceId === source?.attachedTo) &&
+    (!filter.attachedToSource || (source !== undefined && card.attachedTo === source.instanceId)) &&
     (!filter.neighborsOfSource || (source !== undefined && neighbors(state, source).includes(card))) &&
     (!filter.leftOf || beside(state, source, card, "left")) &&
     (!filter.rightOf || beside(state, source, card, "right")) &&
@@ -1053,6 +1057,7 @@ function matches(state: GameState, me: Side, source: CardInstance | undefined, c
           : houseMatches(state, card, positive(filter.house))) !== negated(filter.house))) &&
     (filter.trait === undefined || traitMatches(state, card, positive(filter.trait)) !== negated(filter.trait)) &&
     (filter.exhausted === undefined || !card.ready === filter.exhausted) &&
+    (!filter.wasExhausted || scope?.wasReady === false) &&
     (filter.amber === undefined || ((card.amber ?? 0) > 0) === filter.amber) &&
     counterOk
   );
@@ -1144,6 +1149,10 @@ interface Ctx {
   movedHouse?: string;
   /** Neighbors of the target as they were when the ability started (Lote 6 §6.7). */
   wasNeighbors?: CardInstance[];
+  /** Readiness of the target when the ability started (stamp, pre-acts): "Exhaust a
+      creature. If it was ALREADY exhausted" — a post-act `exhausted` check sees the
+      ability's own exhaust and would always answer yes. */
+  wasReady?: boolean;
   /** Houses captured before a destroy clears `houseAs` (Lote 6 §6.3). */
   targetHouse?: string;
   foughtHouse?: string;
@@ -2313,6 +2322,7 @@ function stamp(state: GameState, context: Context, fought?: CardInstance): void 
   if (context.target) {
     context.targetHouse = houseOf(state, context.target);
     context.wasNeighbors = neighbors(state, context.target).slice();
+    context.wasReady = context.target.ready;
   }
   if (fought) context.foughtHouse = houseOf(state, fought);
 }

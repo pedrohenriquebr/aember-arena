@@ -404,25 +404,13 @@
     "on": [
      "play"
     ],
+    "target": {
+     "type": "Creature"
+    },
     "acts": [
      {
       "k": "exhaust",
       "s": "target"
-     },
-     {
-      "k": "destroy",
-      "s": "target",
-      "if": {
-       "k": "count",
-       "of": {
-        "c": {
-         "target": true,
-         "exhausted": true
-        }
-       },
-       "op": "gte",
-       "n": 1
-      }
      },
      {
       "k": "loseAmber",
@@ -433,25 +421,37 @@
        "of": {
         "c": {
          "target": true,
-         "exhausted": true
+         "wasExhausted": true
+        }
+       },
+       "op": "gte",
+       "n": 1
+      }
+     },
+     {
+      "k": "destroy",
+      "s": "target",
+      "if": {
+       "k": "count",
+       "of": {
+        "c": {
+         "target": true,
+         "wasExhausted": true
         }
        },
        "op": "gte",
        "n": 1
       }
      }
-    ],
-    "target": {
-     "type": "Creature"
-    }
+    ]
    }
   ],
   "textHash": "53b2810a",
-  "source": "llm",
+  "source": "manual",
   "reviewed": true,
   "generatedAt": 1791149211677,
-  "v": 8,
-  "model": "mimo-v2.6-flash-free",
+  "v": 17,
+  "model": "hand-fix cotv+hayden 22out",
   "effects": [],
   "keywords": {}
  },
@@ -868,7 +868,7 @@
       "per": {
        "c": {
         "type": "Upgrade",
-        "host": true
+        "attachedToSource": true
        }
       }
      }
@@ -876,11 +876,11 @@
    }
   ],
   "textHash": "b77513bc",
-  "source": "llm",
+  "source": "manual",
   "reviewed": true,
   "generatedAt": 1791170150427,
-  "v": 10,
-  "model": "mimo-v2.6-flash-free",
+  "v": 17,
+  "model": "hand-fix cotv+hayden 22out",
   "effects": [],
   "keywords": {}
  },
