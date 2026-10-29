@@ -617,6 +617,7 @@ export const DICT: Record<string, [string, string]> = {
   "ui.table.continue": ["Keep playing", "Continuar jogando"],
   "ui.table.notes": ["Table notes", "Notas da mesa"],
   "ui.table.view3d": ["3D table", "Mesa 3D"],
+  "ui.table.arena": ["Arena layout", "Layout Arena"],
   "ui.table.exit": ["Leave to lobby", "Sair para o lobby"],
   "ui.table.exitTitle": ["Leave the match?", "Sair da partida?"],
   "ui.table.exitBody": ["The match is saved. Resume it from the lobby any time.", "A partida fica salva. Retome pelo lobby quando quiser."],
@@ -746,6 +747,9 @@ export const DICT: Record<string, [string, string]> = {
   "ui.coach.playCard": ["Play a card of that house: tap it in your hand.", "Jogue uma carta dessa casa: toque nela na sua mão."],
   "ui.coach.endTurn": ["When you're done, end your turn.", "Quando terminar, encerre seu turno."],
   "ui.coach.skip": ["Skip tips", "Pular dicas"],
+  // H-ATL-01: o Layout Arena (terceira visão da mesa, docs/ARENA_TCG_LIVE_PLAN.md).
+  "ui.arena.layout": ["Arena layout", "Layout Arena"],
+  "ui.arena.layoutSub": ["Flat table: big cards in the center, piles and score on the edges. Beta.", "Mesa plana: cartas grandes no centro, pilhas e placar nas bordas. Beta."],
 };
 
 

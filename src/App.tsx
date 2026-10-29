@@ -1387,6 +1387,9 @@ type PlayerBandProps = {
   chains: number;
   /** Lado dono do band: ancora o diretor de FX (âmbar/chaves/avatar). */
   side: 0 | 1;
+  /** H-ATL-02: lado da mesa (topo = Warden / baixo = você). `isAi` não serve: no pass-and-play
+      os dois bands são humanos, e o de cima é sempre o `enemy`. Gancho de marcação (data-seat). */
+  seat: "top" | "bottom";
   /** FEAT-13: pass-and-play avatars show the player number instead of "You". */
   avatarLabel?: string;
   /** FIT-04: a barra do jogador absorve o título da mão (contagens + dica). */
@@ -1412,6 +1415,7 @@ function arePlayerBandPropsEqual(a: PlayerBandProps, b: PlayerBandProps): boolea
     a.isAi === b.isAi &&
     a.active === b.active &&
     a.side === b.side &&
+    a.seat === b.seat &&
     (a.thinking ?? false) === (b.thinking ?? false) &&
     (a.house ?? "") === (b.house ?? "") &&
     (a.avatarLabel ?? "") === (b.avatarLabel ?? "") &&
@@ -1444,6 +1448,7 @@ const PlayerBand = memo(function PlayerBand({
   house,
   chains,
   side,
+  seat,
   avatarLabel,
   handCount,
   deckCount,
@@ -1460,7 +1465,7 @@ const PlayerBand = memo(function PlayerBand({
   // só o dono abre o seu, o do oponente mostra só a contagem (sem ação).
   const ownArchive = canOpenPile("archives", side, viewerSide);
   return (
-    <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}${thinking ? " player-band--thinking" : ""}`} data-side={side}>
+    <div className={`player-band${active ? " player-band--active" : ""}${isAi ? " player-band--ai" : ""}${thinking ? " player-band--thinking" : ""}`} data-side={side} data-seat={seat}>
       <div className={`player-avatar${isAi ? " player-avatar--ai" : ""}`}>
         {isAi ? <Cpu size={18} strokeWidth={1.6} /> : <span>{avatarLabel ?? t("common.you")}</span>}
         {active && <span className="avatar-live-dot" />}
@@ -1492,7 +1497,7 @@ const PlayerBand = memo(function PlayerBand({
       <div className="player-resources">
         {house && (
           <span className="filter-chip">
-            <HouseMark house={house} small />{houseLabel(house, t)}
+            <HouseMark house={house} small /><span className="filter-chip-label">{houseLabel(house, t)}</span>
           </span>
         )}
         <KeyCounter keys={player.keys} t={t} />
@@ -1969,7 +1974,9 @@ function GameBoard({
   // H3D-09: no hardware fraco a classe é `--lite` (2.5D, mesa só de cenário) —
   // o _table-plane_ do 3D real exige `--3d`, então um nunca vem com o outro.
   const view3d = settings.tableView === "3d";
-  const tableClass = view3d ? (LITE_TABLE ? " game-board--lite" : " game-board--3d") : "";
+  // H-ATL-01: a terceira visão (Layout Arena) é só da v2 — na v1 um "tcg" gravado lê como 2D.
+  const tcg = ui2 && settings.tableView === "tcg";
+  const tableClass = view3d ? (LITE_TABLE ? " game-board--lite" : " game-board--3d") : tcg ? " game-board--tcg" : "";
   // QA 07/out: o que a casa escolhida no pill vai fazer (a carta que pede a casa
   // lê a escolha em "each creature of that house").
   const houseEffect = pick?.houses ? housePickEffect(pick.move, game, t) : undefined;
@@ -1977,7 +1984,7 @@ function GameBoard({
   return (
     <section
       className={`game-board game-board--stage${settings.animations ? "" : " no-anim"}${tableClass}${consoleSlot ? " game-board--console-docked" : ""}${viewSwitching ? " game-board--switching" : ""}`}
-      data-view={view3d ? "3d" : undefined}
+      data-view={view3d ? "3d" : tcg ? "tcg" : undefined}
       // H3D-21: a cor do tapete segue a casa do turno e a metade de quem joga.
       // --turn-house também tinge o anel/glow da casa ativa no pill (2D e 3D).
       style={{ "--turn-house": game.activeHouse ? houseColor(game.activeHouse) : "transparent", "--turn-y": game.activePlayer === humanSide ? "72%" : "28%" } as CSSProperties}
@@ -1994,6 +2001,7 @@ function GameBoard({
           house={game.activePlayer === enemySide ? game.activeHouse : null}
           chains={enemy.chains}
           side={enemySide}
+          seat="top"
           avatarLabel={passAndPlay ? String(enemySide + 1) : undefined}
           backs={enemy.hand.length}
           discardCount={enemy.discard.length}
@@ -2167,6 +2175,7 @@ function GameBoard({
           house={game.activePlayer === humanSide ? game.activeHouse : null}
           chains={player.chains}
           side={humanSide}
+          seat="bottom"
           avatarLabel={passAndPlay ? String(humanSide + 1) : undefined}
           handCount={player.hand.length}
           deckCount={player.deck.length}
@@ -2932,6 +2941,13 @@ function App() {
     cancelFx();
     setViewSwitching(true);
     setSettings((prev) => ({ ...prev, tableView: prev.tableView === "3d" ? "2d" : "3d" }));
+  }, [cancelFx]);
+
+  /** H-ATL-01: liga/desliga o Layout Arena (sai sempre para o 2D). Mesmo contrato de FX do 3D. */
+  const toggleTcg = useCallback(() => {
+    cancelFx();
+    setViewSwitching(true);
+    setSettings((prev) => ({ ...prev, tableView: prev.tableView === "tcg" ? "2d" : "tcg" }));
   }, [cancelFx]);
 
   // H3D-10: a classe da transição vive 420ms (o fade do board-content) e sai no
@@ -4727,12 +4743,12 @@ function App() {
                       <span className="archives-count">{game.players[humanSide].archives.length}</span>
                     </button>
                   ) : undefined}
-                  consoleSlot={drawerMode ? null : railConsoleSlot}
+                  consoleSlot={drawerMode || (ui2 === "2" && settings.tableView === "tcg") ? null : railConsoleSlot}
                   consoleExtra={tableShell ? (
                     <>
                       {/* H-09: no celular o console tem Undo + ☰ (as notas e a visão 3D estão no menu). */}
                       {drawerMode && !passAndPlay && (
-                        <button type="button" className="view-toggle" aria-label={t("game.undo")} title={undo?.blocked ? t("game.undoBlocked") : t("game.undo")} onClick={undoLastMove} disabled={!undoable}>
+                        <button type="button" className="view-toggle console-undo" aria-label={t("game.undo")} title={undo?.blocked ? t("game.undoBlocked") : t("game.undo")} onClick={undoLastMove} disabled={!undoable}>
                           <RotateCcw size={16} />
                         </button>
                       )}
@@ -4981,6 +4997,8 @@ function App() {
           onClose={() => setTableMenuOpen(false)}
           view3d={settings.tableView === "3d"}
           onToggleView={toggleTableView}
+          tcg={settings.tableView === "tcg"}
+          onToggleTcg={toggleTcg}
           sfx={settings.sfx}
           onToggleSfx={() => { sound.play("click"); setSettings((prev) => ({ ...prev, sfx: !prev.sfx })); }}
           music={settings.music}

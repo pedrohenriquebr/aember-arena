@@ -18,8 +18,9 @@ export const clampAiDelay = (value: number) => Math.min(AI_DELAY_MAX, Math.max(A
 export const aiHoldScale = (delayMs: number) => Math.min(3, Math.max(0.45, delayMs / 400));
 
 /** H3D-01 (VIEW3D_PLAN §2.11): visão da mesa — 2D (padrão, o board de sempre)
-    ou 3D (a camada CSS inclinada, ligada pela classe `.game-board--3d`). */
-export type TableView = "2d" | "3d";
+    ou 3D (a camada CSS inclinada, ligada pela classe `.game-board--3d`).
+    H-ATL-01: "tcg" = Layout Arena (mesa plana, só com a v2; na v1 lê como 2D). */
+export type TableView = "2d" | "3d" | "tcg";
 
 export interface AppSettings {
   difficulty: Difficulty;
@@ -89,7 +90,7 @@ export function readSettings(fallbackLanguage: Language): AppSettings {
       aiDelayMs: Number.isFinite(Number(parsed.aiDelayMs)) && parsed.aiDelayMs !== null && parsed.aiDelayMs !== undefined
         ? clampAiDelay(Number(parsed.aiDelayMs))
         : parsed.aiSpeed === "fast" ? 400 : base.aiDelayMs,
-      tableView: parsed.tableView === "3d" ? "3d" : base.tableView,
+      tableView: parsed.tableView === "3d" || parsed.tableView === "tcg" ? parsed.tableView : base.tableView,
       deckP1Id: typeof parsed.deckP1Id === "string" ? parsed.deckP1Id : base.deckP1Id,
       deckP2Id: typeof parsed.deckP2Id === "string" ? parsed.deckP2Id : base.deckP2Id,
     };

@@ -19,6 +19,9 @@ export type TableMenuProps = {
   onClose: () => void;
   view3d: boolean;
   onToggleView: () => void;
+  /** H-ATL-01: Layout Arena (só com a v2; o App não passa `true` na v1). */
+  tcg: boolean;
+  onToggleTcg: () => void;
   sfx: boolean;
   onToggleSfx: () => void;
   music: boolean;
@@ -40,7 +43,7 @@ export type TableMenuProps = {
  * lobby, tutorial — e as ações do rail que não cabem mais na linha do console. Os interruptores
  * mantêm a folha aberta (ajuste); as ações de navegação fecham antes de agir.
  */
-export function TableMenu({ t, open, onClose, view3d, onToggleView, sfx, onToggleSfx, music, onToggleMusic, aiDelayMs, onAiDelay, onOpenNotes, onOpenLog, rules, onTutorial, onExit }: TableMenuProps) {
+export function TableMenu({ t, open, onClose, view3d, onToggleView, tcg, onToggleTcg, sfx, onToggleSfx, music, onToggleMusic, aiDelayMs, onAiDelay, onOpenNotes, onOpenLog, rules, onTutorial, onExit }: TableMenuProps) {
   const rulesId = useId();
   const [rulesOpen, setRulesOpen] = useState(false);
   // O preset mais próximo do valor atual: um ritmo fora dos três (Config avançada) ainda marca um.
@@ -67,6 +70,10 @@ export function TableMenu({ t, open, onClose, view3d, onToggleView, sfx, onToggl
           <SettingRow
             title={t("ui.table.view3d")}
             control={<Switch checked={view3d} onChange={onToggleView} label={t("ui.table.view3d")} />}
+          />
+          <SettingRow
+            title={t("ui.table.arena")}
+            control={<Switch checked={tcg} onChange={onToggleTcg} label={t("ui.table.arena")} />}
           />
           <SettingRow
             title={t("config.experience.sfx")}

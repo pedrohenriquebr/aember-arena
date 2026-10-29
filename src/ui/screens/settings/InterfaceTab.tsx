@@ -56,6 +56,17 @@ export function InterfaceTab({ t, settings, onChange, hasHover, theme, onTheme, 
           />
         }
       />
+      <SettingRow
+        title={t("ui.arena.layout")}
+        description={t("ui.arena.layoutSub")}
+        control={
+          <Switch
+            checked={settings.tableView === "tcg"}
+            label={t("ui.arena.layout")}
+            onChange={(value) => onChange({ ...settings, tableView: value ? "tcg" : "2d" })}
+          />
+        }
+      />
       {hasHover && (
         <SettingRow
           title={t("config.experience.zoom")}

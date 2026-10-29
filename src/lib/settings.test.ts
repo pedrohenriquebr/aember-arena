@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { aiHoldScale, drawDeck, readSettings } from "./settings";
+import { aiHoldScale, drawDeck, readSettings, saveSettings } from "./settings";
 
 function seed(saved: unknown) {
   vi.stubGlobal("localStorage", { getItem: () => JSON.stringify(saved) });
@@ -27,6 +27,22 @@ describe("aiDelayMs", () => {
     expect(aiHoldScale(4000)).toBe(3);
     expect(aiHoldScale(400)).toBe(1);
     expect(aiHoldScale(200)).toBe(0.5);
+  });
+});
+
+describe("tableView", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("keeps the Arena layout ('tcg') through save and read", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => store.set(key, value) });
+    saveSettings({ ...readSettings("en"), tableView: "tcg" });
+    expect(readSettings("en").tableView).toBe("tcg");
+  });
+
+  it("reads an unknown value as the 2D default", () => {
+    vi.stubGlobal("localStorage", { getItem: () => JSON.stringify({ tableView: "foo" }) });
+    expect(readSettings("en").tableView).toBe("2d");
   });
 });
 
