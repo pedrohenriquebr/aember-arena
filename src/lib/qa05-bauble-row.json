@@ -1,0 +1,1 @@
+{"cardId":"96548d93-b318-40e3-9f5c-3297c8070ebd","dsl":[{"on":["action"],"target":{"type":"Creature","side":"friendly","ready":true},"acts":[{"k":"use","s":"target","mode":"a"},{"k":"use","s":"target","via":"fight","mode":"b"}]}],"textHash":"fc8c21bf","source":"llm","v":17,"reviewed":true,"model":"haiku-5-5-qa05"}

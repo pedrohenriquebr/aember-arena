@@ -5,6 +5,34 @@ Bugs reportados pelo dono durante partidas reais. Cada item: repro, causa-raiz p
 
 ---
 
+## QA-06 · Witch of the Eye colhe sem deixar ESCOLHER a carta do descarte
+- **Reportado**: 29/out, dono jogando: "quando fiz reap dela, não me ofereceu a oportunidade
+  de escolher qual carta do descarte eu pegar".
+- **Carta**: Witch of the Eye (Untamed, "Reap: Return a card from your discard pile to your
+  hand." — 3 variantes no corpus, todas sem row vendored; o parser produz
+  `{on:["reap"], acts:[{k:"fromDiscard"}]}` com coverage "full").
+- **Causa-raiz (motor, game.ts:2153)**: o ato `fromDiscard` pega SEMPRE a carta do TOPO do
+  descarte próprio (`reverse().find`) — sem escolha do jogador. Regras reais: "your discard
+  pile" é o descarte do controlador e **ele escolhe** qualquer carta (informação aberta;
+  rulebook FFG §Discard Pile — confirmado por pesquisa em 29/out a pedido do dono). Segunda
+  instância da mentira do selo "full": frase parseada ≠ efeito fiel.
+- **Correção necessária**: primitiva de ESCOLHA em zona (novo kind de prompt listando o
+  descarte do jogador + variante do ato que espera a escolha) — motor + UI (o prompt de
+  alvo atual só varre battlelines, `everyMatch` não enxerga zonas). É da família 🟢/🔴 da
+  onda 4 (selection em zona). **Status: FILA DE MOTOR** — aguarda bloco B da Arena fechar
+  (a UI de prompt é território dela); não é consertável como row de dados.
+
+## QA-05 · Dominator Bauble não faz nada (sem prompt de escolha de criatura)
+- **Reportado**: 29/out, dono jogando (deck demo): "não deixou escolher a criatura, que era do tipo Indomáveis".
+- **Carta**: Dominator Bauble (Dis, Artefato, demo deck — "Action: Use a friendly creature.").
+- **Causa-raiz**: carta SEM linha vendored (vanilla) — o texto não vira efeito nenhum, nem prompt
+  existe. A infraestrutura do motor está completa (move `use` → gatilho `action` → ato `use`
+  em `game.ts:2128` com criatura de QUALQUER casa — não há check de casa no ato; `asYours`
+  existe); faltam só a row e a porta de escolha lutar/colher do jogador (`via` default = reap;
+  a escolha pode sair pelo mecanismo de `mode` do Lote 8).
+- **Status**: EM VOO — primeira produção do Haiku 5.5 (executor aprovado no duelo 9/9), com
+  bancada comportamental + hash carimbado + review antes de vendorizar.
+
 ## QA-04 · Glifo privado (Æmber/dano) aparece como caractere inválido no texto exibido
 - **Reportado**: 13/out noite, dono (inspetor do Trawler: "capture all your opponent’s ." com tofu).
 - **Causa-raiz**: corpus/MV guardam Æmber e dano como glifos PUA (U+F360/F361). O parser
