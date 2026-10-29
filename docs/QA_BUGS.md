@@ -5,6 +5,18 @@ Bugs reportados pelo dono durante partidas reais. Cada item: repro, causa-raiz p
 
 ---
 
+## QA-07 · Scrap de upgrade/artefato EM JOGO nunca dispara
+- **Descoberto**: 29/out, lote M1 da moagem Haiku (bancada da Essence Entangler; não é bug
+  reportado pelo dono — achado de código).
+- **Causa-raiz (motor)**: o gatilho `scrap` só existe no caminho do move `discard`
+  (game.ts:2734), e esse move só é gerado para cartas NA MÃO (:2916). `leavePlay` manda a
+  carta ao descarte SEM disparar "scrap" — então upgrades/artefatos em jogo com "Scrap:"
+  (Essence Entangler, Animating Force "Scrap: Gain 1") são inalcançáveis. A DSL do lote M1
+  está correta e espera o gatilho (bancada com `it.skip` documentado).
+- **Correção necessária**: `leavePlay` (ou o caminho de destruição) deve disparar
+  `scrap` para cartas com ability `on:["scrap"]` — motor puro, sem UI. **Status: FILA DE
+  MOTOR** (junto com QA-06; testes já prontos na bancada M1 para validar o fix).
+
 ## QA-06 · Witch of the Eye colhe sem deixar ESCOLHER a carta do descarte
 - **Reportado**: 29/out, dono jogando: "quando fiz reap dela, não me ofereceu a oportunidade
   de escolher qual carta do descarte eu pegar".

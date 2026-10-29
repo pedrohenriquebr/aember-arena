@@ -1443,5 +1443,152 @@
    }
   ],
   "keywords": {}
- }
+ },
+  {
+    "cardId": "ac9fd9ad-e2a9-4744-8324-5532cedb9c72",
+    "dsl": [
+      {
+        "on": [
+          "play"
+        ],
+        "acts": [
+          {
+            "k": "forgeKey",
+            "n": 1,
+            "mod": 20,
+            "less": {
+              "p": "discard"
+            },
+            "min": 6
+          },
+          {
+            "k": "purge",
+            "s": "self",
+            "if": {
+              "k": "count",
+              "of": "did",
+              "op": "gte",
+              "n": 1
+            }
+          }
+        ]
+      }
+    ],
+    "textHash": "9051d766",
+    "source": "llm",
+    "v": 17,
+    "reviewed": true,
+    "model": "haiku-5-5-m1"
+  },
+  {
+    "cardId": "91e40053-2046-44eb-ace3-de495d5e930c",
+    "dsl": [
+      {
+        "on": [
+          "scrap"
+        ],
+        "target": {
+          "type": "Creature"
+        },
+        "target2": {
+          "type": "Creature"
+        },
+        "acts": [
+          {
+            "k": "moveAmber",
+            "s": "target",
+            "n": 1,
+            "to": "target2"
+          }
+        ]
+      }
+    ],
+    "textHash": "53391b33",
+    "source": "llm",
+    "v": 17,
+    "reviewed": true,
+    "model": "haiku-5-5-m1",
+    "effects": [
+      {
+        "target": {
+          "host": true
+        },
+        "power": -1,
+        "per": {
+          "of": "amber",
+          "s": "host"
+        }
+      }
+    ]
+  },
+  {
+    "cardId": "ca388cc0-ec45-446e-a20c-7bcd962c1a6b",
+    "dsl": [
+      {
+        "on": [
+          "endOfTurn"
+        ],
+        "if": {
+          "k": "not",
+          "c": {
+            "k": "count",
+            "of": {
+              "c": {
+                "self": true,
+                "flank": true
+              }
+            },
+            "op": "gte",
+            "n": 1
+          }
+        },
+        "acts": [
+          {
+            "k": "move",
+            "n": 1,
+            "from": "hand",
+            "to": "archives"
+          }
+        ]
+      }
+    ],
+    "textHash": "9bb80d58",
+    "source": "llm",
+    "v": 17,
+    "reviewed": true,
+    "model": "haiku-5-5-m1"
+  },
+  {
+    "cardId": "76fce6b7-5877-4f49-bb9a-a0515ffbb8f2",
+    "dsl": [
+      {
+        "on": [
+          "action"
+        ],
+        "target": {
+          "type": "Creature",
+          "side": "friendly",
+          "ready": true
+        },
+        "acts": [
+          {
+            "k": "use",
+            "s": "target",
+            "mode": "a"
+          },
+          {
+            "k": "use",
+            "s": "target",
+            "via": "fight",
+            "mode": "b"
+          }
+        ]
+      }
+    ],
+    "textHash": "fc8c21bf",
+    "source": "llm",
+    "v": 17,
+    "reviewed": true,
+    "model": "haiku-5-5-m1"
+  }
 ]
