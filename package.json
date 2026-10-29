@@ -20,6 +20,8 @@
     "e2e:fit": "node e2e/fit.mjs",
     "e2e:fit:3d": "node e2e/fit.mjs --view 3d",
     "e2e:arena": "node e2e/probes/_3d-arena.mjs",
+    "e2e:tcg:shots": "node e2e/probes/_tcg-shots.mjs",
+    "e2e:tcg:hit": "node e2e/probes/_tcg-hit.mjs",
     "e2e:bundle": "node e2e/bundle-size.mjs",
     "e2e:acceptance": "node e2e/acceptance.mjs",
     "e2e:ui2": "node e2e/ui2.mjs",
