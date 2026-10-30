@@ -1,0 +1,200 @@
+/* Layout Arena (docs/ARENA_TCG_LIVE_PLAN.md): a terceira visão da mesa, plana. Mesmo DOM do
+   2D; bandas e console viram `display: contents` e cada peça vai para uma área do grid. Sem
+   .game-board--tcg nada aqui casa — o 2D e o 3D não mudam. */
+
+.game-board.game-board--tcg .board-content {
+  grid-template-columns: var(--nf-tcg-tray-w) minmax(0, 1fr) var(--nf-tcg-end-w) var(--nf-tcg-tray-w);
+  grid-template-rows: var(--nf-tcg-strip-h) minmax(0, 1fr) var(--nf-tcg-mid-h) minmax(0, 1fr) var(--nf-tcg-seat-h) var(--nf-tcg-peek-h);
+  grid-template-areas:
+    "o-av   o-id   o-undo o-menu"
+    "o-pile o-zone o-zone o-res"
+    "turn   turn   end    end"
+    "p-pile p-zone p-zone p-res"
+    "p-av   house  house  house"
+    "hand   hand   hand   hand";
+}
+
+/* As caixas somem; os filhos viram itens do grid (o FX e o drag acham tudo pelo DOM, que não mudou). */
+.game-board.game-board--tcg :is(.player-band, .turn-console) {
+  display: contents;
+}
+
+.game-board.game-board--tcg .zone-heading,
+.game-board.game-board--tcg .player-band[data-seat="bottom"] .player-copy {
+  display: none;
+}
+
+.game-board.game-board--tcg .player-band[data-seat="top"] .player-avatar { grid-area: o-av; justify-self: center; align-self: center; }
+.game-board.game-board--tcg .player-band[data-seat="top"] .player-copy { grid-area: o-id; justify-self: start; align-self: center; min-width: 0; max-width: calc(100% - var(--nf-tcg-backs-w)); padding-inline-start: var(--space-2); }
+.game-board.game-board--tcg .player-band[data-seat="top"] .hand-backs { grid-area: o-id; justify-self: end; align-self: center; }
+.game-board.game-board--tcg .player-band[data-seat="top"] .pile-chips { grid-area: o-pile; justify-self: center; align-self: start; }
+.game-board.game-board--tcg .player-band[data-seat="top"] .player-resources { grid-area: o-res; justify-self: center; align-self: end; }
+.game-board.game-board--tcg .console-undo { grid-area: o-undo; justify-self: end; align-self: center; }
+.game-board.game-board--tcg .table-menu-trigger { grid-area: o-menu; justify-self: center; align-self: center; }
+.game-board.game-board--tcg .battle-zone--opponent { grid-area: o-zone; }
+.game-board.game-board--tcg .turn-console-copy { grid-area: turn; justify-self: start; align-self: center; min-width: 0; max-width: 100%; padding-inline: var(--space-3); }
+.game-board.game-board--tcg .end-turn-button { grid-area: end; justify-self: end; align-self: center; margin-inline-end: var(--space-2); }
+.game-board.game-board--tcg .battle-zone--player { grid-area: p-zone; }
+.game-board.game-board--tcg .player-band[data-seat="bottom"] .pile-chips { grid-area: p-pile; justify-self: center; align-self: end; }
+.game-board.game-board--tcg .archives-action { grid-area: p-pile; justify-self: center; align-self: start; }
+.game-board.game-board--tcg .player-band[data-seat="bottom"] .player-resources { grid-area: p-res; justify-self: center; align-self: start; }
+.game-board.game-board--tcg .player-band[data-seat="bottom"] .hand-bar-info { grid-area: p-res; justify-self: center; align-self: end; }
+.game-board.game-board--tcg .player-band[data-seat="bottom"] .player-avatar { grid-area: p-av; justify-self: center; align-self: center; }
+.game-board.game-board--tcg .hand-zone { grid-area: hand; }
+
+/* O pill é item do grid; os insets do palco (absolute) deixam de valer. A moldura de 4px do
+   2D faz o pill ter 54px numa faixa de 52px: aqui a moldura é de hairline (cabe a faixa). */
+.game-board.game-board--tcg .house-pill {
+  position: static;
+  grid-area: house;
+  justify-self: center;
+  align-self: center;
+  padding: 1px;
+}
+/* Pedido de casa: o prompt + emblemas não cabem na faixa — vira overlay logo acima dela. */
+.game-board.game-board--tcg .house-pill.house-pill--asking {
+  position: absolute;
+  grid-area: auto;
+  z-index: 4;
+  inset: auto var(--space-2) calc(var(--nf-tcg-peek-h) + var(--nf-tcg-seat-h) + var(--space-2)) var(--space-2);
+  justify-self: auto;
+  align-items: center;
+}
+
+/* Bandejas: tudo empilha e nada passa da coluna (o texto quebra em vez de vazar). */
+.game-board.game-board--tcg :is(.pile-chips, .player-resources, .hand-bar-info) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.game-board.game-board--tcg .resource-divider,
+.game-board.game-board--tcg .hand-title {
+  display: none;
+}
+/* "29 IN DECK" e a dica "Choose a house…" são uma linha só no 2D; na coluna de 56px quebram
+   (R9: quebra, nunca vaza). A dica some de vez no lote 09; até lá só quebra. */
+.game-board.game-board--tcg :is(.hand-count, .deck-count) {
+  white-space: normal;
+}
+/* A dica de casa da barra da mão sai com a variante (a dica do turno, lote 09, a substitui — plano
+   §5 H-ATL-09). Antecipada aqui: quebrada na coluna de 56–104px ela cresce para cima e encosta no
+   placar de baixo (gate de sobreposição do lote 04). */
+.game-board.game-board--tcg .hand-prompt {
+  display: none;
+}
+.game-board.game-board--tcg .pile-chip {
+  min-width: var(--nf-tcg-hit);
+  min-height: var(--nf-tcg-hit);
+  justify-content: center;
+}
+.game-board.game-board--tcg .pile-chip-label {
+  display: none; /* o aria-label do botão já diz "Descarte de X: N" */
+}
+.game-board.game-board--tcg .key-pips {
+  flex-direction: column;
+}
+.game-board.game-board--tcg .amber-counter {
+  flex-direction: column;
+}
+/* No celular a bandeja tem 56px: o nome da casa fica só para o leitor de tela. */
+.game-board.game-board--tcg .player-resources .filter-chip-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (min-width: 701px) {
+  .game-board.game-board--tcg .key-pips { flex-direction: row; }
+  .game-board.game-board--tcg .player-resources .filter-chip-label { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: normal; }
+}
+
+/* A mão cabe na faixa `hand` (o peek da §2.4): sem a altura mínima e o recuo do 2D (o recuo
+   de 14px tirava a carta do limite de 70% visível), e a carta usa a largura do token da variante.
+   O leque e a rotação são do lote 07. */
+.game-board.game-board--tcg .hand-zone {
+  padding: 0;
+}
+.game-board.game-board--tcg .hand-track {
+  min-height: 0;
+  padding: 0;
+}
+.game-board.game-board--tcg .hand-track > .card-tile--hand {
+  width: var(--nf-tcg-hand-w);
+}
+
+/* A instrução de alvo vive no topo da sua zona, que aqui é estreita: quebra em vez de estourar. */
+.game-board.game-board--tcg .fight-instruction {
+  max-width: calc(100% - var(--space-4));
+  flex-wrap: wrap;
+  justify-content: center;
+  white-space: normal;
+}
+
+/* Cor do lado: herdada pelos filhos (custom property atravessa display: contents). */
+.game-board.game-board--tcg .player-band[data-seat="top"] { --tcg-seat: var(--nf-ember); }
+.game-board.game-board--tcg .player-band[data-seat="bottom"] { --tcg-seat: var(--nf-ether); }
+
+.game-board.game-board--tcg .player-resources {
+  padding: var(--space-2) var(--space-1);
+  border: 1px solid color-mix(in srgb, var(--tcg-seat) 55%, transparent);
+  border-radius: var(--radius-lg);
+  color: var(--nf-text);
+  background: color-mix(in srgb, var(--tcg-seat) 14%, var(--nf-s2));
+  box-shadow: var(--nf-elev-1);
+}
+.game-board.game-board--tcg .amber-value { font-size: var(--fs-xl); line-height: 1; }
+.game-board.game-board--tcg .amber-counter small { font-size: var(--fs-3xs); letter-spacing: 0.12em; text-transform: uppercase; }
+
+.game-board.game-board--tcg .pile-chips .pile-chip {
+  flex-direction: column;
+  gap: 0;
+  height: auto;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+.game-board.game-board--tcg .hand-bar-info {
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  color: var(--nf-text-2);
+  background: color-mix(in srgb, var(--nf-s2) 80%, transparent);
+  font-size: var(--fs-2xs);
+}
+
+/* Vez: o avatar de quem joga ganha anel na cor da casa + o ponto "ao vivo" que já existe
+   (estado nunca só por cor). */
+.game-board.game-board--tcg .player-band--active .player-avatar {
+  box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--turn-house) 70%, transparent);
+}
+
+/* Dorsos da mão do Warden (públicos no KeyForge): leque raso na faixa do topo; o voo da carta
+   jogada pela IA nasce do último (FxLayer, sem mudança). */
+.game-board.game-board--tcg .hand-backs {
+  display: inline-flex;
+  align-items: center;
+  padding-inline-start: calc(var(--nf-tcg-back-w) / 2);
+  margin-inline-end: var(--space-2);
+}
+.game-board.game-board--tcg .hand-backs i {
+  display: block;
+  width: var(--nf-tcg-back-w);
+  height: var(--nf-tcg-back-h);
+  margin-inline-start: calc(var(--nf-tcg-back-w) / -2);
+  border: 1px solid var(--nf-line-strong);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(160deg, var(--nf-accent-deep), var(--nf-s3));
+}
+.game-board.game-board--tcg .hand-backs b {
+  margin-inline-start: var(--space-1);
+  color: var(--nf-text-2);
+  font-size: var(--fs-2xs);
+}
+.game-board.game-board--tcg .player-copy strong { font-size: var(--fs-sm); }
+.game-board.game-board--tcg .player-deck-name { font-size: var(--fs-2xs); }

@@ -35,3 +35,30 @@
   /* Movimento de laço e de ambiente (H-28): o CSS da v2 não leva tempo literal — lint:ui2. */
   --dur-shimmer:1.4s; --dur-ambient:14s; --dur-drift:18s; --ease-linear:linear;
 }
+
+/* 4) MESA TCG (H-ATL, docs/ARENA_TCG_LIVE_PLAN.md §2.4) — geometria da variante; só é lida
+   sob .game-board--tcg. A ordem dos @media importa: a altura baixa vem por último. */
+:root {
+  --nf-tcg-tray-w: 56px; --nf-tcg-end-w: 120px;
+  --nf-tcg-strip-h: 48px; --nf-tcg-mid-h: 60px; --nf-tcg-seat-h: 52px; --nf-tcg-peek-h: 92px;
+  --nf-tcg-hand-w: 72px; --nf-tcg-board-min: 64px; --nf-tcg-board-max: 132px; --nf-tcg-board-chrome: 26px;
+  --nf-tcg-end-h: 52px; --nf-tcg-hit: 44px; --nf-tcg-backs-w: 48px; --nf-tcg-back-w: 10px; --nf-tcg-back-h: 14px;
+  --nf-tcg-fan-deg: 3deg; --nf-tcg-fan-drop: 2px; --nf-tcg-fan-drop-max: 6px;
+  --nf-tcg-tip-w: 22rem; --nf-tcg-ring: 22vmin; --nf-tcg-ring-w: 2px; --nf-tcg-chalk: 22px;
+}
+@media (min-width: 701px) {
+  :root {
+    --nf-tcg-tray-w: 88px; --nf-tcg-end-w: 152px; --nf-tcg-strip-h: 52px; --nf-tcg-mid-h: 64px;
+    --nf-tcg-seat-h: 56px; --nf-tcg-peek-h: 112px; --nf-tcg-hand-w: 92px; --nf-tcg-board-min: 72px;
+    --nf-tcg-board-max: 150px; --nf-tcg-end-h: 56px; --nf-tcg-backs-w: 72px;
+  }
+}
+@media (min-width: 1041px) {
+  :root { --nf-tcg-tray-w: 104px; --nf-tcg-end-w: 168px; --nf-tcg-peek-h: 124px; --nf-tcg-hand-w: 104px; --nf-tcg-board-max: 168px; }
+}
+@media (min-width: 701px) and (max-height: 759px) {
+  :root { --nf-tcg-strip-h: 46px; --nf-tcg-mid-h: 56px; --nf-tcg-seat-h: 52px; --nf-tcg-peek-h: 96px; --nf-tcg-hand-w: 84px; }
+}
+@media (max-height: 600px) {
+  :root { --nf-tcg-strip-h: 44px; --nf-tcg-mid-h: 52px; --nf-tcg-seat-h: 52px; --nf-tcg-peek-h: 72px; --nf-tcg-hand-w: 60px; --nf-tcg-board-min: 52px; --nf-tcg-end-h: 52px; }
+}

@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = 5209;
 // H3D-13: `--view 3d` roda o mesmo encaixe com a mesa inclinada (mao em overlay).
-const VIEW3D = process.argv.includes("--view") && process.argv[process.argv.indexOf("--view") + 1] === "3d";
+// H-ATL-03: `--view tcg` mede a Layout Arena (trilhas do grid + sobreposição; ver report()).
+const VIEW = process.argv.includes("--view") ? process.argv[process.argv.indexOf("--view") + 1] : "2d";
 // H-02c: --theme <id> semeia o tema; o encaixe tem de ser idêntico em qualquer tema (§1.6.3.5).
 const THEME = process.argv.includes("--theme") ? process.argv[process.argv.indexOf("--theme") + 1] : null;
 const COACH = process.argv.includes("--coach");
@@ -26,7 +27,7 @@ const VIEWPORTS = [
 const SEED = () => `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
     difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: false,
-    hoverZoom: false, hints: false, language: "en", opponentMode: "mirror", gameMode: "solo",${VIEW3D ? ' tableView: "3d",' : ""}
+    hoverZoom: false, hints: false, language: "en", opponentMode: "mirror", gameMode: "solo",${VIEW !== "2d" ? ` tableView: "${VIEW}",` : ""}
   }));
   localStorage.setItem("aember-arena-language", "en");
   localStorage.setItem("aember-arena-tutorial-seen", "1");${THEME ? ` localStorage.setItem("aember-arena-theme", "${THEME}");` : ""}
@@ -88,19 +89,64 @@ const MEASURE = () => {
   const tabs = document.querySelector(".mobile-tabs");
   const bands = all(".game-board .player-band");
   const zones = all(".game-board .battle-zone");
-  const rows = {
+  // H-ATL-03: na variante (Layout Arena) as bandas e o console são `display: contents` — não
+  // têm altura própria. A conta vira as trilhas do grid do palco (o `.board-content`).
+  const isTcg = Boolean(document.querySelector(".game-board--tcg"));
+  const common = {
     header: h(".app-header"),
     screenPadding: px(scs.paddingTop) + px(scs.paddingBottom),
     title: visible(heading) && getComputedStyle(heading).position !== "absolute" ? heading.getBoundingClientRect().height + px(getComputedStyle(heading).marginBottom) : 0,
     boardBorder: px(bcs.borderTopWidth) + px(bcs.borderBottomWidth),
-    bandOpponent: bands[0] ?? 0,
-    zoneOpponent: zones[0] ?? 0,
-    console: h(".game-board .turn-console"),
-    zonePlayer: zones[1] ?? 0,
-    bandPlayer: bands[1] ?? 0,
-    hand: h(".game-board .hand-zone"),
-    tabs: visible(tabs) ? tabs.getBoundingClientRect().height : 0,
   };
+  const tabsH = visible(tabs) ? tabs.getBoundingClientRect().height : 0;
+  const rows = isTcg
+    ? {
+      ...common,
+      tracks: getComputedStyle(document.querySelector(".game-board .board-content")).gridTemplateRows.split(" ").reduce((a, v) => a + (parseFloat(v) || 0), 0),
+      tabs: tabsH,
+    }
+    : {
+      ...common,
+      bandOpponent: bands[0] ?? 0,
+      zoneOpponent: zones[0] ?? 0,
+      console: h(".game-board .turn-console"),
+      zonePlayer: zones[1] ?? 0,
+      bandPlayer: bands[1] ?? 0,
+      hand: h(".game-board .hand-zone"),
+      tabs: tabsH,
+    };
+  // Variante: cada peça visível da mesa (área do grid) não pode cobrir outra nem sair do tabuleiro.
+  const boardRect = document.querySelector(".game-board").getBoundingClientRect();
+  const TCG_PIECES = [
+    ".battle-zone--opponent", ".battle-zone--player", ".turn-console-copy", ".end-turn-button",
+    '.player-band[data-seat="top"] .player-avatar', '.player-band[data-seat="top"] .player-copy', '.player-band[data-seat="top"] .hand-backs',
+    '.player-band[data-seat="top"] .pile-chips', '.player-band[data-seat="top"] .player-resources',
+    '.player-band[data-seat="bottom"] .player-avatar', '.player-band[data-seat="bottom"] .pile-chips', '.player-band[data-seat="bottom"] .player-resources',
+    '.player-band[data-seat="bottom"] .hand-bar-info', ".archives-action", ".house-pill", ".table-menu-trigger", ".console-undo",
+  ];
+  const pieces = isTcg ? TCG_PIECES.flatMap((sel) => [...document.querySelectorAll(`.game-board ${sel}`)]
+    .filter((el) => getComputedStyle(el).display !== "none")
+    .map((el) => ({ sel, r: el.getBoundingClientRect() }))
+    .filter(({ r }) => r.width > 0 && r.height > 0)) : [];
+  const clash = [];
+  for (let i = 0; i < pieces.length; i += 1) {
+    for (let j = i + 1; j < pieces.length; j += 1) {
+      const a = pieces[i].r;
+      const b = pieces[j].r;
+      const ix = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+      const iy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (ix > 0 && iy > 0 && ix * iy > 1) clash.push(`${pieces[i].sel} x ${pieces[j].sel}`);
+    }
+  }
+  const outside = pieces.filter(({ r }) => r.left < boardRect.left - 1 || r.right > boardRect.right + 1 || r.top < boardRect.top - 1 || r.bottom > boardRect.bottom + 1).map(({ sel }) => sel);
+  // Texto que vaza da própria caixa (a caixa cabe, o conteúdo não): a bandeja quebra, nunca vaza.
+  // (só as bandejas e a linha do turno: a zona de batalha rola por dentro, de propósito.)
+  const TEXT_PIECES = [".turn-console-copy", ".end-turn-button", '.player-band[data-seat="top"] .player-copy', '.player-band[data-seat="top"] .player-resources',
+    '.player-band[data-seat="top"] .pile-chips', '.player-band[data-seat="bottom"] .pile-chips', '.player-band[data-seat="bottom"] .player-resources',
+    '.player-band[data-seat="bottom"] .hand-bar-info', ".archives-action"];
+  const textOver = isTcg ? TEXT_PIECES.flatMap((sel) => [...document.querySelectorAll(`.game-board ${sel}`)]
+    .filter((el) => getComputedStyle(el).display !== "none" && el.scrollWidth > el.clientWidth + 1)
+    .map((el) => `${sel} ${el.scrollWidth}>${el.clientWidth} "${el.textContent.trim().slice(0, 24)}"`)) : [];
   // Conteúdo maior que a faixa que o contém (diagnóstico do que transborda).
   const overflow = [".game-board .player-band", ".game-board .battle-zone", ".game-board .turn-console", ".game-board .hand-zone", ".game-board .hand-track"]
     .flatMap((sel) => [...document.querySelectorAll(sel)].map((el, i) => (el.scrollHeight > el.clientHeight + 1 ? `${sel.split(" ").pop()}[${i}] ${el.scrollHeight}>${el.clientHeight}` : null)))
@@ -130,6 +176,11 @@ const MEASURE = () => {
     innerHeight: window.innerHeight,
     hand,
     is3d,
+    isTcg,
+    clash,
+    outside,
+    textOver,
+    boardTop: boardRect.top,
     boardBottom,
     // VA-01: o board nao pode estourar na horizontal (console/faixas cortados).
     // No 3D o scrollWidth do board inclui a PROJECAO do plano (perspectiva alarga a
@@ -174,11 +225,18 @@ async function report(page, vp, label) {
     const m = await page.evaluate(MEASURE);
     const problems = [];
     // Abaixo de 1041px o rail e um drawer (FIT-05), mas o celular ainda rola (FIT-06).
-    if (vp.width >= 701 && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
+    // H-ATL-03: a variante não rola em nenhuma largura (o palco é o viewport inteiro).
+    if ((vp.width >= 701 || m.isTcg) && m.docScroll > m.innerHeight + 1) problems.push(`documento rola: scrollHeight ${m.docScroll} > ${m.innerHeight}`);
     if (m.sum > m.innerHeight + 1) problems.push(`soma das faixas ${m.sum} > viewport ${m.innerHeight}`);
+    if (m.isTcg && Math.abs(m.sum - m.innerHeight) > 1) problems.push(`soma das trilhas ${m.sum} != viewport ${m.innerHeight} (tcg: ±1)`);
+    if (m.isTcg && m.clash.length) problems.push(`pecas sobrepostas (tcg): ${m.clash.join("; ")}`);
+    if (m.isTcg && m.outside.length) problems.push(`pecas fora do tabuleiro (tcg): ${m.outside.join("; ")}`);
+    if (m.isTcg && m.textOver.length) problems.push(`texto vazando da caixa (tcg): ${m.textOver.join("; ")}`);
     // 3D: a mao e overlay cortado pela borda do board; cada carta mostra >= 70%.
-    const cut = m.is3d
-      ? m.hand.filter((r) => (Math.min(r.bottom, m.boardBottom) - Math.max(r.top, 0)) / (r.bottom - r.top) < 0.7)
+    // H-ATL-03 (tcg, DECISÃO D1-A): o mesmo limite de 70%, medido contra o tabuleiro inteiro.
+    const share = (r) => (Math.min(r.bottom, m.boardBottom) - Math.max(r.top, m.isTcg ? m.boardTop : 0)) / (r.bottom - r.top);
+    const cut = m.is3d || m.isTcg
+      ? m.hand.filter((r) => share(r) < 0.7)
       : m.hand.filter((r) => r.top < 0 || r.bottom > m.innerHeight + 0.5);
     if (m.boardScrollW > m.boardClientW + 1) problems.push(`board estoura na horizontal: scrollWidth ${m.boardScrollW} > clientWidth ${m.boardClientW}`);
     if (!m.hand.length) problems.push("mao vazia/ausente");
@@ -186,6 +244,7 @@ async function report(page, vp, label) {
 
     console.log(`\n== ${vp.name} [${label}] ${problems.length ? "FAIL" : "OK"}`);
     console.log(`   faixas: ${Object.entries(m.rows).map(([k, v]) => `${k}=${v}`).join(" ")}`);
+    if (m.isTcg) console.log(`   tcg: sobreposicoes=${m.clash.length} foraDoTabuleiro=${m.outside.length}`);
     console.log(`   soma=${m.sum} viewport=${m.innerHeight} docScroll=${m.docScroll} cartaBoard=${m.boardCardMin}-${m.boardCardMax}px mao=${m.hand.length} (bottom ${m.hand.length ? Math.max(...m.hand.map((r) => r.bottom)).toFixed(0) : "-"})`);
     if (problems.length) console.log(`   onde: ${m.where}`);
     if (m.overflow.length) console.log(`   transborda: ${m.overflow.join(", ")}`);

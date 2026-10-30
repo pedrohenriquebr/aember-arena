@@ -21,6 +21,7 @@ import "./ui/screens/import/import.css";
 import "./ui/screens/match.css";
 import "./ui/screens/settings/settings.css";
 import "./ui/screens/zones/zones.css";
+import "./ui/table/tcg.css";
 import App from "./App";
 import { applyTheme, readTheme } from "./ui/theme";
 

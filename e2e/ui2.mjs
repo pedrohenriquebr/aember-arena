@@ -23,7 +23,8 @@ const VIEWPORTS = [
 // data-screen="<name>". `seed` é JS opcional (localStorage) rodado antes do boot.
 // H-05: a galeria de primitivas entra como `_kit` (só com a flag, ?ui=2&screen=_kit).
 // H-08: a partida na casca de mesa roda em 2D e 3D (o gate de soma); --no-table desliga para depurar.
-const TABLE_VIEWS = process.argv.includes("--no-table") ? [] : ["2d", "3d"];
+// H-ATL-03: a Layout Arena (tcg) entra no mesmo fluxo; a conta vira as trilhas do grid (TABLE_MEASURE).
+const TABLE_VIEWS = process.argv.includes("--no-table") ? [] : ["2d", "3d", "tcg"];
 // H-07: `shell` é a casca do lobby na tela inicial (sem query extra).
 const SCREENS = [
   { name: "_kit", query: "screen=_kit" },
@@ -510,17 +511,33 @@ const TABLE_MEASURE = () => {
   const mcs = getComputedStyle(document.querySelector(".app-main"));
   const bands = all(".game-board .player-band");
   const zones = all(".game-board .battle-zone");
-  const rows = {
+  // H-ATL-03: na variante as bandas e o console são `display: contents` (sem altura própria); a
+  // conta é a das trilhas do grid do palco. O 2D e o 3D seguem com as faixas de sempre.
+  const isTcg = Boolean(document.querySelector(".game-board--tcg"));
+  const base = {
     mainPadding: px(mcs.paddingTop) + px(mcs.paddingBottom),
     screenPadding: px(scs.paddingTop) + px(scs.paddingBottom),
     boardBorder: px(bcs.borderTopWidth) + px(bcs.borderBottomWidth),
-    bandOpponent: bands[0] ?? 0,
-    zoneOpponent: zones[0] ?? 0,
-    console: h(".game-board .turn-console"),
-    zonePlayer: zones[1] ?? 0,
-    bandPlayer: bands[1] ?? 0,
-    hand: h(".game-board .hand-zone"),
   };
+  const rows = isTcg
+    ? { ...base, tracks: getComputedStyle(document.querySelector(".game-board .board-content")).gridTemplateRows.split(" ").reduce((a, v) => a + (parseFloat(v) || 0), 0) }
+    : {
+      ...base,
+      bandOpponent: bands[0] ?? 0,
+      zoneOpponent: zones[0] ?? 0,
+      console: h(".game-board .turn-console"),
+      zonePlayer: zones[1] ?? 0,
+      bandPlayer: bands[1] ?? 0,
+      hand: h(".game-board .hand-zone"),
+    };
+  // DECISÃO D1-A (tcg): cada carta da mão mostra >= 70% dentro do tabuleiro (a mesma conta do 3D).
+  const boardRect = document.querySelector(".game-board").getBoundingClientRect();
+  const handShare = isTcg
+    ? [...document.querySelectorAll(".hand-track > .card-tile--hand")].map((el) => {
+      const r = el.getBoundingClientRect();
+      return (Math.min(r.bottom, boardRect.bottom) - Math.max(r.top, boardRect.top)) / (r.bottom - r.top);
+    })
+    : [];
   // Respiro do plano 3D (desktop, console no rail): a linha do meio do grid do plano fica
   // reservada por desenho (index.css, bloco .game-board--console-docked: "respiro do plano";
   // geometria calibrada H3D-14/17). É a única folga que o gate aceita, e só essa linha.
@@ -539,6 +556,8 @@ const TABLE_MEASURE = () => {
     vp: window.innerHeight,
     docH: document.scrollingElement.scrollHeight,
     handBottom: hand.length ? Math.max(...hand) : null,
+    isTcg,
+    handMinShare: handShare.length ? Math.round(Math.min(...handShare) * 100) / 100 : null,
     cardMin: boardCards.length ? Math.round(Math.min(...boardCards)) : null,
     cardMax: boardCards.length ? Math.round(Math.max(...boardCards)) : null,
   };
@@ -704,7 +723,10 @@ async function tableFlow(browser, vp, url, view, shotDir = null) {
     const accounted = m.sum + m.respiro;
     if (accounted < m.vp - 1 || accounted > m.vp + 1) failures.push(`${label}: soma ${accounted} fora de [${m.vp - 1}, ${m.vp + 1}] (respiro ${m.respiro})`);
     if (m.docH > m.vp + 1) failures.push(`${label}: documento rola (docH ${m.docH} > ${m.vp})`);
-    if (m.handBottom !== null && m.handBottom > m.vp + 0.5 && !m.is3d) failures.push(`${label}: mão cortada (bottom ${m.handBottom} > ${m.vp})`);
+    // H-ATL-03: na variante a mão espia pela borda do tabuleiro — a regra é a D1-A (abaixo), não a de 100%.
+    if (m.handBottom !== null && m.handBottom > m.vp + 0.5 && !m.is3d && !m.isTcg) failures.push(`${label}: mão cortada (bottom ${m.handBottom} > ${m.vp})`);
+    // H-ATL-03 (tcg, D1-A): a mão espia pela borda do tabuleiro, mas cada carta mostra >= 70%.
+    if (m.isTcg && m.handMinShare !== null && m.handMinShare < 0.7) failures.push(`${label}: mão tcg com carta abaixo de 70% visível (mín ${m.handMinShare})`);
   };
   check(await page.evaluate(TABLE_MEASURE), "mesa vazia");
   // H-27: a mesa vazia tem o estado vazio da v2 nas fileiras (orbe + 1 linha) e a mão cheia não

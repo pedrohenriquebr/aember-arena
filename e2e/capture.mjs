@@ -80,8 +80,9 @@ function parseArgs(argv) {
       process.exit(2);
     }
   }
-  if (args.view !== "2d" && args.view !== "3d") {
-    console.error(`capture: --view aceita "2d" ou "3d" (recebi "${args.view}")`);
+  // H-ATL-03: "tcg" (Layout Arena) usa o piso do 2D (sem projeção); só o "3d" tem piso visual.
+  if (args.view !== "2d" && args.view !== "3d" && args.view !== "tcg") {
+    console.error(`capture: --view aceita "2d", "3d" ou "tcg" (recebi "${args.view}")`);
     process.exit(2);
   }
   if (args.theme !== null && !["forja", "aco", "claro", "arcano"].includes(args.theme)) {

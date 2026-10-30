@@ -3,7 +3,9 @@
 //   L01 — interruptores: Ajustes › Interface e ☰ da mesa ligam/desligam a Arena e a Mesa 3D
 //         (mutuamente exclusivos) e a Arena fica sem console no rail (H-ATL-01 aceite)
 //   L02 — marcação: [data-seat] nos dois bands, .console-undo, e a área do END TURN na mesa
-// Uso: node e2e/probes/_tcg-hit.mjs [--upto 02]   (sai != 0 se algum check falhar)
+//   L03 — grid da variante: peça dentro da sua zona, alvos sem cobertura e fight-instruction quebrando
+//   L04 — bandejas e faixas: placar acima/abaixo do END TURN, pilhas ≥44px, dorsos só no topo
+// Uso: node e2e/probes/_tcg-hit.mjs [--upto 04]   (sai != 0 se algum check falhar)
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -11,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PORT = 5235;
-const UPTO = process.argv.includes("--upto") ? Number(process.argv[process.argv.indexOf("--upto") + 1]) : 2;
+const UPTO = process.argv.includes("--upto") ? Number(process.argv[process.argv.indexOf("--upto") + 1]) : 4;
 const SEED = (view) => `(() => {
   localStorage.setItem("aember-arena-settings", JSON.stringify({
     difficulty: "Medium", thinkingDepth: 2, sfx: false, music: false, animations: false,
@@ -182,9 +184,87 @@ async function sectionL02(browser, url) {
   await context.close();
 }
 
+async function sectionL03(browser, url) {
+  // Grid da variante (H-ATL-03): cada peça fica na sua área, nenhum alvo toca fica coberto.
+  for (const vp of [{ w: 360, h: 844 }, { w: 390, h: 844 }, { w: 768, h: 1024 }, { w: 1440, h: 900 }]) {
+    const label = `L03 ${vp.w}x${vp.h}`;
+    const { context, page } = await openMatch(browser, url, "tcg", vp);
+    const pieces = await page.evaluate(() => {
+      const outside = [...document.querySelectorAll(".board-piece")].filter((piece) => {
+        const zone = piece.closest(".battle-zone");
+        if (!zone) return true;
+        const r = piece.getBoundingClientRect();
+        const z = zone.getBoundingClientRect();
+        return r.top < z.top - 1 || r.bottom > z.bottom + 1;
+      }).length;
+      return { total: document.querySelectorAll(".board-piece").length, outside };
+    });
+    check(`${label}: nenhum .board-piece fora da sua .battle-zone (${pieces.total} peças)`, pieces.outside === 0, `fora=${pieces.outside}`);
+
+    const hits = await page.evaluate(() => [...document.querySelectorAll(".pile-chip, .end-turn-button, .table-menu-trigger, .house-choice")]
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { name: el.className.split(" ")[0] || el.tagName, ok: Boolean(hit && (hit === el || el.contains(hit))), cover: hit?.className?.toString().split(" ")[0] ?? null };
+      }));
+    const covered = hits.filter((h) => !h.ok);
+    check(`${label}: centro de ${hits.length} alvos (pile-chip, END TURN, ☰, casa) cai no próprio alvo`, hits.length > 0 && covered.length === 0, covered.map((h) => `${h.name}<-${h.cover}`).join(" "));
+
+    // A instrução de alvo ocupa o topo da sua zona: forçamos um nó com a classe e lemos o CSS computado.
+    const wrap = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.className = "fight-instruction";
+      probe.textContent = "probe";
+      document.querySelector(".battle-zone--player").appendChild(probe);
+      const ws = getComputedStyle(probe).whiteSpace;
+      probe.remove();
+      return ws;
+    });
+    check(`${label}: .fight-instruction quebra linha (white-space normal)`, wrap === "normal", `white-space=${wrap}`);
+    await context.close();
+  }
+}
+
+async function sectionL04(browser, url) {
+  // Bandejas e faixas (H-ATL-04): placar de cada lado fora da linha do meio, pilhas com alvo de 44px,
+  // dorsos da mão do Warden só na faixa do topo.
+  for (const vp of [{ w: 390, h: 844 }, { w: 1440, h: 900 }]) {
+    const label = `L04 ${vp.w}x${vp.h}`;
+    const { context, page } = await openMatch(browser, url, "tcg", vp);
+    const m = await page.evaluate(() => {
+      const box = (el) => (el ? el.getBoundingClientRect() : null);
+      const end = box(document.querySelector(".end-turn-button"));
+      const topRes = box(document.querySelector('.player-band[data-seat="top"] .player-resources'));
+      const botRes = box(document.querySelector('.player-band[data-seat="bottom"] .player-resources'));
+      const chips = [...document.querySelectorAll(".pile-chip")].filter((el) => el.getClientRects().length > 0).map((el) => {
+        const r = el.getBoundingClientRect();
+        return { w: r.width, h: r.height };
+      });
+      const backsTop = document.querySelector('.player-band[data-seat="top"] .hand-backs');
+      const backsBottom = document.querySelector('.player-band[data-seat="bottom"] .hand-backs');
+      return {
+        topAboveEnd: Boolean(topRes && end && topRes.bottom <= end.top + 0.5),
+        bottomBelowEnd: Boolean(botRes && end && botRes.top >= end.bottom - 0.5),
+        chipsSmall: chips.filter((c) => c.w < 44 || c.h < 44).length,
+        chips: chips.length,
+        backsTopVisible: Boolean(backsTop && backsTop.offsetWidth > 0),
+        backsBottomVisible: Boolean(backsBottom && backsBottom.offsetWidth > 0),
+      };
+    });
+    check(`${label}: placar do topo acima do END TURN (bottom ≤ topo do botão)`, m.topAboveEnd);
+    check(`${label}: placar de baixo abaixo do END TURN (top ≥ base do botão)`, m.bottomBelowEnd);
+    check(`${label}: cada .pile-chip ≥ 44×44 (${m.chips} pilhas)`, m.chips > 0 && m.chipsSmall === 0, `abaixo=${m.chipsSmall}`);
+    check(`${label}: dorsos da mão do Warden só no topo (topo=${m.backsTopVisible}, base=${m.backsBottomVisible})`, m.backsTopVisible && !m.backsBottomVisible);
+    await context.close();
+  }
+}
+
 const SECTIONS = [
   { num: 1, name: "L01", run: sectionL01 },
   { num: 2, name: "L02", run: sectionL02 },
+  { num: 3, name: "L03", run: sectionL03 },
+  { num: 4, name: "L04", run: sectionL04 },
 ];
 
 const server = startServer();
