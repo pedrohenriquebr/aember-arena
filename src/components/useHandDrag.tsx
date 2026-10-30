@@ -33,20 +33,24 @@ interface Options {
   /** Só cartas com play legal (isLegalMove) iniciam o arrasto. */
   canDrag: (iid: string) => boolean;
   faceOf: (iid: string) => CardFace | undefined;
-  onDrop: (iid: string) => void;
+  /** QA-08: `host` = hospedeiro legal sob o ponteiro (upgrade solta em cima da criatura). */
+  onDrop: (iid: string, host?: string) => void;
+  /** QA-08: hospedeiros legais da carta arrastada (upgrade); [] para o resto. Soltar sobre
+      um deles anexa ali — inclusive na lane inimiga, fora da zona de drop. */
+  hostsOf?: (iid: string) => string[];
   /** false = sem snap-back animado (reduce-motion / animações desligadas). */
   animate: boolean;
 }
 
 /** Pointer Events na mão: o fantasma é portado para o body (a track tem overflow e cortaria). */
-export function useHandDrag({ canDrag, faceOf, onDrop, animate }: Options) {
+export function useHandDrag({ canDrag, faceOf, onDrop, hostsOf, animate }: Options) {
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const track = useRef<Track | null>(null);
   const suppressClick = useRef(false);
   const cleanup = useRef<(() => void) | null>(null);
-  const opts = useRef({ canDrag, faceOf, onDrop, animate });
-  opts.current = { canDrag, faceOf, onDrop, animate };
+  const opts = useRef({ canDrag, faceOf, onDrop, hostsOf, animate });
+  opts.current = { canDrag, faceOf, onDrop, hostsOf, animate };
 
   useEffect(() => () => cleanup.current?.(), []);
 
@@ -62,6 +66,10 @@ export function useHandDrag({ canDrag, faceOf, onDrop, animate }: Options) {
       const r = zone()?.getBoundingClientRect();
       return Boolean(r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
     };
+    // Os tiles da mesa que aceitam a carta (upgrade): marcados enquanto o arrasto vive.
+    let hosts: HTMLElement[] = [];
+    const hostAt = (x: number, y: number) =>
+      document.elementsFromPoint(x, y).map((el) => el.closest<HTMLElement>(".board-piece [data-iid]")).find((el) => el && hosts.includes(el)) ?? undefined;
     const place = (dx: number, dy: number, lift: boolean) => {
       const el = ghostRef.current;
       if (el) el.style.transform = `translate(${dx}px, ${dy}px) rotate(${lift ? Math.max(-8, Math.min(8, dx * 0.06)) : 0}deg) scale(${lift ? 1.08 : 1})`;
@@ -74,11 +82,13 @@ export function useHandDrag({ canDrag, faceOf, onDrop, animate }: Options) {
       window.removeEventListener("keydown", key);
       const z = zone();
       if (z) delete z.dataset.drop;
+      for (const host of hosts) delete host.dataset.dropHost;
+      hosts = [];
       tile.removeAttribute("data-dragging");
       track.current = null;
       cleanup.current = null;
     };
-    const finish = (drop: boolean) => {
+    const finish = (drop: boolean, host?: string) => {
       const wasActive = t.active;
       end();
       if (!wasActive) return;
@@ -87,7 +97,7 @@ export function useHandDrag({ canDrag, faceOf, onDrop, animate }: Options) {
       setTimeout(() => { suppressClick.current = false; }, 0);
       if (drop) {
         setGhost(null);
-        opts.current.onDrop(iid);
+        opts.current.onDrop(iid, host);
         return;
       }
       const el = ghostRef.current;
@@ -108,6 +118,9 @@ export function useHandDrag({ canDrag, faceOf, onDrop, animate }: Options) {
         tile.setAttribute("data-dragging", "");
         const z = zone();
         if (z) z.dataset.drop = "armed";
+        const ids = opts.current.hostsOf?.(iid) ?? [];
+        hosts = [...document.querySelectorAll<HTMLElement>(".board-piece [data-iid]")].filter((el) => ids.includes(el.dataset.iid ?? ""));
+        for (const host of hosts) host.dataset.dropHost = "armed";
         const f = opts.current.faceOf(iid);
         if (!f) { end(); return; }
         setGhost({ iid, face: f, left: t.rect.left, top: t.rect.top, width: t.rect.width, height: t.rect.height });
@@ -115,11 +128,14 @@ export function useHandDrag({ canDrag, faceOf, onDrop, animate }: Options) {
       e.preventDefault();
       place(dx, dy, true);
       const z = zone();
-      if (z) z.dataset.drop = over(e.clientX, e.clientY) ? "over" : "armed";
+      const host = hostAt(e.clientX, e.clientY);
+      for (const el of hosts) el.dataset.dropHost = el === host ? "over" : "armed";
+      if (z) z.dataset.drop = !host && over(e.clientX, e.clientY) ? "over" : "armed";
     };
     const up = (e: PointerEvent) => {
       if (e.pointerId !== t.pointerId) return;
-      finish(t.active && over(e.clientX, e.clientY));
+      const host = t.active ? hostAt(e.clientX, e.clientY)?.dataset.iid : undefined;
+      finish(t.active && (Boolean(host) || over(e.clientX, e.clientY)), host);
     };
     const cancel = (e: PointerEvent) => { if (e.pointerId === t.pointerId) finish(false); };
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") finish(false); };

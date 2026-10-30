@@ -1,17 +1,11 @@
 import { BookOpen, CircleHelp, History, LogOut, PanelRight } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import type { Translator } from "../../lib/i18n";
+import { AI_PACES as SPEEDS } from "../../lib/settings";
 import { Button } from "../primitives/Button";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { SettingRow, Switch } from "../primitives/SettingRow";
 import { Sheet } from "../primitives/Sheet";
-
-// Mesmas três velocidades da Config (App.tsx, ritmo do Warden); o valor cru segue no settings.
-const SPEEDS = [
-  { id: "fast", ms: 400 },
-  { id: "normal", ms: 1200 },
-  { id: "slow", ms: 2400 },
-] as const;
 
 export type TableMenuProps = {
   t: Translator;
@@ -46,7 +40,7 @@ export type TableMenuProps = {
 export function TableMenu({ t, open, onClose, view3d, onToggleView, tcg, onToggleTcg, sfx, onToggleSfx, music, onToggleMusic, aiDelayMs, onAiDelay, onOpenNotes, onOpenLog, rules, onTutorial, onExit }: TableMenuProps) {
   const rulesId = useId();
   const [rulesOpen, setRulesOpen] = useState(false);
-  // O preset mais próximo do valor atual: um ritmo fora dos três (Config avançada) ainda marca um.
+  // O preset mais próximo do valor atual (AI_PACES, o mesmo da Config): um ritmo fora deles ainda marca um.
   const speedValue = aiDelayMs === undefined ? "" : SPEEDS.reduce((best, s) => (Math.abs(s.ms - aiDelayMs) < Math.abs(best.ms - aiDelayMs) ? s : best)).id;
   const closeThen = (fn: () => void) => () => { onClose(); fn(); };
 

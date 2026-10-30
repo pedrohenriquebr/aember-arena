@@ -91,7 +91,7 @@ import { fetchKeyforgeDeck, loadDeckOrCache, syncCatalog, vaultErrorText, type C
 import { createTranslator, LANGUAGES, readLanguage, saveLanguage, type Language, type Translator,
   cardTypeLabel,} from "./lib/i18n";
 import { canOpenPile, sortPile, type PileKind } from "./lib/piles";
-import { aiHoldScale, AI_DELAY_MAX, AI_DELAY_MIN, clampAiDelay, drawDeck, llmReady, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
+import { aiHoldScale, AI_DELAY_MAX, AI_PACES, AI_DELAY_MIN, clampAiDelay, drawDeck, llmReady, readLlmConfig, readSettings, saveLlmConfig, saveSettings, type AppSettings, type LlmConfig, type GameMode, type OpponentMode } from "./lib/settings";
 import { sound } from "./lib/sound";
 import { cardJitter, diffFx, motionEnabled, type FxDirector, type FxPlan } from "./lib/fx";
 import { CardArt, CardLightbox, houseColor, houseLabel } from "./components/CardArt";
@@ -223,7 +223,9 @@ const UNDO_LIMIT = 40;
 // pelo UX review (#1) somando PRE + FX (voo/animação) + GAP.
 /** Abertura: a dificuldade define quanto o Warden "pensa" antes de agir. */
 const aiThinkMs = (difficulty: Difficulty) => 250 + DIFFICULTIES.indexOf(difficulty) * 100;
-const AI_PRE: Record<GameMove["type"], number> = { play: 120, fight: 260, reap: 200, use: 200, unstun: 160, discard: 80, takeArchives: 120 };
+// discard era 80: no ritmo Rápido (k=1) e com a curva de degradação (0,45) o destaque
+// durava ~36ms — ninguém via. 120 = o piso dos outros PREs.
+const AI_PRE: Record<GameMove["type"], number> = { play: 120, fight: 260, reap: 200, use: 200, unstun: 160, discard: 120, takeArchives: 120 };
 const AI_HOUSE_MS = 450;
 /** FIT-08: 400ms ≈ PRE médio (180) + GAP (220) de antes; k escala só as pausas. */
 const delayK = (delayMs: number) => delayMs / 400;
@@ -233,6 +235,14 @@ const delaySeconds = (delayMs: number, language: string) =>
 const AI_HOLD = 520;
 const AI_GAP = 220;
 const AI_END_MS = 300;
+
+/** QA-08: o pick do hospedeiro de uma upgrade diz o destino — criatura ou, na Animating Force, artefato. */
+function hostPrompt(game: GameState, hand: CardInstance[], pick: { move: GameMove; ids: string[] }): "game.chooseHost" | "game.chooseHostArtifact" | null {
+  const move = pick.move;
+  if (move.type !== "play" || hand.find((card) => card.instanceId === move.instanceId)?.face.type !== "Upgrade") return null;
+  const hosts = game.players.flatMap((side) => side.board).filter((card) => pick.ids.includes(card.instanceId));
+  return hosts.length && hosts.every((card) => !isCreatureCard(card)) ? "game.chooseHostArtifact" : "game.chooseHost";
+}
 
 // T5: hover só existe quando o dispositivo anuncia "(hover: hover)"; em touch o
 // toggle hoverZoom some e a inspeção vai por long-press (CardLightbox).
@@ -1219,7 +1229,7 @@ function ConfigScreen({
                     />
                     <output>{t("config.speed.value", { s: delaySeconds(settings.aiDelayMs, settings.language) })}</output>
                     <div className="filter-chips" role="group" aria-label={t("config.experience.speed")}>
-                      {([["fast", 400], ["normal", 1200], ["slow", 2400]] as const).map(([id, ms]) => (
+                      {AI_PACES.map(({ id, ms }) => (
                         <button
                           key={id}
                           type="button"
@@ -1881,7 +1891,8 @@ function GameBoard({
   onCancelPick?: () => void;
   onSelectHand: (card: CardInstance) => void;
   /** Drag-to-play: soltar sobre a battleline = o mesmo move do botão Play. */
-  onPlayHand?: (card: CardInstance) => void;
+  /** `target` = hospedeiro escolhido ao soltar a upgrade sobre ele (QA-08). */
+  onPlayHand?: (card: CardInstance, target?: string) => void;
   onSelectBoard: (owner: 0 | 1, card: CardInstance) => void;
   onEndTurn: () => void;
   onRematch: () => void;
@@ -1918,7 +1929,8 @@ function GameBoard({
   const handDrag = useHandDrag({
     canDrag: (iid) => isHumanTurn && !pick && isLegalMove(game, humanSide, { type: "play", instanceId: iid }),
     faceOf: (iid) => player.hand.find((card) => card.instanceId === iid)?.face,
-    onDrop: (iid) => { const card = player.hand.find((item) => item.instanceId === iid); if (card) onPlayHand(card); },
+    onDrop: (iid, host) => { const card = player.hand.find((item) => item.instanceId === iid); if (card) onPlayHand(card, host); },
+    hostsOf: (iid) => (player.hand.find((card) => card.instanceId === iid)?.face.type === "Upgrade" ? targetChoices(game, humanSide, { type: "play", instanceId: iid }) : []),
     animate: settings.animations && !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   });
   // T7d: closures estáveis por lane — sem identidade estável o memo de
@@ -2158,7 +2170,7 @@ function GameBoard({
                 ) : pick.move.type === "fight" ? (
                   <><Swords size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t("game.chooseFight")}</>
                 ) : (
-                  <><Crosshair size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t("game.chooseTarget")}</>
+                  <><Crosshair size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t(hostPrompt(game, player.hand, pick) ?? "game.chooseTarget")}</>
                 )}
                 <button type="button" className="pick-cancel" onClick={onCancelPick} aria-label={t("game.cancelPick")} title={t("game.cancelPick")}>
                   <X size={12} />
@@ -4739,7 +4751,7 @@ function App() {
                   onPickDiscard={pickDiscard}
                   onCancelPick={() => setPick(null)}
                   onSelectHand={selectHandCard}
-                  onPlayHand={(card) => performHumanMove({ type: "play", instanceId: card.instanceId })}
+                  onPlayHand={(card, target) => performHumanMove(target ? { type: "play", instanceId: card.instanceId, target } : { type: "play", instanceId: card.instanceId })}
                   onSelectBoard={pickBoardCard}
                   onEndTurn={endHumanTurn}
                   onRematch={rematch}

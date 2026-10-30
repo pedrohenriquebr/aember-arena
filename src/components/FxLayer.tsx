@@ -20,9 +20,12 @@ import type { FxDirector, FxPlan, FxSide, FxSource } from "../lib/fx";
 const PRESENT_MS = 260;
 const SLAM_MS = 270;
 const DISSOLVE_MS = 260;
+/** O "-N" do dano (.fx-dmg no CSS): o run não pode limpar o número antes do fim. */
+const DMG_MS = 700;
 /** Ação sem voo (colher, lutar): o pulso de quem age + a gema, no mesmo tempo
-    do beat da IA (plano §3, reap ≈ 700ms). Também cobre o fade de .fx-gone. */
-const ACTION_MS = 620;
+    do beat da IA (plano §3, reap ≈ 700ms). Cobre o fade de .fx-gone (480), o
+    "+N Æ" (560) e o "-N" inteiro — com 620 o número era cortado a 89%. */
+const ACTION_MS = DMG_MS;
 /** Largura da carta em cena: ~1,6× a da mão no desktop (plano §2-B). */
 const STAGE_WIDTH = 160;
 
@@ -112,8 +115,9 @@ export function captureGone(ids: string[]): FxSource[] {
     e o "-N" 60ms depois). */
 const LUNGE_MS = 460;
 const IMPACT_MS = Math.round(LUNGE_MS * 0.45);
-/** Investida + estouro + "-N" cabem aqui, um pouco acima do beat de 620. */
-const LUNGE_HOLD_MS = 760;
+/** Investida + estouro + "-N" cabem aqui: o número do defensor nasce em IMPACT+60 e
+    dura DMG_MS (com os 760 de antes ele sumia cortado a 70%, ainda visível). */
+const LUNGE_HOLD_MS = IMPACT_MS + 60 + DMG_MS;
 
 /** PRE-commit (só no 3D): quanto o atacante avança e onde o golpe acerta. Os
     deslocamentos são de LAYOUT (offset*, sem a projeção): a `translate` da peça age no

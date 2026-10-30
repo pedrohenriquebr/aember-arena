@@ -1,20 +1,12 @@
 import type { Translator } from "../../../lib/i18n";
 import { sound } from "../../../lib/sound";
-import type { AppSettings } from "../../../lib/settings";
+import { AI_PACES as PACE, type AiPaceId as PaceId, type AppSettings } from "../../../lib/settings";
 import { applyPreset, presetOf } from "../../lib/presets";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { SettingRow, Switch } from "../../primitives/SettingRow";
 import { StrengthPicker } from "../StrengthPicker";
 
-type PaceId = "fast" | "normal" | "slow";
-
-// Os mesmos três ritmos da tela v1 (config.speed.*); fora deles o controle fica sem marcação.
-const PACE: { id: PaceId; ms: number }[] = [
-  { id: "fast", ms: 400 },
-  { id: "normal", ms: 1200 },
-  { id: "slow", ms: 2400 },
-];
-
+// Os mesmos ritmos da tela v1 (AI_PACES); fora deles o controle fica sem marcação.
 /** Aba Jogo de Ajustes (UX_REWRITE_PLAN §2 S7): força do Warden, ritmo da IA e dicas. */
 export function GameTab({ t, settings, onChange, formatDelay }: {
   t: Translator;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { aiHoldScale, drawDeck, readSettings, saveSettings } from "./settings";
+import { AI_PACES, aiHoldScale, drawDeck, readSettings, saveSettings } from "./settings";
 
 function seed(saved: unknown) {
   vi.stubGlobal("localStorage", { getItem: () => JSON.stringify(saved) });
@@ -20,6 +20,12 @@ describe("aiDelayMs", () => {
     expect(seed({ aiDelayMs: 99999 })).toBe(4000);
     expect(seed({ aiDelayMs: 1234 })).toBe(1200);
     expect(seed({ aiDelayMs: "abc" })).toBe(1200);
+  });
+
+  it("keeps the four named paces in selector order, all inside the clamp", () => {
+    expect(AI_PACES.map((pace) => pace.id)).toEqual(["fast", "normal", "slow", "superSlow"]);
+    for (const pace of AI_PACES) expect(seed({ aiDelayMs: pace.ms })).toBe(pace.ms);
+    expect(AI_PACES.find((pace) => pace.id === "superSlow")?.ms).toBe(3600);
   });
 
   it("scales the flight hold without the old 1.6 ceiling", () => {

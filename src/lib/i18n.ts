@@ -100,6 +100,7 @@ export const DICT: Record<string, [string, string]> = {
   "config.speed.normal": ["Normal", "Normal"],
   "config.speed.fast": ["Fast", "Rápido"],
   "config.speed.slow": ["Slow", "Lento"],
+  "config.speed.superSlow": ["Super slow", "Bem lento"],
   "config.experience.speedSub": ["Reading pause between the Warden's actions", "Pausa de leitura entre as ações do Warden"],
   "config.speed.value": ["~{s} s per action", "~{s} s por ação"],
   "config.experience.language": ["Language", "Idioma"],
@@ -206,6 +207,9 @@ export const DICT: Record<string, [string, string]> = {
   // "Escolha um alvo" — o toast não pode virar duas linhas por cima das cartas.
   "game.chooseFight": ["an enemy creature", "uma criatura inimiga"],
   "game.chooseTarget": ["a highlighted card", "uma carta destacada"],
+  // QA-08: o hospedeiro da upgrade — o destino dito no banner (Animating Force vai num artefato).
+  "game.chooseHost": ["a creature to attach it to", "uma criatura para anexar"],
+  "game.chooseHostArtifact": ["an artifact to attach it to", "um artefato para anexar"],
   "game.chooseMoveHouse": ["Choose a house for this card", "Escolha uma casa para esta carta"],
   // QA 07/out: seleção de alvo — rótulo do banner enquanto ela vive + tooltip do
   // alvo elegível no board (o clique ali SEMPRE escolhe o alvo).

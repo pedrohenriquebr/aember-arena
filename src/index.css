@@ -6570,6 +6570,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
   pointer-events: none;
   text-shadow: 0 2px 0 #3a120a, 0 0 10px rgb(255 90 60 / 0.55);
   transform: translate(-50%, -50%);
+  /* 700ms = DMG_MS no FxLayer (o run segura o número até o fim). */
   animation: fx-dmg 700ms var(--ease-out) forwards;
 }
 
@@ -9568,6 +9569,16 @@ button.pile-chip:focus-visible {
 .battle-zone--player[data-drop="over"] {
   outline: 2px solid color-mix(in srgb, var(--nf-ether) 95%, transparent);
   box-shadow: inset 0 0 0 1000px color-mix(in srgb, var(--nf-ether) 16%, transparent);
+}
+
+/* QA-08: hospedeiros legais da upgrade arrastada (qualquer lado); só outline, como a zona. */
+.card-tile[data-drop-host] {
+  outline: 2px dashed color-mix(in srgb, var(--nf-ether) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.card-tile[data-drop-host="over"] {
+  outline: 3px solid var(--nf-ether);
 }
 
 /* Lote 10: modal privado do "Look at …" - tiras de cartas que quebram linha. */

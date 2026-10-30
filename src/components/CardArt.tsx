@@ -19,13 +19,23 @@ type Size = "hand" | "board" | "preview";
 const ZOOM_MIN_WIDTH = 260;
 const ZOOM_MAX_WIDTH = 340;
 const ZOOM_TEXT_HEIGHT = 140;
-// Áreas que o preview nunca cobre: placares, console do turno e o drawer aberto.
-// Do console conta só o conteúdo (texto e botões), não o fundo de largura total.
-const ZOOM_COUNTERS = ".amber-counter, .key-counter";
-const ZOOM_AVOID = ".turn-console > *, .command-rail--drawer.is-open";
+// Áreas que o preview evita, com peso: placares e o END TURN/console pesam mais (o jogador
+// precisa deles a qualquer momento); os móveis do tcg (pílula de casas, bandejas de pilhas,
+// placar tingido) e do 3D (console como placa central) entram aqui. Do console conta só o
+// conteúdo (texto e botões), não o fundo de largura total. O rail fixo entra à parte (peso 4).
+const ZOOM_AVOID: readonly [string, number][] = [
+  [".amber-counter, .key-counter, .key-pips", 10],
+  [".end-turn-button, .console-undo, .turn-console > *", 8],
+  [".house-pill", 5],
+  [".pile-chips, .player-resources, .table-menu-trigger", 3],
+  [".player-avatar", 2],
+  [".command-rail--drawer.is-open", 1],
+];
 const ZOOM_GAP = 12;
 const ZOOM_MARGIN = 12;
 const ZOOM_DELAY = 120;
+// Passo da varredura de reserva (só quando nenhuma posição preferida está livre).
+const ZOOM_SWEEP = 16;
 // T5 — touch: long-press inspeciona a carta (tap continua selecionando no board).
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_SLOP = 12;
@@ -112,45 +122,84 @@ function zoomWidth() {
   return Math.round(Math.max(ZOOM_MIN_WIDTH, Math.min(0.26 * window.innerWidth, fit, ZOOM_MAX_WIDTH)));
 }
 
-function hits(a: { left: number; top: number; right: number; bottom: number }, b: DOMRect) {
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+type Box = { left: number; top: number; right: number; bottom: number };
+
+/** Custo de `a` sobre `b` (0 ou 0,5..1): tocar já custa meio peso — raspar o placar não pode
+    sair mais barato que cobrir o rail inteiro — e o resto cresce com a fração coberta. */
+function covered(a: Box, b: Box) {
+  const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+  const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  const area = (b.right - b.left) * (b.bottom - b.top);
+  return w > 0 && h > 0 && area > 0 ? 0.5 + (0.5 * w * h) / area : 0;
+}
+
+/** Só o que está de fato na tela (a pílula de casas existe com opacity 0 fora da escolha). */
+function shown(el: Element) {
+  return typeof el.checkVisibility === "function" ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true }) : true;
 }
 
 function placeZoom(rect: DOMRect): ZoomPlacement {
   const width = zoomWidth();
   const totalHeight = width / 0.714 + ZOOM_TEXT_HEIGHT;
   const viewport = { width: window.innerWidth, height: window.innerHeight };
-  const wanted = rect.top + rect.height / 2 - totalHeight / 2;
-  const top = Math.max(ZOOM_MARGIN, Math.min(viewport.height - totalHeight - ZOOM_MARGIN, wanted));
-  const counters = document.querySelectorAll(ZOOM_COUNTERS).length;
-  const railEl = document.querySelector(".command-rail:not(.command-rail--drawer)");
-  const avoid = Array.from(document.querySelectorAll(`${ZOOM_COUNTERS}, ${ZOOM_AVOID}`), (el) => el.getBoundingClientRect());
-  const rail = railEl?.getBoundingClientRect();
-  if (rail && rail.width > 0) avoid.push(rail);
-
-  // Ordem: direita da carta, esquerda da carta, metade oposta do palco e, por último, o
-  // slot do rail (VA-04: o rail guarda inspetor/Undo/log — cobri-lo é o pior caso).
-  const cardCenter = rect.left + rect.width / 2;
-  const candidates: Array<[number, string]> = [];
-  candidates.push([rect.right + ZOOM_GAP, "0%"], [rect.left - width - ZOOM_GAP, "100%"]);
-  candidates.push(cardCenter < viewport.width / 2 ? [viewport.width - width - ZOOM_MARGIN, "100%"] : [ZOOM_MARGIN, "0%"]);
-  if (rail && rail.width > 0) candidates.push([viewport.width - width - ZOOM_MARGIN, "100%"]);
-
-  // Sem posição livre (drawer, tela estreita): a de menor sobreposição, placar pesando mais.
-  let chosen = candidates[0];
-  let best = Infinity;
-  for (const c of candidates) {
-    const box = { left: c[0], right: c[0] + width, top, bottom: top + totalHeight };
-    if (box.left < ZOOM_MARGIN || box.right > viewport.width - ZOOM_MARGIN) continue;
-    const score = (hits(box, rect) ? 100 : 0) + avoid.reduce((n, r, i) => n + (hits(box, r) ? (i < counters ? 10 : 1) : 0), 0);
-    if (score < best) {
-      best = score;
-      chosen = c;
+  const clampTop = (value: number) => Math.max(ZOOM_MARGIN, Math.min(viewport.height - totalHeight - ZOOM_MARGIN, value));
+  const avoid: { box: Box; weight: number }[] = [];
+  for (const [selector, weight] of ZOOM_AVOID) {
+    for (const el of document.querySelectorAll(selector)) {
+      const box = el.getBoundingClientRect();
+      if (box.width > 0 && box.height > 0 && shown(el)) avoid.push({ box, weight });
     }
-    if (!score) break;
   }
-  const originY = `${Math.max(0, Math.min(100, ((rect.top + rect.height / 2 - top) / totalHeight) * 100))}%`;
-  return { top, left: chosen[0], width, originX: chosen[1], originY };
+  const rail = document.querySelector(".command-rail:not(.command-rail--drawer)")?.getBoundingClientRect();
+  if (rail && rail.width > 0) avoid.push({ box: rail, weight: 4 });
+
+  // x: direita da carta, esquerda da carta, metade oposta do palco e, por último, o slot do
+  // rail (VA-04: o rail guarda inspetor/Undo/log — cobri-lo é o pior caso). y: centrado na
+  // carta e, se ali bate em placar/console, encostado no topo ou no pé — o topo preso ao
+  // centro era o que empurrava o zoom para cima do rail no 3D (faixa de placar no alto).
+  const cardCenter = rect.left + rect.width / 2;
+  const xs: Array<[number, string]> = [[rect.right + ZOOM_GAP, "0%"], [rect.left - width - ZOOM_GAP, "100%"]];
+  xs.push(cardCenter < viewport.width / 2 ? [viewport.width - width - ZOOM_MARGIN, "100%"] : [ZOOM_MARGIN, "0%"]);
+  if (rail && rail.width > 0) xs.push([viewport.width - width - ZOOM_MARGIN, "100%"]);
+  const ys = [...new Set([clampTop(rect.top + rect.height / 2 - totalHeight / 2), clampTop(rect.bottom - totalHeight), clampTop(rect.top), ZOOM_MARGIN, clampTop(Infinity)])];
+
+  // A primeira posição livre na ordem de preferência; sem nenhuma, uma varredura em grade
+  // pega a livre mais perto da carta; sem livre alguma, a de menor cobertura ponderada
+  // (cobrir a própria carta é proibitivo).
+  const scoreOf = (left: number, top: number) => {
+    const box = { left, right: left + width, top, bottom: top + totalHeight };
+    return covered(box, rect) * 100 + avoid.reduce((sum, item) => sum + covered(box, item.box) * item.weight, 0);
+  };
+  const fits = (left: number) => left >= ZOOM_MARGIN && left + width <= viewport.width - ZOOM_MARGIN;
+  let chosen = { left: xs[0][0], originX: xs[0][1], top: ys[0] };
+  let best = Infinity;
+  search: for (const [left, originX] of xs) {
+    if (!fits(left)) continue;
+    for (const top of ys) {
+      const score = scoreOf(left, top);
+      if (score < best - 0.001) {
+        best = score;
+        chosen = { left, originX, top };
+      }
+      if (score < 0.001) break search;
+    }
+  }
+  if (best >= 0.001) {
+    let near = Infinity;
+    for (let left = ZOOM_MARGIN; fits(left); left += ZOOM_SWEEP) {
+      for (let top = ZOOM_MARGIN; top + totalHeight <= viewport.height - ZOOM_MARGIN; top += ZOOM_SWEEP) {
+        const score = scoreOf(left, top);
+        const distance = Math.hypot(left + width / 2 - cardCenter, top + totalHeight / 2 - (rect.top + rect.height / 2));
+        if (score < best - 0.001 || (score < 0.001 && distance < near)) {
+          best = score;
+          if (score < 0.001) near = distance;
+          chosen = { left, originX: left + width / 2 < cardCenter ? "100%" : "0%", top };
+        }
+      }
+    }
+  }
+  const originY = `${Math.max(0, Math.min(100, ((rect.top + rect.height / 2 - chosen.top) / totalHeight) * 100))}%`;
+  return { top: chosen.top, left: chosen.left, width, originX: chosen.originX, originY };
 }
 
 export function CardArt({

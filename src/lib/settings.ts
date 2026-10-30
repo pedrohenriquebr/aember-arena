@@ -14,6 +14,18 @@ export const AI_DELAY_MAX = 4000;
 export const AI_DELAY_DEFAULT = 1200;
 export const clampAiDelay = (value: number) => Math.min(AI_DELAY_MAX, Math.max(AI_DELAY_MIN, Math.round(value / 100) * 100));
 
+/** Os ritmos nomeados do Warden (config.speed.*), na ordem dos seletores. O "super slow"
+    é 3600ms = 1,5× o slow: com 3000 o passo sobre o slow (2400) seria só 25%, abaixo do
+    que se percebe numa batida; o valor cru segue no `aiDelayMs`, então save sem o preset
+    novo continua lendo igual. */
+export type AiPaceId = "fast" | "normal" | "slow" | "superSlow";
+export const AI_PACES: readonly { id: AiPaceId; ms: number }[] = [
+  { id: "fast", ms: 400 },
+  { id: "normal", ms: AI_DELAY_DEFAULT },
+  { id: "slow", ms: 2400 },
+  { id: "superSlow", ms: 3600 },
+];
+
 /** Fator do hold do voo do Warden: ms/400 entre 0,45 e 3,0 (default 1200 -> 3,0). */
 export const aiHoldScale = (delayMs: number) => Math.min(3, Math.max(0.45, delayMs / 400));
 
