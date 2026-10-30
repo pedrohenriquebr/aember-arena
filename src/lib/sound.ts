@@ -43,6 +43,13 @@ export interface Voice {
   q?: number;
   /** Also feed the echo bus. */
   wet?: 1;
+  // Corda friccionada (só a trilha; os SFX não usam):
+  /** Segundo oscilador a ±det cents do primeiro (largura de naipe). */
+  det?: number;
+  /** Vibrato (cents) que cresce de 0 até aqui nos 0,6 s depois do ataque. */
+  vib?: number;
+  /** Swell: a nota entra a (1-sw) do pico, cresce e cai — substitui o ADSR. */
+  sw?: number;
 }
 
 const MAX_VOICES = 32;
@@ -158,46 +165,65 @@ const PALETTE: Record<SfxName, () => Voice[]> = {
 };
 
 // ---------------------------------------------------------------------------
-// Trilha "Forja Noturna": ré menor, 66 BPM, forma A A2 B A' de 8 compassos
-// (32 compassos ≈ 1 min 56 s). A composição é DADO puro — `planBar` diz o que
-// soa em cada compasso e `eventVoices` traduz um evento em vozes do motor —,
-// então a teoria (escala, compassos, graves) é verificável sem AudioContext.
+// Trilha v2 "Luz da Forja": fá maior, 62 BPM, naipe de cordas (contrabaixo,
+// violoncelo, viola, violino II, violino I) na forma A A2 B A' de 8 compassos
+// (32 compassos ≈ 2 min 4 s). A melodia viaja: nasce no violoncelo (A), passa ao
+// violino (A2), sobe com resposta do violoncelo (B) e fica só com o violino sobre
+// o pedal (A'). A composição é DADO puro — `planBar` diz o que soa em cada
+// compasso e `eventVoices` traduz um evento em vozes do motor —, então a teoria
+// (escala, compassos, graves, vozes vivas) é verificável sem AudioContext.
 // ---------------------------------------------------------------------------
 
-export const MUSIC_BPM = 66;
+/** A/B no ouvido: `true` restaura a v1 "Forja Noturna" (ré eólio, pad + drone). */
+export const TRILHA_V1: boolean = false;
+
+export const MUSIC_BPM = TRILHA_V1 ? 66 : 62;
 /** Colcheias num 4/4. */
 export const STEPS_PER_BAR = 8;
 export const STEP_SEC = 60 / MUSIC_BPM / 2;
 export const BAR_SEC = STEP_SEC * STEPS_PER_BAR;
 /** Nível do fader da música (o fade-in sobe até aqui). */
 export const MUSIC_LEVEL = 0.07;
-/** Vozes agendadas da música; o resto do teto (MAX_VOICES) fica para os SFX. */
-export const MUSIC_VOICES = 14;
+/** Vozes agendadas da música; o resto do teto (MAX_VOICES) fica para os SFX.
+ * As cordas são notas longas com cauda cruzada: a v2 precisa de 16. */
+export const MUSIC_VOICES = TRILHA_V1 ? 14 : 16;
 
-export type ChordName = "Dm" | "Bb" | "F" | "C" | "Gm" | "G" | "Asus";
+export type ChordName = "F" | "Am7" | "Bbmaj7" | "Dm7" | "Bb" | "Gm7" | "Csus" | "C" | "Dm" | "G" | "F/A";
 
-// Pad sempre acima do drone (A2/D3) e o baixo abaixo dele: os três registros
-// não se esbarram em segunda nos graves (o teste mede isso).
-export const CHORDS: Record<ChordName, { bass: number; pad: number[] }> = {
-  Dm: { bass: 38, pad: [57, 62, 65] },
-  Bb: { bass: 34, pad: [58, 62, 65] },
-  F: { bass: 41, pad: [57, 60, 65] },
-  C: { bass: 36, pad: [55, 60, 64] },
-  Gm: { bass: 31, pad: [55, 58, 62] },
-  // A cor dórica (si natural) só aparece no B: é o "amanhecer" da forja.
-  G: { bass: 31, pad: [55, 59, 62] },
-  // Lá sem terça: a dominante sem dó sustenido mantém o modo, sem cadência de ópera.
-  Asus: { bass: 33, pad: [57, 62, 64] },
+export interface Chord {
+  bass: number;
+  /** Nota de tenor do violoncelo quando ele não canta. */
+  cello: number;
+  /** [viola, violino II]. */
+  inner: [number, number];
+  /** Suspensão do violino II: segura esta nota e cai em `inner[1]` na 2ª metade. */
+  sus?: number;
+}
+
+// Violoncelo nunca abaixo de F3 (53) fora do pedal: o grave é do contrabaixo, sem lama.
+export const CHORDS: Record<ChordName, Chord> = {
+  F: { bass: 41, cello: 57, inner: [60, 65], sus: 67 }, // 9-8
+  Am7: { bass: 33, cello: 55, inner: [60, 64], sus: 65 }, // 6-5
+  Bbmaj7: { bass: 34, cello: 53, inner: [57, 62], sus: 64 }, // #11 -> 3
+  Dm7: { bass: 38, cello: 57, inner: [60, 65] },
+  Bb: { bass: 34, cello: 53, inner: [60, 62] }, // add9: o cacho dó/ré
+  Gm7: { bass: 31, cello: 53, inner: [58, 62] },
+  Csus: { bass: 36, cello: 55, inner: [58, 64], sus: 65 }, // 4-3 com a 7ª embaixo
+  C: { bass: 36, cello: 55, inner: [60, 64] },
+  Dm: { bass: 38, cello: 57, inner: [62, 65], sus: 67 }, // 4-3
+  // O "amanhecer": Sol MAIOR (si natural, o lídio de fá) só no B.
+  G: { bass: 31, cello: 55, inner: [59, 62], sus: 64 }, // 6-5
+  "F/A": { bass: 33, cello: 53, inner: [60, 65] },
 };
 
-export const AEOLIAN = [2, 4, 5, 7, 9, 10, 0];
-export const DORIAN = [2, 4, 5, 7, 9, 11, 0];
-export const scaleOf = (chord: ChordName): number[] => (chord === "G" ? DORIAN : AEOLIAN);
+export const IONIAN = [5, 7, 9, 10, 0, 2, 4];
+export const LYDIAN = [5, 7, 9, 11, 0, 2, 4];
+export const scaleOf = (chord: ChordName): number[] => (chord === "G" ? LYDIAN : IONIAN);
 
-/** Drone contínuo (A2 + D3): a brasa embaixo de tudo. */
-export const DRONE = [45, 50];
+/** Drone contínuo do motor: só a v1 (na v2 o "drone" do A' é o pedal das cordas). */
+export const DRONE: number[] = TRILHA_V1 ? [45, 50] : [];
 /** Pico do drone no barramento (dois níveis + a respiração do LFO). */
-export const DRONE_PEAK = 0.3 + 0.08;
+export const DRONE_PEAK = TRILHA_V1 ? 0.3 + 0.08 : 0;
 
 export interface Section {
   name: "A" | "A2" | "B" | "A'";
@@ -205,43 +231,89 @@ export interface Section {
 }
 
 export const FORM: Section[] = [
-  { name: "A", prog: ["Dm", "Bb", "F", "C", "Dm", "Bb", "Gm", "Asus"] },
-  { name: "A2", prog: ["Dm", "Bb", "F", "C", "Dm", "Bb", "Gm", "Asus"] },
-  { name: "B", prog: ["Bb", "C", "Dm", "G", "Bb", "F", "C", "Asus"] },
-  // A' fecha em Dm: o loop volta ao A sem a dominante pendurada.
-  { name: "A'", prog: ["Dm", "Bb", "F", "C", "Dm", "Bb", "Asus", "Dm"] },
+  { name: "A", prog: ["F", "Am7", "Bbmaj7", "F", "Dm7", "Bb", "Gm7", "Csus"] },
+  { name: "A2", prog: ["F", "Am7", "Bbmaj7", "F", "Dm7", "Bb", "Gm7", "Csus"] },
+  { name: "B", prog: ["Bb", "C", "Dm", "G", "Bbmaj7", "F/A", "Gm7", "Csus"] },
+  // A' sobre o pedal de fá, fechando em F: o loop volta ao F do A.
+  { name: "A'", prog: ["F", "Am7", "Bbmaj7", "F", "Dm7", "Bb", "Csus", "F"] },
 ];
 export const FORM_BARS = FORM.length * 8;
 
 /** [colcheia, nota MIDI, duração em colcheias] */
 type Note = [number, number, number];
 
-// Tema: começa no meio do compasso, sobe à 5ª e desce em degraus — frase de quem
-// pensa, não de quem marcha. Cada compasso respira (há pausas em 0 ou no fim).
-export const LEAD_A: Note[][] = [
-  [[4, 69, 2], [6, 72, 2]],
-  [[0, 74, 6], [6, 72, 2]],
-  [[0, 69, 4], [4, 65, 2], [6, 67, 2]],
-  [[0, 67, 6]],
-  [[4, 65, 2], [6, 69, 2]],
+// Tema (altura do violino; o violoncelo canta uma oitava abaixo): anacruse,
+// sobe à terça, desce em suspiros. Cada compasso respira.
+export const THEME: Note[][] = [
+  [[4, 72, 2], [6, 74, 2]],
+  [[0, 76, 5], [5, 74, 1], [6, 72, 2]],
+  [[0, 74, 4], [4, 69, 4]],
+  [[0, 72, 6]],
+  [[2, 69, 2], [4, 72, 2], [6, 77, 2]],
+  [[0, 76, 4], [4, 74, 2], [6, 72, 2]],
   [[0, 74, 3], [3, 72, 1], [4, 70, 4]],
-  [[0, 69, 4], [4, 67, 2], [6, 65, 2]],
-  [[0, 64, 7]],
+  [[0, 69, 4], [4, 67, 3]],
 ];
 
-// Resposta do B: registro mais alto, o si natural sobre Sol e o pouso no ré.
-export const LEAD_B: Note[][] = [
-  [[0, 77, 4], [4, 74, 2], [6, 72, 2]],
-  [[0, 76, 6], [6, 74, 2]],
-  [[0, 69, 4], [4, 74, 4]],
-  [[0, 71, 4], [4, 74, 2], [6, 76, 2]],
-  [[0, 77, 6], [6, 76, 2]],
-  [[0, 72, 4], [4, 69, 4]],
-  [[0, 67, 2], [2, 69, 2], [4, 72, 4]],
-  [[0, 74, 8]],
+// B: o violino uma oitava de luz acima (o si natural no Sol), terminando no mi
+// que pede o fá do A'.
+export const THEME_B: Note[][] = [
+  [[0, 77, 4], [4, 81, 4]],
+  [[0, 79, 6], [6, 77, 2]],
+  [[0, 76, 2], [2, 77, 2], [4, 81, 4]],
+  [[0, 83, 6], [6, 81, 2]],
+  [[0, 81, 4], [4, 77, 4]],
+  [[0, 79, 2], [2, 77, 2], [4, 76, 4]],
+  [[0, 74, 4], [4, 77, 4]],
+  [[0, 76, 8]],
 ];
 
-export type MusicLayer = "pad" | "bass" | "lead" | "bell" | "anvil";
+// Resposta do violoncelo no B: só onde o violino segura nota longa.
+export const CELLO_B: (Note[] | null)[] = [
+  null,
+  [[2, 60, 2], [4, 64, 4]],
+  null,
+  [[2, 59, 2], [4, 62, 4]],
+  null,
+  null,
+  null,
+  [[0, 60, 2], [2, 62, 2], [4, 64, 4]],
+];
+
+// Coda do A': depois dos 4 primeiros compassos do tema, um fecho que pousa na terça.
+export const CODA: Note[][] = [
+  [[2, 72, 6]],
+  [[0, 74, 4], [4, 72, 4]],
+  [[0, 70, 4], [4, 69, 4]],
+  [[0, 69, 8]],
+];
+
+// Contrabaixo: raiz e semínimas de passagem ligando os acordes (sempre na escala).
+const WALK_A: Note[][] = [
+  [[0, 41, 6], [6, 36, 2]],
+  [[0, 33, 8]],
+  [[0, 34, 6], [6, 36, 2]],
+  [[0, 41, 6], [6, 40, 2]],
+  [[0, 38, 8]],
+  [[0, 34, 6], [6, 33, 2]],
+  [[0, 31, 4], [4, 33, 2], [6, 34, 2]],
+  [[0, 36, 6], [6, 40, 2]],
+];
+const WALK_B: Note[][] = [
+  [[0, 34, 4], [4, 33, 2], [6, 34, 2]],
+  [[0, 36, 6], [6, 40, 2]],
+  [[0, 38, 4], [4, 36, 2], [6, 33, 2]],
+  [[0, 31, 6], [6, 33, 2]],
+  [[0, 34, 8]],
+  [[0, 33, 8]],
+  [[0, 31, 4], [4, 33, 2], [6, 34, 2]],
+  [[0, 36, 6], [6, 40, 2]],
+];
+
+export type MusicLayer =
+  | "bass" | "cello" | "viola" | "violin2" | "violin" | "bell" | "anvil"
+  // só a v1
+  | "pad" | "lead";
 
 export interface MusicEvent {
   layer: MusicLayer;
@@ -250,8 +322,10 @@ export interface MusicEvent {
   /** 0 no anvil (ruído). */
   midi: number;
   g: number;
-  /** Corte do lowpass do pad (Hz): o B abre o filtro. */
+  /** Corte do lowpass (Hz). */
   tone?: number;
+  /** Atraso humano (s): o ataque sai um pouco fora da grade. */
+  nudge?: number;
 }
 
 // Hash inteiro determinístico: a variação por ciclo é reprodutível (e testável).
@@ -263,71 +337,120 @@ const hash = (a: number, b: number): number => {
 
 /** O que soa no compasso `index` (0..FORM_BARS-1) da passada `cycle`. */
 export function planBar(index: number, cycle: number): MusicEvent[] {
+  return TRILHA_V1 ? planBarV1(index, cycle) : planBarV2(index, cycle);
+}
+
+export function planBarV2(index: number, cycle: number): MusicEvent[] {
   const bar = ((index % FORM_BARS) + FORM_BARS) % FORM_BARS;
   const section = FORM[Math.floor(bar / 8)];
   const b = bar % 8;
-  const { bass, pad } = CHORDS[section.prog[b]];
+  const chord = CHORDS[section.prog[b]];
   const odd = cycle % 2 === 1;
-  const r = hash(bar, cycle);
-  const bright = section.name === "B";
   const out: MusicEvent[] = [];
-
-  for (const midi of pad) {
-    out.push({ layer: "pad", step: 0, len: 8, midi, g: bright ? 0.15 : 0.13, tone: bright ? 1250 : 760 });
-  }
-
-  // Baixo: semibreve no A (o chão parado); no B um pulso de coração, 3+1+4.
-  if (bright) {
-    out.push({ layer: "bass", step: 0, len: 3, midi: bass, g: 0.4 });
-    out.push({ layer: "bass", step: 3, len: 1, midi: bass, g: 0.22 });
-    out.push({ layer: "bass", step: 4, len: 4, midi: bass, g: 0.32 });
-  } else {
-    out.push({ layer: "bass", step: 0, len: 8, midi: bass, g: 0.4 });
-  }
-
-  const lead = (notes: Note[], layer: MusicLayer, shift: number, g: number) => {
-    for (const [step, midi, len] of notes) out.push({ layer, step, len, midi: midi + shift, g });
+  const add = (layer: MusicLayer, notes: Note[], g: number, shift = 0, tone?: number) => {
+    // 0-28 ms (quem canta até 40): ninguém do naipe ataca exatamente junto.
+    const spread = layer === "violin" || layer === "cello" ? 41 : 29;
+    for (const [step, midi, len] of notes) {
+      const nudge = (hash(bar * 16 + step, cycle * 8 + out.length) % spread) / 1000;
+      out.push({ layer, step, len, midi: midi + shift, g, tone, nudge });
+    }
   };
+  const inner = (shift: number, g: number, viola: boolean) => {
+    if (viola) add("viola", [[0, chord.inner[0] + shift, 8]], g);
+    const top = chord.inner[1] + shift;
+    add("violin2", chord.sus ? [[0, chord.sus + shift, 4], [4, top, 4]] : [[0, top, 8]], g);
+  };
+  const celloHold = (g = 0.13) => add("cello", [[0, chord.cello, 8]], g, 0, 1100);
+  const celloSing = (notes: Note[]) => add("cello", notes, 0.21, -12, 1500);
+  const violin = (notes: Note[], g = 0.2) => add("violin", notes, g, 0, 2400);
 
   if (section.name === "A") {
-    // Só sinos esparsos: um a cada 2 compassos, num tempo fraco sorteado.
-    if (b % 2 === 1) out.push({ layer: "bell", step: [2, 4, 6][r % 3], len: 2, midi: pad[r % pad.length] + 12, g: 0.11 });
+    add("bass", WALK_A[b], 0.3);
+    // O violoncelo canta; em cima só um halo do violino II (sem viola: o tenor é dele).
+    // A primeira passada abre com quatro compassos só de acordes.
+    if (cycle === 0 && b < 4) celloHold();
+    else celloSing(THEME[b]);
+    inner(12, 0.06, false);
   } else if (section.name === "A2") {
-    // Par: o tema inteiro. Ímpar: o tema some nos compassos 2-3 e 6-7 e os sinos
-    // respondem uma oitava acima — a melodia aparece e some.
-    if (!odd || b % 4 < 2) lead(LEAD_A[b], "lead", 0, 0.2);
-    else lead(LEAD_A[b], "bell", 12, 0.08);
-  } else if (bright) {
-    lead(LEAD_B[b], "lead", 0, 0.18);
-    // Arpejo de sino nos contratempos; a passada ímpar desloca o desenho.
-    const steps = odd ? [1, 5] : [2, 6];
-    steps.forEach((step, i) => out.push({ layer: "bell", step, len: 2, midi: pad[(i + 1 + (r % 2)) % pad.length] + 12, g: 0.07 }));
+    add("bass", WALK_A[b], 0.3);
+    // Passada ímpar: a segunda metade da frase volta ao violoncelo.
+    if (odd && b >= 4) {
+      celloSing(THEME[b]);
+      inner(12, 0.06, false);
+    } else {
+      violin(THEME[b]);
+      celloHold();
+      inner(0, 0.1, true);
+    }
+  } else if (section.name === "B") {
+    add("bass", WALK_B[b], 0.32);
+    violin(THEME_B[b], 0.19);
+    const answer = CELLO_B[b];
+    if (answer) add("cello", answer, 0.17, 0, 1500);
+    else celloHold(0.14);
+    inner(0, 0.11, true);
+    if (b === 3) out.push({ layer: "bell", step: 2, len: 2, midi: 83, g: 0.05 });
+    // A bigorna da v1 sobrevive como UM golpe distante por forma: a entrada do B.
+    if (b === 0) out.push({ layer: "anvil", step: 0, len: 1, midi: 0, g: 0.1 });
   } else {
-    // A': esvazia. Na passada ímpar o começo do tema volta como eco de sino.
-    if (odd && (b === 4 || b === 5)) lead(LEAD_A[b], "bell", 12, 0.08);
-    if (b === 7) out.push({ layer: "bell", step: 0, len: 4, midi: 86, g: 0.1 });
+    // A': só o violino e o "drone" — pedal fá/dó do contrabaixo e do violoncelo.
+    add("bass", [[0, 41, 8]], 0.24);
+    add("cello", [[0, 48, 8]], 0.11, 0, 900);
+    violin(b < 4 ? THEME[b] : CODA[b - 4], 0.18);
+    if (b === 7) {
+      inner(0, 0.07, true);
+      out.push({ layer: "bell", step: 4, len: 2, midi: 81, g: 0.05 });
+    }
   }
-
-  // Bigorna: a cada 4 compassos (2 no B). A abertura (ciclo 0) entra sem martelo.
-  const strike = bright ? b % 2 === 0 : b % 4 === 0 && !(section.name === "A'" && b === 4);
-  if (strike && !(cycle === 0 && bar === 0)) out.push({ layer: "anvil", step: 0, len: 1, midi: 0, g: bright ? 0.26 : 0.2 });
-
   return out;
 }
 
 const midiHz = (midi: number): number => 440 * 2 ** ((midi - 69) / 12);
 
+interface Bow {
+  /** Ataque (s): o arco "pega" a corda. */
+  a: number;
+  /** Swell (fração do pico). */
+  sw: number;
+  /** Vibrato (cents) que cresce depois do ataque. */
+  vib: number;
+  /** Desafinação ± (cents) da dupla de serras: largura de naipe. */
+  det: number;
+  fq: number;
+}
+
+const BOWS: Record<"bass" | "cello" | "viola" | "violin2" | "violin", Bow> = {
+  bass: { a: 0.12, sw: 0.15, vib: 3, det: 4, fq: 520 },
+  cello: { a: 0.22, sw: 0.3, vib: 6, det: 6, fq: 1300 },
+  viola: { a: 0.3, sw: 0.25, vib: 4, det: 8, fq: 1600 },
+  violin2: { a: 0.28, sw: 0.25, vib: 5, det: 8, fq: 1800 },
+  violin: { a: 0.16, sw: 0.22, vib: 8, det: 7, fq: 2400 },
+};
+/** Cauda cruzada (s): a nota seguinte entra antes desta acabar — legato. */
+export const LEGATO = 0.12;
+
 /** Traduz um evento em vozes do motor; `at` = segundos a partir de agora. */
 export function eventVoices(e: MusicEvent, at: number): Voice[] {
   const dur = e.len * STEP_SEC;
   const f = midiHz(e.midi);
+  at += e.nudge ?? 0;
+  if (TRILHA_V1 && e.layer === "bass") return [{ f, w: "triangle", at, a: 0.04, d: dur * 0.95, s: 0.7, g: e.g, flt: "lowpass", fq: 420 }];
   switch (e.layer) {
+    case "bass":
+    case "cello":
+    case "viola":
+    case "violin2":
+    case "violin": {
+      const bow = BOWS[e.layer];
+      return [{
+        f, w: "sawtooth", at, a: bow.a, d: Math.max(0.2, dur - bow.a + LEGATO), g: e.g,
+        flt: "lowpass", fq: e.tone ?? bow.fq, q: 0.6, sw: bow.sw, vib: bow.vib, det: bow.det,
+      }];
+    }
     case "pad":
       // Saw abafado com ataque lento; a cauda (d×1,3) cruza com o compasso seguinte
       // e a troca de acorde vira uma respiração, não um corte.
       return [{ f, w: "sawtooth", at, a: 1.1, d: dur * 1.3, s: 0.75, g: e.g, flt: "lowpass", fq: e.tone ?? 760, fto: (e.tone ?? 760) * 0.6, q: 0.7 }];
-    case "bass":
-      return [{ f, w: "triangle", at, a: 0.04, d: dur * 0.95, s: 0.7, g: e.g, flt: "lowpass", fq: 420 }];
     case "lead":
       return [{ f, w: "triangle", at, a: 0.08, d: dur, s: 0.6, g: e.g, flt: "lowpass", fq: 2400, fto: 1300 }];
     case "bell":
@@ -340,6 +463,95 @@ export function eventVoices(e: MusicEvent, at: number): Voice[] {
         { f: 1174.66, at, d: 0.7, g: e.g * 0.12 },
       ];
   }
+}
+
+// ---------------------------------------------------------------------------
+// v1 "Forja Noturna" (ré eólio, 66 BPM, pad + drone + sinos + bigorna), guardada
+// intacta para o A/B com `TRILHA_V1`.
+// ---------------------------------------------------------------------------
+
+export type ChordNameV1 = "Dm" | "Bb" | "F" | "C" | "Gm" | "G" | "Asus";
+
+export const CHORDS_V1: Record<ChordNameV1, { bass: number; pad: number[] }> = {
+  Dm: { bass: 38, pad: [57, 62, 65] },
+  Bb: { bass: 34, pad: [58, 62, 65] },
+  F: { bass: 41, pad: [57, 60, 65] },
+  C: { bass: 36, pad: [55, 60, 64] },
+  Gm: { bass: 31, pad: [55, 58, 62] },
+  G: { bass: 31, pad: [55, 59, 62] },
+  Asus: { bass: 33, pad: [57, 62, 64] },
+};
+export const AEOLIAN = [2, 4, 5, 7, 9, 10, 0];
+export const DORIAN = [2, 4, 5, 7, 9, 11, 0];
+export const scaleOfV1 = (chord: ChordNameV1): number[] => (chord === "G" ? DORIAN : AEOLIAN);
+
+export const FORM_V1: { name: Section["name"]; prog: ChordNameV1[] }[] = [
+  { name: "A", prog: ["Dm", "Bb", "F", "C", "Dm", "Bb", "Gm", "Asus"] },
+  { name: "A2", prog: ["Dm", "Bb", "F", "C", "Dm", "Bb", "Gm", "Asus"] },
+  { name: "B", prog: ["Bb", "C", "Dm", "G", "Bb", "F", "C", "Asus"] },
+  { name: "A'", prog: ["Dm", "Bb", "F", "C", "Dm", "Bb", "Asus", "Dm"] },
+];
+
+const LEAD_A_V1: Note[][] = [
+  [[4, 69, 2], [6, 72, 2]],
+  [[0, 74, 6], [6, 72, 2]],
+  [[0, 69, 4], [4, 65, 2], [6, 67, 2]],
+  [[0, 67, 6]],
+  [[4, 65, 2], [6, 69, 2]],
+  [[0, 74, 3], [3, 72, 1], [4, 70, 4]],
+  [[0, 69, 4], [4, 67, 2], [6, 65, 2]],
+  [[0, 64, 7]],
+];
+const LEAD_B_V1: Note[][] = [
+  [[0, 77, 4], [4, 74, 2], [6, 72, 2]],
+  [[0, 76, 6], [6, 74, 2]],
+  [[0, 69, 4], [4, 74, 4]],
+  [[0, 71, 4], [4, 74, 2], [6, 76, 2]],
+  [[0, 77, 6], [6, 76, 2]],
+  [[0, 72, 4], [4, 69, 4]],
+  [[0, 67, 2], [2, 69, 2], [4, 72, 4]],
+  [[0, 74, 8]],
+];
+
+export function planBarV1(index: number, cycle: number): MusicEvent[] {
+  const bar = ((index % FORM_BARS) + FORM_BARS) % FORM_BARS;
+  const section = FORM_V1[Math.floor(bar / 8)];
+  const b = bar % 8;
+  const { bass, pad } = CHORDS_V1[section.prog[b]];
+  const odd = cycle % 2 === 1;
+  const r = hash(bar, cycle);
+  const bright = section.name === "B";
+  const out: MusicEvent[] = [];
+
+  for (const midi of pad) {
+    out.push({ layer: "pad", step: 0, len: 8, midi, g: bright ? 0.15 : 0.13, tone: bright ? 1250 : 760 });
+  }
+  if (bright) {
+    out.push({ layer: "bass", step: 0, len: 3, midi: bass, g: 0.4 });
+    out.push({ layer: "bass", step: 3, len: 1, midi: bass, g: 0.22 });
+    out.push({ layer: "bass", step: 4, len: 4, midi: bass, g: 0.32 });
+  } else {
+    out.push({ layer: "bass", step: 0, len: 8, midi: bass, g: 0.4 });
+  }
+  const lead = (notes: Note[], layer: MusicLayer, shift: number, g: number) => {
+    for (const [step, midi, len] of notes) out.push({ layer, step, len, midi: midi + shift, g });
+  };
+  if (section.name === "A") {
+    if (b % 2 === 1) out.push({ layer: "bell", step: [2, 4, 6][r % 3], len: 2, midi: pad[r % pad.length] + 12, g: 0.11 });
+  } else if (section.name === "A2") {
+    if (!odd || b % 4 < 2) lead(LEAD_A_V1[b], "lead", 0, 0.2);
+    else lead(LEAD_A_V1[b], "bell", 12, 0.08);
+  } else if (bright) {
+    lead(LEAD_B_V1[b], "lead", 0, 0.18);
+    const steps = odd ? [1, 5] : [2, 6];
+    steps.forEach((step, i) => out.push({ layer: "bell", step, len: 2, midi: pad[(i + 1 + (r % 2)) % pad.length] + 12, g: 0.07 }));
+  } else {
+    if (odd && (b === 4 || b === 5)) lead(LEAD_A_V1[b], "bell", 12, 0.08);
+    if (b === 7) out.push({ layer: "bell", step: 0, len: 4, midi: 86, g: 0.1 });
+  }
+  const strike = bright ? b % 2 === 0 : b % 4 === 0 && !(section.name === "A'" && b === 4);
+  if (strike && !(cycle === 0 && bar === 0)) out.push({ layer: "anvil", step: 0, len: 1, midi: 0, g: bright ? 0.26 : 0.2 });
+  return out;
 }
 
 // A tiny synthesized audio engine so the build stays self-contained (no asset files).
@@ -472,12 +684,43 @@ class SoundEngine {
     const end = t + attack + v.d;
     let source: AudioScheduledSourceNode;
     let offset = 0;
+    /** Osciladores auxiliares (dupla desafinada, LFO) com o mesmo start/stop. */
+    const extra: OscillatorNode[] = [];
+    let mix: AudioNode | null = null;
     if (v.f) {
       const osc = context.createOscillator();
       osc.type = v.w ?? "sine";
       osc.frequency.setValueAtTime(v.f, t);
       if (v.to) osc.frequency.exponentialRampToValueAtTime(v.to, end);
       source = osc;
+      const oscs = [osc];
+      if (v.det) {
+        // Duas serras em ±det cents batem devagar: soa a naipe, não a um oscilador.
+        const twin = context.createOscillator();
+        twin.type = osc.type;
+        twin.frequency.setValueAtTime(v.f, t);
+        osc.detune.setValueAtTime(-v.det, t);
+        twin.detune.setValueAtTime(v.det, t);
+        const sum = context.createGain();
+        sum.gain.value = 0.6;
+        osc.connect(sum);
+        twin.connect(sum);
+        mix = sum;
+        oscs.push(twin);
+        extra.push(twin);
+      }
+      if (v.vib) {
+        // Vibrato atrasado: o arco pega a corda reto e a mão esquerda entra depois.
+        const lfo = context.createOscillator();
+        lfo.frequency.value = 5 + Math.random() * 0.9;
+        const depth = context.createGain();
+        depth.gain.setValueAtTime(0, t);
+        depth.gain.setValueAtTime(0, t + attack * 0.6);
+        depth.gain.linearRampToValueAtTime(v.vib, t + attack + 0.6);
+        lfo.connect(depth);
+        for (const o of oscs) depth.connect(o.detune);
+        extra.push(lfo);
+      }
     } else {
       const noise = context.createBufferSource();
       noise.buffer = this.noiseBuffer;
@@ -485,23 +728,38 @@ class SoundEngine {
       offset = Math.random() * 0.5;
       source = noise;
     }
-    let tail: AudioNode = source;
+    let tail: AudioNode = mix ?? source;
+    // Swell: a nota respira (entra a 1-sw do pico, cresce até ~40%, recua e afina a 0
+    // no fim), e o filtro acompanha de leve — corda mais tocada é corda mais clara.
+    const sw = v.sw;
+    const crest = t + attack + v.d * 0.4;
+    const ebb = t + attack + v.d * 0.85;
     if (v.flt) {
       const filter = context.createBiquadFilter();
       filter.type = v.flt;
       filter.Q.value = v.q ?? 1;
       filter.frequency.setValueAtTime(v.fq ?? 1000, t);
-      if (v.fto) filter.frequency.exponentialRampToValueAtTime(v.fto, end);
+      if (sw !== undefined) {
+        filter.frequency.linearRampToValueAtTime((v.fq ?? 1000) * (1 + sw), crest);
+        filter.frequency.linearRampToValueAtTime(v.fq ?? 1000, ebb);
+      } else if (v.fto) filter.frequency.exponentialRampToValueAtTime(v.fto, end);
       tail.connect(filter);
       tail = filter;
     }
-    // ADSR: linear attack, decay toward sustain (or silence), release at 60% of a held note.
     const env = context.createGain();
-    const sustain = v.s ?? 0;
     env.gain.setValueAtTime(0, t);
-    env.gain.linearRampToValueAtTime(v.g, t + attack);
-    env.gain.setTargetAtTime(v.g * sustain, t + attack, sustain ? 0.06 : v.d / 5);
-    if (sustain) env.gain.setTargetAtTime(0, t + attack + v.d * 0.6, v.d * 0.08);
+    if (sw !== undefined) {
+      env.gain.linearRampToValueAtTime(v.g * (1 - sw), t + attack);
+      env.gain.linearRampToValueAtTime(v.g, crest);
+      env.gain.linearRampToValueAtTime(v.g * (1 - sw) * 0.9, ebb);
+      env.gain.linearRampToValueAtTime(0, end);
+    } else {
+      // ADSR: linear attack, decay toward sustain (or silence), release at 60% of a held note.
+      const sustain = v.s ?? 0;
+      env.gain.linearRampToValueAtTime(v.g, t + attack);
+      env.gain.setTargetAtTime(v.g * sustain, t + attack, sustain ? 0.06 : v.d / 5);
+      if (sustain) env.gain.setTargetAtTime(0, t + attack + v.d * 0.6, v.d * 0.08);
+    }
     tail.connect(env);
     env.connect(out ?? this.masterGain);
     if (!out && v.wet && this.echo) env.connect(this.echo);
@@ -511,6 +769,10 @@ class SoundEngine {
     };
     (source as AudioBufferSourceNode).start(t, offset);
     source.stop(end + 0.02);
+    for (const o of extra) {
+      o.start(t);
+      o.stop(end + 0.02);
+    }
     return source;
   }
 
