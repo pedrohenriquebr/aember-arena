@@ -47,10 +47,8 @@ describe("M1 · Essence Entangler — Scrap: a linha carrega o gatilho e o movim
     expect(ability?.acts).toEqual([expect.objectContaining({ k: "moveAmber", to: "target2" })]);
   });
 
-  // GAP DE MOTOR (fora da moagem; motor é somente leitura nesta missão): o Scrap de carta EM JOGO
-  // não dispara. `leavePlay` manda a carta direto ao descarte sem `toDiscard`, e o movimento `discard`
-  // só é oferecido para cartas na mão. Quando o motor disparar o Scrap ao sair de jogo, troque para `it`.
-  it.skip("quando o upgrade sai de jogo, 1 Æ sai da criatura que tem Æ e vai para a outra criatura (GAP: scrap sem gatilho em jogo)", () => {
+  // QA-07: o Scrap de carta em jogo dispara quando ela cai no descarte (cascata do hospedeiro em luta).
+  it("quando o upgrade sai de jogo, 1 Æ sai da criatura que tem Æ e vai para a outra criatura", () => {
     const e = entangler();
     const host = card("Hospedeira", { type: "Creature", house: "Star Alliance", power: 5, armor: 0, text: "" });
     const donor = { ...card("Doadora", { type: "Creature", house: "Star Alliance", power: 4, armor: 0, text: "" }), amber: 3 };

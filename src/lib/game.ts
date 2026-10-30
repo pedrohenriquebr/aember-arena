@@ -1373,7 +1373,7 @@ function releaseBound(state: GameState, source: CardInstance): void {
   }
 }
 
-function leavePlay(state: GameState, card: CardInstance, destination: "discard" | "hand" | "deck" | "archives" | "purged"): void {
+function leavePlay(state: GameState, card: CardInstance, destination: "discard" | "hand" | "deck" | "archives" | "purged", deterministic = false): void {
   const side = controllerOf(state, card);
   if (side === undefined) return;
   const player = state.players[side];
@@ -1387,7 +1387,7 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   if (card.amber) state.players[other(side)].amber += card.amber;
   // Upgrades may be attached by the other player too (BUG-04): scan both boards.
   for (const upgrade of state.players.flatMap((p) => p.board).filter((item) => item.attachedTo === card.instanceId)) {
-    leavePlay(state, upgrade, "discard");
+    leavePlay(state, upgrade, "discard", deterministic);
   }
   // A Gigantic half under this creature leaves play with it (BUG-23).
   for (const half of card.under ?? []) {
@@ -1422,17 +1422,21 @@ function leavePlay(state: GameState, card: CardInstance, destination: "discard" 
   if (card.isToken) return;
   if (destination === "deck") owner.deck.push(card);
   else owner[destination].push(card);
+  // QA-07: "Scrap:" is a discard trigger, so it fires for an upgrade/artifact that leaves play INTO a discard
+  // pile — destroyed, sacrificed, or falling with its host (the cascade above). Purge, return and archive are
+  // other destinations and stay silent. Same active-player gate as toDiscard.
+  if (destination === "discard" && side === state.activePlayer) fire(state, side, card, "scrap", { deterministic });
 }
 
 /** Purge / return / archive by an effect: a ward intercepts these leave-play
     events too (keyteki Card.js onCardPurged/onCardLeavesPlay) — the token is
     spent and the creature stays. Only creatures carry ward. */
-function leaveByEffect(state: GameState, card: CardInstance, destination: "hand" | "deck" | "archives" | "purged"): void {
+function leaveByEffect(state: GameState, card: CardInstance, destination: "hand" | "deck" | "archives" | "purged", deterministic = false): void {
   if (isCreature(card) && card.warded) {
     card.warded = 0;
     return;
   }
-  leavePlay(state, card, destination);
+  leavePlay(state, card, destination, deterministic);
 }
 
 // Cards whose "Destroyed:" abilities are resolving: still in play, but already
@@ -1458,7 +1462,7 @@ function destroy(state: GameState, card: CardInstance, deterministic: boolean, b
   }
   const replacement = replacementFor(state, card, "destroy")?.effect.replace;
   if (replacement?.to) {
-    leavePlay(state, card, replacement.to);
+    leavePlay(state, card, replacement.to, deterministic);
     return true;
   }
   // FEAT-06: an enemy creature destroyed by an effect is a kill for the acting
@@ -1468,7 +1472,7 @@ function destroy(state: GameState, card: CardInstance, deterministic: boolean, b
   dying.add(card);
   fire(state, side, card, "destroyed", { deterministic });
   dying.delete(card);
-  leavePlay(state, card, "discard");
+  leavePlay(state, card, "discard", deterministic);
   return true;
 }
 
@@ -1785,7 +1789,7 @@ function run(context: Context, act: Act): void {
       // A leave-play destination of its own (keyteki PurgeAction): the card is
       // out of the game and cannot come back through a reshuffle.
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
-      for (const card of cards) leaveByEffect(state, card, "purged");
+      for (const card of cards) leaveByEffect(state, card, "purged", deterministic);
       // "Purge ~" on an Action still being played: it is not in play yet, so
       // applyMove sends it to purged instead of the discard pile (Lote 5 §5.4).
       if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "purged");
@@ -1998,7 +2002,7 @@ function run(context: Context, act: Act): void {
       break;
     case "returnToHand": {
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
-      for (const card of cards) leaveByEffect(state, card, "hand");
+      for (const card of cards) leaveByEffect(state, card, "hand", deterministic);
       if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "hand");
       // Ward intercepta o leave-play: o ato não aconteceu (did 0 — mesma régua
       // do destroy acima, keyteki cancela o evento).
@@ -2015,7 +2019,7 @@ function run(context: Context, act: Act): void {
       const landed: CardInstance[] = [];
       for (const card of cards) {
         const owner = ownerOf(state, card) ?? me;
-        leaveByEffect(state, card, "deck");
+        leaveByEffect(state, card, "deck", deterministic);
         if (state.players[owner].deck.includes(card)) landed.push(card);
         // A ward (or a token leaving the game) cancels the move: only a card
         // that really landed in the deck is repositioned.
@@ -2115,7 +2119,7 @@ function run(context: Context, act: Act): void {
     }
     case "archive": {
       const houses = new Map(cards.map((card) => [card, houseOf(state, card)] as const));
-      for (const card of cards) leaveByEffect(state, card, "archives");
+      for (const card of cards) leaveByEffect(state, card, "archives", deterministic);
       if (act.s === "self" && controllerOf(state, source) === undefined) selfLeave.set(source, "archives");
       explicitDid = cards.filter((card) => controllerOf(state, card) === undefined).length;
       remember(
