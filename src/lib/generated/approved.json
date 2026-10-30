@@ -1590,5 +1590,45 @@
     "v": 17,
     "reviewed": true,
     "model": "haiku-5-5-m1"
+  },
+  {
+    "cardId": "b6832a73-9223-41ae-8146-98e000a57f6d",
+    "dsl": [
+      {
+        "on": [
+          "play"
+        ],
+        "acts": [
+          {
+            "k": "move",
+            "n": 5,
+            "from": "deck",
+            "to": "discard",
+            "pick": "top"
+          },
+          {
+            "k": "capture",
+            "n": 1,
+            "s": "target",
+            "per": {
+              "m": "cards",
+              "house": "Geistoid"
+            }
+          }
+        ],
+        "target": {
+          "type": "Creature",
+          "side": "friendly"
+        }
+      }
+    ],
+    "textHash": "49fd8c63",
+    "source": "llm",
+    "reviewed": true,
+    "generatedAt": 1793319652360,
+    "v": 17,
+    "model": "haiku-5-5-m2",
+    "effects": [],
+    "keywords": {}
   }
 ]
