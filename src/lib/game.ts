@@ -2155,9 +2155,15 @@ function run(context: Context, act: Act): void {
       }
       break;
     case "fromDiscard": {
-      const card = [...player.discard].reverse().find((item) => !act.type || displayType(item) === act.type);
-      if (card) player.discard = player.discard.filter((item) => item !== card);
+      // QA-06: the controller CHOOSES the card — the move's queue names it (pendingPrompt "discard").
+      // With no choice made (the AI, the no-UI path) the engine takes the most recent discard that fits.
+      const pool = discardPool(player.discard, act.type);
+      const queue = context.queue ?? [];
+      const chosen = pool.find((item) => item.instanceId === queue[0]);
+      const card = chosen ?? pool[0];
+      if (chosen) context.queue = queue.slice(1);
       if (card) {
+        player.discard = player.discard.filter((item) => item !== card);
         player.hand.push(card);
         remember(context, [card]);
       }
@@ -2416,12 +2422,16 @@ function citesMode(ability: Ability): boolean {
     engine's guess for the player's side of the table), a "Choose one:" its first option. */
 const defaultMode = (ability: Ability): "a" | "b" => (JSON.stringify(ability.acts).includes('"side":"any"') ? "b" : "a");
 
-/** Does an ability select with an "up to N" pick (it reads the move's `targets` queue)? */
+/** The discard cards a `fromDiscard` act may take, newest first (the engine's default is the first one).
+    `type` narrows it to the act's card type ("return a creature from your discard pile"). */
+const discardPool = (discard: CardInstance[], type?: "Creature") => [...discard].reverse().filter((item) => !type || displayType(item) === type);
+
+/** Does an ability select with an "up to N" pick, or choose a discard card (QA-06)? Either reads the move's `targets` queue. */
 const queueCache = new WeakMap<Ability, boolean>();
 function citesQueue(ability: Ability): boolean {
   let cites = queueCache.get(ability);
   if (cites === undefined) {
-    cites = JSON.stringify(ability.acts).includes('"upTo"');
+    cites = JSON.stringify(ability.acts).includes('"upTo"') || ability.acts.some((act) => act.k === "fromDiscard");
     queueCache.set(ability, cites);
   }
   return cites;
@@ -2819,8 +2829,9 @@ function upToSpec(ability: Ability): { pick: Filter; n: number; k: Act["k"] } | 
 /** What the move still has to ask the player after the house and the first target. */
 export interface MovePrompt {
   /** `target2`: one more card (the move's `targets[0]`); `targets`: 0..max cards; `flank`: left or right;
-      `mode` (Lote 8): "a" or "b" — `choice` says whether they are two zones ("side") or two printed options ("option"). */
-  kind: "target2" | "targets" | "flank" | "mode";
+      `mode` (Lote 8): "a" or "b" — `choice` says whether they are two zones ("side") or two printed options ("option");
+      `discard` (QA-06): one card of the player's own discard pile (`ids`, newest first) as `targets[0]`. */
+  kind: "target2" | "targets" | "flank" | "mode" | "discard";
   ids: string[];
   max?: number;
   choice?: "side" | "option";
@@ -2841,6 +2852,12 @@ export function pendingPrompt(state: GameState, side: Side, move: GameMove): Mov
         const excluded = first ?? (ability.target ? everyMatch(view, side, card, ability.target)[0]?.instanceId : undefined);
         const ids = everyMatch(view, side, card, ability.target2).map((item) => item.instanceId).filter((id) => ability.sameTarget2 || id !== excluded);
         if (ids.length > 1) return { kind: "target2" as const, ids };
+      }
+      // QA-06: "return a card from your discard pile" — the controller picks the card (an empty pile asks nothing).
+      const fromDiscard = ability.acts.find((act): act is Extract<Act, { k: "fromDiscard" }> => act.k === "fromDiscard");
+      if (fromDiscard && move.targets === undefined) {
+        const ids = discardPool(view.players[side].discard, fromDiscard.type).map((item) => item.instanceId);
+        if (ids.length) return { kind: "discard" as const, ids };
       }
       const spec = upToSpec(ability);
       if (spec && !ability.target2 && move.targets === undefined) {

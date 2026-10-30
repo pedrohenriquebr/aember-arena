@@ -304,6 +304,7 @@ export const DICT: Record<string, [string, string]> = {
   "inspector.withoutEffect": ["Without effect", "Sem efeito"],
   "inspector.cannotPlay": ["Cannot be played now", "Não pode ser jogada agora"],
   "game.chooseTarget2": ["a second card", "uma segunda carta"],
+  "game.chooseDiscard": ["choose a card from your discard pile", "escolha uma carta do seu descarte"],
   "game.chooseUpTo": ["up to {max} ({chosen} picked)", "até {max} ({chosen} escolhidas)"],
   "game.confirmPick": ["Confirm", "Confirmar"],
   "game.chooseFlank": ["Choose the flank", "Escolha o flanco"],

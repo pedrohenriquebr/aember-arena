@@ -160,7 +160,7 @@ type Pick = {
   /** The move's card asks "Choose a house" (Lote 5 §5.1): the picker offers these first. */
   houses?: string[];
   /** Lote 7 §7.1: a later question of the move — a second card, 0..max cards, or a flank. */
-  kind?: "target2" | "targets" | "flank" | "mode";
+  kind?: "target2" | "targets" | "flank" | "mode" | "discard";
   chosen?: string[];
   max?: number;
   /** Lote 8: a "mode" question offers two zones (own/opponent's) or the two printed options. */
@@ -1815,6 +1815,7 @@ function GameBoard({
   onConfirmPick = NOOP,
   onPickFlank = NOOP,
   onPickMode = NOOP,
+  onPickDiscard = NOOP,
   onCancelPick = NOOP,
   onSelectHand,
   onPlayHand = NOOP,
@@ -1874,6 +1875,8 @@ function GameBoard({
   onPickFlank?: (flank: "left" | "right") => void;
   /** Lote 8: the answer to a "Choose one:" / "a player's deck" prompt. */
   onPickMode?: (mode: "a" | "b") => void;
+  /** QA-06: the card of your discard pile that "return a card from your discard pile" takes. */
+  onPickDiscard?: (instanceId: string) => void;
   /** QA 07/out: aborta a escolha pendente (banner/pill) sem jogar. */
   onCancelPick?: () => void;
   onSelectHand: (card: CardInstance) => void;
@@ -2139,6 +2142,19 @@ function GameBoard({
                   </>
                 ) : pick.kind === "target2" ? (
                   <><Crosshair size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t("game.chooseTarget2")}</>
+                ) : pick.kind === "discard" ? (
+                  // QA-06: the discard pile is not on the board, so its cards are listed here (newest first, as the engine defaults).
+                  <>
+                    <Crosshair size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span>
+                    <span className="pick-sep" aria-hidden="true">·</span>
+                    {t("game.chooseDiscard")}
+                    {player.discard.filter((card) => pick.ids.includes(card.instanceId)).reverse().map((card, index) => (
+                      // Mandatory effect: the list takes focus and Escape leaves it alone (only the X undoes the move, as every prompt).
+                      <button key={card.instanceId} type="button" className="filter-chip" style={{ minHeight: 44 }} autoFocus={index === 0} onClick={() => onPickDiscard(card.instanceId)}>
+                        {card.face.title}
+                      </button>
+                    ))}
+                  </>
                 ) : pick.move.type === "fight" ? (
                   <><Swords size={15} /> <span className="pick-tag">{t("game.chooseTargetBanner")}</span><span className="pick-sep" aria-hidden="true">·</span>{t("game.chooseFight")}</>
                 ) : (
@@ -3992,6 +4008,14 @@ function App() {
     [pick, performHumanMove],
   );
 
+  // QA-06: the discard card is the move's first queue entry (what the engine reads as targets[0]).
+  const pickDiscard = useCallback(
+    (instanceId: string) => {
+      if (pick?.kind === "discard") performHumanMove({ ...pick.move, targets: [instanceId] } as GameMove);
+    },
+    [pick, performHumanMove],
+  );
+
   const endHumanTurn = useCallback(() => {
     const live = gameRef.current;
     if (!live) return;
@@ -4712,6 +4736,7 @@ function App() {
                   onConfirmPick={confirmPick}
                   onPickFlank={pickFlank}
                   onPickMode={pickMode}
+                  onPickDiscard={pickDiscard}
                   onCancelPick={() => setPick(null)}
                   onSelectHand={selectHandCard}
                   onPlayHand={(card) => performHumanMove({ type: "play", instanceId: card.instanceId })}

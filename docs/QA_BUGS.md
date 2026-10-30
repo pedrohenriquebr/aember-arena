@@ -31,8 +31,18 @@ Bugs reportados pelo dono durante partidas reais. Cada item: repro, causa-raiz p
 - **Correção necessária**: primitiva de ESCOLHA em zona (novo kind de prompt listando o
   descarte do jogador + variante do ato que espera a escolha) — motor + UI (o prompt de
   alvo atual só varre battlelines, `everyMatch` não enxerga zonas). É da família 🟢/🔴 da
-  onda 4 (selection em zona). **Status: FILA DE MOTOR** — aguarda bloco B da Arena fechar
-  (a UI de prompt é território dela); não é consertável como row de dados.
+  onda 4 (selection em zona). **Status: ✅ RESOLVIDO (código + testes; commit pendente)**.
+- **Correção (29/out, Haiku 5.5 high)**: `pendingPrompt` ganhou o kind `"discard"` (ids das
+  cartas do descarte do próprio lado, filtradas pelo `type` do ato, mais recente primeiro); o
+  move responde com `targets[0]` (a fila que `citesQueue` já entrega ao ato — `citesQueue`
+  passou a incluir `fromDiscard`). O ato escolhe o id da fila se ele estiver no descarte;
+  sem escolha (IA, caminho sem UI, id inválido) pega o topo — a heurística documentada.
+  UI: o banner lista as cartas do descarte (botões de 44px, foco no primeiro; Esc não
+  mexe no prompt; o X desfaz a jogada como nos demais prompts). Sem mudança de schema:
+  `DSL_VERSION` e `PARSER_VERSION` ficam como estão. O selo "full" do parser agora é
+  verdadeiro (o ato faz o que o texto manda). Bancada: `src/lib/qa06-discard.test.ts`
+  (10 casos). Suíte completa: 93 arquivos, 1191 verdes; typecheck limpo.
+  Não verificado no navegador (e2e não rodado nesta missão).
 
 ## QA-05 · Dominator Bauble não faz nada (sem prompt de escolha de criatura)
 - **Reportado**: 29/out, dono jogando (deck demo): "não deixou escolher a criatura, que era do tipo Indomáveis".
