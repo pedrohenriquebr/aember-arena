@@ -29,6 +29,7 @@
 // sistema via channel ("msedge" -> "chrome") ou executablePath padrao do Windows.
 
 import { spawn } from "node:child_process";
+import dns from "node:dns/promises";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -174,7 +175,7 @@ const SYSTEM_BROWSER_CANDIDATES = [
   "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
 ];
 
-async function launchBrowser() {
+async function launchBrowser(hostRules) {
   const { chromium } = await import("playwright-core");
   const attempts = [
     { channel: "msedge" },
@@ -186,7 +187,7 @@ async function launchBrowser() {
     try {
       return await chromium.launch({
         headless: true,
-        args: ["--no-sandbox", "--disable-dev-shm-usage"],
+        args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-features=DnsOverHttps", ...(hostRules ? [`--host-resolver-rules=${hostRules}`] : [])],
         ...opts,
       });
     } catch (err) {
@@ -698,6 +699,17 @@ async function main() {
   THEME = args.theme;
   const server = args.baseUrl ? null : startDevServer(args.port);
   const base = args.baseUrl ?? server.url;
+  // Redes com Netskope derrubam a resolução interna do Chromium (IPv6 sem rota):
+  // fixa o IPv4 do host de destino nas regras do resolver do browser.
+  let hostRules = "";
+  if (args.baseUrl) {
+    try {
+      const h = new URL(args.baseUrl).hostname;
+      const addrs = await dns.lookup(h, { all: true });
+      const v4 = addrs.find((a) => a.family === 4);
+      if (v4) hostRules = `MAP ${h} ${v4.address}`;
+    } catch { /* resolve pelo caminho normal */ }
+  }
   let browser;
   try {
     if (server) {
@@ -705,7 +717,7 @@ async function main() {
       await server.waitReady();
       console.log(`[capture] dev server pronto (view=${VIEW})`);
     }
-    browser = await launchBrowser();
+    browser = await launchBrowser(hostRules);
     if (args.floorOnly) await runFloorOnly(browser, base);
     else if (args.matchSmoke) await runMatchSmoke(browser, base, args.out);
     else await runCapture(browser, base, resolve(ROOT, args.out));

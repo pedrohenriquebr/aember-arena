@@ -6,7 +6,7 @@ focused pull requests are welcome.
 ## Fluxo
 
 - `dev` é a branch de desenvolvimento; `master` é o que está publicado em
-  <https://pedrohenriquebr.github.io/aember-arena/>.
+  <https://aember-arena.com.br/>.
 - Abra PRs **contra `dev`** (nunca direto no `master`). O `master` só recebe o
   merge de `dev` (fast-forward ou merge commit, nunca squash, para os
   históricos não divergirem); o deploy do Pages sai do push no `master`.

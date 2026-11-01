@@ -2,7 +2,7 @@
 
 [![Deploy](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/pages.yml/badge.svg)](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/pages.yml)
 [![CI](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/ci.yml)
-[![Live](https://img.shields.io/badge/play-pedrohenriquebr.github.io%2Faember-arena-2ea043)](https://pedrohenriquebr.github.io/aember-arena/)
+[![Live](https://img.shields.io/badge/play-aember-arena.com.br-2ea043)](https://aember-arena.com.br/)
 
 **Status: protótipo.** Jogo solo de fã, não comercial, em desenvolvimento ativo.
 
@@ -18,7 +18,7 @@ PWA offline-first para jogar KeyForge solo: importe um deck real do Master Vault
 jogue contra uma IA local configurável e continue jogando sem conexão. O build é um
 único `index.html` autocontido.
 
-Jogue em <https://pedrohenriquebr.github.io/aember-arena/>.
+Jogue em <https://aember-arena.com.br/>.
 
 ```bash
 npm install
@@ -42,7 +42,7 @@ service worker, o toast "Nova versão disponível" (FEAT-09) aparece e o botão
 Se o app parecer **preso numa versão velha** (service worker envenenado: tela
 antiga que não atualiza nem com reload), abra o app com `?swreset=1` na URL —
 por exemplo `http://localhost:4173/?swreset=1` no `npm run preview`, ou, em
-produção, <https://pedrohenriquebr.github.io/aember-arena/?swreset=1>. O
+produção, <https://aember-arena.com.br/?swreset=1>. O
 parâmetro precisa ir no caminho do app (o Pages serve o site do usuário na raiz,
 não o subpath). Isso desregistra todos os service workers, apaga todos os caches
 `aember-arena-*`, tira o parâmetro da URL e recarrega o app limpo uma única vez.
