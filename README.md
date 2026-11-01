@@ -12,6 +12,12 @@ connection. The build is a single self-contained `index.html` (works from `file:
 from an e-mail attachment or from any static host). It is a fan-made, non-commercial
 prototype — see the licence and fan notice below.
 
+**Status (unofficial prototype):** KeyForge is a registered trademark of its
+distributor (registered in Brazil with the INPI). This project is a fan-made training
+tool (solo play against a local AI), free and non-commercial, with no monetization,
+and it will comply with any rights-holder request. Game content is not redistributed:
+card data and images are loaded at runtime from the Master Vault — see `NOTICE`.
+
 ## O que é
 
 PWA offline-first para jogar KeyForge solo: importe um deck real do Master Vault,

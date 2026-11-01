@@ -192,6 +192,13 @@ ações, cobertura por set, pendências).
 
 ## Direções de futuro (anotadas, sem design ainda)
 
+A versão pública atual é — e enquanto estas direções não tiverem design, continua
+sendo — **solo contra a IA, offline, sem contas e sem monetização**.
+
+- **Backend próprio para cache de arte e APIs** (anotado em 01/nov): um backend
+  intermediário poderia servir/cache a arte das cartas e abrigar chamadas ao Master
+  Vault (incluindo eventual chave de API, longe do bundle público). Sem design;
+  depende de decisão de hospedagem.
 - **Multiplayer com backend/API**: o dono pretende adicionar partida multiplayer com
   backend próprio — impacta o single-file (API same-origin mata CORS de terceiros),
   o modo solo vs remote, e a arte (servida pelo backend). Anotado; plano separado
@@ -199,7 +206,10 @@ ações, cobertura por set, pendências).
 - **Empacotamento desktop via Tauri** (primeira opção leve): envolve o single-file
   como webview, filesystem próprio para arte offline (pacote WebP extraído numa pasta
   do usuário, sem quota de navegador), e atualização via pacote. Plano:
-  `docs/ART_OFFLINE_PLAN.md` (ajustado para Tauri).
+  `docs/ART_OFFLINE_PLAN.md` (ajustado para Tauri). **Nota (01/nov): o plano de
+  empacotar a arte offline ficou PAUSADO** — empacotar arte do Master Vault seria
+  redistribuir conteúdo de terceiros; sem licença escrita dos detentores, a arte
+  continua sendo carregada em tempo real do CDN.
 
 ## Regras de estilo vigentes
 

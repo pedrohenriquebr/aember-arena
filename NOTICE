@@ -42,9 +42,9 @@ the corresponding source at Settings > About ("Source code (AGPL-3.0)").
 2. Master Vault / KeyForge card data
 ------------------------------------
 
-Deck and card data comes from the official Master Vault
-(https://www.keyforgegame.com) at runtime, under the fan-content terms of the
-game's rights holders. Card images are loaded from the Master Vault CDN and are
+Deck and card data is requested at runtime from the official Master Vault
+(https://www.keyforgegame.com). No licence or permission from the rights
+holders is claimed. Card images are loaded from the Master Vault CDN and are
 not redistributed by this repository. The two demo decks (src/lib/demoDeck*.ts)
 embed card names and text for offline first-run play only.
 

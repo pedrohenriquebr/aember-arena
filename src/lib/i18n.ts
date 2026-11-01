@@ -620,7 +620,7 @@ export const DICT: Record<string, [string, string]> = {
   "ui.settings.about.keyteki": ["keyteki", "keyteki"],
   "ui.disclaimer": ["Fan-made, free and non-commercial. Not the official KeyForge site and not affiliated with, sponsored or endorsed by Ghost Galaxy, Fantasy Flight Games or Master Vault. KeyForge is a Registered Trademark of Ghost Galaxy, Inc.", "Projeto de fã, gratuito e não comercial. Não é o site oficial de KeyForge nem é afiliado, patrocinado ou endossado pela Ghost Galaxy, Fantasy Flight Games ou Master Vault. KeyForge is a Registered Trademark of Ghost Galaxy, Inc."],
   "ui.settings.about.privacy": ["Privacy: your game data stays only in this browser (localStorage/IndexedDB). Decks come from the Master Vault. Nothing is sent to servers of ours. Contact: the repository issues.", "Privacidade: os dados do jogo ficam apenas neste navegador (localStorage/IndexedDB). Os decks vêm do Master Vault. Nenhum dado é enviado a servidores nossos. Contato: issues do repositório."],
-  "ui.settings.about.trademark": ["KeyForge is a trademark of Ghost Galaxy. No endorsement implied.", "KeyForge é marca da Ghost Galaxy. Sem endosso."],
+  "ui.settings.about.trademark": ["KeyForge is a Registered Trademark of Ghost Galaxy, Inc. No endorsement implied.", "KeyForge é marca registrada da Ghost Galaxy, Inc. Sem endosso."],
   "ui.table.menu": ["Table menu", "Menu da mesa"],
   "ui.table.continue": ["Keep playing", "Continuar jogando"],
   "ui.table.notes": ["Table notes", "Notas da mesa"],
