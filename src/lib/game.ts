@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Rules engine of Keyforge Online. Turn structure, fight/damage/armor, keywords,
+// Rules engine of Aember Arena. Turn structure, fight/damage/armor, keywords,
 // draw-with-chains and key cost ported from keyteki (https://github.com/keyteki/keyteki):
 // server/game/GameActions/ResolveFightAction.js, DealDamageAction.js, DrawAction.js,
 // server/game/player.js (getCurrentKeyCost, maxHandSize), gamesteps/ReadyPhase.js,
 // gamesteps/key/KeyPhase.js, gamesteps/setup/setupphase.js and Card.js (taunt).
-// Copyright (C) keyteki contributors. Rewritten in TypeScript for Keyforge Online.
+// Copyright (C) keyteki contributors. Rewritten in TypeScript for Aember Arena.
 //
 // Pure API: every exported function clones its input and returns a new state;
 // the helpers below mutate only that private clone.

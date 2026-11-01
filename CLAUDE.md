@@ -333,7 +333,7 @@ ações, cobertura por set, pendências).
 - Errors from the Master Vault API go through `describeFailure()` in `keyforgeApi.ts`.
 - Storage failures are swallowed on purpose. Keep that property.
 - Audio unlocked from a user gesture (`sound.unlock()` on first `pointerdown`).
-- **Repo público:** <https://github.com/pedrohenriquebr/keyforge-online> — `dev` é a
+- **Repo público:** <https://github.com/pedrohenriquebr/aember-arena> — `dev` é a
   branch de trabalho, `master` é o que o Pages publica (deploy por GitHub Actions,
   `.github/workflows/pages.yml`). Nunca force-push; PR `dev → master` sem squash.
 - **Todo commit leva `[AI]` no assunto** (hook `.githooks/commit-msg`; ative com

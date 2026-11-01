@@ -1,12 +1,12 @@
-# Keyforge Online
+# Aember Arena
 
-[![Deploy](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/pages.yml/badge.svg)](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/pages.yml)
-[![CI](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/ci.yml/badge.svg)](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/ci.yml)
-[![Live](https://img.shields.io/badge/play-pedrohenriquebr.github.io%2Fkeyforge-online-2ea043)](https://pedrohenriquebr.github.io/keyforge-online/)
+[![Deploy](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/pages.yml/badge.svg)](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/pages.yml)
+[![CI](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/pedrohenriquebr/aember-arena/actions/workflows/ci.yml)
+[![Live](https://img.shields.io/badge/play-pedrohenriquebr.github.io%2Faember-arena-2ea043)](https://pedrohenriquebr.github.io/aember-arena/)
 
 **Status: protótipo.** Jogo solo de fã, não comercial, em desenvolvimento ativo.
 
-**English:** Keyforge Online is an offline-first PWA for solo KeyForge: import a real
+**English:** Aember Arena is an offline-first PWA for solo KeyForge: import a real
 Master Vault deck, play against a configurable local AI, and keep playing with no
 connection. The build is a single self-contained `index.html` (works from `file://`,
 from an e-mail attachment or from any static host). It is a fan-made, non-commercial
@@ -18,7 +18,7 @@ PWA offline-first para jogar KeyForge solo: importe um deck real do Master Vault
 jogue contra uma IA local configurável e continue jogando sem conexão. O build é um
 único `index.html` autocontido.
 
-Jogue em <https://pedrohenriquebr.github.io/keyforge-online/>.
+Jogue em <https://pedrohenriquebr.github.io/aember-arena/>.
 
 ```bash
 npm install
@@ -42,14 +42,14 @@ service worker, o toast "Nova versão disponível" (FEAT-09) aparece e o botão
 Se o app parecer **preso numa versão velha** (service worker envenenado: tela
 antiga que não atualiza nem com reload), abra o app com `?swreset=1` na URL —
 por exemplo `http://localhost:4173/?swreset=1` no `npm run preview`, ou, em
-produção, <https://pedrohenriquebr.github.io/keyforge-online/?swreset=1>. O
+produção, <https://pedrohenriquebr.github.io/aember-arena/?swreset=1>. O
 parâmetro precisa ir no caminho do app (o Pages serve o site do usuário na raiz,
 não o subpath). Isso desregistra todos os service workers, apaga todos os caches
 `aember-arena-*`, tira o parâmetro da URL e recarrega o app limpo uma única vez.
 
 ## Licença
 
-Copyright (C) 2026 Keyforge Online contributors.
+Copyright (C) 2026 Aember Arena contributors.
 
 Este programa é software livre: você pode redistribuí-lo e/ou modificá-lo sob os
 termos da **GNU Affero General Public License, versão 3** (`AGPL-3.0-only`), conforme
@@ -77,12 +77,12 @@ commit fonte e as demais atribuições estão em [`NOTICE`](NOTICE).
 
 ## Aviso de projeto de fã
 
-Keyforge Online é um **projeto de fã, gratuito e não comercial**, sem afiliação,
+Aember Arena é um **projeto de fã, gratuito e não comercial**, sem afiliação,
 patrocínio ou endosso da Fantasy Flight Games, da Ghost Galaxy ou do Master Vault.
 KeyForge, os nomes, textos e artes das cartas e demais elementos do jogo são
 propriedade intelectual de seus respectivos titulares (Fantasy Flight Games /
 Ghost Galaxy). A licença AGPL-3.0 cobre **apenas o código** deste repositório — não
 concede nenhum direito sobre esse conteúdo. Imagens de cartas são carregadas do
-Master Vault em tempo de execução e não são redistribuídas por este projeto. O MTG
-Arena é citado nos documentos de design apenas como referência de UX; nenhum asset
-dele está incluído no repositório ou no build.
+Master Vault em tempo de execução e não são redistribuídas por este projeto.
+
+*KeyForge is a Registered Trademark of Ghost Galaxy, Inc.*

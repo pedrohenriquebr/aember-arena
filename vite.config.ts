@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Publicado em subpath (github.io/keyforge-online/): relativo é o default seguro
+  // Publicado em subpath (github.io/aember-arena/): relativo é o default seguro
   // do singlefile, e manifest/sw.js já resolvem a partir de "./".
   base: "./",
   plugins: [react(), viteSingleFile()],

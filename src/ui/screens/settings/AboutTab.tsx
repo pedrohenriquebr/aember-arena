@@ -36,11 +36,12 @@ export function AboutTab({ t, onOpenTutorial }: { t: Translator; onOpenTutorial:
           </a>
           {/* AGPL-3.0 §13: quem usa o app pela rede precisa de um caminho para o
               código-fonte correspondente (o bundle minificado não carrega o notice). */}
-          <a className="u-about-link" href="https://github.com/pedrohenriquebr/keyforge-online" target="_blank" rel="noreferrer">
+          <a className="u-about-link" href="https://github.com/pedrohenriquebr/aember-arena" target="_blank" rel="noreferrer">
             <ExternalLink size={13} aria-hidden="true" /> {t("ui.settings.about.source")}
           </a>
         </div>
-        <p className="u-settings-note">{t("ui.settings.about.trademark")}</p>
+        <p className="u-settings-note">{t("ui.disclaimer")}</p>
+        <p className="u-settings-note">{t("ui.settings.about.privacy")}</p>
         <div className="u-settings-actions">
           <Button variant="primary" icon={<RotateCcw size={15} />} onClick={onOpenTutorial}>{t("tutorial.open")}</Button>
         </div>

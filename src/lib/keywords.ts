@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Keyword model ported from keyteki (https://github.com/keyteki/keyteki):
 // server/game/Card.js (printedKeywords / getKeywordValue) and docs/keywords.md.
-// Copyright (C) keyteki contributors. Rewritten in TypeScript for Keyforge Online.
+// Copyright (C) keyteki contributors. Rewritten in TypeScript for Aember Arena.
 import type { CardFace } from "./game";
 
 /** Keywords the engine resolves by itself (see game.ts). "exalt" is recognized

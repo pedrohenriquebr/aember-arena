@@ -131,6 +131,8 @@ export function LobbyScreen(props: LobbyScreenProps) {
           />
         )}
       </div>
+
+      <p className="nf-lobby-fine" role="contentinfo">{t("ui.disclaimer")}</p>
     </div>
   );
 }
