@@ -6132,9 +6132,15 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 }
 
 /* ---------- Card hover zoom ---------- */
+/* Escala de camadas (medida): header 30 · fx 55 · rail/drawer 60–71 · tab bar 70 · replay 75–76 ·
+   toast 80 · modal-backdrop (v1 e lightbox) 100 · coach 900 · folhas nf-sheet / onboarding /
+   resultado 1000 (teto atual).
+   O preview de leitura é só visual (pointer-events: none) e precisa ficar SEMPRE acima de
+   qualquer modal, por isso vem acima do teto (1100). Novo modal fica em ≤ 1000; se um dia
+   passar disso, suba junto com este valor. */
 .card-zoom-layer {
   position: fixed;
-  z-index: 200;
+  z-index: 1100;
   inset: 0;
   pointer-events: none;
 }
@@ -6394,7 +6400,7 @@ html:not(.reduce-motion) .game-board:not(.no-anim) .house-pill--asking .house-ch
 /* ---------- FX layer (Onda 1: portal de voo/efeitos) ---------- */
 /* O board tem overflow: hidden; tudo que voa vive neste portal no <body>, como
    o zoom/lightbox do CardArt. z-index 55: acima do board e do header, abaixo
-   dos modais (100), da tab bar (70) e do zoom de carta (200). A coreografia
+   dos modais (nf-sheet 1000), da tab bar (70) e do zoom de carta (1100). A coreografia
    vive aqui; o JS só posiciona o nó e passa a geometria em custom properties
    (--fx-* no host), o que mantém o diretor pequeno e o movimento no compositor. */
 .fx-layer {
