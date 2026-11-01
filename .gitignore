@@ -4,8 +4,21 @@ graphify-out/
 e2e/shots/
 e2e/clips/
 .playwright-mcp/
-docs/advisor/*.log
 e2e/probes/shots/
 .kfdata-tmp/
 scripts/harvest/
+
+# Internal operation material: AI mission briefs, model streams and reference
+# screenshots stay local (they are heavy and some carry third-party art).
+docs/advisor/
+docs/references/
+docs/ux-prints/
+docs/polish/
+bench/
+
+# Local secrets and bulky exports never belong in the repo.
+.env
+.env.*
 opencode.json
+*.zip
+*.jsonl

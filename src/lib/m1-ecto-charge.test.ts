@@ -9,16 +9,18 @@ import { normaliseAbilityOverride, setAbilityOverrides, type AbilityOverride } f
 import { textHash } from "./cardText";
 import { applyMove, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "ac9fd9ad-e2a9-4744-8324-5532cedb9c72";
-const TEXT = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; text: string }[]).find((c) => c.id === ID)!.text;
+const CORPUS = harvestJson<{ id: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const TEXT = CORPUS.find((c) => c.id === ID)?.text ?? "";
 
 const ROW = normaliseAbilityOverride((JSON.parse(readFileSync(join(process.cwd(), "src", "lib", "generated", "approved.json"), "utf8")) as { cardId: string }[]).find((r) => r.cardId === ID)) as AbilityOverride;
 
 beforeEach(() => setAbilityOverrides(new Map([[ID, ROW]])));
 afterEach(() => setAbilityOverrides(new Map()));
 
-describe("M1 · linha vendored (approved.json) — validador e hash do corpus", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · linha vendored (approved.json) — validador e hash do corpus", () => {
   it("passa no validador e o hash é o do texto impresso", () => {
     expect(ROW).not.toBeNull();
     expect(ROW.textHash).toBe(textHash(TEXT));
@@ -35,7 +37,7 @@ function playEcto(amber: number, discardCount: number): GameState {
   return applyMove(state, 0, { type: "play", instanceId: e.instanceId });
 }
 
-describe("M1 · Ecto-Charge — custo = +20 menos 1 por carta no descarte (mínimo 6)", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · Ecto-Charge — custo = +20 menos 1 por carta no descarte (mínimo 6)", () => {
   it("sem descarte o custo é 26: com 25 âmbar não forja, a carta vai ao descarte e não é purgada", () => {
     const after = playEcto(25, 0);
     expect(after.players[0].keys).toBe(0);

@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // M2 · Gargantes Scrapper (17cf0b90): "Alpha. Play: If you have 3Æ or more, deal 3D to an enemy
 // creature." Bancada do TEXTO IMPRESSO (corpus), sem linha vendored.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, getLegalMoves, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "17cf0b90-55c6-4e4b-b13a-2400dd883938";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 
 const scrapper = () => card(TITLE, { id: ID, type: "Creature", house: "Brobnar", power: 4, armor: 0, text: TEXT });
 const foe = () => card("Inimiga", { type: "Creature", house: "Untamed", power: 9, armor: 0, text: "" });
 const damageOf = (state: GameState, instanceId: string) => state.players[1].board.find((c) => c.instanceId === instanceId)?.damage;
 
-describe("M2 · Gargantes Scrapper — Play: com 3Æ ou mais, 3 de dano a uma criatura inimiga", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Gargantes Scrapper — Play: com 3Æ ou mais, 3 de dano a uma criatura inimiga", () => {
   it("com 3Æ na pool: 3 de dano no alvo inimigo e o âmbar da pool não muda", () => {
     const s = scrapper();
     const f = foe();

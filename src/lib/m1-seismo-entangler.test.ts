@@ -2,14 +2,14 @@
 // M1 · Seismo-entangler (e5f62952): "Action: Choose a house. During your opponent's next turn,
 // creatures of the chosen house cannot be used to reap." Bancada do TEXTO IMPRESSO (corpus), sem
 // linha vendored.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, chooseHouse, endTurn, getLegalMoves, type GameState } from "./game";
 import { card, setupTest, type SideSetup } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "e5f62952-650e-4063-b534-6023a0cd30cf";
-const TEXT = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; text: string }[]).find((c) => c.id === ID)!.text;
+const CORPUS = harvestJson<{ id: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const TEXT = CORPUS.find((c) => c.id === ID)?.text ?? "";
 
 const seismo = () => card("Seismo-entangler", { id: ID, type: "Artifact", house: "Logos", power: 0, armor: 0, text: TEXT });
 const foeBrobnar = () => card("Brobnar inimigo", { type: "Creature", house: "Brobnar", power: 3, armor: 0, text: "" });
@@ -27,7 +27,7 @@ function arena(p1: SideSetup, p2: SideSetup): GameState {
 const canReap = (state: GameState, side: 0 | 1, house: string, instanceId: string) =>
   getLegalMoves(state, side, house).some((m) => m.type === "reap" && m.instanceId === instanceId);
 
-describe("M1 · Seismo-entangler — casa escolhida não reapa no próximo turno do oponente", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · Seismo-entangler — casa escolhida não reapa no próximo turno do oponente", () => {
   it("escolhida Brobnar: no turno seguinte do oponente, a Brobnar dele não reapa (e a casa de fato foi escolhida)", () => {
     const s = seismo();
     const b = foeBrobnar();

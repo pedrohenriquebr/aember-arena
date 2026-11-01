@@ -6,16 +6,15 @@
 // Regras (rulebook, "Upgrade"): entra anexada a uma criatura escolhida por quem controla a
 // upgrade; se não puder anexar, não entra em jogo; sai junto com o hospedeiro. Animating Force
 // é a exceção impressa: "enters play attached to an artifact instead of a creature".
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setAbilityOverrides } from "./abilities";
 import { applyMove, isLegalMove, targetChoices, type CardFace, type CardInstance, type GameState } from "./game";
 import { partitionLane } from "./laneLayout";
 import { card, setupTest } from "./testkit";
 import { vendoredOverrides } from "./vendored";
-
-const DECKS = JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-dois-decks.json"), "utf8")) as CardFace[];
+import { harvestJson } from "./testHarvest";
+const DECKS = harvestJson<CardFace[]>("cards-dois-decks.json") ?? [];
+const HAS_CORPUS = DECKS.length > 0;
 const faceOf = (title: string) => DECKS.find((face) => face.title === title)!;
 const fromDeck = (title: string) => card(title, { ...faceOf(title) });
 
@@ -35,7 +34,7 @@ afterEach(() => setAbilityOverrides(new Map()));
 
 const CREATURE_UPGRADES = ["Blood of Titans", "Cybergiant Rig", "Essence Entangler", "Under Pressure", "Proton Siphon"];
 
-describe("QA-08 · upgrades de criatura dos decks do dono", () => {
+describe.skipIf(!HAS_CORPUS)("QA-08 · upgrades de criatura dos decks do dono", () => {
   it("as 5 faces do deck são Upgrade (e Grasping Vines é Action)", () => {
     for (const title of [...CREATURE_UPGRADES, "Animating Force"]) expect(faceOf(title).type, title).toBe("Upgrade");
     expect(faceOf("Grasping Vines").type).toBe("Action");
@@ -85,7 +84,7 @@ describe("QA-08 · upgrades de criatura dos decks do dono", () => {
   }
 });
 
-describe("QA-08 · Animating Force (0706d7cd, a face do deck)", () => {
+describe.skipIf(!HAS_CORPUS)("QA-08 · Animating Force (0706d7cd, a face do deck)", () => {
   it("o prompt oferece SÓ artefatos — nenhuma criatura, de nenhum lado", () => {
     const af = fromDeck("Animating Force");
     const [mine, theirs, art, theirArt] = [creature("Mine", "Geistoid"), creature("Theirs"), relic(), relic()];

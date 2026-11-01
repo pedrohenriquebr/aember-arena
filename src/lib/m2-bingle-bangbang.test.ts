@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // M2 · Bingle Bangbang (kt:722:043): "Before Fight: Deal 5 to each neighbor of the creature Bingle
 // Bangbang fights." Bancada do TEXTO IMPRESSO (corpus), sem linha vendored.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "kt:722:043:brobnar";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 
 const bingle = () => card(TITLE, { id: ID, type: "Creature", house: "Brobnar", power: 9, armor: 0, text: TEXT });
 const unit = (title: string, power: number, house = "Untamed") => card(title, { type: "Creature", house, power, armor: 0, text: "" });
 const onBoard = (state: GameState, side: 0 | 1, instanceId: string) => state.players[side].board.find((c) => c.instanceId === instanceId);
 
-describe("M2 · Bingle Bangbang — antes da luta, 5 de dano em cada vizinho do alvo", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Bingle Bangbang — antes da luta, 5 de dano em cada vizinho do alvo", () => {
   it("os dois vizinhos do alvo levam 5; o alvo só leva o dano da luta; Bingle e os vizinhos dela não", () => {
     const b = bingle();
     const amiga1 = unit("Amiga 1", 9, "Brobnar");

@@ -143,38 +143,15 @@ ações, cobertura por set, pendências).
   inteiro; enrage obrigа luta "if able"), `controlledBy` (take control MOVE a carta
   de battleline), `bonusIcons` (enhanced: capture/damage/draw além do âmbar),
   `forgeKey/unforgeKey` fora do passo, `PersistentEffect.replace` ("instead").
-- **PAUSA 09/out noite (reboot do ZCode): H-25 NO STASH@{0}** — migração de tokens do board FEITA
-  (seed via script em src/index.css; 1020 specs verdes; tsc OK; FIT 2D/3D com rows idênticas nos 4
-  temas). FALTA: re-rodar `_3d-chain` e `_3d-arena` (H3D-17) — o agente suspeitava flake por timing e
-  ia re-rodar; decidir regressão-vs-flake; captures nos 4 temas + check de contraste novo; relatório.
-  Retomada: `git stash pop` → probes primeiro. Tudo até H-24 COMMITADO (1836f70); a esteira pós-H-25:
-  H-26 ZonesSheet, H-27 vazios/erros, H-28 coreografia, e o CUTOVER (H-29) aguardando as 5 decisões
-  do dono (§7) + ciclo de uso antes de remover a v1 (H-30).
-- **PAUSA 09/out (dono desligou): bloco Decks (H-15/16/17) NO STASH** — `git stash pop` retoma; 983
-  specs verdes + tsc OK no stash; FALTA: 2 asserções do importFlow no `e2e/ui2.mjs` em ajuste + bateria
-  final (ui2/FIT/journey/freeze/build) → commit por lote. Lições do dia: (1) o daemon do Claude Code
-  RESSUSCITA sessões em background — matar processo falha, use `claude stop <id|nome>` (resíduos
-  ui2-baseline-e2e-investigation e debug-runner-animation-texture parados assim; a lição está na memória
-  bg-mission-hygiene); (2) sessão interativa paralela no MESMO repo = dois escritores (o Haiku detectou
-  sozinho e parou — comportamento correto).
-- **PAUSA 07/out noite (dono desligou): pill de casas NO STASH** — `git stash pop` retoma (seletor de
-  casas como pill flutuante sobre a mesa, parcial do mimo; depois: ícones maiores das pilhas e sessão
-  de QA jogando no navegador). Pilhas visíveis COMMITADAS (7cbb196). Estado do dia:
-- **Estado 07/out (sessão dos 2 decks + UX + PWA)**: ① Lotes 15a-15f do conversor COMMITADOS
-  (then-chains DSL v14, target-select v15, pacote de tabelas, durações v16 + fix `self` no-op no lasting,
-  engineGaps v17, gain-ability — converted 221→432, golden 531; refs/audit em `docs/UX_ARENA_PLAN.md`).
-  ② SW CURADO: dev não registra SW (1ea1797), `sw.js` versionado por build + escape hatch `?swreset=1`
-  (975d982) — build novo = toast FEAT-09; harness `node e2e/sw-reset.mjs`. ③ 2 DECKS DO DONO 100%
-  (755bcdd): o faltante eram rascunhos nunca-revisados, não farm — checar drafts.json antes de farmar.
-  ④ **FALLBACK POR textHash no storedAbility (07/out)**: os ids de carta do MV DIVERGEM dos ids do
-  corpus ETL nos sets novos (Memette 07f5be7e… no MV vs 6e4e4627… no corpus) e o override nunca casava
-  por id — agora, se o id não acha, a linha cujo textHash é IGUAL ao texto da carta aplica (texto igual =
-  regra igual; cartas SEM texto nunca caem no fallback — teste dsl3 do laço de observers pega isso).
-  ⑤ UX ARENA (5e1db6e/2572fad): 15 referências MTG Arena em `docs/references/mtg-arena/`, backlog
-  UX-01..14, design system com tokens, home AAA (parallax/partículas/cascata) e mesa 3D estilo MTG
-  (atmosfera por profundidade; folga vertical ZERO na tela de jogo e `--row-z` travado — ver plano §6).
-  ⑥ MISSÃO DOS 2 DECKS NO NAVEGADOR: importação fresca do MV abre 19/36; com o fallback → 35/36
-  (Memette full). Crash do DeckTile com deck importado (`deck.houses[0]` sem houses) em correção.
+- **Service worker curado**: dev não registra SW, `sw.js` é versionado por build
+  (`?swreset=1` é o escape hatch) e build novo dispara o toast FEAT-09
+  (`node e2e/sw-reset.mjs`).
+- **Fallback por `textHash` no storedAbility**: os ids do Master Vault divergem dos
+  ids do corpus ETL nos sets novos, então, quando o id não acha, a linha cujo
+  `textHash` é igual ao texto da carta aplica (texto igual = regra igual; carta sem
+  texto nunca cai no fallback — o teste dsl3 do laço de observers cobre).
+- **Decks do dono**: os 2 decks próprios estão 100% cobertos; o que faltava eram
+  rascunhos nunca revisados (checar `drafts.json` antes de farmar).
 - **Keyteki como fonte de DSL (pesquisa 05/out)**: `docs/KEYTEKI_DSL_RESEARCH.md` (Opus low) e
   `_SONNET.md` (Sonnet medium, independente) mediram o sistema de habilidades do keyteki
   (2.606 arquivos JS, 101 classes de GameAction, 127 helpers usados). Veredito: conversor
@@ -249,139 +226,9 @@ ações, cobertura por set, pendências).
 4. `houseColor` / `houseLabel` signatures stable.
 5. All user-facing strings (incl. `aria-label`) go through `i18n.ts` (`t("…")`), en + pt-BR.
 6. Preserve the deliberate error-swallowing in storage/audio paths (match stays playable).
-7. **Tamanho de bundle:** INFORMATIVO desde 02/out/2026 (decisão do dono: features
-   valem mais que bytes — o número é telemetria, não gate; histórico abaixo).
-   Histórico de
-   revisões (sempre chore commit + justificativa): 121,5 → 122 (FEAT-01/02) → 124
-   (fechamento tutorial) → 125 (BUG2-05) → 126 (FEAT-05/08/10) → 127,5 (FEAT-11/14/06)
-   → 129,5 (FEAT-12) → 132 (FEAT-13) → 134 (tutorial) → 135 (fixes BUG2-01..07:
-   +0,15 kB líquidos, dos quais 56 bytes são do BUG2-04 — reconstrução de DeckInfo
-   retomado, lógica nova real; varredura de mortos exaustiva pré-revisão: 0 removível)
-   → **136,5** (ANIM onda 1, `docs/ANIMATIONS_PLAN.md`: infra de FX — `lib/fx.ts`
-   (diff determinístico, puro), diretor `FxLayer` no portal, `data-iid`/`data-side`,
-   voo da carta com assento no slot, fade de quem sai do board, glow de seleção com
-   a aura fria, e VAL-04 (whoosh `play` + `land` no slam). Medido 136,46 kB;
-   varredura de mortos pré-revisão: 6 overrides `.reduce-motion` redundantes
-   (superseded pelo `*` global) e 2 metadados do `card-tile--enter`/`ready-breathe`
-   removidos)
-   → **138** (ANIM onda 2, `docs/ANIMATIONS_PLAN.md` §3: palco do turno da IA —
-   batida de 700-900ms por ação com curva de degradação, legenda "o Warden jogou
-   X", pulso de quem age + "+N Æ" voando ao placar, selo da casa no band, banner
-   "Seu turno", resumo persistente na faixa do round, toque para acelerar e
-   `aiSpeed` (normal/rápida) em settings com i18n en+pt. Medido 137,92 kB)
-   → **139,5** (ANIM onda 3, `docs/ANIMATIONS_PLAN.md` §4: impacto — forja com
-   glow no lado de quem forjou + shake, números flutuantes de dano (aria-hidden)
-   com marca de impacto, morte com dissolve do clone e correntes com elo no
-   contador. Medido 138,68 kB)
-   → **141** (VIEW3D H3D-01..10, `docs/VIEW3D_PLAN.md` §2/§5 — fundação do modo
-   3D: `settings.tableView` persistido ("2d" default) com toggle na Config e
-   botão de 44px na partida, wrapper `.table-plane` (`display: contents` no 2D)
-   e a cadeia `perspective`/`preserve-3d` até a `.board-piece`, `@property
-   --tilt` + transição de 420ms e fade da troca de modo, probe
-   `e2e/probes/_3d-chain.mjs`. Só CSS/TS, zero dependência; a fundação mediu
-   +0,87 kB gz (139,26 → 140,13) e o modo completo (H3D-03..12, mesa
-   inclinada/leque/FX) ainda pede a revisão dos marcos M2/M3 — estimativa do
-   plano: +2,0 a +2,6 kB no total. Varredura de mortos pré-revisão
-   (`_dead-css`): 0 removível — os nomes
-   "sem uso" são dinâmicos (`card-art--${size}`) e os overrides `.reduce-motion`
-   restantes são intencionais (o `*` global só encurta a duração, não remove o
-   fill).
-   → **143,5** (VIEW3D H3D-03..06, `docs/VIEW3D_PLAN.md` §2.1-§2.5: mesa
-   inclinada a 40°/32° com playmat em gradientes + billboards, cartas de pé e
-   levitando (pose em propriedades individuais, --n por lane com sobreposição),
-   sombras difusas no tapete com o ready-breathe/sel-breathe convertidos para
-   opacity e mão em leque com recuo lateral, mais os checks novos do probe
-   `_3d-chain` (pose, sombra, teto de animações por propriedade e leque). Só
-   CSS/TS, zero dependência; medido 141,38 kB gz (+1,25 sobre os 140,13 da
-   fundação: +0,26 no 03, +0,45 no 04, +0,25 no 05 e +0,29 no 06). Varredura de
-   mortos pré-revisão (`_dead-css`): 0 removível — os "sem uso" são nomes
-   dinâmicos (`card-art--${size}`, `house-icon--${size}`). Confira com
-   `npm run e2e:bundle`.
-   → **143,5 mantido** (VIEW3D H3D-07/08/09/12, `docs/VIEW3D_PLAN.md` §2.7-§3:
-   interação (alvo do pick sobe/afunda), FX no 3D (pouso com a pose do slot,
-   origem do leque por layout+scale, shake no plano), perfil 2.5D do celular +
-   modo lite (<= 2 núcleos) + `@supports` que anula o 3D sem suporte, parallax
-   da câmera e os instrumentos (capture/floor visual/smoke/record 3D + probes
-   `_3d-hit`/`_3d-fx` e os checks de câmera no `_3d-chain`). Só CSS/TS, zero
-   dependência: medido **142,57 kB gz** (+1,19 sobre os 141,38) — dentro do teto,
-   sem necessidade de nova revisão. Varredura de mortos pós-mudança
-   (`_dead-css`): 0 removível (mesmos nomes dinâmicos de antes).
-   → **145** (UX-FIT lote 2, `docs/UX_FIT_PLAN.md` §2.4/§2.6/§4: mão como HUD
-   com título fundido à barra do jogador, rail em drawer abaixo de 1041px
-   (botões Desfazer/Notas no console, useDialogFocus, Esc/backdrop/X) e ritmo da
-   IA configurável `aiDelayMs`. Só CSS/TS, zero dependência; FIT-04 mediu
-   143,20 e FIT-05 143,66 kB gz. Teto ÚNICO deste lote — acima de 145: parar.
-   Varredura de mortos pré-revisão: 0 removível (`.match-chip` já saiu).)
-   → **148** (onda 1 da camada de efeitos, `docs/ROADMAP_REVIEW.md` §3:
-   persistentEffect derivado do board em `game.activeEffects` — gramática
-   constante no `cardText.ts` (gets/gains/gets ±N power|armor/cannot play|use|fight/
-   gains '<ability citada>'), leitura efetiva (`effectivePower`/`effectiveArmor`/
-   `keyword(state,…)`/`abilitiesOf`) em luta, dano, morte por poder e avaliação da
-   IA, proibições na legalidade, duração ("remainder of the turn"/"on their next
-   turn") como dado primitivo em `GameState.lasting` podado no endTurn, e o fix de
-   regra dos arquivos opcionais ("may") com botão no console. Só TS/CSS, zero
-   dependência; a gramática sozinha mediu 145,38 e o fechamento **146,34 kB** gz.
-   Deixou de fora da onda (documentado no roadmap): bonusFightDamage (Valdr),
-   contadores de poder, "instead" e tokens. Teto ÚNICO deste lote — acima de 148:
-   parar. Varredura de mortos pré-revisão: 0 removível (o nome novo
-   `.archives-action/.archives-count` é usado pelo botão; os nomes "sem uso" do CSS
-   continuam dinâmicos).)
-   → **151** (onda 4, "estado de set", `docs/ROADMAP_REVIEW.md` §3: ward/enrage
-   como tokens em `CardInstance` (`warded`/`enraged`) com consumo no destroy/dano e
-   a luta forçada na legalidade, `CardFace.bonusIcons` + `enhancements` do Master
-   Vault lidos no `normaliseCard` e resolvidos no play, `controlledBy` para a troca
-   de controle (que move a carta de battleline e devolve à pilha do dono), `forge()`
-   compartilhado com `forgeKey`/`unforgeKey` fora do passo de chave e
-   `PersistentEffect.replace` para as substituições "instead" suportadas. Só TS,
-   zero dependência; medido **148,35 kB** gz no fechamento (147,16 antes da onda).
-   Teto ÚNICO deste lote — acima de 151: parar. Varredura de mortos pré-revisão
-   (`_dead-css`): 0 removível (os nomes "sem uso" continuam dinâmicos:
-   `card-art--${size}`, `house-icon--${size}`, `coverage-note--*`,
-   `toast-message--${kind}`).)
-   → **155** (onda 1 do catálogo dinâmico, `docs/DYNAMIC_CATALOG_PLAN.md`
-   §1/§2/§3/§5: DB v4 com os stores `cards` (face + `textHash` + `syncedAt`) e
-   `abilities` (DSL por carta com `source`/`reviewed`, pronto para a onda 2),
-   sync incremental paginado com cursor persistido e cancelamento (só cartas
-   novas ou com texto mudado entram), `rulesOf` lendo o store antes do parser
-   (mapa carregado no boot, memo WeakMap invalidado quando os overrides chegam)
-   e o chip "catálogo: N cartas" na Home/Vault + seção Catálogo no card do Review
-   (um 7º pill não cabia com rótulo no stepper). Só
-   TS/CSS, zero dependência; baseline real 152,26 kB e o fechamento mediu
-   **153,80 kB** gz — teto revisado de 153 para 155, a ÚNICA revisão autorizada
-   pelo pedido da onda. Varredura de identificadores CSS novos: 0 removível
-   (`.catalog-row` e `.deck-list-meta` são usados; o resto é classe existente).)
-   → **153** (lote A3 "o espetáculo", `docs/VIEW3D_ARENA_LAYOUT.md` §4 H3D-19..21:
-   avatares centrais + dorsos do Warden, investida/impacto e mesa-ambiente. Só
-   CSS/TS, zero dependência; baseline real 150,79 kB (o 148,39 citado no pedido era
-   anterior ao ritmo da IA). Teto ÚNICO deste lote — acima de 153: parar. Varredura
-   de mortos pré-revisão (`_dead-css`): 0 removível (só nomes dinâmicos).)
-   → **157** (onda 2 do catálogo dinâmico, `docs/DYNAMIC_CATALOG_PLAN.md` §4/§5:
-   parserVersion + overrides só entre partidas, BYOK na Config, pipeline LLM
-   (`catalogLlm.ts`, schema gerado em `generated/dslSchema.ts`) e harvest. Baseline
-   154,63; mediu **156,31 kB** (BYOK +1,26; o pipeline só entra no bundle quando a UI
-   o importa). A fila de revisão (UI) NÃO coube: com ela o bundle vai a 163,61 kB
-   (+7,3) e ficou na branch `wip/catalog-queue-ui`. Teto 157, a ÚNICA revisão desta
-   onda — acima: parar.)
-   → **162** (CAT-3, `npm run harvest`/docs do proxy: a fila de tradução in-game +
-   revisão entrou pela primeira vez e traz o pipeline `catalogLlm` inteiro para o
-   bundle. Baseline 156,31; mediu **161,76 kB** (+5,45: pipeline/schema/few-shots
-   ~+4, UI/i18n/CSS ~+1,5). Teto 162, revisão ÚNICA do CAT-3 — acima: parar.)
-   → **164** (DSL lote 1, `docs/DSL_EXPANSION_PLAN.md` §Lote 1: normalise dos glifos
-   do MV com `textHash` congelado, `DSL_VERSION 2` com whitelists, grafias novas,
-   snapshot dos `if` no `fire()`, dry-run rico. Baseline 161,77; mediu **162,67**
-   (+0,90; a troca Sets→tabela `ACTS` do plano CUSTOU +78 — gzip comprime repetição
-   de graça). Teto 164, revisão ÚNICA do lote — acima: parar.)
-   → **167** (DSL lote 2, `docs/DSL_EXPANSION_PLAN.md` §Lote 2: `per`/`Count`,
-   `act.if` (did/gone), filtros casa/traço/exausta, `keyCost` com guarda
-   anti-recursão, `Selection.pick`/`"fought"`, act `move`, gatilho `scrap`.
-   Baseline 162,67; mediu **166,44** (+3,77, o dobro do estimado; cortar os
-   few-shots só chegaria a 166,03 — corte destrói entregável). Teto 167,
-   revisão ÚNICA do lote — acima: parar.)
-   → **TETO APOSENTADO** (decisão do dono, 02/out/2026): o tamanho do bundle deixou
-   de ser gate — o acceptance mede o gzip só como telemetria informativa; features
-   valem mais que bytes. Lotes seguintes da DSL e qualquer feature NÃO param mais
-   por tamanho e não geram mais chore de teto; `maxGzipKb` segue só como referência
-   do histórico (167).
+7. **Tamanho de bundle:** INFORMATIVO (decisão do dono: features valem mais que
+   bytes). `npm run e2e:bundle` mede o gzip como telemetria — não é gate, não
+   bloqueia feature e não gera chore de teto.
 8. Áudio permanece 100% sintetizado (Web Audio); animações respeitam
    `prefers-reduced-motion` E `settings.animations` (classe `no-anim`).
 9. Alvos de toque ≥ 44px em controles primários; `<html lang>` segue `settings.language`.
@@ -486,4 +333,10 @@ ações, cobertura por set, pendências).
 - Errors from the Master Vault API go through `describeFailure()` in `keyforgeApi.ts`.
 - Storage failures are swallowed on purpose. Keep that property.
 - Audio unlocked from a user gesture (`sound.unlock()` on first `pointerdown`).
-- Repo git próprio do projeto (41+ commits desde o baseline); sem remote — nunca push.
+- **Repo público:** <https://github.com/pedrohenriquebr/keyforge-online> — `dev` é a
+  branch de trabalho, `master` é o que o Pages publica (deploy por GitHub Actions,
+  `.github/workflows/pages.yml`). Nunca force-push; PR `dev → master` sem squash.
+- **Todo commit leva `[AI]` no assunto** (hook `.githooks/commit-msg`; ative com
+  `git config core.hooksPath .githooks`). O commit baseline é a única exceção.
+- Documentação interna de missões (`docs/advisor/`, `docs/references/`,
+  `docs/ux-prints/`, `bench/`) fica fora do repositório público (gitignored).

@@ -1,0 +1,23 @@
+name: CI
+
+# Só o que roda em qualquer máquina: tipos, testes e bundle. Os gates e2e
+# dependem do Edge/Chrome do sistema (playwright-core, sem browser baixado) e
+# por isso não entram no CI.
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [dev, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

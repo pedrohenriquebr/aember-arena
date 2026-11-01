@@ -615,6 +615,7 @@ export const DICT: Record<string, [string, string]> = {
   "ui.settings.art.stalled": ["The download stopped without an answer from the service worker. Try again.", "O download parou sem resposta do service worker. Tente de novo."],
   "ui.settings.lab.advanced": ["Advanced controls — change only if you know what each field does.", "Controles avançados — mude só se souber o que cada campo faz."],
   "ui.settings.about.license": ["Released under the GNU AGPL-3.0 license.", "Publicado sob a licença GNU AGPL-3.0."],
+  "ui.settings.about.source": ["Source code (AGPL-3.0)", "Código-fonte (AGPL-3.0)"],
   "ui.settings.about.credits": ["Card data by Master Vault. Ability model derived from keyteki.", "Dados de cartas pelo Master Vault. Modelo de habilidades derivado do keyteki."],
   "ui.settings.about.keyteki": ["keyteki", "keyteki"],
   "ui.settings.about.trademark": ["KeyForge is a trademark of Ghost Galaxy. No endorsement implied.", "KeyForge é marca da Ghost Galaxy. Sem endosso."],

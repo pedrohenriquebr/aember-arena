@@ -2,20 +2,20 @@
 // M2 · Grasping Vines (61609682): "Play: Return up to 3 artifacts to their owners’ hands."
 // Bancada do TEXTO IMPRESSO (corpus), sem linha vendored. "Up to 3" = o jogador escolhe 0..3
 // artefatos de QUALQUER lado (não há "friendly"/"enemy" no texto).
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "61609682-2c6a-4d08-8715-748cb8c8e691";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 
 const vines = () => card(TITLE, { id: ID, type: "Action", house: "Untamed", text: TEXT });
 const artifact = (title: string) => card(title, { type: "Artifact", house: "Untamed", text: "" });
 const titlesOf = (cards: { face: { title: string } }[]) => cards.map((c) => c.face.title);
 
-describe("M2 · Grasping Vines — devolve até 3 artefatos de qualquer lado às mãos dos donos", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Grasping Vines — devolve até 3 artefatos de qualquer lado às mãos dos donos", () => {
   it("escolhidos 3 artefatos (dois do oponente, um meu): cada um volta à mão do dono; o 4º fica", () => {
     const v = vines();
     const mine = artifact("Meu artefato");

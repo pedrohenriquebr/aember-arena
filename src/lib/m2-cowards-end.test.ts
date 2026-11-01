@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // M2 · Coward’s End (7d1d5e99): "Play: Destroy each undamaged creature. Gain 3 chains."
 // Bancada do TEXTO IMPRESSO (corpus), sem linha vendored.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "7d1d5e99-f0c4-4bfd-b515-0eaa50c0ce29";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 
 const coward = () => card(TITLE, { id: ID, type: "Action", house: "Brobnar", text: TEXT });
 const creature = (title: string, damage = 0) => ({ ...card(title, { type: "Creature", house: "Brobnar", power: 3, armor: 0, text: "" }), damage });
 const titlesOf = (cards: { face: { title: string } }[]) => cards.map((c) => c.face.title);
 
-describe("M2 · Coward’s End — destrói toda criatura sem dano (dos dois lados) e ganha 3 correntes", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Coward’s End — destrói toda criatura sem dano (dos dois lados) e ganha 3 correntes", () => {
   it("destrói só as criaturas sem dano, dos dois lados; as danificadas ficam; ganha 3 correntes", () => {
     const cw = coward();
     const state = setupTest(

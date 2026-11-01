@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: AGPL-3.0-only
+// Consome lambdas extraídos das cartas do keyteki (Copyright (C) keyteki contributors,
+// AGPL-3.0); as tabelas geradas seguem a mesma licença deste projeto. Ver NOTICE.
 // Lane M: classifica lambdas pendentes do dump keyteki no nosso Count/Condition via LLM (relay local).
 // Uso: node scripts/keyteki/classify.mjs [--top 150] [--batch 25] [--url ...] [--model ...]
 // Retomável: lambdas já presentes em lambda-map.json (inclusive null) são puladas.

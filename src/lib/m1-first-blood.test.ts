@@ -2,14 +2,14 @@
 // M1 · First Blood (0ec85771): "Alpha. Play: Deal 2D for each friendly Brobnar creature.
 // You may divide this damage among any number of creatures." Bancada do TEXTO IMPRESSO
 // (corpus), sem linha vendored: o parser puro precisa cumprir tudo.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, getLegalMoves } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "0ec85771-8143-4d64-8c3a-ce48bce4e81c";
-const TEXT = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; text: string }[]).find((c) => c.id === ID)!.text;
+const CORPUS = harvestJson<{ id: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const TEXT = CORPUS.find((c) => c.id === ID)?.text ?? "";
 
 const firstBlood = () => card("First Blood", { id: ID, type: "Action", house: "Brobnar", text: TEXT });
 const brob = (title: string) => card(title, { type: "Creature", house: "Brobnar", power: 3, armor: 0, text: "" });
@@ -17,7 +17,7 @@ const foe = (title: string, house = "Untamed") => card(title, { type: "Creature"
 const damageOf = (state: ReturnType<typeof setupTest>, side: 0 | 1, title: string) =>
   state.players[side].board.find((c) => c.face.title === title)?.damage ?? -1;
 
-describe("M1 · First Blood — 2D por criatura Brobnar amiga", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · First Blood — 2D por criatura Brobnar amiga", () => {
   it("soma 2 por criatura Brobnar amiga (2 amigas = 4) e não conta Brobnar inimiga nem amiga de outra casa", () => {
     const fb = firstBlood();
     const state = setupTest(
@@ -53,7 +53,7 @@ describe("M1 · First Blood — 2D por criatura Brobnar amiga", () => {
   });
 });
 
-describe("M1 · First Blood — Alpha", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · First Blood — Alpha", () => {
   it("depois de fazer outra coisa no passo, First Blood não pode mais ser jogada", () => {
     const fb = firstBlood();
     const reaper = brob("Reaper");

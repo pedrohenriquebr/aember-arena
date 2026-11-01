@@ -3,14 +3,14 @@
 // of a creature. Play: Take control of this artifact and put it on a flank of your battleline
 // as a creature with 4 power and versatile. Scrap: Gain 1." Bancada do TEXTO IMPRESSO (corpus),
 // sem linha vendored.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, effectivePower, keyword, type CardInstance, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "551a7add-d9fe-4546-82da-e3c1d1814a52";
-const TEXT = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; text: string }[]).find((c) => c.id === ID)!.text;
+const CORPUS = harvestJson<{ id: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const TEXT = CORPUS.find((c) => c.id === ID)?.text ?? "";
 
 const animating = () => card("Animating Force", { id: ID, type: "Upgrade", house: "Geistoid", text: TEXT });
 const relic = () => card("Relic", { type: "Artifact", house: "Logos", power: 0, armor: 0, text: "" });
@@ -19,7 +19,7 @@ const grunt = () => card("Grunt", { type: "Creature", house: "Geistoid", power: 
 const find = (state: GameState, side: 0 | 1, instanceId: string): CardInstance | undefined =>
   state.players[side].board.find((c) => c.instanceId === instanceId);
 
-describe("M1 · Animating Force — entra anexada a artefato", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · Animating Force — entra anexada a artefato", () => {
   it("jogada num artefato inimigo, a carta fica anexada a ele e não vira criatura ainda", () => {
     const af = animating();
     const r = relic();
@@ -29,7 +29,7 @@ describe("M1 · Animating Force — entra anexada a artefato", () => {
   });
 });
 
-describe("M1 · Animating Force — Play: pega o artefato, põe num flanco com 4 de poder e versatile", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · Animating Force — Play: pega o artefato, põe num flanco com 4 de poder e versatile", () => {
   it("o artefato do inimigo passa para a minha battleline como criatura de poder 4, no flanco esquerdo, versatile", () => {
     const af = animating();
     const r = relic();

@@ -4,17 +4,17 @@
 // vanilla. A row original (`gone`) estava ERRADA: "gone" conta cartas que saem do JOGO a partir do
 // tabuleiro, não o descarte do topo. A linha corrigida (`m:"cards"`, anexada ao approved.json com o
 // mesmo cardId) é a que vale: vendoredOverrides() é o caminho do boot e a última linha do id vence.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setAbilityOverrides } from "./abilities";
 import { textHash } from "./cardText";
 import { applyMove, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
 import { vendoredOverrides } from "./vendored";
-
+import { harvestJson } from "./testHarvest";
 const ID = "b6832a73-9223-41ae-8146-98e000a57f6d";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 const ROW = vendoredOverrides().get(ID)!;
 
 beforeEach(() => setAbilityOverrides(vendoredOverrides()));
@@ -29,7 +29,7 @@ const capturedOn = (state: GameState, side: 0 | 1, instanceId: string) => state.
 /** Topo = último elemento. Top 5 (do topo ao 5º): G1, X, G2, Y, Z. Abaixo do top 5: `below`. */
 const deckWith = (top5: ReturnType<typeof card>[], below: ReturnType<typeof card>[]) => [...below, ...[...top5].reverse()];
 
-describe("M2 · Hallowed Eve Festival — linha aprovada: descarta 5 do topo; cada Geistoid descartado = 1 de captura", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Hallowed Eve Festival — linha aprovada: descarta 5 do topo; cada Geistoid descartado = 1 de captura", () => {
   it("a linha vigente passa no validador, tem o hash do texto impresso e conta pelo descarte do topo (m:cards)", () => {
     expect(ROW.textHash).toBe(textHash(TEXT));
     expect(ROW.v).toBe(17);

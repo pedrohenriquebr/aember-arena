@@ -10,9 +10,11 @@ import { normaliseAbilityOverride, setAbilityOverrides, type AbilityOverride } f
 import { textHash } from "./cardText";
 import { applyMove, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "67ca7dfb-455a-4ba9-89a8-12c5e5be02d9";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 const ROW = normaliseAbilityOverride((JSON.parse(readFileSync(join(process.cwd(), "src", "lib", "generated", "approved.json"), "utf8")) as { cardId: string }[]).find((r) => r.cardId === ID)) as AbilityOverride;
 
 beforeEach(() => setAbilityOverrides(new Map([[ID, ROW]])));
@@ -22,7 +24,7 @@ const dirge = () => card(TITLE, { id: ID, type: "Action", house: "Unfathomable",
 const creature = (title: string, house: string) => card(title, { type: "Creature", house, power: 3, armor: 0, text: "" });
 const readyOf = (state: GameState, side: 0 | 1, title: string) => state.players[side].board.find((c) => c.face.title === title)?.ready;
 
-describe("M2 · Dirge of the Deep — linha aprovada: fundo do baralho inimigo vai ao descarte e a casa dele trava", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Dirge of the Deep — linha aprovada: fundo do baralho inimigo vai ao descarte e a casa dele trava", () => {
   it("a linha passa no validador e o hash é o do texto impresso", () => {
     expect(ROW).not.toBeNull();
     expect(ROW.textHash).toBe(textHash(TEXT));

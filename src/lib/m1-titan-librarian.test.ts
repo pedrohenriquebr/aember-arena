@@ -9,16 +9,18 @@ import { normaliseAbilityOverride, setAbilityOverrides, type AbilityOverride } f
 import { textHash } from "./cardText";
 import { endTurn, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "ca388cc0-ec45-446e-a20c-7bcd962c1a6b";
-const TEXT = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; text: string }[]).find((c) => c.id === ID)!.text;
+const CORPUS = harvestJson<{ id: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const TEXT = CORPUS.find((c) => c.id === ID)?.text ?? "";
 
 const ROW = normaliseAbilityOverride((JSON.parse(readFileSync(join(process.cwd(), "src", "lib", "generated", "approved.json"), "utf8")) as { cardId: string }[]).find((r) => r.cardId === ID)) as AbilityOverride;
 
 beforeEach(() => setAbilityOverrides(new Map([[ID, ROW]])));
 afterEach(() => setAbilityOverrides(new Map()));
 
-describe("M1 · linha vendored (approved.json) — validador e hash do corpus", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · linha vendored (approved.json) — validador e hash do corpus", () => {
   it("passa no validador e o hash é o do texto impresso", () => {
     expect(ROW).not.toBeNull();
     expect(ROW.textHash).toBe(textHash(TEXT));
@@ -35,7 +37,7 @@ function endOf(board: ReturnType<typeof card>[]): GameState {
   return endTurn(state, 0);
 }
 
-describe("M1 · Titan Librarian — arquiva uma carta no fim do meu turno se não estiver em flanco", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · Titan Librarian — arquiva uma carta no fim do meu turno se não estiver em flanco", () => {
   it("no meio da battleline (não é flanco): arquiva uma carta da mão", () => {
     const t = titan();
     const after = endOf([ally("Esquerda"), t, ally("Direita")]);

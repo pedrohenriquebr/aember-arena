@@ -2,19 +2,19 @@
 // M2 · Beam of Forgetting (c1aea816): "Enhance. Play: Reveal a random card from your opponent’s
 // hand. Put that card on the bottom of their deck." Bancada do TEXTO IMPRESSO (corpus), sem
 // linha vendored: o parser puro precisa cumprir tudo.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, getLegalMoves, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "c1aea816-4bb8-4fb8-86c1-78384997b739";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 
 const beam = () => card(TITLE, { id: ID, type: "Action", house: "Unfathomable", text: TEXT });
 const titlesOf = (cards: { face: { title: string } }[]) => cards.map((c) => c.face.title);
 
-describe("M2 · Beam of Forgetting — revela uma carta aleatória da mão inimiga e a põe no fundo do baralho", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Beam of Forgetting — revela uma carta aleatória da mão inimiga e a põe no fundo do baralho", () => {
   it("tira UMA carta da mão do oponente e a põe no FUNDO (deck[0]) do baralho dele", () => {
     const b = beam();
     const state = setupTest({ hand: [b] }, { hand: ["Opp A", "Opp B"], deck: ["Fundo 1", "Fundo 2"] }, "Unfathomable");

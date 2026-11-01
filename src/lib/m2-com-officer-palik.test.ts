@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // M2 · Com. Officer Palik (cbe0466a): "Versatile. After Fight/After Reap: A friendly creature
 // captures 1." Bancada do TEXTO IMPRESSO (corpus), sem linha vendored.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, getLegalMoves, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "cbe0466a-7a00-4816-b2e3-db7e750b90d1";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 
 const palik = () => card(TITLE, { id: ID, type: "Creature", house: "Star Alliance", power: 3, armor: 0, text: TEXT });
 const ally = () => card("Aliada", { type: "Creature", house: "Star Alliance", power: 2, armor: 0, text: "" });
@@ -17,7 +17,7 @@ const foe = () => card("Inimiga", { type: "Creature", house: "Brobnar", power: 1
 // "Capture" põe o âmbar capturado NA criatura (CardInstance.amber), não na pool de quem jogou.
 const capturedOn = (state: GameState, side: 0 | 1, instanceId: string) => state.players[side].board.find((c) => c.instanceId === instanceId)?.amber ?? 0;
 
-describe("M2 · Com. Officer Palik — após reap/luta, uma criatura amiga captura 1", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Com. Officer Palik — após reap/luta, uma criatura amiga captura 1", () => {
   it("After Reap: a criatura amiga escolhida captura 1 do oponente (o +1 da minha pool é o do próprio reap)", () => {
     const p = palik();
     const a = ally();

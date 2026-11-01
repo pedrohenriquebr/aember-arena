@@ -2,14 +2,14 @@
 // M1 · Cybergiant Rig (19953e87): "This creature gains, 'At the end of your turn, this creature
 // loses a +1 power counter.' Play: Fully heal this creature and give it a +1 power counter for
 // each damage healed." Bancada do TEXTO IMPRESSO (corpus), sem linha vendored.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyMove, effectivePower, endTurn, type CardInstance, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "19953e87-7a79-4172-a122-76889afbb514";
-const TEXT = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; text: string }[]).find((c) => c.id === ID)!.text;
+const CORPUS = harvestJson<{ id: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const TEXT = CORPUS.find((c) => c.id === ID)?.text ?? "";
 
 const rig = () => card("Cybergiant Rig", { id: ID, type: "Upgrade", house: "Brobnar", text: TEXT });
 const giant = (damage: number) => ({ ...card("Cybergiant", { type: "Creature", house: "Brobnar", power: 3, armor: 0, text: "" }), damage });
@@ -17,7 +17,7 @@ const giant = (damage: number) => ({ ...card("Cybergiant", { type: "Creature", h
 const find = (state: GameState, instanceId: string): CardInstance | undefined =>
   state.players[0].board.find((c) => c.instanceId === instanceId);
 
-describe("M1 · Cybergiant Rig — Play: cura total e +1 de poder por dano curado", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · Cybergiant Rig — Play: cura total e +1 de poder por dano curado", () => {
   it("com 2 de dano: cura tudo e fica com 2 contadores de +1 poder (poder 5)", () => {
     const r = rig();
     const g = giant(2);
@@ -38,7 +38,7 @@ describe("M1 · Cybergiant Rig — Play: cura total e +1 de poder por dano curad
   });
 });
 
-describe("M1 · Cybergiant Rig — a criatura ganha 'no fim do seu turno, perde 1 contador de +1 poder'", () => {
+describe.skipIf(!HAS_CORPUS)("M1 · Cybergiant Rig — a criatura ganha 'no fim do seu turno, perde 1 contador de +1 poder'", () => {
   it("no fim do meu turno a criatura perde um contador", () => {
     const r = rig();
     const g = giant(2);

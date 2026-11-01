@@ -1,0 +1,58 @@
+Aember Arena — third-party notices
+==================================
+
+This project is licensed under the GNU Affero General Public License v3.0
+(AGPL-3.0-only). The full text is in LICENSE.
+
+The AGPL license covers the source code of this repository only. It does not
+grant any rights over KeyForge game content (card names, card text, artwork,
+icons), which belongs to Fantasy Flight Games / Ghost Galaxy. See the fan-made
+notice in README.md.
+
+
+1. keyteki — Copyright (C) keyteki contributors
+-----------------------------------------------
+
+Repository: https://github.com/keyteki/keyteki
+License:    GNU Affero General Public License v3.0 (AGPL-3.0)
+Revision:   d9b239bc76c30f1b4505eefc9b1967a316011bf7
+            (recorded in scripts/keyteki/SOURCE.json)
+
+Aember Arena ports the shape of keyteki's declarative ability system (card
+abilities bound to triggers, composable game actions, keyword handling, fight
+and damage rules) and uses keyteki's card data as a source for derived ability
+rows. No keyteki runtime or npm dependency is bundled: the model was rewritten
+in TypeScript and the derived rows are plain data (DSL + text hash, no card
+text).
+
+Files derived from keyteki (AGPL-3.0, same license as this project):
+
+  src/lib/abilities.ts            ability model ported from keyteki's Card.js,
+                                  CardAbility.js, AbilityTargets and GameActions
+  src/lib/vendored.ts             boot-time merge of the reviewed derived rows
+  src/lib/generated/keyteki.json  ability rows approved from the converter queue
+  src/lib/generated/approved.json ability rows approved from the harvest queue
+  scripts/keyteki/*               AST parser, lambda library, lowering tables and
+                                  the converter CLI used to generate those rows
+
+Because the AGPL applies to network use (section 13), the running app links to
+the corresponding source at Settings > About ("Source code (AGPL-3.0)").
+
+
+2. Master Vault / KeyForge card data
+------------------------------------
+
+Deck and card data comes from the official Master Vault
+(https://www.keyforgegame.com) at runtime, under the fan-content terms of the
+game's rights holders. Card images are loaded from the Master Vault CDN and are
+not redistributed by this repository. The two demo decks (src/lib/demoDeck*.ts)
+embed card names and text for offline first-run play only.
+
+
+3. Trademarks
+-------------
+
+KeyForge is a trademark of Ghost Galaxy. Fantasy Flight Games and Ghost Galaxy
+do not sponsor or endorse this project in any way. MTG Arena is
+mentioned in the design notes only as a UX reference; no asset from it is
+included in this repository or in the build.

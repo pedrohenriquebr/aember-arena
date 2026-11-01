@@ -9,9 +9,11 @@ import { normaliseAbilityOverride, setAbilityOverrides, type AbilityOverride } f
 import { textHash } from "./cardText";
 import { applyMove, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "kt:722:045:brobnar";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 const ROW = normaliseAbilityOverride((JSON.parse(readFileSync(join(process.cwd(), "src", "lib", "generated", "approved.json"), "utf8")) as { cardId: string }[]).find((r) => r.cardId === ID)) as AbilityOverride;
 
 beforeEach(() => setAbilityOverrides(new Map([[ID, ROW]])));
@@ -21,7 +23,7 @@ const drum = (ready = true) => card(TITLE, { id: ID, type: "Creature", house: "B
 const giant = (title: string, house = "Brobnar") => card(title, { type: "Creature", house, power: 6, armor: 0, text: "", traits: "Giant" });
 const titlesOf = (cards: { face: { title: string } }[]) => cards.map((c) => c.face.title);
 
-describe("M2 · Drummernaut — devolve outro Giant amigo à mão (Play, After Fight, After Reap)", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Drummernaut — devolve outro Giant amigo à mão (Play, After Fight, After Reap)", () => {
   it("a linha passa no validador e o hash é o do texto impresso", () => {
     expect(ROW).not.toBeNull();
     expect(ROW.textHash).toBe(textHash(TEXT));

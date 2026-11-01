@@ -1,0 +1,43 @@
+name: Bug report
+description: Something behaves differently from the printed card text or from the UI expects
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is a fan-made prototype, not an official product. Do not paste card art.
+        For a rules problem, quote the card text and say what the engine did instead.
+  - type: input
+    id: deck
+    attributes:
+      label: Deck / card
+      description: Deck id or card name involved (no Master Vault URL needed).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Steps to reproduce, ideally from the demo deck.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build id
+      description: Settings > About shows the build id; paste it here.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      options:
+        - Rules engine / AI
+        - Table (2D)
+        - Table (3D)
+        - Deck import / library
+        - Offline / PWA update
+        - Other

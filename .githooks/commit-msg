@@ -1,0 +1,18 @@
+#!/bin/sh
+# Projeto escrito com assistência de IA: todo commit diz isso no assunto.
+# Ative com `git config core.hooksPath .githooks`.
+subject=$(head -n 1 "$1")
+
+case "$subject" in
+  "[AI]"* | "[human]"*)
+    exit 0
+    ;;
+  Merge* | Revert* | fixup!* | squash!* | "#"*)
+    # Merges, reverts e commits de autosquash são gerados pelo git.
+    exit 0
+    ;;
+esac
+
+echo "commit-msg: o assunto precisa começar com [AI] (ou [human])." >&2
+echo "            recebido: $subject" >&2
+exit 1

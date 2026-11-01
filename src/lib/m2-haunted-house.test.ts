@@ -9,9 +9,11 @@ import { normaliseAbilityOverride, setAbilityOverrides, type AbilityOverride } f
 import { textHash } from "./cardText";
 import { applyMove, endTurn, type GameState } from "./game";
 import { card, setupTest } from "./testkit";
-
+import { harvestJson } from "./testHarvest";
 const ID = "kt:700:149:geistoid";
-const { title: TITLE, text: TEXT } = (JSON.parse(readFileSync(join(process.cwd(), "scripts", "harvest", "cards-corpus.json"), "utf8")) as { id: string; title: string; text: string }[]).find((c) => c.id === ID)!;
+const CORPUS = harvestJson<{ id: string; title: string; text: string }[]>("cards-corpus.json") ?? [];
+const HAS_CORPUS = CORPUS.length > 0;
+const { title: TITLE, text: TEXT } = CORPUS.find((c) => c.id === ID) ?? { title: "", text: "" };
 const ROW = normaliseAbilityOverride((JSON.parse(readFileSync(join(process.cwd(), "src", "lib", "generated", "approved.json"), "utf8")) as { cardId: string }[]).find((r) => r.cardId === ID)) as AbilityOverride;
 
 beforeEach(() => setAbilityOverrides(new Map([[ID, ROW]])));
@@ -21,7 +23,7 @@ const house = () => card(TITLE, { id: ID, type: "Artifact", house: "Geistoid", t
 const junk = (n: number, prefix = "Lixo") => Array.from({ length: n }, (_, i) => card(`${prefix} ${i}`, { house: "Dis" }));
 const filler = (n: number) => Array.from({ length: n }, (_, i) => card(`Baralho ${i}`, { house: "Dis" }));
 
-describe("M2 · Haunted House — linha aprovada", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Haunted House — linha aprovada", () => {
   it("a linha passa no validador e o hash é o do texto impresso", () => {
     expect(ROW).not.toBeNull();
     expect(ROW.textHash).toBe(textHash(TEXT));
@@ -30,7 +32,7 @@ describe("M2 · Haunted House — linha aprovada", () => {
 
 // endTurn(s, 0) termina o turno do jogador 0: quem COMEÇA é o 1, então a casa fica com ele (dsl13).
 // Baralho grande: se a compra esvaziar o baralho, o descarte é embaralhado de volta e some da conta.
-describe("M2 · Haunted House — início do turno: descarta do topo só enquanto NÃO está assombrada", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Haunted House — início do turno: descarta do topo só enquanto NÃO está assombrada", () => {
   it("sem assombro (9 no descarte): ao começar meu turno, o topo do meu baralho vai ao descarte", () => {
     const state = setupTest({}, { inPlay: [house()], deck: filler(20), discard: junk(9) }, "Geistoid");
     const after = endTurn(state, 0) as GameState;
@@ -45,7 +47,7 @@ describe("M2 · Haunted House — início do turno: descarta do topo só enquant
   });
 });
 
-describe("M2 · Haunted House — Omni: se assombrado, ganha 1Æ", () => {
+describe.skipIf(!HAS_CORPUS)("M2 · Haunted House — Omni: se assombrado, ganha 1Æ", () => {
   it("assombrada (10 no descarte): usar a casa dá 1Æ", () => {
     const h = house();
     const state = setupTest({ inPlay: [h], discard: junk(10) }, {}, "Geistoid");

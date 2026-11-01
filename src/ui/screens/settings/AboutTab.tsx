@@ -34,6 +34,11 @@ export function AboutTab({ t, onOpenTutorial }: { t: Translator; onOpenTutorial:
           <a className="u-about-link" href="https://github.com/keyteki/keyteki" target="_blank" rel="noreferrer">
             <ExternalLink size={13} aria-hidden="true" /> {t("ui.settings.about.keyteki")}
           </a>
+          {/* AGPL-3.0 §13: quem usa o app pela rede precisa de um caminho para o
+              código-fonte correspondente (o bundle minificado não carrega o notice). */}
+          <a className="u-about-link" href="https://github.com/pedrohenriquebr/keyforge-online" target="_blank" rel="noreferrer">
+            <ExternalLink size={13} aria-hidden="true" /> {t("ui.settings.about.source")}
+          </a>
         </div>
         <p className="u-settings-note">{t("ui.settings.about.trademark")}</p>
         <div className="u-settings-actions">
