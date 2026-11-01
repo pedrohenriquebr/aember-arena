@@ -514,7 +514,7 @@ export const DICT: Record<string, [string, string]> = {
   "tutorial.skip": ["Skip tutorial", "Pular tutorial"],
   "tutorial.finish": ["Let's forge", "Vamos forjar"],
   "tutorial.flank": ["Flank", "Flanco"],
-  "tutorial.welcome": ["Welcome to Aember Arena|Forge 3 keys before the Warden: at the start of your turn, 6 amber forge a key.|Chains cost cards: your refill draws 1 fewer per 6 chains.", "Boas-vindas à Aember Arena|Forje 3 chaves antes do Warden: no início do seu turno, 6 âmbar forjam uma chave.|Correntes custam cartas: a reposição compra 1 a menos a cada 6."],
+  "tutorial.welcome": ["Welcome to Keyforge Online|Forge 3 keys before the Warden: at the start of your turn, 6 amber forge a key.|Chains cost cards: your refill draws 1 fewer per 6 chains.", "Boas-vindas à Keyforge Online|Forje 3 chaves antes do Warden: no início do seu turno, 6 âmbar forjam uma chave.|Correntes custam cartas: a reposição compra 1 a menos a cada 6."],
   "tutorial.houses": ["One house per turn|Each deck has 3 houses. Every turn you choose one: only its cards can be played or used.", "Uma casa por turno|Cada baralho tem 3 casas. A cada turno você escolhe uma: só cartas dela podem ser jogadas ou usadas."],
   "tutorial.board": ["Hand and battleline|Creatures enter exhausted on a flank, either end of the line; many abilities hit neighbors.|Artifacts stay in play; upgrades attach to a creature.", "Mão e linha de batalha|Criaturas entram exaustas num flanco, uma ponta da linha; muitas habilidades afetam vizinhos.|Artefatos ficam em jogo; melhorias se prendem a uma criatura."],
   "tutorial.actions": ["Reap, fight or use|Each ready creature of the house acts once per turn. Reap: +1 amber. Use: artifact or Action ability.|Fight: both deal their power to each other. Elusive dodges the first attack; Taunt shields neighbors.", "Colher, lutar ou usar|Cada criatura pronta da casa age uma vez por turno. Colher: +1 âmbar. Usar: artefato ou habilidade Action.|Lutar: as duas causam seu poder uma na outra. Elusive esquiva do primeiro ataque; Taunt protege vizinhos."],
@@ -737,7 +737,7 @@ export const DICT: Record<string, [string, string]> = {
   "ui.result.lobby": ["Lobby", "Lobby"],
   // UX_REWRITE_PLAN §2 S1 (H-23): onboarding (passos 1-2).
   "ui.onboarding.progress": ["Step {step} of {total}", "Passo {step} de {total}"],
-  "ui.onboarding.welcomeTitle": ["Welcome to Aember Arena", "Bem-vindo ao Aember Arena"],
+  "ui.onboarding.welcomeTitle": ["Welcome to Keyforge Online", "Bem-vindo ao Keyforge Online"],
   "ui.onboarding.welcomeBody": ["Play a solo KeyForge match against the Ember Warden. It runs offline, with no account.", "Jogue uma partida solo de KeyForge contra o Ember Warden. Funciona offline, sem conta."],
   "ui.onboarding.start": ["Start", "Começar"],
   "ui.onboarding.skip": ["Skip for now", "Pular por enquanto"],

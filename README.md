@@ -1,4 +1,4 @@
-# Aember Arena
+# Keyforge Online
 
 [![Deploy](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/pages.yml/badge.svg)](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/pages.yml)
 [![CI](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/ci.yml/badge.svg)](https://github.com/pedrohenriquebr/keyforge-online/actions/workflows/ci.yml)
@@ -6,7 +6,7 @@
 
 **Status: protótipo.** Jogo solo de fã, não comercial, em desenvolvimento ativo.
 
-**English:** Aember Arena is an offline-first PWA for solo KeyForge: import a real
+**English:** Keyforge Online is an offline-first PWA for solo KeyForge: import a real
 Master Vault deck, play against a configurable local AI, and keep playing with no
 connection. The build is a single self-contained `index.html` (works from `file://`,
 from an e-mail attachment or from any static host). It is a fan-made, non-commercial
@@ -49,7 +49,7 @@ não o subpath). Isso desregistra todos os service workers, apaga todos os cache
 
 ## Licença
 
-Copyright (C) 2026 Aember Arena contributors.
+Copyright (C) 2026 Keyforge Online contributors.
 
 Este programa é software livre: você pode redistribuí-lo e/ou modificá-lo sob os
 termos da **GNU Affero General Public License, versão 3** (`AGPL-3.0-only`), conforme
@@ -77,7 +77,7 @@ commit fonte e as demais atribuições estão em [`NOTICE`](NOTICE).
 
 ## Aviso de projeto de fã
 
-Aember Arena é um **projeto de fã, gratuito e não comercial**, sem afiliação,
+Keyforge Online é um **projeto de fã, gratuito e não comercial**, sem afiliação,
 patrocínio ou endosso da Fantasy Flight Games, da Ghost Galaxy ou do Master Vault.
 KeyForge, os nomes, textos e artes das cartas e demais elementos do jogo são
 propriedade intelectual de seus respectivos titulares (Fantasy Flight Games /

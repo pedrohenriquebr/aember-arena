@@ -3301,7 +3301,7 @@ function App() {
       game: t("nav.play"),
       inspect: inspectDeck?.name ?? t("nav.home"),
     };
-    document.title = `${titles[screen]} · Aember Arena`;
+    document.title = `${titles[screen]} · Keyforge Online`;
   }, [screen, t, inspectDeck]);
 
   // Keep <html lang> in sync with the active language (settings.language).

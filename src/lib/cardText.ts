@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// card_text -> ability parser for Aember Arena. No NLP: a fixed grammar of the
+// card_text -> ability parser for Keyforge Online. No NLP: a fixed grammar of the
 // trigger prefixes printed on real cards and of the verb phrases whose semantics
 // were ported from keyteki's GameActions (Copyright (C) keyteki contributors,
 // AGPL-3.0). An ability is used only when EVERY sentence of it is understood;

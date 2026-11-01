@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Aember Arena - KeyForge Solo Play",
-  "short_name": "Aember Arena",
+  "name": "Keyforge Online - KeyForge Solo Play",
+  "short_name": "Keyforge Online",
   "description": "A responsive KeyForge-inspired solo game with offline deck caching.",
   "start_url": "./",
   "scope": "./",

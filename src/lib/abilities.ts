@@ -3,7 +3,7 @@
 // server/game/Card.js (play/reap/fight/destroyed/action/omni registration),
 // server/game/CardAbility.js + AbilityTargets (target/condition by context) and
 // server/game/GameActions/* (composable game actions).
-// Copyright (C) keyteki contributors. Rewritten in TypeScript for Aember Arena:
+// Copyright (C) keyteki contributors. Rewritten in TypeScript for Keyforge Online:
 // abilities are plain data interpreted by game.ts, so the same objects feed the
 // rules engine, the AI's move pruning and the coverage badge in the UI.
 import { PARSER_VERSION, parseCardText, textHash } from "./cardText";
