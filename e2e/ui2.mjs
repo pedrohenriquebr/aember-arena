@@ -1093,8 +1093,8 @@ async function sheetFlow(browser, vp, url) {
     }
   }
 
-  // Força pela folha: Duro = Hard · 4 nas settings gravadas.
-  await dialog.getByRole("radio", { name: /Hard|Duro/ }).click();
+  // Força pela folha: Difícil = Hard · 4 nas settings gravadas.
+  await dialog.getByRole("radio", { name: /Hard|Difícil/ }).click();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("aember-arena-settings") ?? "{}"));
   if (saved.difficulty !== "Hard" || saved.thinkingDepth !== 4) failures.push(`força Duro não gravou (difficulty=${saved.difficulty}, depth=${saved.thinkingDepth})`);
 

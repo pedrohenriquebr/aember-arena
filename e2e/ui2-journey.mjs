@@ -2,7 +2,7 @@
 // primeiro frame da mesa e falha se algum caminho passar de 3. Sobe o vite (porta 5212), abre
 // ?ui=2 com storage limpo e mede cada cenário pelo listener de captura do próprio documento.
 // Cenários: A Jogar→Manter (esperado 2) · B tile→Jogar→Manter (2) · C aba Jogar→Jogar→Manter a
-// partir de Ajustes (3) · D força Duro→Jogar→Manter (3) · E Continuar após reload (1) · F abandono
+// partir de Ajustes (3) · D força Difícil→Jogar→Manter (3) · E Continuar após reload (1) · F abandono
 // só com partida viva (confirma e cancela) · S smoke v2: dois turnos do Warden na mesa ·
 // R (H-22) partida fechada → S9 (1) → Revanche → Manter (2) · O (H-23) onboarding → mesa (3),
 // reload no passo 2 retoma, settings gravadas não mostram o onboarding · K (H-24) três dicas
@@ -167,9 +167,9 @@ async function scenarioD(browser) {
   await page.locator('[data-screen="lobby"] .nf-seg-option', { hasText: "Hard" }).click();
   await page.locator('[data-action="play"]').click();
   await keepOpeningHand(page);
-  check("D força Duro → Jogar → Manter", await clicks(page), 3);
+  check("D força Difícil → Jogar → Manter", await clicks(page), 3);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("aember-arena-settings") ?? "{}"));
-  if (saved.difficulty !== "Hard" || saved.thinkingDepth !== 4) failures.push(`D: força Duro não persistiu (${saved.difficulty}·${saved.thinkingDepth})`);
+  if (saved.difficulty !== "Hard" || saved.thinkingDepth !== 4) failures.push(`D: força Difícil não persistiu (${saved.difficulty}·${saved.thinkingDepth})`);
   await context.close();
 }
 

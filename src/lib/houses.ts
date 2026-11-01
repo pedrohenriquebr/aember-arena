@@ -78,7 +78,7 @@ export const HOUSES: Record<string, HouseInfo> = {
   },
   Untamed: {
     id: "Untamed",
-    namePt: "Indomados",
+    namePt: "Indomáveis",
     color: "#78a66c",
     icon: `${CDN}/Untamed_bXh9SJD.png`,
     short: "UN",
